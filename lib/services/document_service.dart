@@ -139,6 +139,7 @@ class DocumentService {
       notes: notes,
       relatedDocumentId: relatedDocumentId,
       status: 'active',
+      currencyCode: business.currencyCode,
     );
 
     final documentItems = items.map((item) => DocumentItem(
@@ -275,6 +276,7 @@ class DocumentService {
       notes: notes,
       relatedDocumentId: effectiveRelatedDocumentId,
       status: existing.status,
+      currencyCode: existing.currencyCode,
     );
 
     final documentItems = items.map((item) => DocumentItem(

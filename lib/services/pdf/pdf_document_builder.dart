@@ -51,8 +51,7 @@ class PdfDocumentBuilder {
 
     final isArabic = l10n.langCode == 'ar';
     final documentTypeLabel = _documentTypeLabel(doc.type, l10n);
-    // ✅ FIX: use currencyCode instead of currency
-    final currency = business.currencyCode;
+    final currency = doc.currencyCode;
 
     pdf.addPage(
       pw.MultiPage(

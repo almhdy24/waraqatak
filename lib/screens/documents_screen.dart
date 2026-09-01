@@ -111,7 +111,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           child: ListTile(
             leading: Icon(_iconForType(doc.type)),
             title: Text(doc.documentNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('${doc.recipientName ?? ''} - ${NumberFormat('#,##0').format(doc.total)}'),
+            subtitle: Text('${doc.recipientName ?? ''} - ${NumberFormat('#,##0').format(doc.total)} ${doc.currencySymbol}'),
             trailing: Text(DateFormat('dd/MM/yyyy').format(doc.date), style: const TextStyle(fontSize: 12)),
             onTap: () async {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: doc.id!)));
