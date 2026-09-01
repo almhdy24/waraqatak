@@ -80,7 +80,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
 
   Future<void> _pickLogo() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker().pickFiles(
         type: FileType.image,
         allowCompression: false,
         withData: true,
