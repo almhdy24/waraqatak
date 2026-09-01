@@ -93,17 +93,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     });
   }
 
-  // ✅ الحسابات اللحظية
-  double get _subtotal {
-    double sum = 0;
-    for (int i = 0; i < _descriptionControllers.length; i++) {
-      final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
-      final price = double.tryParse(_priceControllers[i].text) ?? 0;
-      sum += qty * price;
-    }
-    return sum;
-  }
-
   double get _discount {
     return double.tryParse(_discountController.text) ?? 0;
   }
@@ -112,25 +101,22 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     return double.tryParse(_paidController.text) ?? 0;
   }
 
-  double get _total {
-    final subtotal = _subtotal;
-    final discount = _discount;
-    final taxableAmount = _taxableItemsTotal;
-    final taxRate = _business?.taxRate ?? 0;
-    final taxAmount = taxableAmount * taxRate / 100;
-    return subtotal - discount + taxAmount;
-  }
-
-  double get _taxableItemsTotal {
-    double sum = 0;
-    for (int i = 0; i < _taxableList.length; i++) {
-      if (_taxableList[i]) {
-        final qty = double.tryParse(_quantityControllers[i].text) ?? 0;
-        final price = double.tryParse(_priceControllers[i].text) ?? 0;
-        sum += qty * price;
-      }
-    }
-    return sum;
+  ({double subtotal, double taxAmount, double total}) get _totals {
+    final items = List.generate(
+      _descriptionControllers.length,
+      (index) => DocumentItemInput(
+        description: _descriptionControllers[index].text,
+        quantity: double.tryParse(_quantityControllers[index].text) ?? 0,
+        price: double.tryParse(_priceControllers[index].text) ?? 0,
+        taxable: _taxableList[index],
+        productId: _productIds[index],
+      ),
+    );
+    return DocumentService.calculateInvoiceTotals(
+      items: items,
+      discount: _discount,
+      taxRate: _business?.taxRate ?? 0,
+    );
   }
 
   Future<void> _save() async {
@@ -182,9 +168,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final l10n = AppLocalizations.of(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    final subtotal = _subtotal;
+    final totals = _totals;
+    final subtotal = totals.subtotal;
     final discount = _discount;
-    final total = _total;
+    final total = totals.total;
     final paid = _paid;
     final remaining = total - paid;
 
@@ -230,7 +217,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             // ملخص مباشر
             Text('${l10n.subtotal}: ${NumberFormat('#,##0.00').format(subtotal)}'),
             Text('${l10n.discount}: ${NumberFormat('#,##0.00').format(discount)}'),
-            Text('${l10n.tax} (${_business?.taxRate ?? 0}%): ${NumberFormat('#,##0.00').format(total - subtotal + discount)}'),
+            Text('${l10n.tax} (${_business?.taxRate ?? 0}%): ${NumberFormat('#,##0.00').format(totals.taxAmount)}'),
             Text('${l10n.total}: ${NumberFormat('#,##0.00').format(total)}', style: const TextStyle(fontWeight: FontWeight.bold)),
             Text('${l10n.paid}: ${NumberFormat('#,##0.00').format(paid)}'),
             Text('${l10n.remaining}: ${NumberFormat('#,##0.00').format(remaining)}', style: TextStyle(color: remaining > 0 ? Theme.of(context).colorScheme.error : Colors.green)),

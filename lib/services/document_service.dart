@@ -97,9 +97,14 @@ class DocumentService {
       if (discountApplied > subtotal) {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
+      final totals = calculateInvoiceTotals(
+        items: items,
+        discount: discountApplied,
+        taxRate: business.taxRate,
+      );
       taxRate = business.taxRate;
-      taxAmount = _calculateTax(items, discountApplied, taxRate, subtotal);
-      total = subtotal - discountApplied + taxAmount;
+      taxAmount = totals.taxAmount;
+      total = totals.total;
       if (paid < 0) {
         throw ArgumentError('Paid amount cannot be negative');
       }
@@ -228,9 +233,14 @@ class DocumentService {
       if (discountApplied > subtotal) {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
+      final totals = calculateInvoiceTotals(
+        items: items,
+        discount: discountApplied,
+        taxRate: business.taxRate,
+      );
       taxRate = business.taxRate;
-      taxAmount = _calculateTax(items, discountApplied, taxRate, subtotal);
-      total = subtotal - discountApplied + taxAmount;
+      taxAmount = totals.taxAmount;
+      total = totals.total;
       if (paid < 0) {
         throw ArgumentError('Paid amount cannot be negative');
       }
@@ -343,6 +353,21 @@ class DocumentService {
   // Updated with explicit double typing for safety
   static double _calculateSubtotal(List<DocumentItemInput> items) {
     return items.fold<double>(0.0, (sum, item) => sum + item.total);
+  }
+
+  static ({double subtotal, double taxAmount, double total})
+      calculateInvoiceTotals({
+    required List<DocumentItemInput> items,
+    required double discount,
+    required double taxRate,
+  }) {
+    final subtotal = _calculateSubtotal(items);
+    final taxAmount = _calculateTax(items, discount, taxRate, subtotal);
+    return (
+      subtotal: subtotal,
+      taxAmount: taxAmount,
+      total: subtotal - discount + taxAmount,
+    );
   }
 
   /// Calculates tax using proportional discount allocation:
