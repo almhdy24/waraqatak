@@ -171,6 +171,9 @@ class AppLocalizations {
       _t('هل تريد حذف هذا العميل؟', 'Delete this customer?');
   String get deleteProductMessage =>
       _t('هل تريد حذف هذا المنتج؟', 'Delete this product?');
+  String get productUsedInDocuments => _t(
+      'لا يمكن حذف منتج مستخدم في مستندات سابقة.',
+      'A product used in existing documents cannot be deleted.');
 
   // ========== BUSINESS SETUP ==========
   String get setupBusiness =>

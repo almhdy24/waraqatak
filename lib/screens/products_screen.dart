@@ -75,7 +75,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     if (confirmed == true && mounted) {
       try {
-        await DatabaseHelper.instance.deleteProduct(product.id!);
+        final db = DatabaseHelper.instance;
+        if (await db.isProductReferenced(product.id!)) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.productUsedInDocuments)),
+          );
+          return;
+        }
+        await db.deleteProduct(product.id!);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.operationSuccessful)),

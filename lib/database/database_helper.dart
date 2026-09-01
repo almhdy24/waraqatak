@@ -232,6 +232,18 @@ class DatabaseHelper {
     return db.delete('products', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<bool> isProductReferenced(int id) async {
+    final db = await database;
+    final rows = await db.query(
+      'document_items',
+      columns: ['id'],
+      where: 'product_id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
   Future<List<Product>> getAllProducts() async {
     final db = await database;
     final maps = await db.query('products', orderBy: 'name');

@@ -123,7 +123,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     if (confirmed == true && mounted) {
       try {
-        await DatabaseHelper.instance.deleteProduct(widget.product!.id!);
+        final db = DatabaseHelper.instance;
+        if (await db.isProductReferenced(widget.product!.id!)) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.productUsedInDocuments)),
+          );
+          return;
+        }
+        await db.deleteProduct(widget.product!.id!);
         if (!mounted) return;
         Navigator.pop(context, true);
       } catch (e) {
