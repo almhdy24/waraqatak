@@ -3,6 +3,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
+import '../utils/currency_utils.dart';
 
 class DocumentItemInput {
   final String description;
@@ -23,13 +24,6 @@ class DocumentItemInput {
 }
 
 class DocumentService {
-  static const Set<String> allowedPaymentMethods = {
-    'cash',
-    'bank',
-    'bankak',
-    'okash',
-  };
-
   /// Creates a new document.
   static Future<int> createDocument({
     required String type,
@@ -60,7 +54,7 @@ class DocumentService {
     }
 
     if (isFinancial) {
-      _validatePaymentMethod(paymentMethod);
+      _validatePaymentMethod(paymentMethod, business.currencyCode);
       if (paid <= 0) {
         throw ArgumentError('Amount must be greater than zero');
       }
@@ -191,7 +185,7 @@ class DocumentService {
     }
 
     if (isFinancial) {
-      _validatePaymentMethod(paymentMethod);
+      _validatePaymentMethod(paymentMethod, business.currencyCode);
       if (paid <= 0) {
         throw ArgumentError('Amount must be greater than zero');
       }
@@ -338,8 +332,10 @@ class DocumentService {
     }
   }
 
-  static void _validatePaymentMethod(String? paymentMethod) {
-    if (paymentMethod == null || !allowedPaymentMethods.contains(paymentMethod)) {
+  static void _validatePaymentMethod(
+      String? paymentMethod, String currencyCode) {
+    if (paymentMethod == null ||
+        !CurrencyUtils.isPaymentMethodAllowed(paymentMethod, currencyCode)) {
       throw ArgumentError('Invalid payment method');
     }
   }

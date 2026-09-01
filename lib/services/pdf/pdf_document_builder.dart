@@ -9,6 +9,7 @@ import '../../models/business.dart';
 import '../../models/contact.dart';
 import '../../models/document.dart';
 import '../../models/document_item.dart';
+import '../../utils/currency_utils.dart';
 import 'pdf_customer_builder.dart';
 import 'pdf_header_builder.dart';
 import 'pdf_items_table_builder.dart';
@@ -122,7 +123,7 @@ class PdfDocumentBuilder {
               doc.paymentMethod != null)
             _buildInfoRow(
               label: l10n.paymentMethod,
-              value: doc.paymentMethod!,
+              value: CurrencyUtils.getPaymentMethodLabel(doc.paymentMethod!, l10n),
               bold: bold,
               regular: regular,
               textColor: theme.textColor,

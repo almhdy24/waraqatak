@@ -8,6 +8,7 @@ import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../services/pdf_service.dart';
+import '../utils/currency_utils.dart';
 import 'edit_document_screen.dart';
 
 class DocumentDetailScreen extends StatefulWidget {
@@ -197,7 +198,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                   if (doc.type == 'quotation' && doc.validUntil != null)
                     Text('${l10n.validUntil}: ${DateFormat('dd/MM/yyyy').format(doc.validUntil!)}'),
                   if ((doc.type == 'payment_receipt' || doc.type == 'expense_voucher') && doc.paymentMethod != null)
-                    Text('${l10n.paymentMethod}: ${doc.paymentMethod}'),
+                    Text('${l10n.paymentMethod}: ${CurrencyUtils.getPaymentMethodLabel(doc.paymentMethod!, l10n)}'),
                 ],
               ),
             ),
