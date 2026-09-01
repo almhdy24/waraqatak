@@ -190,7 +190,7 @@ class DocumentService {
     }
 
     if (isFinancial) {
-      _validatePaymentMethod(paymentMethod, business.currencyCode);
+      _validatePaymentMethod(paymentMethod, existing.currencyCode);
       if (paid <= 0) {
         throw ArgumentError('Amount must be greater than zero');
       }

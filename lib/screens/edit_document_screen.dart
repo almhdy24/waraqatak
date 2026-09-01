@@ -131,8 +131,8 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   }
 
   void _ensureValidPaymentMethod() {
-    if (_business == null) return;
-    final allowed = CurrencyUtils.getPaymentMethodsForCurrency(_business!.currencyCode);
+    if (_document == null) return;
+    final allowed = CurrencyUtils.getPaymentMethodsForCurrency(_document!.currencyCode);
     if (!allowed.contains(_paymentMethod)) {
       setState(() {
         _paymentMethod = allowed.first;
@@ -223,7 +223,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     // Ensure payment method is allowed if financial
     String? finalPaymentMethod;
     if (isFinancial) {
-      final allowed = CurrencyUtils.getPaymentMethodsForCurrency(_business!.currencyCode);
+      final allowed = CurrencyUtils.getPaymentMethodsForCurrency(_document!.currencyCode);
       if (!allowed.contains(_paymentMethod)) {
         _paymentMethod = allowed.first;
       }
@@ -280,8 +280,8 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final isFinancial = type == 'payment_receipt' || type == 'expense_voucher';
     final isCustom = type == 'custom';
 
-    final allowedMethods = _business != null
-        ? CurrencyUtils.getPaymentMethodsForCurrency(_business!.currencyCode)
+    final allowedMethods = _document != null
+        ? CurrencyUtils.getPaymentMethodsForCurrency(_document!.currencyCode)
         : const ['cash', 'bank'];
 
     return Scaffold(
