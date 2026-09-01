@@ -5,7 +5,9 @@ import '../models/product.dart';
 import 'product_form_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
-  const ProductsScreen({super.key});
+  final int refreshToken;
+
+  const ProductsScreen({super.key, this.refreshToken = 0});
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
@@ -20,6 +22,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProductsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) _load();
   }
 
   Future<void> _load() async {

@@ -6,7 +6,9 @@ import '../models/document.dart';
 import 'document_detail_screen.dart';
 
 class DocumentsScreen extends StatefulWidget {
-  const DocumentsScreen({super.key});
+  final int refreshToken;
+
+  const DocumentsScreen({super.key, this.refreshToken = 0});
 
   @override
   State<DocumentsScreen> createState() => _DocumentsScreenState();
@@ -22,6 +24,12 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant DocumentsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) _load();
   }
 
   Future<void> _load() async {

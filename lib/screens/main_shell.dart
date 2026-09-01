@@ -15,33 +15,44 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+  int _documentsRefreshToken = 0;
+  int _customersRefreshToken = 0;
+  int _productsRefreshToken = 0;
   late final GlobalKey<HomeScreenState> _homeKey;
-  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     _homeKey = GlobalKey<HomeScreenState>();
-    _screens = [
-      HomeScreen(key: _homeKey),
-      const DocumentsScreen(),
-      const CustomersScreen(),
-      const ProductsScreen(),
-      const SettingsScreen(),
-    ];
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: IndexedStack(
+        index: _index,
+        children: [
+          HomeScreen(key: _homeKey),
+          DocumentsScreen(refreshToken: _documentsRefreshToken),
+          CustomersScreen(refreshToken: _customersRefreshToken),
+          ProductsScreen(refreshToken: _productsRefreshToken),
+          const SettingsScreen(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
           setState(() => _index = i);
-          if (i == 0) {
-            _homeKey.currentState?.reload();
+          switch (i) {
+            case 0:
+              _homeKey.currentState?.reload();
+            case 1:
+              _documentsRefreshToken++;
+            case 2:
+              _customersRefreshToken++;
+            case 3:
+              _productsRefreshToken++;
           }
         },
         destinations: [

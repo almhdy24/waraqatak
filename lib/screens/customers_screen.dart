@@ -6,7 +6,9 @@ import 'contact_form_screen.dart';
 import 'customer_detail_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
-  const CustomersScreen({super.key});
+  final int refreshToken;
+
+  const CustomersScreen({super.key, this.refreshToken = 0});
 
   @override
   State<CustomersScreen> createState() => _CustomersScreenState();
@@ -22,6 +24,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant CustomersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) _load();
   }
 
   Future<void> _load() async {
