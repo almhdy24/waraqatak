@@ -34,14 +34,8 @@ class BackupService {
 
     final bytes = Uint8List.fromList(utf8.encode(jsonStr));
 
-    await Share.shareXFiles(
-      [
-        XFile.fromData(
-          bytes,
-          mimeType: 'application/octet-stream',
-          name: fileName,
-        ),
-      ],
+    await SharePlus.instance.share(
+      jsonStr,
       subject: 'Warqatek Backup',
     );
   }
@@ -73,7 +67,7 @@ class BackupService {
 
     final bytes = Uint8List.fromList(utf8.encode(jsonStr));
 
-    final result = await FilePicker.platform.saveFile(
+    final result = await FilePicker().saveFile(
       dialogTitle: 'Save Backup',
       fileName: fileName,
       bytes: bytes,
@@ -88,7 +82,7 @@ class BackupService {
   // ============================================================
 
   static Future<bool> restoreBackup() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker().pickFiles(
       type: FileType.any,
       withData: true,
     );
