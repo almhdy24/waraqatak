@@ -1,0 +1,62 @@
+﻿name: warqatek
+
+description: Waraqatak - invoices and business documents.
+
+publish_to: 'none'
+
+version: 1.0.0+3
+
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_localizations:
+    sdk: flutter
+
+  # Database
+  sqflite: ^2.3.0
+  path: ^1.8.3
+
+  # File & Storage
+  path_provider: ^2.1.5
+  file_picker: ^12.1.2
+  shared_preferences: ^2.2.0
+
+  # PDF & Printing
+  pdf: ^3.10.4
+  printing: ^5.15.0
+
+  # Sharing & URLs
+  share_plus: ^13.3.0
+  url_launcher: ^6.2.0
+
+  # UI
+  flutter_svg: ^2.0.9
+
+  # Localization
+  intl: ^0.20.3
+
+  # App information
+  package_info_plus: ^10.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/logo.svg
+
+  fonts:
+    - family: Tajawal
+      fonts:
+        - asset: assets/fonts/Tajawal-Regular.ttf
+        - asset: assets/fonts/Tajawal-Bold.ttf
+          weight: 700

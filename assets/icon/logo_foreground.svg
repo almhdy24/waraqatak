@@ -1,0 +1,38 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+
+  <!-- Document -->
+  <path
+    d="M154 112
+       C141.85 112 132 121.85 132 134
+       V378
+       C132 390.15 141.85 400 154 400
+       H358
+       C370.15 400 380 390.15 380 378
+       V190
+       L302 112
+       H154Z"
+    fill="white"/>
+
+  <!-- Folded corner -->
+  <path
+    d="M302 112V174
+       C302 182.84 309.16 190 318 190
+       H380L302 112Z"
+    fill="#B9D7D8"/>
+
+  <!-- Document lines -->
+  <rect x="176" y="220" width="132" height="16" rx="8" fill="#155E63"/>
+  <rect x="176" y="258" width="96" height="16" rx="8" fill="#155E63"/>
+  <rect x="176" y="296" width="116" height="16" rx="8" fill="#155E63"/>
+
+  <!-- Check / transaction mark -->
+  <circle cx="333" cy="330" r="48" fill="#155E63"/>
+
+  <path
+    d="M310 330L326 346L357 313"
+    stroke="white"
+    stroke-width="13"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+</svg>
