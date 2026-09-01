@@ -39,12 +39,8 @@ class PdfService {
       items: items,
       l10n: l10n,
     );
-    await Share.shareXFiles([
-      XFile.fromData(
-        bytes,
-        mimeType: 'application/pdf',
-        name: '${doc.documentNumber}.pdf',
-      ),
-    ]);
+    await SharePlus.instance.share(
+      '${doc.documentNumber}.pdf',
+    );
   }
 }
