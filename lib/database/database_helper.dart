@@ -325,9 +325,18 @@ class DatabaseHelper {
         where: 'document_id = ?',
         whereArgs: [doc.id],
       );
+      final existingDocument = await txn.query(
+        'documents',
+        columns: ['type'],
+        where: 'id = ?',
+        whereArgs: [doc.id],
+      );
+      if (existingDocument.isEmpty) {
+        throw StateError('Document not found');
+      }
 
       // Revert stock for old items
-      if (doc.type == 'invoice') {
+      if (existingDocument.first['type'] == 'invoice') {
         for (final old in oldItems) {
           final productId = old['product_id'] as int?;
           final qty = old['quantity'] as num? ?? 0;
