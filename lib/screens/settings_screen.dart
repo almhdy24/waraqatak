@@ -130,27 +130,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Backup & Restore section
           ListTile(
-            leading: const Icon(Icons.backup),
-            title: Text(l10n.backup),
-            subtitle: Text(l10n.backupDescription),
-            onTap: () async {
-              try {
-                await BackupService.createBackup();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.operationSuccessful)),
-                  );
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.operationFailed)),
-                  );
-                }
-              }
-            },
-          ),
-          ListTile(
             leading: const Icon(Icons.save_outlined),
             title: Text(l10n.saveBackupTo),
             onTap: () async {

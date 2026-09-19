@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/constants/app_constants.dart';
@@ -66,6 +67,7 @@ class AboutScreen extends StatelessWidget {
                 context,
                 [
                   _Feature(Icons.receipt_long_rounded, l10n.invoice),
+                  _Feature(Icons.shopping_cart_outlined, l10n.purchase),
                   _Feature(Icons.request_quote_outlined, l10n.quotation),
                   _Feature(Icons.payments_outlined, l10n.paymentReceipt),
                   _Feature(Icons.money_off_csred_outlined, l10n.expenseVoucher),
@@ -87,10 +89,13 @@ class AboutScreen extends StatelessWidget {
                 context,
                 [
                   _Feature(Icons.people_alt_outlined, l10n.customers),
+                  _Feature(Icons.store_outlined, l10n.suppliers),
                   _Feature(Icons.inventory_2_outlined, l10n.products),
                   _Feature(Icons.warehouse_outlined, l10n.stock),
+                  _Feature(Icons.qr_code_scanner_rounded, l10n.barcodeScanner),
+                  _Feature(Icons.bar_chart_rounded, l10n.reports),
+                  _Feature(Icons.percent_rounded, l10n.taxProfiles),
                   _Feature(Icons.language_rounded, l10n.arabicEnglishSupport),
-                  _Feature(Icons.wifi_off_rounded, l10n.offlineFirst),
                 ],
               ),
               const SizedBox(height: 24),
@@ -100,7 +105,16 @@ class AboutScreen extends StatelessWidget {
                 title: l10n.backupRestore,
               ),
               const SizedBox(height: 12),
-              _buildToolsCard(context, l10n),
+              _buildFeatureGroup(
+                context,
+                [
+                  _Feature(Icons.wifi_off_rounded, l10n.offlineFirst),
+                  _Feature(Icons.save_outlined, l10n.saveBackupTo),
+                  _Feature(Icons.restore_rounded, l10n.restore),
+                  _Feature(Icons.workspace_premium_outlined, l10n.trialFreeDays),
+                  _Feature(Icons.shield_outlined, l10n.dataAlwaysSafe),
+                ],
+              ),
               const SizedBox(height: 30),
               _buildSectionHeader(
                 context,
@@ -141,10 +155,13 @@ class AboutScreen extends StatelessWidget {
             color: colors.primaryContainer,
             shape: BoxShape.circle,
           ),
-          child: Icon(
-            Icons.receipt_long_rounded,
-            size: 52,
-            color: colors.onPrimaryContainer,
+          padding: const EdgeInsets.all(18),
+          child: SvgPicture.asset(
+            'assets/logo.svg',
+            colorFilter: ColorFilter.mode(
+              colors.onPrimaryContainer,
+              BlendMode.srcIn,
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -297,53 +314,6 @@ class AboutScreen extends StatelessWidget {
             ),
           ),
           Icon(Icons.check_circle_rounded, size: 19, color: colors.primary),
-        ],
-      ),
-    );
-  }
-
-  // ─── Tools Card ─────────────────────────────────────
-  Widget _buildToolsCard(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: colors.secondaryContainer,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(Icons.backup_rounded, color: colors.onSecondaryContainer),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.backupRestore,
-                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.backupDescription,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
