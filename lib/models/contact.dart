@@ -7,6 +7,8 @@ class Contact {
   final String? notes;
   final String type; // customer / supplier
   final bool active;
+  final String? legalName;
+  final String? taxId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -19,6 +21,8 @@ class Contact {
     this.notes,
     this.type = 'customer',
     this.active = true,
+    this.legalName,
+    this.taxId,
     this.createdAt,
     this.updatedAt,
   });
@@ -32,6 +36,8 @@ class Contact {
         'notes': notes,
         'type': type,
         'active': active ? 1 : 0,
+        'legal_name': legalName,
+        'tax_id': taxId,
         'created_at': createdAt?.toIso8601String(),
         'updated_at': updatedAt?.toIso8601String(),
       };
@@ -45,6 +51,8 @@ class Contact {
         notes: map['notes'] as String?,
         type: map['type'] as String? ?? 'customer',
         active: (map['active'] as int? ?? 1) == 1,
+        legalName: map['legal_name'] as String?,
+        taxId: map['tax_id'] as String?,
         createdAt: map['created_at'] != null
             ? DateTime.tryParse(map['created_at'] as String)
             : null,

@@ -46,7 +46,9 @@ class PdfTotalsBuilder {
             ),
           if (doc.taxAmount > 0)
             _row(
-              label: '${l10n.tax} (${doc.taxRate.toStringAsFixed(0)}%)',
+              label: doc.taxRate > 0
+                  ? '${l10n.tax} (${doc.taxRate.toStringAsFixed(0)}%)'
+                  : l10n.tax,
               value: doc.taxAmount,
               currency: currency,
               font: regular,

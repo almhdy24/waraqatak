@@ -15,6 +15,7 @@ class Product {
   final bool isTaxable;
   final bool isActive;
   final String? notes;
+  final int? taxProfileId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -35,6 +36,7 @@ class Product {
     this.isTaxable = true,
     this.isActive = true,
     this.notes,
+    this.taxProfileId,
     this.createdAt,
     this.updatedAt,
   });
@@ -53,6 +55,7 @@ class Product {
         'is_taxable': isTaxable ? 1 : 0,
         'is_active': isActive ? 1 : 0,
         'notes': notes,
+        'tax_profile_id': taxProfileId,
         'created_at': createdAt?.toIso8601String(),
         'updated_at': updatedAt?.toIso8601String(),
       };
@@ -71,6 +74,7 @@ class Product {
         isTaxable: (map['is_taxable'] as int?) == 1,
         isActive: (map['is_active'] as int? ?? 1) == 1,
         notes: map['notes'] as String?,
+        taxProfileId: map['tax_profile_id'] as int?,
         createdAt: map['created_at'] != null
             ? DateTime.tryParse(map['created_at'] as String)
             : null,

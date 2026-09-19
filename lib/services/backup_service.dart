@@ -159,6 +159,13 @@ class BackupService {
           await txn.insert('stock_movements', row);
         }
       }
+      // tax_profiles is optional (absent in backups created before Phase 3.5)
+      if (data.containsKey('tax_profiles') && data['tax_profiles'] is List) {
+        await txn.delete('tax_profiles');
+        for (final row in _convertRows(data['tax_profiles'])) {
+          await txn.insert('tax_profiles', row);
+        }
+      }
     });
 
     await _restoreLogoIfNeeded(jsonMap);
@@ -250,6 +257,7 @@ class BackupService {
         'document_counters': await db.query('document_counters'),
         'document_payments': await db.query('document_payments'),
         'stock_movements': await db.query('stock_movements'),
+        'tax_profiles': await db.query('tax_profiles'),
       },
       'assets': {
         'logo_base64': logoBase64,

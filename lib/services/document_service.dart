@@ -12,6 +12,7 @@ class DocumentItemInput {
   final double price;
   final bool taxable;
   final int? productId;
+  final double? taxRate; // per-item rate snapshot; null = use business default
 
   const DocumentItemInput({
     required this.description,
@@ -19,6 +20,7 @@ class DocumentItemInput {
     required this.price,
     this.taxable = true,
     this.productId,
+    this.taxRate,
   });
 
   double get total => quantity * price;
@@ -89,8 +91,9 @@ class DocumentService {
       subtotal = _calculateSubtotal(items);
       discountApplied = 0;
       taxRate = business.taxRate;
-      taxAmount = _calculateTax(items, discountApplied, taxRate, subtotal);
-      total = subtotal + taxAmount;
+      taxAmount = _calculateTaxMultiRate(
+          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax);
+      total = business.pricesIncludeTax ? subtotal : subtotal + taxAmount;
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
@@ -106,6 +109,7 @@ class DocumentService {
         items: items,
         discount: discountApplied,
         taxRate: business.taxRate,
+        pricesIncludeTax: business.pricesIncludeTax,
       );
       taxRate = business.taxRate;
       taxAmount = totals.taxAmount;
@@ -166,6 +170,7 @@ class DocumentService {
       price: item.price,
       total: item.total,
       taxable: item.taxable,
+      taxRate: item.taxRate,
     )).toList();
 
     final db = DatabaseHelper.instance;
@@ -244,8 +249,9 @@ class DocumentService {
       subtotal = _calculateSubtotal(items);
       discountApplied = 0;
       taxRate = business.taxRate;
-      taxAmount = _calculateTax(items, discountApplied, taxRate, subtotal);
-      total = subtotal + taxAmount;
+      taxAmount = _calculateTaxMultiRate(
+          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax);
+      total = business.pricesIncludeTax ? subtotal : subtotal + taxAmount;
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
@@ -261,6 +267,7 @@ class DocumentService {
         items: items,
         discount: discountApplied,
         taxRate: business.taxRate,
+        pricesIncludeTax: business.pricesIncludeTax,
       );
       taxRate = business.taxRate;
       taxAmount = totals.taxAmount;
@@ -325,6 +332,7 @@ class DocumentService {
       price: item.price,
       total: item.total,
       taxable: item.taxable,
+      taxRate: item.taxRate,
     )).toList();
 
     await db.updateDocumentWithItems(updatedDocument, documentItems, contact: contact);
@@ -431,48 +439,56 @@ class DocumentService {
     }
   }
 
-  // Updated with explicit double typing for safety
   static double _calculateSubtotal(List<DocumentItemInput> items) {
     return items.fold<double>(0.0, (sum, item) => sum + item.total);
   }
 
+  /// Calculates invoice totals supporting per-item tax rates and inclusive/exclusive modes.
+  ///
+  /// [taxRate] is the business-level fallback rate used when an item has no
+  /// explicit [DocumentItemInput.taxRate] and is marked [taxable].
+  ///
+  /// [pricesIncludeTax] = true → inclusive mode: tax is embedded in the price,
+  /// so total = subtotal − discount (tax is extracted for display only).
+  /// [pricesIncludeTax] = false → exclusive mode: tax is added on top,
+  /// so total = subtotal − discount + taxAmount.
   static ({double subtotal, double taxAmount, double total})
       calculateInvoiceTotals({
     required List<DocumentItemInput> items,
     required double discount,
     required double taxRate,
+    bool pricesIncludeTax = false,
   }) {
     final subtotal = _calculateSubtotal(items);
-    final taxAmount = _calculateTax(items, discount, taxRate, subtotal);
-    return (
-      subtotal: subtotal,
-      taxAmount: taxAmount,
-      total: subtotal - discount + taxAmount,
-    );
+    final taxAmount = _calculateTaxMultiRate(
+        items, discount, taxRate, subtotal, pricesIncludeTax);
+    final total = pricesIncludeTax
+        ? subtotal - discount
+        : subtotal - discount + taxAmount;
+    return (subtotal: subtotal, taxAmount: taxAmount, total: total);
   }
 
-  /// Calculates tax using proportional discount allocation:
-  /// Discount is applied across taxable and non-taxable items proportionally.
-  static double _calculateTax(
+  /// Per-item tax calculation with proportional discount and inclusive/exclusive support.
+  static double _calculateTaxMultiRate(
     List<DocumentItemInput> items,
     double discount,
-    double taxRate,
+    double fallbackRate,
     double subtotal,
+    bool pricesIncludeTax,
   ) {
     if (subtotal <= 0) return 0;
-
-    final taxableTotal = items
-        .where((i) => i.taxable)
-        .fold<double>(0.0, (sum, item) => sum + item.total);
-
-    // If no taxable items, no tax
-    if (taxableTotal <= 0) return 0;
-
-    // Apply discount proportionally to taxable portion
     final discountRatio = (subtotal - discount) / subtotal;
-    final taxableAfterDiscount = taxableTotal * discountRatio;
-
-    if (taxableAfterDiscount < 0) return 0;
-    return taxableAfterDiscount * taxRate / 100;
+    var totalTax = 0.0;
+    for (final item in items) {
+      final rate = item.taxRate ?? (item.taxable ? fallbackRate : 0.0);
+      if (rate <= 0) continue;
+      final itemAfterDiscount = item.total * discountRatio;
+      if (itemAfterDiscount <= 0) continue;
+      totalTax += pricesIncludeTax
+          ? itemAfterDiscount * rate / (100 + rate) // extract from inclusive price
+          : itemAfterDiscount * rate / 100; // add on top (exclusive)
+    }
+    return totalTax < 0 ? 0 : totalTax;
   }
+
 }

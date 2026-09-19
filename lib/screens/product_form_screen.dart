@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
+import '../models/tax_profile.dart';
 import '../services/product_service.dart';
 import 'barcode_scanner_screen.dart';
 
@@ -31,6 +32,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   bool _taxable = true;
   bool _isActive = true;
   bool _saving = false;
+  int? _taxProfileId;
+  List<TaxProfile> _taxProfiles = [];
 
   @override
   void initState() {
@@ -49,9 +52,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _notesController.text = p.notes ?? '';
       _taxable = p.isTaxable;
       _isActive = p.isActive;
+      _taxProfileId = p.taxProfileId;
     } else if (widget.initialBarcode != null) {
       _barcodeController.text = widget.initialBarcode!;
     }
+    _loadTaxProfiles();
+  }
+
+  Future<void> _loadTaxProfiles() async {
+    final profiles =
+        await DatabaseHelper.instance.getTaxProfiles(activeOnly: true);
+    if (mounted) setState(() => _taxProfiles = profiles);
   }
 
   @override
@@ -118,6 +129,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       isTaxable: _taxable,
       isActive: _isActive,
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      taxProfileId: _taxProfileId,
       createdAt: widget.product?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -418,6 +430,28 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       onChanged: (v) => setState(() => _taxable = v!),
                       controlAffinity: ListTileControlAffinity.trailing,
                     ),
+                    if (_taxProfiles.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int?>(
+                        initialValue: _taxProfiles.any((p) => p.id == _taxProfileId)
+                            ? _taxProfileId
+                            : null,
+                        decoration: InputDecoration(
+                          labelText: l10n.taxProfile,
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        items: [
+                          DropdownMenuItem<int?>(
+                              value: null, child: Text(l10n.noTaxProfile)),
+                          ..._taxProfiles.map((p) => DropdownMenuItem<int?>(
+                              value: p.id,
+                              child: Text(
+                                  '${p.name} (${p.rate.toStringAsFixed(0)}%)'))),
+                        ],
+                        onChanged: (v) => setState(() => _taxProfileId = v),
+                      ),
+                    ],
                     if (!isNew)
                       SwitchListTile(
                         title: Text(l10n.active),

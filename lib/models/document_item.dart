@@ -7,6 +7,7 @@ class DocumentItem {
   final double price;
   final double total;
   final bool taxable;
+  final double? taxRate; // snapshot at creation; null = use business default
 
   const DocumentItem({
     this.id,
@@ -17,6 +18,7 @@ class DocumentItem {
     required this.price,
     required this.total,
     this.taxable = true,
+    this.taxRate,
   });
 
   Map<String, dynamic> toMap() => {
@@ -28,6 +30,7 @@ class DocumentItem {
         'price': price,
         'total': total,
         'taxable': taxable ? 1 : 0,
+        'tax_rate': taxRate,
       };
 
   factory DocumentItem.fromMap(Map<String, dynamic> map) => DocumentItem(
@@ -39,5 +42,6 @@ class DocumentItem {
         price: (map['price'] as num?)?.toDouble() ?? 0,
         total: (map['total'] as num?)?.toDouble() ?? 0,
         taxable: (map['taxable'] as int?) == 1,
+        taxRate: (map['tax_rate'] as num?)?.toDouble(),
       );
 }

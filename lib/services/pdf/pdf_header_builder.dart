@@ -14,6 +14,14 @@ class PdfHeaderBuilder {
     pw.MemoryImage? logoImage,
     required bool isArabic,
   }) {
+    final fallbackDir =
+        isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+
+    // Show legalName under the trading name if different and set
+    final showLegal = business.legalName != null &&
+        business.legalName!.trim().isNotEmpty &&
+        business.legalName!.trim() != business.name.trim();
+
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -27,9 +35,24 @@ class PdfHeaderBuilder {
                 font: bold,
                 fontSize: 18,
                 color: primaryColor,
-                fallbackDirection:
-                    isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr,
+                fallbackDirection: fallbackDir,
               ),
+              if (showLegal)
+                PdfTextUtils.directionalText(
+                  business.legalName!,
+                  font: regular,
+                  fontSize: 11,
+                  color: textColor,
+                  fallbackDirection: fallbackDir,
+                ),
+              if (business.taxId != null && business.taxId!.trim().isNotEmpty)
+                PdfTextUtils.directionalText(
+                  business.taxId!,
+                  font: regular,
+                  fontSize: 10,
+                  color: textColor,
+                  fallbackDirection: pw.TextDirection.ltr,
+                ),
               pw.SizedBox(height: 4),
               if (business.phone.isNotEmpty)
                 PdfTextUtils.directionalText(

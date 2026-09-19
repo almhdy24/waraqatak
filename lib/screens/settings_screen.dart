@@ -6,6 +6,7 @@ import '../utils/print_settings.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
+import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -47,6 +48,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.account_balance_outlined),
+            title: Text(l10n.financialSettings),
+            subtitle: Text(l10n.financialSettingsDesc),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const FinancialSettingsScreen()),
             ),
           ),
           ListTile(

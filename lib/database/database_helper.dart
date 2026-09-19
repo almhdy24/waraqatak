@@ -8,12 +8,13 @@ import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_payment.dart';
 import '../models/document_status.dart';
+import '../models/tax_profile.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 9;
+  static const int dbVersion = 10;
 
   static Database? _database;
 
@@ -35,6 +36,19 @@ class DatabaseHelper {
 
   Future<void> _createTables(Database db, int version) async {
     await db.execute('''
+      CREATE TABLE tax_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT DEFAULT 'vat',
+        rate REAL DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        is_default INTEGER DEFAULT 0,
+        calculation_mode TEXT DEFAULT 'exclusive',
+        notes TEXT
+      )
+    ''');
+
+    await db.execute('''
       CREATE TABLE businesses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -44,7 +58,17 @@ class DatabaseHelper {
         email TEXT,
         logo_path TEXT,
         currency_code TEXT DEFAULT 'SDG',
-        tax_rate REAL DEFAULT 0
+        tax_rate REAL DEFAULT 0,
+        legal_name TEXT,
+        tax_id TEXT,
+        tax_reg TEXT,
+        commercial_reg TEXT,
+        branch TEXT,
+        taxes_enabled INTEGER DEFAULT 0,
+        prices_include_tax INTEGER DEFAULT 0,
+        default_tax_profile_id INTEGER,
+        invoice_title TEXT,
+        legal_footer TEXT
       )
     ''');
 
@@ -58,6 +82,8 @@ class DatabaseHelper {
         notes TEXT,
         type TEXT DEFAULT 'customer',
         active INTEGER DEFAULT 1,
+        legal_name TEXT,
+        tax_id TEXT,
         created_at TEXT,
         updated_at TEXT
       )
@@ -78,6 +104,7 @@ class DatabaseHelper {
         is_taxable INTEGER DEFAULT 1,
         is_active INTEGER DEFAULT 1,
         notes TEXT,
+        tax_profile_id INTEGER,
         created_at TEXT,
         updated_at TEXT
       )
@@ -137,6 +164,7 @@ class DatabaseHelper {
         price REAL NOT NULL,
         total REAL NOT NULL,
         taxable INTEGER DEFAULT 1,
+        tax_rate REAL,
         FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
@@ -304,6 +332,51 @@ class DatabaseHelper {
           timestamp TEXT NOT NULL
         )
       ''');
+    }
+
+    if (oldVersion < 10) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS tax_profiles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          type TEXT DEFAULT 'vat',
+          rate REAL DEFAULT 0,
+          is_active INTEGER DEFAULT 1,
+          is_default INTEGER DEFAULT 0,
+          calculation_mode TEXT DEFAULT 'exclusive',
+          notes TEXT
+        )
+      ''');
+      // businesses: legal identity + tax config + document settings
+      for (final col in [
+        "ALTER TABLE businesses ADD COLUMN legal_name TEXT",
+        "ALTER TABLE businesses ADD COLUMN tax_id TEXT",
+        "ALTER TABLE businesses ADD COLUMN tax_reg TEXT",
+        "ALTER TABLE businesses ADD COLUMN commercial_reg TEXT",
+        "ALTER TABLE businesses ADD COLUMN branch TEXT",
+        "ALTER TABLE businesses ADD COLUMN taxes_enabled INTEGER DEFAULT 0",
+        "ALTER TABLE businesses ADD COLUMN prices_include_tax INTEGER DEFAULT 0",
+        "ALTER TABLE businesses ADD COLUMN default_tax_profile_id INTEGER",
+        "ALTER TABLE businesses ADD COLUMN invoice_title TEXT",
+        "ALTER TABLE businesses ADD COLUMN legal_footer TEXT",
+      ]) {
+        try { await db.execute(col); } catch (_) {}
+      }
+      // contacts: legal identity
+      for (final col in [
+        "ALTER TABLE contacts ADD COLUMN legal_name TEXT",
+        "ALTER TABLE contacts ADD COLUMN tax_id TEXT",
+      ]) {
+        try { await db.execute(col); } catch (_) {}
+      }
+      // products: tax profile link
+      if (!await columnExists('products', 'tax_profile_id')) {
+        await db.execute('ALTER TABLE products ADD COLUMN tax_profile_id INTEGER');
+      }
+      // document_items: tax rate snapshot
+      if (!await columnExists('document_items', 'tax_rate')) {
+        await db.execute('ALTER TABLE document_items ADD COLUMN tax_rate REAL');
+      }
     }
   }
 
@@ -631,6 +704,7 @@ class DatabaseHelper {
           'price': item.price,
           'total': item.total,
           'taxable': item.taxable ? 1 : 0,
+          'tax_rate': item.taxRate,
         });
 
         if (item.productId == null || item.quantity <= 0) continue;
@@ -729,6 +803,7 @@ class DatabaseHelper {
           'price': item.price,
           'total': item.total,
           'taxable': item.taxable ? 1 : 0,
+          'tax_rate': item.taxRate,
         });
 
         if (item.productId == null || item.quantity <= 0) continue;
@@ -1487,5 +1562,60 @@ class DatabaseHelper {
       await _database!.close();
       _database = null;
     }
+  }
+
+  // ========== Tax Profiles ==========
+
+  Future<int> insertTaxProfile(TaxProfile p) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      if (p.isDefault) {
+        await txn.update('tax_profiles', {'is_default': 0});
+      }
+      return txn.insert('tax_profiles', p.toMap());
+    });
+  }
+
+  Future<int> updateTaxProfile(TaxProfile p) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      if (p.isDefault) {
+        await txn.update('tax_profiles', {'is_default': 0},
+            where: 'id != ?', whereArgs: [p.id]);
+      }
+      return txn.update('tax_profiles', p.toMap(),
+          where: 'id = ?', whereArgs: [p.id]);
+    });
+  }
+
+  Future<int> deleteTaxProfile(int id) async {
+    final db = await database;
+    return db.delete('tax_profiles', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<TaxProfile>> getTaxProfiles({bool activeOnly = false}) async {
+    final db = await database;
+    final maps = await db.query(
+      'tax_profiles',
+      where: activeOnly ? 'is_active = 1' : null,
+      orderBy: 'is_default DESC, name',
+    );
+    return maps.map(TaxProfile.fromMap).toList();
+  }
+
+  Future<TaxProfile?> getTaxProfileById(int id) async {
+    final db = await database;
+    final maps =
+        await db.query('tax_profiles', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return TaxProfile.fromMap(maps.first);
+  }
+
+  Future<TaxProfile?> getDefaultTaxProfile() async {
+    final db = await database;
+    final maps = await db.query('tax_profiles',
+        where: 'is_default = 1 AND is_active = 1', limit: 1);
+    if (maps.isEmpty) return null;
+    return TaxProfile.fromMap(maps.first);
   }
 }

@@ -495,5 +495,52 @@ class AppLocalizations {
   // ========== PHASE 3.4 — AUDIT ==========
   String get auditLog => _t('سجل الأحداث', 'Audit Log');
 
+  // ========== PHASE 3.5 — FINANCIAL & LEGAL ==========
+  String get financialSettings   => _t('الإعدادات المالية والقانونية', 'Financial & Legal Settings');
+  String get financialSettingsDesc => _t('الضرائب والهوية القانونية وإعدادات المستندات', 'Taxes, legal identity & document settings');
+  String get legalIdentity       => _t('الهوية القانونية',        'Legal Identity');
+  String get legalName           => _t('الاسم القانوني',          'Legal / Registered Name');
+  String get taxId               => _t('الرقم الضريبي',           'Tax ID');
+  String get taxReg              => _t('رقم التسجيل الضريبي',     'Tax Registration No.');
+  String get commercialReg       => _t('السجل التجاري',           'Commercial Reg. No.');
+  String get branch              => _t('الفرع',                   'Branch');
+
+  String get taxSettings         => _t('إعدادات الضريبة',         'Tax Settings');
+  String get taxesEnabled        => _t('تفعيل الضريبة',           'Enable Taxes');
+  String get taxesEnabledDesc    => _t('عرض الضريبة في الفواتير', 'Show tax on invoices');
+  String get pricesIncludeTax    => _t('الأسعار شاملة الضريبة',  'Prices include tax (inclusive)');
+  String get pricesIncludeTaxDesc => _t('سعر الوحدة يشمل الضريبة بالفعل', 'Unit price already includes tax');
+  String get defaultTaxProfile   => _t('ملف ضريبي افتراضي',       'Default Tax Profile');
+  String get noDefaultProfile    => _t('لا يوجد ملف افتراضي',     'No default profile');
+
+  String get taxProfiles         => _t('ملفات الضريبة',           'Tax Profiles');
+  String get taxProfilesDesc     => _t('إنشاء وإدارة معدلات الضريبة', 'Create and manage tax rates');
+  String get addTaxProfile       => _t('إضافة ملف ضريبي',         'Add Tax Profile');
+  String get editTaxProfile      => _t('تعديل الملف الضريبي',     'Edit Tax Profile');
+  String get taxProfileName      => _t('اسم الملف الضريبي',       'Profile Name');
+  String get taxProfileType      => _t('نوع الضريبة',             'Tax Type');
+  String get taxProfileRate      => _t('نسبة الضريبة (%)',         'Tax Rate (%)');
+  String get taxProfileDefault   => _t('افتراضي',                  'Default');
+  String get taxProfileInclusive => _t('شامل (مضمّن في السعر)',   'Inclusive (in price)');
+  String get taxProfileExclusive => _t('غير شامل (يضاف للسعر)',  'Exclusive (added on top)');
+  String get calculationMode     => _t('طريقة الاحتساب',          'Calculation Mode');
+  String get noTaxProfiles       => _t('لا توجد ملفات ضريبية بعد', 'No tax profiles yet');
+  String get confirmDeleteProfile => _t('حذف الملف الضريبي؟',     'Delete Tax Profile?');
+  String get taxTypeVat          => _t('ضريبة القيمة المضافة',    'VAT');
+  String get taxTypeSalesTax     => _t('ضريبة المبيعات',          'Sales Tax');
+  String get taxTypeServiceCharge => _t('رسوم خدمة',             'Service Charge');
+  String get taxTypeOther        => _t('أخرى',                    'Other');
+
+  String get documentSettings    => _t('إعدادات المستند',          'Document Settings');
+  String get invoiceTitle        => _t('عنوان الفاتورة',           'Invoice Title');
+  String get invoiceTitleDesc    => _t('يظهر في رأس الفاتورة بدلاً من "فاتورة"', 'Shown on invoice instead of "Invoice"');
+  String get legalFooter         => _t('التذييل القانوني',          'Legal Footer');
+  String get legalFooterDesc     => _t('نص يظهر في أسفل كل فاتورة', 'Text shown at the bottom of each invoice');
+
+  String get contactLegalName    => _t('الاسم القانوني للجهة',     'Contact Legal Name');
+  String get contactTaxId        => _t('الرقم الضريبي للجهة',      'Contact Tax ID');
+  String get taxProfile          => _t('الملف الضريبي',            'Tax Profile');
+  String get noTaxProfile        => _t('بدون ملف ضريبي',           'No Tax Profile');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }
