@@ -1,0 +1,11 @@
+name: elmahdi_pay_example
+description: Example integration of elmahdi_pay_flutter SDK.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  elmahdi_pay_flutter:
+    path: ../

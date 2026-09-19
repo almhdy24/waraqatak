@@ -1,0 +1,7 @@
+.dart_tool/
+.packages
+build/
+*.snapshot
+pubspec.lock
+example/pubspec.lock
+example/.dart_tool/
