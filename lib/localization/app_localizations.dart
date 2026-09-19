@@ -336,6 +336,36 @@ class AppLocalizations {
   String get retry => _t('إعادة المحاولة', 'Retry');
   String get items => _t('البنود', 'Items');
 
+  // ========== PRODUCTS PHASE 3.1 ==========
+  String get productType => _t('نوع المنتج', 'Product Type');
+  String get productItem => _t('منتج', 'Product');
+  String get serviceItem => _t('خدمة', 'Service');
+  String get barcode => _t('الباركود', 'Barcode');
+  String get sku => _t('رمز المخزون (SKU)', 'SKU');
+  String get unit => _t('وحدة القياس', 'Unit');
+  String get active => _t('نشط', 'Active');
+  String get inactive => _t('غير نشط', 'Inactive');
+  String get addProduct => _t('إضافة منتج', 'Add Product');
+  String get addService => _t('إضافة خدمة', 'Add Service');
+  String get editProduct => _t('تعديل المنتج', 'Edit Product');
+  String get editService => _t('تعديل الخدمة', 'Edit Service');
+  String get deactivateProduct => _t('تعطيل المنتج', 'Deactivate Product');
+  String get activateProduct => _t('تفعيل المنتج', 'Activate Product');
+  String get deactivateProductMessage => _t(
+    'هذا المنتج مستخدم في مستندات سابقة. هل تريد تعطيله بدلاً من حذفه؟',
+    'This product is used in existing documents. Deactivate it instead of deleting?',
+  );
+  String get productDeactivated => _t('تم تعطيل المنتج', 'Product deactivated');
+  String get productActivated => _t('تم تفعيل المنتج', 'Product activated');
+  String get scanBarcode => _t('مسح الباركود', 'Scan Barcode');
+  String get barcodeScanner => _t('ماسح الباركود', 'Barcode Scanner');
+  String get barcodeNotFound => _t('لم يُعثر على منتج بهذا الباركود', 'No product found for this barcode');
+  String get duplicateBarcode => _t('هذا الباركود مستخدم لمنتج آخر', 'This barcode is already used by another product');
+  String get createFromBarcode => _t('إنشاء منتج جديد', 'Create New Product');
+  String get allTypes => _t('الكل', 'All');
+  String get productsOnly => _t('المنتجات', 'Products');
+  String get servicesOnly => _t('الخدمات', 'Services');
+
   // ========== DEVELOPER ==========
   String get developer => _t('المطور', 'Developer');
   String get madeBy => _t('تطوير', 'Made by');

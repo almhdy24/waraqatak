@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
+import '../screens/barcode_scanner_screen.dart';
+import '../screens/product_form_screen.dart';
 import 'product_autocomplete_field.dart';
 
 class DocumentItemForm extends StatefulWidget {
@@ -66,6 +69,53 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     widget.onChanged?.call();
   }
 
+  Future<void> _scanAndLookup(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (code == null || !context.mounted) return;
+
+    final product = await DatabaseHelper.instance.getProductByBarcode(code);
+    if (product != null) {
+      _onProductSelected(product);
+      return;
+    }
+
+    if (!context.mounted) return;
+    final create = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.barcodeNotFound),
+        content: Text(code),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.createFromBarcode),
+          ),
+        ],
+      ),
+    );
+
+    if (create == true && context.mounted) {
+      final newId = await Navigator.push<int>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProductFormScreen(initialBarcode: code),
+        ),
+      );
+      if (newId != null && context.mounted) {
+        final created = await DatabaseHelper.instance.getProductById(newId);
+        if (created != null) _onProductSelected(created);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -76,9 +126,20 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         child: Column(
           children: [
             if (_selectedProductId == null)
-              ProductAutocompleteField(
-                label: l10n.productName,
-                onProductSelected: _onProductSelected,
+              Row(
+                children: [
+                  Expanded(
+                    child: ProductAutocompleteField(
+                      label: l10n.productName,
+                      onProductSelected: _onProductSelected,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.qr_code_scanner),
+                    tooltip: l10n.scanBarcode,
+                    onPressed: () => _scanAndLookup(context),
+                  ),
+                ],
               )
             else
               Row(

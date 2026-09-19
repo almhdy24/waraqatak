@@ -18,7 +18,7 @@ class ProductAutocompleteField extends StatelessWidget {
       displayStringForOption: (product) => product.name,
       optionsBuilder: (textEditingValue) async {
         if (textEditingValue.text.isEmpty) return const <Product>[];
-        return await DatabaseHelper.instance.searchProducts(textEditingValue.text);
+        return DatabaseHelper.instance.searchActiveProducts(textEditingValue.text);
       },
       onSelected: onProductSelected,
       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {

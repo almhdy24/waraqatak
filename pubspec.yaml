@@ -42,6 +42,9 @@ dependencies:
   # App information
   package_info_plus: ^10.2.1
 
+  # Barcode scanning
+  mobile_scanner: ^6.0.2
+
 dependency_overrides:
   # path_provider_android 2.3.x introduced a JNI/NDK-28 dependency that
   # conflicts with the NDK-29-only Termux Android SDK. Pin to 2.2.x.

@@ -12,7 +12,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 6;
+  static const int dbVersion = 7;
 
   static Database? _database;
 
@@ -61,15 +61,23 @@ class DatabaseHelper {
       CREATE TABLE products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
+        type TEXT DEFAULT 'product',
         code TEXT,
+        barcode TEXT,
+        unit TEXT,
         sale_price REAL DEFAULT 0,
         purchase_price REAL DEFAULT 0,
         stock_quantity REAL DEFAULT 0,
         min_stock REAL DEFAULT 0,
         is_taxable INTEGER DEFAULT 1,
-        notes TEXT
+        is_active INTEGER DEFAULT 1,
+        notes TEXT,
+        created_at TEXT,
+        updated_at TEXT
       )
     ''');
+    await db.execute('CREATE INDEX idx_products_name ON products(name)');
+    await db.execute('CREATE INDEX idx_products_barcode ON products(barcode)');
 
     await db.execute('''
       CREATE TABLE documents (
@@ -196,6 +204,29 @@ class DatabaseHelper {
         );
       }
     }
+
+    if (oldVersion < 7) {
+      if (!await columnExists('products', 'type')) {
+        await db.execute("ALTER TABLE products ADD COLUMN type TEXT DEFAULT 'product'");
+      }
+      if (!await columnExists('products', 'barcode')) {
+        await db.execute('ALTER TABLE products ADD COLUMN barcode TEXT');
+      }
+      if (!await columnExists('products', 'unit')) {
+        await db.execute('ALTER TABLE products ADD COLUMN unit TEXT');
+      }
+      if (!await columnExists('products', 'is_active')) {
+        await db.execute('ALTER TABLE products ADD COLUMN is_active INTEGER DEFAULT 1');
+      }
+      if (!await columnExists('products', 'created_at')) {
+        await db.execute('ALTER TABLE products ADD COLUMN created_at TEXT');
+      }
+      if (!await columnExists('products', 'updated_at')) {
+        await db.execute('ALTER TABLE products ADD COLUMN updated_at TEXT');
+      }
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)');
+    }
   }
 
   // ========== Business ==========
@@ -288,17 +319,37 @@ class DatabaseHelper {
     return rows.isNotEmpty;
   }
 
-  Future<List<Product>> getAllProducts() async {
+  Future<List<Product>> getAllProducts({String? type, bool? activeOnly}) async {
     final db = await database;
-    final maps = await db.query('products', orderBy: 'name');
+    final conditions = <String>[];
+    final args = <Object?>[];
+    if (type != null) {
+      conditions.add('type = ?');
+      args.add(type);
+    }
+    if (activeOnly == true) {
+      conditions.add('is_active = 1');
+    }
+    final where = conditions.isEmpty ? null : conditions.join(' AND ');
+    final maps = await db.query('products', where: where, whereArgs: args.isEmpty ? null : args, orderBy: 'name');
     return maps.map((e) => Product.fromMap(e)).toList();
   }
 
   Future<List<Product>> searchProducts(String query) async {
     final db = await database;
     final maps = await db.query('products',
-        where: 'name LIKE ? OR code LIKE ?',
-        whereArgs: ['%$query%', '%$query%'],
+        where: 'name LIKE ? OR code LIKE ? OR barcode LIKE ?',
+        whereArgs: ['%$query%', '%$query%', '%$query%'],
+        orderBy: 'name',
+        limit: 10);
+    return maps.map((e) => Product.fromMap(e)).toList();
+  }
+
+  Future<List<Product>> searchActiveProducts(String query) async {
+    final db = await database;
+    final maps = await db.query('products',
+        where: '(name LIKE ? OR code LIKE ? OR barcode LIKE ?) AND is_active = 1',
+        whereArgs: ['%$query%', '%$query%', '%$query%'],
         orderBy: 'name',
         limit: 10);
     return maps.map((e) => Product.fromMap(e)).toList();
@@ -309,6 +360,31 @@ class DatabaseHelper {
     final maps = await db.query('products', where: 'id = ?', whereArgs: [id]);
     if (maps.isEmpty) return null;
     return Product.fromMap(maps.first);
+  }
+
+  Future<Product?> getProductByBarcode(String barcode) async {
+    final db = await database;
+    final maps = await db.query('products',
+        where: 'barcode = ? AND is_active = 1', whereArgs: [barcode], limit: 1);
+    if (maps.isEmpty) return null;
+    return Product.fromMap(maps.first);
+  }
+
+  Future<bool> isBarcodeUsed(String barcode, {int? excludeId}) async {
+    final db = await database;
+    String where = 'barcode = ?';
+    final args = <Object?>[barcode];
+    if (excludeId != null) {
+      where += ' AND id != ?';
+      args.add(excludeId);
+    }
+    final rows = await db.query('products', columns: ['id'], where: where, whereArgs: args, limit: 1);
+    return rows.isNotEmpty;
+  }
+
+  Future<void> setProductActive(int id, {required bool active}) async {
+    final db = await database;
+    await db.update('products', {'is_active': active ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
   }
 
   // ========== Documents ==========
