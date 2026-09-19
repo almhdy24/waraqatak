@@ -109,6 +109,19 @@ class SubscriptionService {
         ActivateLicenseRequest(licenseKey: licenseKey, deviceId: deviceId),
       );
 
+  /// Activate a license by key only — used when the user manually enters their
+  /// key after formatting their phone or reinstalling the app.
+  static Future<void> activateByKey(String licenseKey, String deviceId) async {
+    await _sdk.public.activateLicense(
+      ActivateLicenseRequest(licenseKey: licenseKey, deviceId: deviceId),
+    );
+    await LicenseService.instance.storeLicense(
+      licenseKey: licenseKey,
+      expiresAt: null,
+      isActive: true,
+    );
+  }
+
   static void close() {
     _client?.close();
     _client = null;

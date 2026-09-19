@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../models/subscription_plan.dart';
 import '../services/license_service.dart';
+import '../services/subscription_service.dart';
 import 'payment_flow_screen.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -231,6 +234,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             ),
           ),
         ),
+
+        const SizedBox(height: 20),
+        _RestoreKeyTile(onRestored: () {
+          LicenseService.instance.invalidateCache();
+          Navigator.pop(context, true);
+        }),
       ],
     );
   }
@@ -460,6 +469,199 @@ class _PlanCard extends StatelessWidget {
             style: TextStyle(
                 color: fg, fontSize: 10, fontWeight: FontWeight.bold)),
       );
+}
+
+// ── Restore License Key Tile ──────────────────────────────────────────────────
+
+class _RestoreKeyTile extends StatelessWidget {
+  final VoidCallback onRestored;
+  const _RestoreKeyTile({required this.onRestored});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: () => _showSheet(context, l10n, cs),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cs.outlineVariant),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.vpn_key_outlined, size: 20, color: cs.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.haveALicenseKey,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: cs.onSurface)),
+                  const SizedBox(height: 2),
+                  Text(l10n.formattedPhoneNote,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                          height: 1.4)),
+                ],
+              ),
+            ),
+            Icon(
+              Directionality.of(context) == TextDirection.rtl
+                  ? Icons.chevron_left_rounded
+                  : Icons.chevron_right_rounded,
+              color: cs.onSurfaceVariant,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSheet(
+      BuildContext context, AppLocalizations l10n, ColorScheme cs) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _KeyEntrySheet(l10n: l10n, cs: cs, onRestored: onRestored),
+    );
+  }
+}
+
+class _KeyEntrySheet extends StatefulWidget {
+  final AppLocalizations l10n;
+  final ColorScheme cs;
+  final VoidCallback onRestored;
+  const _KeyEntrySheet(
+      {required this.l10n, required this.cs, required this.onRestored});
+
+  @override
+  State<_KeyEntrySheet> createState() => _KeyEntrySheetState();
+}
+
+class _KeyEntrySheetState extends State<_KeyEntrySheet> {
+  final _ctrl = TextEditingController();
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _activate() async {
+    final key = _ctrl.text.trim();
+    if (key.isEmpty) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final deviceId = await LicenseService.instance.getOrCreateDeviceId();
+      await SubscriptionService.activateByKey(key, deviceId);
+      if (!mounted) return;
+      Navigator.pop(context);
+      widget.onRestored();
+    } on ElmahdiPayForbiddenException {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = widget.l10n.invalidLicenseKey;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = widget.l10n.networkError;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = widget.l10n;
+    final cs = widget.cs;
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(l10n.restoreLicense,
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(l10n.formattedPhoneNote,
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, height: 1.4)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _ctrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9\-]')),
+              ],
+              decoration: InputDecoration(
+                labelText: l10n.enterLicenseKey,
+                hintText: l10n.licenseKeyHint,
+                prefixIcon: const Icon(Icons.vpn_key_outlined),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                errorText: _error,
+              ),
+              onSubmitted: (_) => _activate(),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: FilledButton(
+                onPressed: _loading ? null : _activate,
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _loading
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Text(l10n.activate,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Trust Row ─────────────────────────────────────────────────────────────────

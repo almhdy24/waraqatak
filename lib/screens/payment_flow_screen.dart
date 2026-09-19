@@ -341,6 +341,30 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
             const SizedBox(height: 12),
           ],
 
+          // Help note
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline_rounded, size: 18, color: cs.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    l10n.enterCorrectDataNote,
+                    style: TextStyle(fontSize: 13, color: cs.primary, height: 1.45),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Buyer details
           Card(
             elevation: 0,
@@ -353,23 +377,30 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                 children: [
                   TextFormField(
                     controller: _nameCtrl,
-                    decoration: InputDecoration(labelText: l10n.buyerNameLabel),
+                    decoration: InputDecoration(
+                      labelText: l10n.buyerNameLabel,
+                      helperText: l10n.buyerNameHelper,
+                      helperMaxLines: 2,
+                    ),
                     textInputAction: TextInputAction.next,
                     validator: (v) => v == null || v.trim().isEmpty
                         ? l10n.required
                         : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _contactCtrl,
-                    decoration:
-                        InputDecoration(labelText: l10n.buyerContactLabel),
+                    decoration: InputDecoration(
+                      labelText: l10n.buyerContactLabel,
+                      helperText: l10n.buyerContactHelper,
+                      helperMaxLines: 2,
+                    ),
                     keyboardType: TextInputType.emailAddress,
                     validator: (v) => v == null || v.trim().isEmpty
                         ? l10n.required
                         : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _noteCtrl,
                     decoration:

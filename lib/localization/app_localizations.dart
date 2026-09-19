@@ -609,5 +609,19 @@ class AppLocalizations {
   String get networkError              => _t('تعذّر الاتصال بالخادم',                 'Could not connect to server');
   String get rateLimitError            => _t('الرجاء الانتظار قبل إعادة المحاولة',   'Please wait before retrying');
 
+  // ── License key restore ────────────────────────────────────────────────────
+  String get haveALicenseKey       => _t('هل لديك مفتاح ترخيص؟',                       'Have a license key?');
+  String get restoreLicense        => _t('استعادة الترخيص',                             'Restore License');
+  String get enterLicenseKey       => _t('أدخل مفتاح الترخيص',                          'Enter License Key');
+  String get licenseKeyHint        => _t('مثال: XXXX-XXXX-XXXX',                        'e.g. XXXX-XXXX-XXXX');
+  String get activate              => _t('تفعيل',                                        'Activate');
+  String get formattedPhoneNote    => _t('إذا غيّرت هاتفك أو أعدت تنسيقه، أدخل مفتاح الترخيص الخاص بك لاستعادة وصولك فوراً.', 'If you formatted your phone, enter your license key to instantly restore access.');
+  String get invalidLicenseKey     => _t('مفتاح الترخيص غير صحيح أو منتهي الصلاحية',  'Invalid or expired license key');
+
+  // ── Payment form help ──────────────────────────────────────────────────────
+  String get enterCorrectDataNote  => _t('أدخل بياناتك الصحيحة — سنتواصل معك إذا واجهنا أي مشكلة ونرسل لك مفتاح الترخيص.', 'Enter your correct details — we\'ll contact you if there\'s any issue and send your license key.');
+  String get buyerNameHelper       => _t('اسمك الكامل كما هو، حتى نتعرف على دفعتك',    'Your full name, so we can identify your payment');
+  String get buyerContactHelper    => _t('هاتفك أو بريدك — نتواصل بك إذا احتجنا لذلك',  'Your phone or email — we\'ll reach you if needed');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

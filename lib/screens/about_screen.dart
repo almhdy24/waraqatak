@@ -61,6 +61,7 @@ class AboutScreen extends StatelessWidget {
                 context,
                 icon: Icons.receipt_long_rounded,
                 title: l10n.documents,
+                color: const Color(0xFF3B5BDB),
               ),
               const SizedBox(height: 12),
               _buildFeatureGroup(
@@ -77,12 +78,14 @@ class AboutScreen extends StatelessWidget {
                   _Feature(Icons.account_balance_wallet_outlined, l10n.paymentTracking),
                   _Feature(Icons.published_with_changes_rounded, l10n.convertToInvoice),
                 ],
+                color: const Color(0xFF3B5BDB),
               ),
               const SizedBox(height: 24),
               _buildSectionHeader(
                 context,
                 icon: Icons.business_center_outlined,
                 title: l10n.businessData,
+                color: const Color(0xFF0D7A5F),
               ),
               const SizedBox(height: 12),
               _buildFeatureGroup(
@@ -97,12 +100,14 @@ class AboutScreen extends StatelessWidget {
                   _Feature(Icons.percent_rounded, l10n.taxProfiles),
                   _Feature(Icons.language_rounded, l10n.arabicEnglishSupport),
                 ],
+                color: const Color(0xFF0D7A5F),
               ),
               const SizedBox(height: 24),
               _buildSectionHeader(
                 context,
                 icon: Icons.security_outlined,
                 title: l10n.backupRestore,
+                color: const Color(0xFF087F5B),
               ),
               const SizedBox(height: 12),
               _buildFeatureGroup(
@@ -114,12 +119,14 @@ class AboutScreen extends StatelessWidget {
                   _Feature(Icons.workspace_premium_outlined, l10n.trialFreeDays),
                   _Feature(Icons.shield_outlined, l10n.dataAlwaysSafe),
                 ],
+                color: const Color(0xFF087F5B),
               ),
               const SizedBox(height: 30),
               _buildSectionHeader(
                 context,
                 icon: Icons.support_agent_rounded,
                 title: l10n.contact,
+                color: const Color(0xFFE67700),
               ),
               const SizedBox(height: 12),
               _buildSupportSection(context, l10n),
@@ -128,6 +135,7 @@ class AboutScreen extends StatelessWidget {
                 context,
                 icon: Icons.code_rounded,
                 title: l10n.developer,
+                color: const Color(0xFF6741D9),
               ),
               const SizedBox(height: 12),
               _buildDeveloperSection(context, l10n),
@@ -149,19 +157,27 @@ class AboutScreen extends StatelessWidget {
     return Column(
       children: [
         Container(
-          width: 104,
-          height: 104,
+          width: 110,
+          height: 110,
           decoration: BoxDecoration(
-            color: colors.primaryContainer,
-            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              colors: [colors.primary, colors.tertiary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: colors.primary.withValues(alpha: 0.35),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(22),
           child: SvgPicture.asset(
             'assets/logo.svg',
-            colorFilter: ColorFilter.mode(
-              colors.onPrimaryContainer,
-              BlendMode.srcIn,
-            ),
+            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
           ),
         ),
         const SizedBox(height: 20),
@@ -244,19 +260,20 @@ class AboutScreen extends StatelessWidget {
     BuildContext context, {
     required IconData icon,
     required String title,
+    Color? color,
   }) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final c = color ?? Theme.of(context).colorScheme.primary;
     return Row(
       children: [
         Container(
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: colors.primaryContainer,
+            color: c.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, size: 19, color: colors.onPrimaryContainer),
+          child: Icon(icon, size: 19, color: c),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -270,7 +287,8 @@ class AboutScreen extends StatelessWidget {
   }
 
   // ─── Feature Group ──────────────────────────────────
-  Widget _buildFeatureGroup(BuildContext context, List<_Feature> features) {
+  Widget _buildFeatureGroup(BuildContext context, List<_Feature> features,
+      {Color? color}) {
     final colors = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
@@ -281,7 +299,7 @@ class AboutScreen extends StatelessWidget {
       child: Column(
         children: [
           for (int i = 0; i < features.length; i++) ...[
-            _featureRow(context, features[i]),
+            _featureRow(context, features[i], color: color),
             if (i < features.length - 1)
               Divider(height: 1, indent: 62, endIndent: 16, color: colors.outlineVariant),
           ],
@@ -290,9 +308,9 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  Widget _featureRow(BuildContext context, _Feature feature) {
+  Widget _featureRow(BuildContext context, _Feature feature, {Color? color}) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final c = color ?? theme.colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       child: Row(
@@ -301,10 +319,10 @@ class AboutScreen extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: colors.primaryContainer,
+              color: c.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(feature.icon, size: 19, color: colors.onPrimaryContainer),
+            child: Icon(feature.icon, size: 19, color: c),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -313,7 +331,7 @@ class AboutScreen extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
-          Icon(Icons.check_circle_rounded, size: 19, color: colors.primary),
+          Icon(Icons.check_circle_rounded, size: 19, color: c),
         ],
       ),
     );
