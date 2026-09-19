@@ -1,7 +1,7 @@
 class AppConstants {
   static const String appName = 'Waraqatak';
 
-  static const String supportEmail = 'almhdybdallh24@gmail.com';
+  static const String supportEmail = 'support@almhdy24.com';
 
   static const String whatsappNumber = '249993452125';
 
