@@ -6,6 +6,8 @@ import '../models/business.dart';
 import '../models/date_range_filter.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
+import '../models/entitlement.dart';
+import '../services/license_service.dart';
 import 'business_setup_screen.dart';
 import 'custom_document_screen.dart';
 import 'document_detail_screen.dart';
@@ -14,6 +16,7 @@ import 'inventory_screen.dart';
 import 'purchase_screen.dart';
 import 'quotation_screen.dart';
 import 'reports_screen.dart';
+import 'subscription_screen.dart';
 import 'voucher_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -30,6 +33,7 @@ class HomeScreenState extends State<HomeScreen> {
   DateRangeFilter _dateRange = DateRangeFilter.thisMonth();
   bool _loading = true;
   String? _error;
+  EntitlementState? _entitlement;
 
   static final _numFmt = NumberFormat('#,##0');
 
@@ -54,6 +58,12 @@ class HomeScreenState extends State<HomeScreen> {
         db.getPeriodSummary(from: _dateRange.from, to: _dateRange.to),
         db.getRecentDocuments(limit: 5),
       ]);
+
+      // Load entitlement from cache (no I/O if already checked this session).
+      LicenseService.instance
+          .checkEntitlement(force: false)
+          .then((e) { if (mounted) setState(() => _entitlement = e); })
+          .catchError((_) {});
 
       if (!mounted) return;
       setState(() {
@@ -222,6 +232,10 @@ class HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Subscription status banner (trial countdown / renewal warning)
+              if (_buildSubscriptionBanner(l10n) case final banner?)
+                banner,
+
               // Quick actions
               SizedBox(
                 height: 52,
@@ -445,6 +459,71 @@ class HomeScreenState extends State<HomeScreen> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildSubscriptionBanner(AppLocalizations l10n) {
+    final e = _entitlement;
+    if (e == null) return null;
+
+    String? message;
+    Color? bgColor;
+    Color? textColor;
+    bool isWarning = false;
+
+    if (e.status == EntitlementStatus.trialActive) {
+      isWarning = e.trialDaysRemaining <= 5;
+      message = '${e.trialDaysRemaining} ${l10n.daysLeftInTrial}';
+      bgColor = isWarning ? Colors.amber.shade100 : Colors.green.shade50;
+      textColor = isWarning ? Colors.amber.shade900 : Colors.green.shade800;
+    } else if (e.status == EntitlementStatus.licensed &&
+        e.licenseExpiresAt != null) {
+      final daysLeft = e.licenseExpiresAt!.difference(DateTime.now()).inDays;
+      if (daysLeft <= 14) {
+        message = '${l10n.licenseExpiresOn} '
+            '${e.licenseExpiresAt!.toLocal().toString().split(' ').first}';
+        bgColor = Colors.amber.shade100;
+        textColor = Colors.amber.shade900;
+        isWarning = true;
+      }
+    }
+
+    if (message == null) return null;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+      ).then((_) => _load()),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isWarning ? Icons.warning_amber_rounded : Icons.info_outline,
+              size: 18,
+              color: textColor,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(message,
+                  style: TextStyle(
+                      fontSize: 13, color: textColor, fontWeight: FontWeight.w500)),
+            ),
+            Text(l10n.renewNow,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                    decoration: TextDecoration.underline)),
+          ],
         ),
       ),
     );

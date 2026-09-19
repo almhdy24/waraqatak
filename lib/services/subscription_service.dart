@@ -13,8 +13,7 @@ class SubscriptionService {
   SubscriptionService._();
 
   // ── Configuration ──────────────────────────────────────────────────────────
-  // Server URL for the Elmahdi Pay backend. Update this after deployment.
-  static const String serverUrl = 'https://pay.elmahdi.dev';
+  static const String serverUrl = 'https://api.almhdy24.com';
   static const String _appSlug  = 'com.elmahdi.waraqatak';
   static const String _currency  = 'SDG';
 

@@ -20,11 +20,22 @@ class _SplashScreenState extends State<SplashScreen> {
     _init();
   }
 
+  Future<EntitlementState> _safeCheckEntitlement() async {
+    try {
+      return await LicenseService.instance.checkEntitlement();
+    } catch (_) {
+      return const EntitlementState(
+        status: EntitlementStatus.trialActive,
+        deviceId: 'unknown',
+        trialDaysRemaining: 14,
+      );
+    }
+  }
+
   Future<void> _init() async {
-    // Run entitlement check concurrently with minimum splash delay.
     EntitlementState? state;
     await Future.wait([
-      LicenseService.instance.checkEntitlement().then((s) => state = s),
+      _safeCheckEntitlement().then((s) => state = s),
       Future<void>.delayed(const Duration(milliseconds: 1200)),
     ]);
     if (!mounted) return;
