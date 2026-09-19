@@ -18,6 +18,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   List<Contact>? _contacts;
   String _query = '';
   String _filterType = 'customer';
+  bool _activeOnly = false;
   String? _error;
 
   @override
@@ -42,22 +43,27 @@ class _CustomersScreenState extends State<CustomersScreen> {
       final db = DatabaseHelper.instance;
       List<Contact> contacts;
       if (_query.isNotEmpty) {
-        contacts = await db.searchContacts(_query, type: _filterType);
+        contacts = await db.searchContacts(_query, type: _filterType, activeOnly: _activeOnly);
       } else {
-        contacts = await db.getAllContacts();
-        contacts = contacts.where((c) => c.type == _filterType).toList();
+        contacts = await db.getAllContacts(type: _filterType, activeOnly: _activeOnly);
       }
 
       if (!mounted) return;
-      setState(() {
-        _contacts = contacts;
-      });
+      setState(() => _contacts = contacts);
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-      });
+      setState(() => _error = e.toString());
     }
+  }
+
+  Future<void> _toggleActive(Contact contact) async {
+    final l10n = AppLocalizations.of(context);
+    await DatabaseHelper.instance.setContactActive(contact.id!, active: !contact.active);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(contact.active ? l10n.contactDeactivated : l10n.contactActivated)),
+    );
+    _load();
   }
 
   Future<void> _deleteContact(Contact contact) async {
@@ -117,9 +123,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               decoration: InputDecoration(
                 hintText: l10n.search,
                 prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onChanged: (value) {
                 _query = value;
@@ -156,6 +160,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     },
                   ),
                 ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: Text(l10n.activeOnly),
+                  selected: _activeOnly,
+                  onSelected: (v) {
+                    setState(() => _activeOnly = v);
+                    _load();
+                  },
+                ),
               ],
             ),
           ),
@@ -184,10 +197,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
           children: [
             Text(l10n.operationFailed),
             const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _load,
-              child: Text(l10n.cancel),
-            ),
+            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
           ],
         ),
       );
@@ -205,13 +215,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.people_outline,
-                size: 64,
-                color: Colors.grey.shade400,
-              ),
+              Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
               const SizedBox(height: 16),
-              Text(l10n.noCustomers),
+              Text(_filterType == 'supplier' ? l10n.noSuppliers : l10n.noCustomers),
             ],
           ),
         ),
@@ -224,36 +230,68 @@ class _CustomersScreenState extends State<CustomersScreen> {
         final contact = contacts[index];
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-              child: Icon(
-                contact.type == 'supplier' ? Icons.store : Icons.person,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            title: Text(
-              contact.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              contact.phone ?? '',
-              style: const TextStyle(fontSize: 12),
-            ),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: () => _deleteContact(contact),
-            ),
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CustomerDetailScreen(contact: contact),
+          child: Opacity(
+            opacity: contact.active ? 1.0 : 0.55,
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor:
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                child: Icon(
+                  contact.type == 'supplier' ? Icons.store : Icons.person,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
-              );
-              _load();
-            },
+              ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      contact.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: contact.active ? null : TextDecoration.lineThrough,
+                      ),
+                    ),
+                  ),
+                  if (!contact.active)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(l10n.inactive, style: const TextStyle(fontSize: 11)),
+                    ),
+                ],
+              ),
+              subtitle: contact.phone != null ? Text(contact.phone!, style: const TextStyle(fontSize: 12)) : null,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      contact.active ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: contact.active ? Colors.orange : Colors.green,
+                      size: 20,
+                    ),
+                    tooltip: contact.active ? l10n.deactivateContact : l10n.activateContact,
+                    onPressed: () => _toggleActive(contact),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                    onPressed: () => _deleteContact(contact),
+                  ),
+                ],
+              ),
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CustomerDetailScreen(contact: contact),
+                  ),
+                );
+                _load();
+              },
+            ),
           ),
         );
       },

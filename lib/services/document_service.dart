@@ -48,6 +48,7 @@ class DocumentService {
 
     final isFinancial = type == 'payment_receipt' || type == 'expense_voucher';
     final isInvoice = type == 'invoice';
+    final isPurchase = type == 'purchase';
     final isQuotation = type == 'quotation';
     final isCustom = type == 'custom';
 
@@ -92,7 +93,7 @@ class DocumentService {
       total = subtotal + taxAmount;
       finalPaid = 0;
       remaining = total;
-    } else if (isInvoice) {
+    } else if (isInvoice || isPurchase) {
       subtotal = _calculateSubtotal(items);
       discountApplied = discount;
       if (discountApplied < 0) {
@@ -127,12 +128,12 @@ class DocumentService {
     }
 
     // Determine status:
-    // - Drafts only valid for invoice and quotation.
+    // - Drafts only valid for invoice, quotation, and purchase.
     // - Receipts/expenses are always issued immediately.
     final String status;
-    if (isDraft && (isInvoice || isQuotation)) {
+    if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       status = DocumentStatus.draft;
-    } else if (isInvoice) {
+    } else if (isInvoice || isPurchase) {
       status = DocumentStatus.fromPayment(finalPaid, total);
     } else {
       status = DocumentStatus.issued;
@@ -203,6 +204,7 @@ class DocumentService {
     final documentDate = date ?? existing.date;
     final isFinancial = type == 'payment_receipt' || type == 'expense_voucher';
     final isInvoice = type == 'invoice';
+    final isPurchase = type == 'purchase';
     final isQuotation = type == 'quotation';
     final isCustom = type == 'custom';
 
@@ -246,7 +248,7 @@ class DocumentService {
       total = subtotal + taxAmount;
       finalPaid = 0;
       remaining = total;
-    } else if (isInvoice) {
+    } else if (isInvoice || isPurchase) {
       subtotal = _calculateSubtotal(items);
       discountApplied = discount;
       if (discountApplied < 0) {
@@ -284,9 +286,9 @@ class DocumentService {
 
     // Compute new status (same logic as createDocument)
     final String newStatus;
-    if (isDraft && (isInvoice || isQuotation)) {
+    if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       newStatus = DocumentStatus.draft;
-    } else if (isInvoice) {
+    } else if (isInvoice || isPurchase) {
       newStatus = DocumentStatus.fromPayment(finalPaid, total);
     } else {
       newStatus = DocumentStatus.issued;

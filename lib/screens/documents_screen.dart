@@ -89,6 +89,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               children: [
                 _chip('all', l10n.all),
                 _chip('invoice', l10n.invoice),
+                _chip('purchase', l10n.purchase),
                 _chip('quotation', l10n.quotation),
                 _chip('payment_receipt', l10n.paymentReceipt),
                 _chip('expense_voucher', l10n.expenseVoucher),
@@ -156,7 +157,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       padding: const EdgeInsets.only(top: 4, bottom: 16),
       itemBuilder: (ctx, i) {
         final doc = docs[i];
-        final showRemaining = doc.type == 'invoice' &&
+        final showRemaining = (doc.type == 'invoice' || doc.type == 'purchase') &&
             doc.status != DocumentStatus.paid &&
             doc.status != DocumentStatus.cancelled &&
             doc.remaining > 0;
@@ -251,6 +252,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   IconData _iconFor(String type) {
     return switch (type) {
       'invoice'         => Icons.receipt_long_rounded,
+      'purchase'        => Icons.shopping_cart_outlined,
       'quotation'       => Icons.request_quote_rounded,
       'payment_receipt' => Icons.call_received_rounded,
       'expense_voucher' => Icons.money_off_rounded,

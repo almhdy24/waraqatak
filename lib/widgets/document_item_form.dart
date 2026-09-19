@@ -15,7 +15,8 @@ class DocumentItemForm extends StatefulWidget {
   final int? productId;
   final ValueChanged<int?> onProductChanged;
   final VoidCallback onDelete;
-  final VoidCallback? onChanged; // ✅ جديد: يستدعي عند تغيير الكمية أو السعر
+  final VoidCallback? onChanged;
+  final bool usePurchasePrice;
 
   const DocumentItemForm({
     super.key,
@@ -28,6 +29,7 @@ class DocumentItemForm extends StatefulWidget {
     required this.onProductChanged,
     required this.onDelete,
     this.onChanged,
+    this.usePurchasePrice = false,
   });
 
   @override
@@ -53,10 +55,11 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
 
   void _onProductSelected(Product? product) {
     if (product == null) return;
+    final price = widget.usePurchasePrice ? product.purchasePrice : product.salePrice;
     setState(() {
       _selectedProductId = product.id;
       widget.descriptionController.text = product.name;
-      widget.priceController.text = product.salePrice.toStringAsFixed(2);
+      widget.priceController.text = price.toStringAsFixed(2);
       widget.onTaxableChanged(product.isTaxable);
     });
     widget.onProductChanged(product.id);

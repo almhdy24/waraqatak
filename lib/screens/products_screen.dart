@@ -3,6 +3,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
+import 'inventory_screen.dart';
 import 'product_form_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -186,15 +187,30 @@ class _ProductsScreenState extends State<ProductsScreen> {
           Expanded(child: _buildList(context, l10n)),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab_products',
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ProductFormScreen()),
-          ).then((_) => _load());
-        },
-        child: const Icon(Icons.add),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'fab_inventory',
+            tooltip: AppLocalizations.of(context).inventory,
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const InventoryScreen()),
+            ).then((_) => _load()),
+            child: const Icon(Icons.warehouse_outlined),
+          ),
+          const SizedBox(height: 8),
+          FloatingActionButton(
+            heroTag: 'fab_products',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProductFormScreen()),
+              ).then((_) => _load());
+            },
+            child: const Icon(Icons.add),
+          ),
+        ],
       ),
     );
   }

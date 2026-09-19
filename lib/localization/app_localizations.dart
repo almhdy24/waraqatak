@@ -373,5 +373,49 @@ class AppLocalizations {
   String get viewOnGitHub => _t('GitHub', 'GitHub');
   String get waraqatakProductPage => _t('صفحة المنتج', 'Product Page');
 
+  // ========== PHASE 3.2 — PURCHASES ==========
+  String get purchase          => _t('أمر شراء',        'Purchase Order');
+  String get purchases         => _t('أوامر الشراء',    'Purchase Orders');
+  String get newPurchase       => _t('أمر شراء جديد',   'New Purchase Order');
+  String get finalizePurchase  => _t('إصدار أمر الشراء', 'Finalize Purchase');
+  String get purchaseDocument  => _t('مستند شراء',      'Purchase Document');
+  String get purchasesOnly     => _t('الشراء',          'Purchases');
+
+  // ========== PHASE 3.2 — SUPPLIERS ==========
+  String get suppliers          => _t('الموردون',            'Suppliers');
+  String get suppliersOnly      => _t('الموردون',            'Suppliers');
+  String get noSuppliers        => _t('لا يوجد موردون بعد', 'No suppliers yet');
+  String get supplierBalance    => _t('رصيد المورد',         'Supplier Balance');
+  String get payable            => _t('مستحق الدفع',         'Payable');
+
+  // ========== PHASE 3.2 — CUSTOMERS EXTENDED ==========
+  String get customerBalance    => _t('رصيد العميل',         'Customer Balance');
+  String get receivable         => _t('مستحق الاستلام',      'Receivable');
+  String get deactivateContact         => _t('تعطيل جهة الاتصال', 'Deactivate Contact');
+  String get activateContact           => _t('تفعيل جهة الاتصال',  'Activate Contact');
+  String get deactivateContactMessage  => _t(
+    'هذه الجهة مستخدمة في مستندات سابقة. هل تريد تعطيلها؟',
+    'This contact is used in existing documents. Deactivate instead of deleting?',
+  );
+  String get contactDeactivated => _t('تم تعطيل جهة الاتصال', 'Contact deactivated');
+  String get contactActivated   => _t('تم تفعيل جهة الاتصال',  'Contact activated');
+  String get activeOnly         => _t('النشطة فقط',             'Active only');
+
+  // ========== PHASE 3.2 — INVENTORY ==========
+  String get inventory         => _t('المخزون',               'Inventory');
+  String get stockMovements    => _t('حركات المخزون',         'Stock Movements');
+  String get stockMovement     => _t('حركة مخزون',            'Stock Movement');
+  String get openingStock      => _t('رصيد افتتاحي',          'Opening Stock');
+  String get adjustStock       => _t('تعديل يدوي',            'Manual Adjustment');
+  String get stockAdjustment   => _t('تعديل المخزون',         'Stock Adjustment');
+  String get adjustmentDelta   => _t('كمية التعديل (+ أو -)', 'Adjustment Delta (+ or -)');
+  String get noMovements       => _t('لا توجد حركات مخزون',  'No stock movements');
+  String get lowStockAlert     => _t('تنبيه مخزون منخفض',    'Low Stock Alert');
+  String get insufficientStockFor => _t('مخزون غير كافٍ لـ', 'Insufficient stock for');
+  String insufficientStock(String name, double available, double required) =>
+      langCode == 'ar'
+          ? 'مخزون غير كافٍ لـ "$name": المتاح ${available.toStringAsFixed(2)}، المطلوب ${required.toStringAsFixed(2)}'
+          : 'Insufficient stock for "$name": available ${available.toStringAsFixed(2)}, required ${required.toStringAsFixed(2)}';
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

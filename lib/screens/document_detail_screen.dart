@@ -424,11 +424,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final isCancelled   = doc.status == DocumentStatus.cancelled;
     final isDraft       = doc.status == DocumentStatus.draft;
     final isInvoice     = doc.type == 'invoice';
+    final isPurchase    = doc.type == 'purchase';
     final isQuotation   = doc.type == 'quotation';
     final isReceipt     = doc.type == 'payment_receipt';
-    final canRecordPay  = isInvoice &&
+    final canRecordPay  = (isInvoice || isPurchase) &&
         (doc.status == DocumentStatus.issued || doc.status == DocumentStatus.partiallyPaid);
-    final canIssue      = isDraft && (isInvoice || isQuotation);
+    final canIssue      = isDraft && (isInvoice || isQuotation || isPurchase);
     final canConvert    = isQuotation && !isCancelled && _convertedInvoice == null;
     final canCancel     = !isCancelled;
     final canEdit       = !isCancelled;
@@ -447,7 +448,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         heroTag: 'fab_issue',
         onPressed: _issueDocument,
         icon: const Icon(Icons.publish_rounded),
-        label: Text(isInvoice ? l10n.issueInvoice : l10n.issueDocument),
+        label: Text(isInvoice ? l10n.issueInvoice : (isPurchase ? l10n.finalizePurchase : l10n.issueDocument)),
       );
     } else if (canConvert) {
       fab = FloatingActionButton.extended(
@@ -849,6 +850,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   String _typeLabel(String type, AppLocalizations l10n) {
     return switch (type) {
       'invoice'         => l10n.invoice,
+      'purchase'        => l10n.purchase,
       'quotation'       => l10n.quotation,
       'payment_receipt' => l10n.paymentReceipt,
       'expense_voucher' => l10n.expenseVoucher,

@@ -8,6 +8,7 @@ import 'business_setup_screen.dart';
 import 'custom_document_screen.dart';
 import 'document_detail_screen.dart';
 import 'invoice_screen.dart';
+import 'purchase_screen.dart';
 import 'quotation_screen.dart';
 import 'voucher_screen.dart';
 
@@ -83,6 +84,14 @@ class HomeScreenState extends State<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(l10n.createDocument, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.shopping_cart_outlined),
+                title: Text(l10n.purchase),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openScreen(const PurchaseScreen());
+                },
               ),
               ListTile(
                 leading: const Icon(Icons.request_quote_outlined),
