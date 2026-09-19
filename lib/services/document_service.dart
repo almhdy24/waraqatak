@@ -354,6 +354,8 @@ class DocumentService {
   /// For non-draft invoices: stock is reverted.
   static Future<void> cancelDocument(int documentId) async {
     await DatabaseHelper.instance.cancelDocument(documentId);
+    await DatabaseHelper.instance.logAuditEvent('document_cancelled',
+        entityType: 'document', entityId: documentId);
   }
 
   /// Converts an issued (or draft) quotation to a new draft invoice.
@@ -365,6 +367,8 @@ class DocumentService {
   /// Promotes a draft document to issued, deducting stock for invoices.
   static Future<void> issueDocument(int documentId) async {
     await DatabaseHelper.instance.issueDocument(documentId);
+    await DatabaseHelper.instance.logAuditEvent('document_issued',
+        entityType: 'document', entityId: documentId);
   }
 
   /// Creates a new draft copy of an existing document.

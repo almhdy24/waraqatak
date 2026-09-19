@@ -24,6 +24,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
   final _reasonController = TextEditingController();
   String _paymentMethod = 'cash';
   List<String> _configuredMethods = CurrencyUtils.defaultMethods;
+  Map<String, String> _customMethodLabels = {};
   Business? _business;
   Contact? _selectedContact;
   String? _contactName;
@@ -47,10 +48,12 @@ class _VoucherScreenState extends State<VoucherScreen> {
   Future<void> _loadBusiness() async {
     final business = await DatabaseHelper.instance.getFirstBusiness();
     final methods = await CurrencyUtils.getConfiguredMethods();
+    final customLabels = await CurrencyUtils.getCustomMethods();
     if (!mounted) return;
     setState(() {
       _business = business;
       _configuredMethods = methods;
+      _customMethodLabels = customLabels;
     });
     _ensureValidPaymentMethod();
   }
@@ -195,7 +198,8 @@ class _VoucherScreenState extends State<VoucherScreen> {
                       runSpacing: 8,
                       children: allowedMethods.map((method) {
                         return _paymentChip(
-                            method, CurrencyUtils.getPaymentMethodLabel(method, l10n));
+                            method, CurrencyUtils.getPaymentMethodLabel(method, l10n,
+                                customLabels: _customMethodLabels));
                       }).toList(),
                     ),
                   ],

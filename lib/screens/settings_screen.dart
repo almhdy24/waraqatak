@@ -6,6 +6,7 @@ import '../utils/print_settings.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
+import 'payment_methods_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -46,6 +47,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.payment_outlined),
+            title: Text(l10n.paymentMethods),
+            subtitle: Text(l10n.configurePaymentMethods),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()),
             ),
           ),
           ListTile(

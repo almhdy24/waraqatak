@@ -471,5 +471,29 @@ class AppLocalizations {
   String get paperThermal80   => _t('حرارية 80مم',          'Thermal 80mm');
   String get defaultPaperSize => _t('حجم الورق الافتراضي', 'Default Paper Size');
 
+  // ========== PHASE 3.4 — PAYMENT METHODS ==========
+  String get addPaymentMethod    => _t('إضافة طريقة دفع',         'Add Payment Method');
+  String get editPaymentMethod   => _t('تعديل طريقة الدفع',       'Edit Payment Method');
+  String get methodName          => _t('اسم الطريقة',             'Method Name');
+  String get predefinedMethods   => _t('الطرق المتاحة',           'Available Methods');
+  String get customMethods       => _t('طرق مخصصة',               'Custom Methods');
+  String get noCustomMethods     => _t('لا توجد طرق مخصصة بعد',  'No custom methods yet');
+  String get confirmDeleteMethod => _t('حذف طريقة الدفع',         'Delete Payment Method');
+
+  // ========== PHASE 3.4 — SCANNER ==========
+  String get scannerHint       => _t('وجّه الكاميرا نحو الباركود',     'Point camera at barcode');
+  String get scannerPermDenied => _t('يتطلب إذن الكاميرا',             'Camera permission required');
+  String get scannerPermMsg    => _t('امنح إذن الكاميرا للمسح الضوئي', 'Grant camera permission to scan barcodes');
+  String get manualEntry       => _t('إدخال يدوي',                     'Manual Entry');
+
+  // ========== PHASE 3.4 — INVENTORY ==========
+  String get newStockQuantity => _t('الكمية بعد التعديل', 'New Stock Quantity');
+  String get adjustmentReason => _t('سبب التعديل',        'Adjustment Reason');
+  String get inStock          => _t('متوفر',              'In Stock');
+  String get scanToLocate     => _t('مسح للبحث',          'Scan to Locate');
+
+  // ========== PHASE 3.4 — AUDIT ==========
+  String get auditLog => _t('سجل الأحداث', 'Audit Log');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

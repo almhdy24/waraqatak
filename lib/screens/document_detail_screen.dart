@@ -32,6 +32,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   Document? _relatedDocument;
   Document? _convertedInvoice;
   List<String> _paymentMethods = CurrencyUtils.defaultMethods;
+  Map<String, String> _customMethodLabels = {};
   bool _loading = true;
   String? _error;
 
@@ -58,6 +59,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       }
 
       final configuredMethods = await CurrencyUtils.getConfiguredMethods();
+      final customLabels = await CurrencyUtils.getCustomMethods();
 
       final futures = await Future.wait([
         db.getFirstBusiness(),
@@ -84,6 +86,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _relatedDocument = futures[4] as Document?;
         _convertedInvoice = doc.type == 'quotation' ? futures[5] as Document? : null;
         _paymentMethods = configuredMethods;
+        _customMethodLabels = customLabels;
         _loading = false;
       });
     } catch (e) {
@@ -305,7 +308,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                   ),
                 ),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+                  padding: EdgeInsets.fromLTRB(20, 16, 20,
+                      (MediaQuery.viewInsetsOf(ctx).bottom > 0
+                          ? MediaQuery.viewInsetsOf(ctx).bottom
+                          : MediaQuery.viewPaddingOf(ctx).bottom) + 24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -335,7 +341,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                           runSpacing: 8,
                           children: _paymentMethods.map((m) {
                             return ChoiceChip(
-                              label: Text(CurrencyUtils.getPaymentMethodLabel(m, l10n)),
+                              label: Text(CurrencyUtils.getPaymentMethodLabel(
+                                  m, l10n, customLabels: _customMethodLabels)),
                               selected: selectedMethod == m,
                               onSelected: (_) => setSheet(() => selectedMethod = m),
                             );
@@ -545,7 +552,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 _infoRow(l10n.validUntil, _dateFmt.format(doc.validUntil!)),
               if (isReceipt && doc.paymentMethod != null)
                 _infoRow(l10n.paymentMethod,
-                    CurrencyUtils.getPaymentMethodLabel(doc.paymentMethod!, l10n)),
+                    CurrencyUtils.getPaymentMethodLabel(doc.paymentMethod!, l10n,
+                        customLabels: _customMethodLabels)),
             ],
           )),
 
@@ -710,7 +718,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                                       fontSize: 12)),
                               if (p.paymentMethod != null)
                                 Text(
-                                  CurrencyUtils.getPaymentMethodLabel(p.paymentMethod!, l10n),
+                                  CurrencyUtils.getPaymentMethodLabel(p.paymentMethod!, l10n,
+                                      customLabels: _customMethodLabels),
                                   style: TextStyle(
                                       fontSize: 12,
                                       color: Theme.of(context).colorScheme.onSurfaceVariant),

@@ -13,7 +13,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 8;
+  static const int dbVersion = 9;
 
   static Database? _database;
 
@@ -162,6 +162,17 @@ class DatabaseHelper {
         FOREIGN KEY (receipt_document_id) REFERENCES documents (id)
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id INTEGER,
+        details TEXT,
+        timestamp TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _upgradeTables(Database db, int oldVersion, int newVersion) async {
@@ -280,6 +291,19 @@ class DatabaseHelper {
         )
       ''');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id)');
+    }
+
+    if (oldVersion < 9) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          action TEXT NOT NULL,
+          entity_type TEXT,
+          entity_id INTEGER,
+          details TEXT,
+          timestamp TEXT NOT NULL
+        )
+      ''');
     }
   }
 
@@ -539,6 +563,9 @@ class DatabaseHelper {
         notes: notes,
       );
     });
+    await logAuditEvent('stock_adjusted',
+        entityType: 'product', entityId: productId,
+        details: 'delta=$delta${notes != null ? " reason=$notes" : ""}');
   }
 
   // ========== Documents ==========
@@ -907,7 +934,7 @@ class DatabaseHelper {
     String? notes,
   }) async {
     final db = await database;
-    return db.transaction((txn) async {
+    final receiptId = await db.transaction((txn) async {
       final docRows = await txn.query('documents', where: 'id = ?', whereArgs: [documentId]);
       if (docRows.isEmpty) throw StateError('Document not found');
       final doc = Document.fromMap(docRows.first);
@@ -968,6 +995,10 @@ class DatabaseHelper {
 
       return receiptId;
     });
+    await logAuditEvent('payment_recorded',
+        entityType: 'document', entityId: documentId,
+        details: 'amount=$amount method=$paymentMethod');
+    return receiptId;
   }
 
   Future<List<DocumentPayment>> getDocumentPayments(int documentId) async {
@@ -1424,6 +1455,31 @@ class DatabaseHelper {
       WHERE dp.date >= ? AND dp.date <= ?
       ORDER BY dp.date DESC
     ''', [from.toIso8601String(), to.toIso8601String()]);
+  }
+
+  Future<void> logAuditEvent(
+    String action, {
+    String? entityType,
+    int? entityId,
+    String? details,
+  }) async {
+    try {
+      final db = await database;
+      await db.insert('audit_log', {
+        'action': action,
+        'entity_type': entityType,
+        'entity_id': entityId,
+        'details': details,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {
+      // Never fail the main operation due to audit logging
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentAuditEvents({int limit = 100}) async {
+    final db = await database;
+    return db.query('audit_log', orderBy: 'timestamp DESC', limit: limit);
   }
 
   Future<void> closeDatabase() async {

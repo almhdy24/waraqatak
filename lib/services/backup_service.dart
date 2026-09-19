@@ -152,9 +152,18 @@ class BackupService {
           await txn.insert('document_payments', row);
         }
       }
+      // stock_movements is optional (absent in backups created before Phase 3.4)
+      if (data.containsKey('stock_movements') && data['stock_movements'] is List) {
+        await txn.delete('stock_movements');
+        for (final row in _convertRows(data['stock_movements'])) {
+          await txn.insert('stock_movements', row);
+        }
+      }
     });
 
     await _restoreLogoIfNeeded(jsonMap);
+    await DatabaseHelper.instance.logAuditEvent('backup_restored',
+        details: 'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}');
     return true;
   }
 
@@ -240,6 +249,7 @@ class BackupService {
         'document_items': await db.query('document_items'),
         'document_counters': await db.query('document_counters'),
         'document_payments': await db.query('document_payments'),
+        'stock_movements': await db.query('stock_movements'),
       },
       'assets': {
         'logo_base64': logoBase64,
