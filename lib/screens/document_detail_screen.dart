@@ -166,7 +166,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     }
 
     final doc = _document!;
-    final business = _business!;
     final currencySymbol = doc.currencySymbol;
     final typeLabel = _documentTypeLabel(doc.type, l10n);
 

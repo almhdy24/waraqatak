@@ -7,7 +7,7 @@ publish_to: 'none'
 version: 1.0.0+3
 
 environment:
-  sdk: '>=3.13.0 <4.0.0'
+  sdk: '>=3.11.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -17,7 +17,7 @@ dependencies:
     sdk: flutter
 
   # Database
-  sqflite: ^2.3.0
+  sqflite: '>=2.3.0 <2.4.0'
   path: ^1.8.3
 
   # File & Storage
@@ -27,7 +27,7 @@ dependencies:
 
   # PDF & Printing
   pdf: ^3.10.4
-  printing: ^5.15.0
+  printing: '>=5.13.0 <5.15.0'
 
   # Sharing & URLs
   share_plus: ^13.3.0
@@ -37,16 +37,21 @@ dependencies:
   flutter_svg: ^2.0.9
 
   # Localization
-  intl: ^0.20.3
+  intl: ^0.20.2
 
   # App information
   package_info_plus: ^10.2.1
+
+dependency_overrides:
+  # path_provider_android 2.3.x introduced a JNI/NDK-28 dependency that
+  # conflicts with the NDK-29-only Termux Android SDK. Pin to 2.2.x.
+  path_provider_android: '>=2.2.0 <2.3.0'
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true

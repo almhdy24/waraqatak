@@ -80,11 +80,11 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
 
   Future<void> _pickLogo() async {
     try {
-      final result = await FilePicker().pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.image,
       );
-      if (result == null || result.files.isEmpty) return;
-      final bytes = await result.files.single.readAsBytes();
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
       if (bytes.isEmpty) throw Exception('No data');
       final directory = await getApplicationDocumentsDirectory();
       final fileName = 'logo_${DateTime.now().millisecondsSinceEpoch}.png';

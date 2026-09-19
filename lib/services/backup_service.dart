@@ -61,14 +61,14 @@ class BackupService {
 
     final bytes = Uint8List.fromList(utf8.encode(jsonStr));
 
-    final result = await FilePicker().saveFile(
+    final uri = await FilePicker.saveFile(
       dialogTitle: 'Save Backup',
       fileName: fileName,
       bytes: bytes,
       type: FileType.any,
     );
 
-    return result != null;
+    return uri != null;
   }
 
   // ============================================================
@@ -76,13 +76,13 @@ class BackupService {
   // ============================================================
 
   static Future<bool> restoreBackup() async {
-    final result = await FilePicker().pickFiles(
+    final file = await FilePicker.pickFile(
       type: FileType.any,
     );
 
-    if (result == null || result.files.isEmpty) return false;
+    if (file == null) return false;
 
-    final bytes = await result.files.first.readAsBytes();
+    final bytes = await file.readAsBytes();
     if (bytes.isEmpty) {
       throw Exception('Empty backup file');
     }

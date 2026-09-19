@@ -8,8 +8,8 @@ class LanguageProvider extends InheritedWidget {
     super.key,
     required this.langCode,
     required this.onChangeLanguage,
-    required Widget child,
-  }) : super(child: child);
+    required super.child,
+  });
 
   static LanguageProvider? of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<LanguageProvider>();
