@@ -345,6 +345,7 @@ class AppLocalizations {
   String get unit => _t('وحدة القياس', 'Unit');
   String get active => _t('نشط', 'Active');
   String get inactive => _t('غير نشط', 'Inactive');
+  String get addItem    => _t('إضافة بند',   'Add Item');
   String get addProduct => _t('إضافة منتج', 'Add Product');
   String get addService => _t('إضافة خدمة', 'Add Service');
   String get editProduct => _t('تعديل المنتج', 'Edit Product');

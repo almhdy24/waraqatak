@@ -17,6 +17,81 @@ class InvoiceScreen extends StatefulWidget {
   State<InvoiceScreen> createState() => _InvoiceScreenState();
 }
 
+class _TotalsCard extends StatelessWidget {
+  final AppLocalizations l10n;
+  final String currencySymbol;
+  final double taxRate;
+  final double subtotal;
+  final double discount;
+  final double taxAmount;
+  final double total;
+  final double paid;
+  final double remaining;
+
+  const _TotalsCard({
+    required this.l10n,
+    required this.currencySymbol,
+    required this.taxRate,
+    required this.subtotal,
+    required this.discount,
+    required this.taxAmount,
+    required this.total,
+    required this.paid,
+    required this.remaining,
+  });
+
+  String _fmt(double v) => '${NumberFormat('#,##0.00').format(v)} $currencySymbol';
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Column(
+          children: [
+            _row(l10n.subtotal, _fmt(subtotal)),
+            if (discount > 0) _row(l10n.discount, '- ${_fmt(discount)}', color: cs.error),
+            if (taxRate > 0) _row('${l10n.tax} ($taxRate%)', _fmt(taxAmount)),
+            const Divider(height: 16),
+            _row(l10n.total, _fmt(total), bold: true, color: cs.primary),
+            _row(l10n.paid, _fmt(paid)),
+            _row(
+              l10n.remaining,
+              _fmt(remaining),
+              bold: true,
+              color: remaining > 0 ? cs.error : Colors.green,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _row(String label, String value, {bool bold = false, Color? color}) {
+    final style = TextStyle(
+      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+      color: color,
+      fontSize: bold ? 15 : 13,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: style),
+          Text(value, style: style),
+        ],
+      ),
+    );
+  }
+}
+
 class _InvoiceScreenState extends State<InvoiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final _discountController = TextEditingController(text: '0');
@@ -190,7 +265,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               onContactChanged: (contact) => _selectedContact = contact,
             ),
             const SizedBox(height: 16),
-            Text(l10n.products, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(l10n.items, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ...List.generate(
               _descriptionControllers.length,
               (index) => DocumentItemForm(
@@ -206,22 +281,26 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   setState(() => _taxableList[index] = value ?? true);
                 },
                 onDelete: () => _removeItem(index),
-                onChanged: () => setState(() {}), // ✅ تحديث فوري
+                onChanged: () => setState(() {}),
               ),
             ),
             ElevatedButton.icon(
               onPressed: _addItem,
               icon: const Icon(Icons.add),
-              label: Text(l10n.products),
+              label: Text(l10n.addItem),
             ),
-            const Divider(),
-            // ملخص مباشر
-            Text('${l10n.subtotal}: ${NumberFormat('#,##0.00').format(subtotal)}'),
-            Text('${l10n.discount}: ${NumberFormat('#,##0.00').format(discount)}'),
-            Text('${l10n.tax} (${_business?.taxRate ?? 0}%): ${NumberFormat('#,##0.00').format(totals.taxAmount)}'),
-            Text('${l10n.total}: ${NumberFormat('#,##0.00').format(total)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text('${l10n.paid}: ${NumberFormat('#,##0.00').format(paid)}'),
-            Text('${l10n.remaining}: ${NumberFormat('#,##0.00').format(remaining)}', style: TextStyle(color: remaining > 0 ? Theme.of(context).colorScheme.error : Colors.green)),
+            const SizedBox(height: 12),
+            _TotalsCard(
+              l10n: l10n,
+              currencySymbol: _business?.currencySymbol ?? '',
+              taxRate: _business?.taxRate ?? 0,
+              subtotal: subtotal,
+              discount: discount,
+              taxAmount: totals.taxAmount,
+              total: total,
+              paid: paid,
+              remaining: remaining,
+            ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _discountController,
