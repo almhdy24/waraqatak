@@ -1,7 +1,11 @@
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/payment_method.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
 import '../models/document.dart';
@@ -14,7 +18,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 10;
+  static const int dbVersion = 11;
 
   static Database? _database;
 
@@ -34,7 +38,40 @@ class DatabaseHelper {
     );
   }
 
+  static const List<Map<String, dynamic>> _paymentMethodSeeds = [
+    {'key': 'cash',   'label_ar': 'نقداً',        'label_en': 'Cash',             'is_enabled': 1, 'is_default': 1, 'sort_order': 0, 'is_predefined': 1},
+    {'key': 'bank',   'label_ar': 'تحويل بنكي',   'label_en': 'Bank Transfer',    'is_enabled': 1, 'is_default': 0, 'sort_order': 1, 'is_predefined': 1},
+    {'key': 'card',   'label_ar': 'بطاقة ائتمان', 'label_en': 'Credit/Debit Card','is_enabled': 0, 'is_default': 0, 'sort_order': 2, 'is_predefined': 1},
+    {'key': 'mobile', 'label_ar': 'محفظة جوّال',  'label_en': 'Mobile Wallet',    'is_enabled': 0, 'is_default': 0, 'sort_order': 3, 'is_predefined': 1},
+    {'key': 'bankak', 'label_ar': 'بنكك',         'label_en': 'Bankak',           'is_enabled': 0, 'is_default': 0, 'sort_order': 4, 'is_predefined': 1},
+    {'key': 'okash',  'label_ar': 'أوكاش',        'label_en': 'oCash',            'is_enabled': 0, 'is_default': 0, 'sort_order': 5, 'is_predefined': 1},
+    {'key': 'mada',   'label_ar': 'مدى',          'label_en': 'Mada',             'is_enabled': 0, 'is_default': 0, 'sort_order': 6, 'is_predefined': 1},
+    {'key': 'fawry',  'label_ar': 'فوري',         'label_en': 'Fawry',            'is_enabled': 0, 'is_default': 0, 'sort_order': 7, 'is_predefined': 1},
+    {'key': 'paypal', 'label_ar': 'باي بال',      'label_en': 'PayPal',           'is_enabled': 0, 'is_default': 0, 'sort_order': 8, 'is_predefined': 1},
+  ];
+
+  static Future<void> _seedPaymentMethods(DatabaseExecutor db) async {
+    for (final seed in _paymentMethodSeeds) {
+      await db.insert('payment_methods', seed,
+          conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
   Future<void> _createTables(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE payment_methods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        label_ar TEXT NOT NULL,
+        label_en TEXT NOT NULL,
+        is_enabled INTEGER NOT NULL DEFAULT 0,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        is_predefined INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+    await _seedPaymentMethods(db);
+
     await db.execute('''
       CREATE TABLE tax_profiles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,6 +414,70 @@ class DatabaseHelper {
       if (!await columnExists('document_items', 'tax_rate')) {
         await db.execute('ALTER TABLE document_items ADD COLUMN tax_rate REAL');
       }
+    }
+
+    if (oldVersion < 11) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS payment_methods (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key TEXT UNIQUE NOT NULL,
+          label_ar TEXT NOT NULL,
+          label_en TEXT NOT NULL,
+          is_enabled INTEGER NOT NULL DEFAULT 0,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_predefined INTEGER NOT NULL DEFAULT 1
+        )
+      ''');
+      await _seedPaymentMethods(db);
+
+      // Migrate enabled predefined methods from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final enabledKeys = prefs.getStringList('payment_methods');
+      if (enabledKeys != null && enabledKeys.isNotEmpty) {
+        await db.update('payment_methods', {'is_enabled': 0, 'is_default': 0},
+            where: 'is_predefined = 1');
+        bool firstSet = false;
+        for (final key in enabledKeys) {
+          if (key.startsWith('custom_')) continue;
+          await db.update('payment_methods',
+              {'is_enabled': 1, 'is_default': firstSet ? 0 : 1},
+              where: 'key = ?', whereArgs: [key]);
+          firstSet = true;
+        }
+      }
+
+      // Migrate custom methods from SharedPreferences
+      final customRaw = prefs.getString('custom_payment_methods_v1');
+      if (customRaw != null && customRaw.isNotEmpty) {
+        try {
+          final customMap = jsonDecode(customRaw) as Map<String, dynamic>;
+          int sortOrder = 100;
+          for (final entry in customMap.entries) {
+            await db.insert('payment_methods', {
+              'key': entry.key,
+              'label_ar': entry.value.toString(),
+              'label_en': entry.value.toString(),
+              'is_enabled': 1,
+              'is_default': 0,
+              'sort_order': sortOrder++,
+              'is_predefined': 0,
+            }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          }
+        } catch (_) {}
+      }
+
+      // Ensure at least one default exists (fall back to cash)
+      final defaults = await db.query('payment_methods',
+          where: 'is_default = 1', limit: 1);
+      if (defaults.isEmpty) {
+        await db.update('payment_methods',
+            {'is_default': 1, 'is_enabled': 1},
+            where: 'key = ?', whereArgs: ['cash']);
+      }
+
+      await prefs.remove('payment_methods');
+      await prefs.remove('custom_payment_methods_v1');
     }
   }
 
@@ -1617,5 +1718,106 @@ class DatabaseHelper {
         where: 'is_default = 1 AND is_active = 1', limit: 1);
     if (maps.isEmpty) return null;
     return TaxProfile.fromMap(maps.first);
+  }
+
+  // ========== Payment Methods ==========
+
+  Future<List<PaymentMethod>> getPaymentMethods() async {
+    final db = await database;
+    final maps = await db.query('payment_methods', orderBy: 'sort_order, id');
+    return maps.map(PaymentMethod.fromMap).toList();
+  }
+
+  Future<List<PaymentMethod>> getEnabledPaymentMethods() async {
+    final db = await database;
+    final maps = await db.query('payment_methods',
+        where: 'is_enabled = 1', orderBy: 'sort_order, id');
+    return maps.map(PaymentMethod.fromMap).toList();
+  }
+
+  Future<PaymentMethod?> getDefaultPaymentMethod() async {
+    final db = await database;
+    final maps = await db.query('payment_methods',
+        where: 'is_default = 1', limit: 1);
+    if (maps.isEmpty) return null;
+    return PaymentMethod.fromMap(maps.first);
+  }
+
+  Future<void> setPaymentMethodEnabled(String key, {required bool enabled}) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.update('payment_methods', {'is_enabled': enabled ? 1 : 0},
+          where: 'key = ?', whereArgs: [key]);
+      // If disabling the default, move default to cash (or first enabled)
+      if (!enabled) {
+        final defaults = await txn.query('payment_methods',
+            where: 'is_default = 1 AND key = ?', whereArgs: [key]);
+        if (defaults.isNotEmpty) {
+          await txn.update('payment_methods', {'is_default': 0},
+              where: 'key = ?', whereArgs: [key]);
+          final fallback = await txn.query('payment_methods',
+              where: 'is_enabled = 1 AND key != ?',
+              whereArgs: [key],
+              orderBy: 'sort_order, id',
+              limit: 1);
+          if (fallback.isNotEmpty) {
+            await txn.update('payment_methods', {'is_default': 1},
+                where: 'id = ?', whereArgs: [fallback.first['id']]);
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> setPaymentMethodDefault(String key) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.update('payment_methods', {'is_default': 0});
+      await txn.update('payment_methods',
+          {'is_default': 1, 'is_enabled': 1},
+          where: 'key = ?', whereArgs: [key]);
+    });
+  }
+
+  Future<int> insertCustomPaymentMethod({
+    required String key,
+    required String labelAr,
+    required String labelEn,
+  }) async {
+    final db = await database;
+    final maxOrder = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT MAX(sort_order) FROM payment_methods')) ?? 0;
+    return db.insert('payment_methods', {
+      'key': key,
+      'label_ar': labelAr,
+      'label_en': labelEn,
+      'is_enabled': 1,
+      'is_default': 0,
+      'sort_order': maxOrder + 1,
+      'is_predefined': 0,
+    });
+  }
+
+  Future<void> updatePaymentMethodLabel(
+      int id, String labelAr, String labelEn) async {
+    final db = await database;
+    await db.update('payment_methods',
+        {'label_ar': labelAr, 'label_en': labelEn},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<bool> isPaymentMethodUsedInDocuments(String key) async {
+    final db = await database;
+    final r1 = await db.query('documents',
+        columns: ['id'], where: 'payment_method = ?', whereArgs: [key], limit: 1);
+    if (r1.isNotEmpty) return true;
+    final r2 = await db.query('document_payments',
+        columns: ['id'], where: 'payment_method = ?', whereArgs: [key], limit: 1);
+    return r2.isNotEmpty;
+  }
+
+  Future<int> deletePaymentMethod(int id) async {
+    final db = await database;
+    return db.delete('payment_methods', where: 'id = ? AND is_predefined = 0', whereArgs: [id]);
   }
 }

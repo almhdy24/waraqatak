@@ -4,7 +4,6 @@ import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_status.dart';
-import '../utils/currency_utils.dart';
 
 class DocumentItemInput {
   final String description;
@@ -61,7 +60,7 @@ class DocumentService {
     }
 
     if (isFinancial) {
-      _validatePaymentMethod(paymentMethod, business.currencyCode);
+      _validatePaymentMethod(paymentMethod);
       if (paid <= 0) {
         throw ArgumentError('Amount must be greater than zero');
       }
@@ -219,7 +218,7 @@ class DocumentService {
     }
 
     if (isFinancial) {
-      _validatePaymentMethod(paymentMethod, existing.currencyCode);
+      _validatePaymentMethod(paymentMethod);
       if (paid <= 0) {
         throw ArgumentError('Amount must be greater than zero');
       }
@@ -431,10 +430,8 @@ class DocumentService {
     }
   }
 
-  static void _validatePaymentMethod(
-      String? paymentMethod, String currencyCode) {
-    if (paymentMethod == null ||
-        !CurrencyUtils.isPaymentMethodAllowed(paymentMethod, currencyCode)) {
+  static void _validatePaymentMethod(String? paymentMethod) {
+    if (paymentMethod == null || paymentMethod.isEmpty) {
       throw ArgumentError('Invalid payment method');
     }
   }

@@ -4,7 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
-import '../utils/currency_utils.dart';
+import '../models/payment_method.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
 
@@ -23,8 +23,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
   final _amountController = TextEditingController();
   final _reasonController = TextEditingController();
   String _paymentMethod = 'cash';
-  List<String> _configuredMethods = CurrencyUtils.defaultMethods;
-  Map<String, String> _customMethodLabels = {};
+  List<PaymentMethod> _enabledMethods = [];
   Business? _business;
   Contact? _selectedContact;
   String? _contactName;
@@ -47,23 +46,15 @@ class _VoucherScreenState extends State<VoucherScreen> {
 
   Future<void> _loadBusiness() async {
     final business = await DatabaseHelper.instance.getFirstBusiness();
-    final methods = await CurrencyUtils.getConfiguredMethods();
-    final customLabels = await CurrencyUtils.getCustomMethods();
+    final methods = await DatabaseHelper.instance.getEnabledPaymentMethods();
     if (!mounted) return;
     setState(() {
       _business = business;
-      _configuredMethods = methods;
-      _customMethodLabels = customLabels;
+      _enabledMethods = methods;
+      if (!methods.any((m) => m.key == _paymentMethod)) {
+        _paymentMethod = methods.isNotEmpty ? methods.first.key : 'cash';
+      }
     });
-    _ensureValidPaymentMethod();
-  }
-
-  void _ensureValidPaymentMethod() {
-    if (!_configuredMethods.contains(_paymentMethod)) {
-      setState(() {
-        _paymentMethod = _configuredMethods.isNotEmpty ? _configuredMethods.first : 'cash';
-      });
-    }
   }
 
   Future<void> _save() async {
@@ -79,9 +70,8 @@ class _VoucherScreenState extends State<VoucherScreen> {
       contact = Contact(name: _contactName!.trim(), type: isReceipt ? 'customer' : 'supplier');
     }
 
-    // Ensure payment method is valid
-    if (!_configuredMethods.contains(_paymentMethod)) {
-      _paymentMethod = _configuredMethods.isNotEmpty ? _configuredMethods.first : 'cash';
+    if (!_enabledMethods.any((m) => m.key == _paymentMethod)) {
+      _paymentMethod = _enabledMethods.isNotEmpty ? _enabledMethods.first.key : 'cash';
     }
 
     try {
@@ -120,7 +110,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
     final contactType = isReceipt ? 'customer' : 'supplier';
     final contactHint = isReceipt ? l10n.customer : l10n.supplier;
 
-    final allowedMethods = _configuredMethods;
+    final allowedMethods = _enabledMethods;
 
     return Scaffold(
       appBar: AppBar(title: Text(title), centerTitle: true),
@@ -197,9 +187,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: allowedMethods.map((method) {
-                        return _paymentChip(
-                            method, CurrencyUtils.getPaymentMethodLabel(method, l10n,
-                                customLabels: _customMethodLabels));
+                        return _paymentChip(method.key, method.label(l10n.langCode));
                       }).toList(),
                     ),
                   ],

@@ -90,17 +90,19 @@ void main() {
     final optionalTables = [
       'document_payments',
       'stock_movements',
+      'tax_profiles',
+      'payment_methods',
     ];
 
     test('all required tables are present', () {
       expect(requiredTables.length, 6);
     });
 
-    test('stock_movements is included as optional', () {
-      expect(optionalTables.contains('stock_movements'), isTrue);
+    test('payment_methods is included as optional', () {
+      expect(optionalTables.contains('payment_methods'), isTrue);
     });
 
-    test('backward compat: older backups without stock_movements still valid', () {
+    test('backward compat: older backups without payment_methods still valid', () {
       final backupData = <String, dynamic>{
         'businesses': [],
         'contacts': [],
@@ -108,12 +110,11 @@ void main() {
         'documents': [],
         'document_items': [],
         'document_counters': [],
-        // no stock_movements (old backup)
+        // no payment_methods or stock_movements (old backup)
       };
-      // Should not throw — stock_movements is optional
-      final hasMovements = backupData.containsKey('stock_movements');
-      expect(hasMovements, isFalse);
-      // Required tables are all present
+      for (final t in optionalTables) {
+        expect(backupData.containsKey(t), isFalse);
+      }
       for (final t in requiredTables) {
         expect(backupData.containsKey(t), isTrue);
       }

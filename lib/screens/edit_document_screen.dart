@@ -6,7 +6,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/document.dart';
 import '../services/document_service.dart';
-import '../utils/currency_utils.dart';
+import '../models/payment_method.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -42,6 +42,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   Contact? _selectedContact;
   String? _contactName;
   String _paymentMethod = 'cash';
+  List<PaymentMethod> _enabledMethods = [];
   DateTime? _selectedDate;
 
   bool _loading = true;
@@ -89,11 +90,13 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final business = await db.getFirstBusiness();
     final contact = doc.contactId != null ? await db.getContactById(doc.contactId!) : null;
     final items = await db.getDocumentItems(doc.id!);
+    final enabledMethods = await db.getEnabledPaymentMethods();
 
     if (!mounted) return;
 
     _document = doc;
     _business = business;
+    _enabledMethods = enabledMethods;
     _selectedContact = contact;
     _contactName = contact?.name ?? doc.recipientName;
     _phoneController.text = contact?.phone ?? doc.recipientPhone ?? '';
@@ -131,12 +134,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   }
 
   void _ensureValidPaymentMethod() {
-    if (_document == null) return;
-    final allowed = CurrencyUtils.getPaymentMethodsForCurrency(_document!.currencyCode);
-    if (!allowed.contains(_paymentMethod)) {
-      setState(() {
-        _paymentMethod = allowed.first;
-      });
+    if (_enabledMethods.isEmpty) return;
+    if (!_enabledMethods.any((m) => m.key == _paymentMethod)) {
+      _paymentMethod = _enabledMethods.first.key;
     }
   }
 
@@ -220,12 +220,11 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       validUntil = (_selectedDate ?? _document!.date).add(Duration(days: days));
     }
 
-    // Ensure payment method is allowed if financial
     String? finalPaymentMethod;
     if (isFinancial) {
-      final allowed = CurrencyUtils.getPaymentMethodsForCurrency(_document!.currencyCode);
-      if (!allowed.contains(_paymentMethod)) {
-        _paymentMethod = allowed.first;
+      if (_enabledMethods.isNotEmpty &&
+          !_enabledMethods.any((m) => m.key == _paymentMethod)) {
+        _paymentMethod = _enabledMethods.first.key;
       }
       finalPaymentMethod = _paymentMethod;
     }
@@ -280,9 +279,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final isFinancial = type == 'payment_receipt' || type == 'expense_voucher';
     final isCustom = type == 'custom';
 
-    final allowedMethods = _document != null
-        ? CurrencyUtils.getPaymentMethodsForCurrency(_document!.currencyCode)
-        : const ['cash', 'bank'];
+    final allowedMethods = _enabledMethods;
 
     return Scaffold(
       appBar: AppBar(
@@ -406,7 +403,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: allowedMethods.map((method) {
-                          return _paymentChip(method, _getPaymentMethodLabel(method, l10n));
+                          return _paymentChip(method.key, method.label(l10n.langCode));
                         }).toList(),
                       ),
                     ],
@@ -577,13 +574,4 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     );
   }
 
-  String _getPaymentMethodLabel(String method, AppLocalizations l10n) {
-    switch (method) {
-      case 'cash': return l10n.cash;
-      case 'bank': return l10n.bankTransfer;
-      case 'bankak': return l10n.bankak;
-      case 'okash': return l10n.okash;
-      default: return method;
-    }
-  }
 }

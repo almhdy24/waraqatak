@@ -11,6 +11,7 @@ import '../models/document_payment.dart';
 import '../models/document_status.dart';
 import '../services/document_service.dart';
 import '../services/pdf_service.dart';
+import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
 import '../widgets/status_badge.dart';
 import 'edit_document_screen.dart';
@@ -31,8 +32,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   List<DocumentPayment> _payments = [];
   Document? _relatedDocument;
   Document? _convertedInvoice;
-  List<String> _paymentMethods = CurrencyUtils.defaultMethods;
-  Map<String, String> _customMethodLabels = {};
+  List<PaymentMethod> _enabledMethods = [];
   bool _loading = true;
   String? _error;
 
@@ -58,8 +58,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         return;
       }
 
-      final configuredMethods = await CurrencyUtils.getConfiguredMethods();
-      final customLabels = await CurrencyUtils.getCustomMethods();
+      final enabledMethods = await DatabaseHelper.instance.getEnabledPaymentMethods();
 
       final futures = await Future.wait([
         db.getFirstBusiness(),
@@ -85,8 +84,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _payments = (futures[3] as List).cast<DocumentPayment>();
         _relatedDocument = futures[4] as Document?;
         _convertedInvoice = doc.type == 'quotation' ? futures[5] as Document? : null;
-        _paymentMethods = configuredMethods;
-        _customMethodLabels = customLabels;
+        _enabledMethods = enabledMethods;
         _loading = false;
       });
     } catch (e) {
@@ -284,7 +282,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final l10n = AppLocalizations.of(context);
     final doc = _document!;
     final amountController = TextEditingController(text: doc.remaining.toStringAsFixed(2));
-    String? selectedMethod = _paymentMethods.isNotEmpty ? _paymentMethods.first : null;
+    String? selectedMethod = _enabledMethods.isNotEmpty ? _enabledMethods.first.key : null;
 
     await showModalBottomSheet(
       context: context,
@@ -334,17 +332,16 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         ),
                         autofocus: true,
                       ),
-                      if (_paymentMethods.isNotEmpty) ...[
+                      if (_enabledMethods.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: _paymentMethods.map((m) {
+                          children: _enabledMethods.map((m) {
                             return ChoiceChip(
-                              label: Text(CurrencyUtils.getPaymentMethodLabel(
-                                  m, l10n, customLabels: _customMethodLabels)),
-                              selected: selectedMethod == m,
-                              onSelected: (_) => setSheet(() => selectedMethod = m),
+                              label: Text(m.label(l10n.langCode)),
+                              selected: selectedMethod == m.key,
+                              onSelected: (_) => setSheet(() => selectedMethod = m.key),
                             );
                           }).toList(),
                         ),
@@ -399,6 +396,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       },
     );
     amountController.dispose();
+  }
+
+  String _methodLabel(String key, AppLocalizations l10n) {
+    final m = _enabledMethods.where((m) => m.key == key).firstOrNull;
+    if (m != null) return m.label(l10n.langCode);
+    return CurrencyUtils.getPaymentMethodLabel(key, l10n);
   }
 
   @override
@@ -552,8 +555,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 _infoRow(l10n.validUntil, _dateFmt.format(doc.validUntil!)),
               if (isReceipt && doc.paymentMethod != null)
                 _infoRow(l10n.paymentMethod,
-                    CurrencyUtils.getPaymentMethodLabel(doc.paymentMethod!, l10n,
-                        customLabels: _customMethodLabels)),
+                    _methodLabel(doc.paymentMethod!, l10n)),
             ],
           )),
 
@@ -718,8 +720,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                                       fontSize: 12)),
                               if (p.paymentMethod != null)
                                 Text(
-                                  CurrencyUtils.getPaymentMethodLabel(p.paymentMethod!, l10n,
-                                      customLabels: _customMethodLabels),
+                                  _methodLabel(p.paymentMethod!, l10n),
                                   style: TextStyle(
                                       fontSize: 12,
                                       color: Theme.of(context).colorScheme.onSurfaceVariant),

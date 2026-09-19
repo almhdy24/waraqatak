@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
+import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
@@ -10,8 +12,7 @@ class PaymentMethodsScreen extends StatefulWidget {
 }
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
-  List<String> _enabled = [];
-  Map<String, String> _custom = {};
+  List<PaymentMethod> _methods = [];
   bool _loading = true;
 
   @override
@@ -21,82 +22,141 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   Future<void> _load() async {
-    final prefs = await CurrencyUtils.getConfiguredMethods();
-    final custom = await CurrencyUtils.getCustomMethods();
+    final methods = await DatabaseHelper.instance.getPaymentMethods();
     if (!mounted) return;
     setState(() {
-      _enabled = List.from(prefs);
-      _custom = Map.from(custom);
+      _methods = methods;
       _loading = false;
     });
   }
 
-  Future<void> _save() async {
-    await CurrencyUtils.saveConfiguredMethods(_enabled);
-    await CurrencyUtils.saveCustomMethods(_custom);
+  Future<void> _toggleEnabled(PaymentMethod method) async {
+    await DatabaseHelper.instance
+        .setPaymentMethodEnabled(method.key, enabled: !method.isEnabled);
+    await _load();
   }
 
-  void _togglePredefined(String key) {
-    setState(() {
-      if (_enabled.contains(key)) {
-        _enabled.remove(key);
-      } else {
-        _enabled.add(key);
-      }
-    });
-    _save();
+  Future<void> _setDefault(PaymentMethod method) async {
+    await DatabaseHelper.instance.setPaymentMethodDefault(method.key);
+    await _load();
   }
 
-  Future<void> _addOrEditCustom({String? existingKey}) async {
+  Future<void> _addCustom() async {
     final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController(
-      text: existingKey != null ? _custom[existingKey] : '',
-    );
+    final arCtrl = TextEditingController();
+    final enCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(existingKey == null ? l10n.addPaymentMethod : l10n.editPaymentMethod),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(labelText: l10n.methodName),
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          onSubmitted: (_) => Navigator.pop(ctx, true),
+        title: Text(l10n.addPaymentMethod),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: arCtrl,
+              decoration: InputDecoration(labelText: l10n.methodLabelAr),
+              textDirection: TextDirection.rtl,
+              autofocus: true,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: enCtrl,
+              decoration: InputDecoration(labelText: l10n.methodLabelEn),
+            ),
+          ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.save)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel)),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.save)),
         ],
       ),
     );
-    controller.dispose();
+    arCtrl.dispose();
+    enCtrl.dispose();
     if (confirmed != true || !mounted) return;
-
-    final label = controller.text.trim();
-    if (label.isEmpty) return;
-
-    if (existingKey != null) {
-      setState(() => _custom[existingKey] = label);
-      await CurrencyUtils.renameCustomMethod(existingKey, label);
-    } else {
-      final key = await CurrencyUtils.addCustomMethod(label);
-      setState(() {
-        _custom[key] = label;
-        _enabled.add(key);
-      });
-    }
-    await _save();
+    final ar = arCtrl.text.trim();
+    final en = enCtrl.text.trim();
+    if (ar.isEmpty && en.isEmpty) return;
+    final key = 'custom_${DateTime.now().millisecondsSinceEpoch}';
+    await DatabaseHelper.instance.insertCustomPaymentMethod(
+      key: key,
+      labelAr: ar.isNotEmpty ? ar : en,
+      labelEn: en.isNotEmpty ? en : ar,
+    );
+    await _load();
   }
 
-  Future<void> _deleteCustom(String key) async {
+  Future<void> _editCustom(PaymentMethod method) async {
     final l10n = AppLocalizations.of(context);
+    final arCtrl = TextEditingController(text: method.labelAr);
+    final enCtrl = TextEditingController(text: method.labelEn);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.editPaymentMethod),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: arCtrl,
+              decoration: InputDecoration(labelText: l10n.methodLabelAr),
+              textDirection: TextDirection.rtl,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: enCtrl,
+              decoration: InputDecoration(labelText: l10n.methodLabelEn),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel)),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.save)),
+        ],
+      ),
+    );
+    arCtrl.dispose();
+    enCtrl.dispose();
+    if (confirmed != true || !mounted) return;
+    final ar = arCtrl.text.trim();
+    final en = enCtrl.text.trim();
+    if (ar.isEmpty && en.isEmpty) return;
+    await DatabaseHelper.instance.updatePaymentMethodLabel(
+      method.id!,
+      ar.isNotEmpty ? ar : en,
+      en.isNotEmpty ? en : ar,
+    );
+    await _load();
+  }
+
+  Future<void> _deleteCustom(PaymentMethod method) async {
+    final l10n = AppLocalizations.of(context);
+    final inUse =
+        await DatabaseHelper.instance.isPaymentMethodUsedInDocuments(method.key);
+    if (!mounted) return;
+    if (inUse) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.cannotDeleteMethodInUse)),
+      );
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.confirmDeleteMethod),
-        content: Text('${l10n.delete}: ${_custom[key] ?? key}'),
+        content: Text('${l10n.delete}: ${method.label(l10n.langCode)}'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel)),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
@@ -107,11 +167,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    setState(() {
-      _custom.remove(key);
-      _enabled.remove(key);
-    });
-    await CurrencyUtils.removeCustomMethod(key);
+    await DatabaseHelper.instance.deletePaymentMethod(method.id!);
+    await _load();
   }
 
   @override
@@ -125,12 +182,13 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       );
     }
 
-    final enabledPredefined = _enabled.where(CurrencyUtils.allMethods.contains).toSet();
+    final predefined = _methods.where((m) => m.isPredefined).toList();
+    final custom = _methods.where((m) => !m.isPredefined).toList();
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.paymentMethods), centerTitle: true),
       floatingActionButton: FloatingActionButton(
-        onPressed: _addOrEditCustom,
+        onPressed: _addCustom,
         tooltip: l10n.addPaymentMethod,
         child: const Icon(Icons.add),
       ),
@@ -141,48 +199,105 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             child: Text(l10n.predefinedMethods,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           ),
-          ...CurrencyUtils.allMethods.map((key) {
-            final isEnabled = enabledPredefined.contains(key);
-            return SwitchListTile(
-              title: Text(CurrencyUtils.getPaymentMethodLabel(key, l10n)),
-              value: isEnabled,
-              onChanged: (_) => _togglePredefined(key),
-            );
-          }),
+          ...predefined.map((method) => _MethodTile(
+                method: method,
+                l10n: l10n,
+                onToggle: () => _toggleEnabled(method),
+                onSetDefault: method.isEnabled && !method.isDefault
+                    ? () => _setDefault(method)
+                    : null,
+              )),
           const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text(l10n.customMethods,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           ),
-          if (_custom.isEmpty)
+          if (custom.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(l10n.noCustomMethods,
                   style: const TextStyle(color: Colors.grey, fontSize: 13)),
             ),
-          ..._custom.entries.map((e) {
-            final isActive = _enabled.contains(e.key);
-            return ListTile(
-              title: Text(e.value),
-              leading: Switch(
-                value: isActive,
-                onChanged: (_) => _togglePredefined(e.key),
-              ),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 20),
-                  onPressed: () => _addOrEditCustom(existingKey: e.key),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete_outline, size: 20,
-                      color: Theme.of(context).colorScheme.error),
-                  onPressed: () => _deleteCustom(e.key),
-                ),
-              ]),
-            );
-          }),
+          ...custom.map((method) => _MethodTile(
+                method: method,
+                l10n: l10n,
+                onToggle: () => _toggleEnabled(method),
+                onSetDefault: method.isEnabled && !method.isDefault
+                    ? () => _setDefault(method)
+                    : null,
+                onEdit: () => _editCustom(method),
+                onDelete: () => _deleteCustom(method),
+              )),
           const SizedBox(height: 80),
+        ],
+      ),
+    );
+  }
+}
+
+class _MethodTile extends StatelessWidget {
+  final PaymentMethod method;
+  final AppLocalizations l10n;
+  final VoidCallback onToggle;
+  final VoidCallback? onSetDefault;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  const _MethodTile({
+    required this.method,
+    required this.l10n,
+    required this.onToggle,
+    this.onSetDefault,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = CurrencyUtils.getPaymentMethodLabel(
+      method.key,
+      l10n,
+      customLabelAr: method.isPredefined ? null : method.labelAr,
+      customLabelEn: method.isPredefined ? null : method.labelEn,
+    );
+
+    return ListTile(
+      leading: Switch(value: method.isEnabled, onChanged: (_) => onToggle()),
+      title: Row(
+        children: [
+          Text(label),
+          if (method.isDefault) ...[
+            const SizedBox(width: 6),
+            Chip(
+              label: Text(l10n.defaultMethod,
+                  style: const TextStyle(fontSize: 11)),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+            ),
+          ],
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onSetDefault != null)
+            IconButton(
+              icon: const Icon(Icons.star_border, size: 20),
+              tooltip: l10n.setAsDefault,
+              onPressed: onSetDefault,
+            ),
+          if (onEdit != null)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              onPressed: onEdit,
+            ),
+          if (onDelete != null)
+            IconButton(
+              icon: Icon(Icons.delete_outline,
+                  size: 20, color: Theme.of(context).colorScheme.error),
+              onPressed: onDelete,
+            ),
         ],
       ),
     );

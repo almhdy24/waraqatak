@@ -480,6 +480,14 @@ class AppLocalizations {
   String get noCustomMethods     => _t('لا توجد طرق مخصصة بعد',  'No custom methods yet');
   String get confirmDeleteMethod => _t('حذف طريقة الدفع',         'Delete Payment Method');
 
+  // ========== PHASE 3.6 — PAYMENT METHODS DB ==========
+  String get defaultMethod          => _t('الافتراضي',                     'Default');
+  String get setAsDefault           => _t('تعيين كافتراضي',                'Set as Default');
+  String get cannotDeleteMethodInUse => _t('لا يمكن حذف طريقة مستخدمة في مستندات', 'Cannot delete: method used in documents');
+  String get methodLabelAr          => _t('الاسم بالعربية',                'Arabic Name');
+  String get methodLabelEn          => _t('الاسم بالإنجليزية',             'English Name');
+  String get noPaymentMethodsEnabled => _t('لا توجد طرق دفع مفعّلة',     'No payment methods enabled');
+
   // ========== PHASE 3.4 — SCANNER ==========
   String get scannerHint       => _t('وجّه الكاميرا نحو الباركود',     'Point camera at barcode');
   String get scannerPermDenied => _t('يتطلب إذن الكاميرا',             'Camera permission required');

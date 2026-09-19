@@ -7,11 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../database/database_helper.dart';
-import '../models/business.dart';
 
 class BackupService {
   static const String backupExtension = 'waraq';
-  static const int currentBackupVersion = 2;
+  static const int currentBackupVersion = 3;
   static const String appId = 'warqatek';
 
   static const List<String> _requiredTables = [
@@ -166,6 +165,13 @@ class BackupService {
           await txn.insert('tax_profiles', row);
         }
       }
+      // payment_methods is optional (absent in backups created before Phase 3.6)
+      if (data.containsKey('payment_methods') && data['payment_methods'] is List) {
+        await txn.delete('payment_methods');
+        for (final row in _convertRows(data['payment_methods'])) {
+          await txn.insert('payment_methods', row);
+        }
+      }
     });
 
     await _restoreLogoIfNeeded(jsonMap);
@@ -258,6 +264,7 @@ class BackupService {
         'document_payments': await db.query('document_payments'),
         'stock_movements': await db.query('stock_movements'),
         'tax_profiles': await db.query('tax_profiles'),
+        'payment_methods': await db.query('payment_methods'),
       },
       'assets': {
         'logo_base64': logoBase64,
@@ -288,18 +295,8 @@ class BackupService {
       final business = await DatabaseHelper.instance.getFirstBusiness();
       if (business == null) return;
 
-      final updated = Business(
-        id: business.id,
-        name: business.name,
-        ownerName: business.ownerName,
-        phone: business.phone,
-        address: business.address,
-        email: business.email,
-        logoPath: file.path,
-        currencyCode: business.currencyCode, // ✅ FIXED: was 'currency'
-        taxRate: business.taxRate,
-      );
-      await DatabaseHelper.instance.updateBusiness(updated);
+      await DatabaseHelper.instance
+          .updateBusiness(business.copyWith(logoPath: file.path));
     } catch (_) {
       // Do not fail restore due to logo
     }
