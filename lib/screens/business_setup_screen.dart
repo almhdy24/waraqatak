@@ -6,6 +6,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/currency.dart';
+import '../utils/currency_utils.dart';
 
 class BusinessSetupScreen extends StatefulWidget {
   const BusinessSetupScreen({super.key});
@@ -24,8 +25,9 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
   final _emailController = TextEditingController();
   final _taxRateController = TextEditingController(text: '0');
 
-  String _currencyCode = 'SDG'; // ✅ الجديد
+  String _currencyCode = 'SDG';
   String? _logoPath;
+  List<String> _enabledMethods = CurrencyUtils.defaultMethods;
   Business? _existing;
   bool _loading = true;
   bool _saving = false;
@@ -50,9 +52,11 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
   Future<void> _load() async {
     try {
       final business = await DatabaseHelper.instance.getFirstBusiness();
+      final methods = await CurrencyUtils.getConfiguredMethods();
       if (!mounted) return;
       setState(() {
         _existing = business;
+        _enabledMethods = methods;
         if (business != null) {
           _nameController.text = business.name;
           _ownerController.text = business.ownerName;
@@ -311,6 +315,38 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Text(l10n.paymentMethods,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Text(l10n.configurePaymentMethods,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: CurrencyUtils.allMethods.map((method) {
+                        final isEnabled = _enabledMethods.contains(method);
+                        return FilterChip(
+                          label: Text(CurrencyUtils.getPaymentMethodLabel(method, l10n)),
+                          selected: isEnabled,
+                          onSelected: (selected) {
+                            final updated = List<String>.from(_enabledMethods);
+                            if (selected) {
+                              updated.add(method);
+                            } else if (updated.length > 1) {
+                              updated.remove(method);
+                            }
+                            setState(() => _enabledMethods = updated);
+                            CurrencyUtils.saveConfiguredMethods(updated);
+                          },
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),

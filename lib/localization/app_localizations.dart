@@ -240,48 +240,27 @@ class AppLocalizations {
 
   // ========== ABOUT / FREE ==========
   String get aboutDescription => _t(
-        'يساعدك تطبيق ورقتك في إنشاء الفواتير وإدارة المنتجات والعملاء ومتابعة المخزون وتنظيم مستنداتك التجارية — كل ذلك من هاتفك.',
-        'Waraqatak helps you create invoices, manage products and customers, track inventory, and keep your business documents organized — all from your phone.',
+        'ورقتك تطبيق محاسبة بسيط لإنشاء الفواتير وعروض الأسعار والإيصالات، مع متابعة المدفوعات وإدارة العملاء والمنتجات — يعمل بالكامل من هاتفك دون الحاجة لإنترنت.',
+        'Waraqatak is a simple business document app for creating invoices, quotations, and receipts. Track payments, manage customers and products — all offline, directly on your phone.',
       );
-  String get freeFeaturesTitle => _t('مميزات النسخة المجانية', 'Free Features');
   String get arabicEnglishSupport =>
       _t('العربية والإنجليزية', 'Arabic & English');
-
-  // ========== PRO COMING SOON ==========
-  String get proComingSoon =>
-      _t('قريباً: ورقتك Pro', 'Coming Soon: Waraqatak Pro');
-  String get proComingSoonDescription => _t(
-        'للتجار وأصحاب الأنشطة الذين يحتاجون أدوات أكثر لتنظيم ومتابعة أعمالهم اليومية.',
-        'More tools for businesses that need deeper control, reporting, customization, and inventory management.',
-      );
-  String get proFeature1 =>
-      _t('تخصيص الفواتير والمستندات', 'Customizable invoices & documents');
-  String get proFeature2 =>
-      _t('إدارة مخزون متقدمة', 'Advanced inventory management');
-  String get proFeature3 =>
-      _t('تقارير المبيعات والأرباح', 'Sales & profit reports');
-  String get proFeature4 =>
-      _t('تقارير ومتابعة النشاط', 'Business activity reports');
-  String get proFeature5 =>
-      _t('إعدادات ضريبية متقدمة', 'Advanced tax settings');
-  String get proFeature6 => _t(
-        'خيارات تخصيص وإدارة إضافية',
-        'Additional customization & management options',
-      );
-  String get proActivationNote => _t(
-        'النسخة الاحترافية قيد التطوير. سيتم الإعلان عن تفاصيل السعر والتفعيل عند توفرها.',
-        'Pro version is under development. Pricing and activation details will be announced when available.',
-      );
+  String get offlineFirst =>
+      _t('يعمل بدون إنترنت', 'Works fully offline');
+  String get paymentTracking =>
+      _t('متابعة المدفوعات والإيصالات', 'Payment & receipt tracking');
+  String get documentStatusTracking =>
+      _t('متابعة حالة المستندات', 'Document status tracking');
 
   // ========== CONTACT ==========
   String get contactWhatsApp => _t('واتساب', 'WhatsApp');
   String get contactEmail => _t('البريد الإلكتروني', 'Email');
-  String get proContactMessage => _t(
-        'السلام عليكم، أرغب في معرفة تفاصيل النسخة الاحترافية من تطبيق ورقتك، بما في ذلك السعر وطريقة الدفع والتفعيل.',
-        'Hello, I would like to know more about Waraqatak Pro, including the price, payment method, and activation process.',
+  String get contactMessage => _t(
+        'السلام عليكم، أريد التواصل بخصوص تطبيق ورقتك.',
+        'Hello, I would like to get in touch about Waraqatak.',
       );
-  String get proEmailSubject =>
-      _t('طلب النسخة الاحترافية من ورقتك', 'Waraqatak Pro Request');
+  String get contactEmailSubject =>
+      _t('تواصل بخصوص ورقتك', 'Waraqatak Inquiry');
 
   // ========== PRIVACY ==========
   String get privacyPolicy => _t('سياسة الخصوصية', 'Privacy Policy');
@@ -347,6 +326,15 @@ class AppLocalizations {
   String get noDocumentsHint     => _t('أنشئ أول فاتورة أو عرض سعر وابدأ.', 'Create your first invoice or quotation.');
   String get noSearchResults     => _t('لم نجد مستندات مطابقة',    'No matching documents');
   String get noSearchResultsHint => _t('جرّب رقم المستند أو اسم العميل.', 'Try a document number or customer name.');
+
+  // ========== PAYMENT METHODS CONFIG ==========
+  String get paymentMethods => _t('طرق الدفع', 'Payment Methods');
+  String get configurePaymentMethods =>
+      _t('اختر طرق الدفع المتاحة في تطبيقك', 'Choose which payment methods to show');
+
+  // ========== MISC ==========
+  String get retry => _t('إعادة المحاولة', 'Retry');
+  String get items => _t('البنود', 'Items');
 
   // ========== DEVELOPER ==========
   String get developer => _t('المطور', 'Developer');

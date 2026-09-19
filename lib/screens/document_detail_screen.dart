@@ -31,6 +31,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   List<DocumentPayment> _payments = [];
   Document? _relatedDocument;
   Document? _convertedInvoice;
+  List<String> _paymentMethods = CurrencyUtils.defaultMethods;
   bool _loading = true;
   String? _error;
 
@@ -56,6 +57,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         return;
       }
 
+      final configuredMethods = await CurrencyUtils.getConfiguredMethods();
+
       final futures = await Future.wait([
         db.getFirstBusiness(),
         if (doc.contactId != null) db.getContactById(doc.contactId!) else Future.value(null),
@@ -80,6 +83,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _payments = (futures[3] as List).cast<DocumentPayment>();
         _relatedDocument = futures[4] as Document?;
         _convertedInvoice = doc.type == 'quotation' ? futures[5] as Document? : null;
+        _paymentMethods = configuredMethods;
         _loading = false;
       });
     } catch (e) {
@@ -277,96 +281,111 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final l10n = AppLocalizations.of(context);
     final doc = _document!;
     final amountController = TextEditingController(text: doc.remaining.toStringAsFixed(2));
-    String? selectedMethod;
-    final allowedMethods = CurrencyUtils.getPaymentMethodsForCurrency(doc.currencyCode);
+    String? selectedMethod = _paymentMethods.isNotEmpty ? _paymentMethods.first : null;
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetCtx) {
         return StatefulBuilder(
           builder: (ctx, setSheet) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(l10n.recordPayment,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${l10n.remaining}: ${_fmt.format(doc.remaining)} ${doc.currencySymbol}',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: l10n.paymentAmountLabel,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      suffixText: doc.currencySymbol,
-                    ),
-                    autofocus: true,
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(l10n.recordPayment,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${l10n.remaining}: ${_fmt.format(doc.remaining)} ${doc.currencySymbol}',
+                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: amountController,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          labelText: l10n.paymentAmountLabel,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          suffixText: doc.currencySymbol,
+                        ),
+                        autofocus: true,
+                      ),
+                      if (_paymentMethods.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _paymentMethods.map((m) {
+                            return ChoiceChip(
+                              label: Text(CurrencyUtils.getPaymentMethodLabel(m, l10n)),
+                              selected: selectedMethod == m,
+                              onSelected: (_) => setSheet(() => selectedMethod = m),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: () async {
+                          final amount = double.tryParse(amountController.text) ?? 0;
+                          if (amount <= 0 || amount > doc.remaining) {
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(SnackBar(content: Text(l10n.invalidAmount)));
+                            return;
+                          }
+                          Navigator.pop(sheetCtx);
+                          try {
+                            final receiptId = await DocumentService.recordPayment(
+                              documentId: doc.id!,
+                              amount: amount,
+                              paymentMethod: selectedMethod,
+                            );
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text(l10n.paymentRecorded),
+                              action: SnackBarAction(
+                                label: l10n.viewReceipt,
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => DocumentDetailScreen(documentId: receiptId),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ));
+                            _load();
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+                          }
+                        },
+                        child: Text(l10n.recordPayment),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: allowedMethods.map((m) {
-                      return ChoiceChip(
-                        label: Text(CurrencyUtils.getPaymentMethodLabel(m, l10n)),
-                        selected: selectedMethod == m,
-                        onSelected: (_) => setSheet(() => selectedMethod = m),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: () async {
-                      final amount = double.tryParse(amountController.text) ?? 0;
-                      if (amount <= 0 || amount > doc.remaining) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text(l10n.invalidAmount)));
-                        return;
-                      }
-                      Navigator.pop(sheetCtx);
-                      try {
-                        final receiptId = await DocumentService.recordPayment(
-                          documentId: doc.id!,
-                          amount: amount,
-                          paymentMethod: selectedMethod,
-                        );
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(l10n.paymentRecorded),
-                          action: SnackBarAction(
-                            label: l10n.viewReceipt,
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => DocumentDetailScreen(documentId: receiptId),
-                                ),
-                              );
-                            },
-                          ),
-                        ));
-                        _load();
-                      } catch (e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
-                      }
-                    },
-                    child: Text(l10n.save),
-                  ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         );
@@ -387,9 +406,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Icon(Icons.error_outline,
+                  size: 48, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 12),
               Text(l10n.operationFailed),
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: _load, child: Text(l10n.cancel)),
+              FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
             ],
           ),
         ),
@@ -595,7 +617,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             _card(Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.products,
+                Text(l10n.items,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 ..._items.map((item) => Padding(
@@ -607,7 +629,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       const SizedBox(width: 8),
                       Text(
                         '${_fmt.format(item.quantity)} × ${_fmt.format(item.price)}',
-                        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 13),
                       ),
                     ],
                   ),
@@ -680,12 +704,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(_dateFmt.format(p.date),
-                                  style: const TextStyle(
-                                      color: Color(0xFF6B7280), fontSize: 12)),
+                                  style: TextStyle(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontSize: 12)),
                               if (p.paymentMethod != null)
                                 Text(
                                   CurrencyUtils.getPaymentMethodLabel(p.paymentMethod!, l10n),
-                                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 ),
                             ],
                           ),
@@ -734,7 +761,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0xFFE5E7EB)),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Padding(padding: const EdgeInsets.all(16), child: child),
     );
@@ -788,12 +815,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   }
 
   Widget _infoRow(String label, String value) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('$label: ', style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+          Text('$label: ', style: TextStyle(color: muted, fontSize: 13)),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
         ],
       ),
@@ -804,7 +832,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       {bool bold = false, Color? color}) {
     final style = TextStyle(
       fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-      color: color ?? const Color(0xFF202124),
+      color: color ?? Theme.of(context).colorScheme.onSurface,
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),

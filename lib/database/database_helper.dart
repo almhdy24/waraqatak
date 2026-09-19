@@ -450,10 +450,37 @@ class DatabaseHelper {
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
 
+      // Payment receipts: reverse the linked invoice payment before deleting
+      if (doc.type == 'payment_receipt' && doc.relatedDocumentId != null) {
+        await txn.delete('document_payments',
+            where: 'receipt_document_id = ?', whereArgs: [id]);
+        final invoiceRows = await txn.query('documents',
+            where: 'id = ?', whereArgs: [doc.relatedDocumentId]);
+        if (invoiceRows.isNotEmpty) {
+          final invoice = Document.fromMap(invoiceRows.first);
+          if (invoice.status != DocumentStatus.cancelled) {
+            final sumRows = await txn.rawQuery(
+              'SELECT COALESCE(SUM(amount), 0) AS total FROM document_payments WHERE document_id = ?',
+              [doc.relatedDocumentId],
+            );
+            final newPaid = (sumRows.first['total'] as num?)?.toDouble() ?? 0;
+            final newRemaining = (invoice.total - newPaid).clamp(0.0, double.infinity);
+            final newStatus = DocumentStatus.fromPayment(newPaid, invoice.total);
+            await txn.update('documents', {
+              'paid': newPaid,
+              'remaining': newRemaining,
+              'status': newStatus,
+            }, where: 'id = ?', whereArgs: [doc.relatedDocumentId]);
+          }
+        }
+      }
+
+      // Stock reversion for non-draft, non-cancelled invoices
       if (doc.type == 'invoice' &&
           doc.status != DocumentStatus.draft &&
           doc.status != DocumentStatus.cancelled) {
-        final items = await txn.query('document_items', where: 'document_id = ?', whereArgs: [id]);
+        final items = await txn.query('document_items',
+            where: 'document_id = ?', whereArgs: [id]);
         for (final item in items) {
           final productId = item['product_id'] as int?;
           final qty = item['quantity'] as num? ?? 0;
@@ -465,6 +492,14 @@ class DatabaseHelper {
           }
         }
       }
+
+      // Nullify related_document_id on any documents that reference this one.
+      // Without this, the FK constraint prevents deletion when other documents
+      // (e.g. payment receipts) still point to this document.
+      await txn.rawUpdate(
+        'UPDATE documents SET related_document_id = NULL WHERE related_document_id = ?',
+        [id],
+      );
 
       return txn.delete('documents', where: 'id = ?', whereArgs: [id]);
     });

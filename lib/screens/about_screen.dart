@@ -13,7 +13,7 @@ class AboutScreen extends StatelessWidget {
     await UrlLauncherUtils.launch(
       context,
       'https://wa.me/${AppConstants.whatsappNumber}'
-      '?text=${Uri.encodeComponent(l10n.proContactMessage)}',
+      '?text=${Uri.encodeComponent(l10n.contactMessage)}',
     );
   }
 
@@ -22,7 +22,7 @@ class AboutScreen extends StatelessWidget {
     final uri = Uri(
       scheme: 'mailto',
       path: AppConstants.supportEmail,
-      queryParameters: {'subject': l10n.proEmailSubject},
+      queryParameters: {'subject': l10n.contactEmailSubject},
     );
     await UrlLauncherUtils.launchUri(context, uri);
   }
@@ -71,6 +71,9 @@ class AboutScreen extends StatelessWidget {
                   _Feature(Icons.money_off_csred_outlined, l10n.expenseVoucher),
                   _Feature(Icons.description_outlined, l10n.customDocument),
                   _Feature(Icons.picture_as_pdf_outlined, l10n.sharePdf),
+                  _Feature(Icons.sync_alt_rounded, l10n.documentStatusTracking),
+                  _Feature(Icons.account_balance_wallet_outlined, l10n.paymentTracking),
+                  _Feature(Icons.published_with_changes_rounded, l10n.convertToInvoice),
                 ],
               ),
               const SizedBox(height: 24),
@@ -87,6 +90,7 @@ class AboutScreen extends StatelessWidget {
                   _Feature(Icons.inventory_2_outlined, l10n.products),
                   _Feature(Icons.warehouse_outlined, l10n.stock),
                   _Feature(Icons.language_rounded, l10n.arabicEnglishSupport),
+                  _Feature(Icons.wifi_off_rounded, l10n.offlineFirst),
                 ],
               ),
               const SizedBox(height: 24),
@@ -97,8 +101,6 @@ class AboutScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _buildToolsCard(context, l10n),
-              const SizedBox(height: 30),
-              _buildProSection(context, l10n),
               const SizedBox(height: 30),
               _buildSectionHeader(
                 context,
@@ -341,115 +343,6 @@ class AboutScreen extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Pro Section ─────────────────────────────────────
-  Widget _buildProSection(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final features = [
-      l10n.proFeature1,
-      l10n.proFeature2,
-      l10n.proFeature3,
-      l10n.proFeature4,
-      l10n.proFeature5,
-      l10n.proFeature6,
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: AlignmentDirectional.topStart,
-          end: AlignmentDirectional.bottomEnd,
-          colors: [
-            colors.primaryContainer,
-            colors.surfaceContainerLow,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.primary.withValues(alpha: 0.22)), // ✅ fixed
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: colors.primary,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.workspace_premium_rounded, color: colors.onPrimary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  l10n.proComingSoon,
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            l10n.proComingSoonDescription,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              height: 1.55,
-              color: colors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: colors.surface.withValues(alpha: 0.65), // ✅ fixed
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                for (int i = 0; i < features.length; i++)
-                  Padding(
-                    padding: EdgeInsets.only(bottom: i == features.length - 1 ? 0 : 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.check_circle_rounded, size: 18, color: colors.primary),
-                        const SizedBox(width: 9),
-                        Expanded(
-                          child: Text(
-                            features[i],
-                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline_rounded, size: 17, color: colors.onSurfaceVariant),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  l10n.proActivationNote,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),

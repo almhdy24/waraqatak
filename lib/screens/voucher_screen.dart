@@ -23,6 +23,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
   final _amountController = TextEditingController();
   final _reasonController = TextEditingController();
   String _paymentMethod = 'cash';
+  List<String> _configuredMethods = CurrencyUtils.defaultMethods;
   Business? _business;
   Contact? _selectedContact;
   String? _contactName;
@@ -45,21 +46,19 @@ class _VoucherScreenState extends State<VoucherScreen> {
 
   Future<void> _loadBusiness() async {
     final business = await DatabaseHelper.instance.getFirstBusiness();
+    final methods = await CurrencyUtils.getConfiguredMethods();
     if (!mounted) return;
     setState(() {
       _business = business;
+      _configuredMethods = methods;
     });
     _ensureValidPaymentMethod();
   }
 
   void _ensureValidPaymentMethod() {
-    if (_business == null) return;
-    final allowed = CurrencyUtils.getPaymentMethodsForCurrency(
-      _business!.currencyCode,
-    );
-    if (!allowed.contains(_paymentMethod)) {
+    if (!_configuredMethods.contains(_paymentMethod)) {
       setState(() {
-        _paymentMethod = allowed.first;
+        _paymentMethod = _configuredMethods.isNotEmpty ? _configuredMethods.first : 'cash';
       });
     }
   }
@@ -77,10 +76,9 @@ class _VoucherScreenState extends State<VoucherScreen> {
       contact = Contact(name: _contactName!.trim(), type: isReceipt ? 'customer' : 'supplier');
     }
 
-    // Ensure payment method is allowed
-    final allowed = CurrencyUtils.getPaymentMethodsForCurrency(_business!.currencyCode);
-    if (!allowed.contains(_paymentMethod)) {
-      _paymentMethod = allowed.first;
+    // Ensure payment method is valid
+    if (!_configuredMethods.contains(_paymentMethod)) {
+      _paymentMethod = _configuredMethods.isNotEmpty ? _configuredMethods.first : 'cash';
     }
 
     try {
@@ -119,9 +117,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
     final contactType = isReceipt ? 'customer' : 'supplier';
     final contactHint = isReceipt ? l10n.customer : l10n.supplier;
 
-    final allowedMethods = _business != null
-        ? CurrencyUtils.getPaymentMethodsForCurrency(_business!.currencyCode)
-        : const ['cash', 'bank'];
+    final allowedMethods = _configuredMethods;
 
     return Scaffold(
       appBar: AppBar(title: Text(title), centerTitle: true),
@@ -198,7 +194,8 @@ class _VoucherScreenState extends State<VoucherScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: allowedMethods.map((method) {
-                        return _paymentChip(method, _getPaymentMethodLabel(method, l10n));
+                        return _paymentChip(
+                            method, CurrencyUtils.getPaymentMethodLabel(method, l10n));
                       }).toList(),
                     ),
                   ],
@@ -266,13 +263,4 @@ class _VoucherScreenState extends State<VoucherScreen> {
     );
   }
 
-  String _getPaymentMethodLabel(String method, AppLocalizations l10n) {
-    switch (method) {
-      case 'cash': return l10n.cash;
-      case 'bank': return l10n.bankTransfer;
-      case 'bankak': return l10n.bankak;
-      case 'okash': return l10n.okash;
-      default: return method;
-    }
-  }
 }
