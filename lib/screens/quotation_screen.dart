@@ -81,20 +81,20 @@ class _QuotationScreenState extends State<QuotationScreen> {
     });
   }
 
-  Future<void> _save() async {
+  List<DocumentItemInput> _buildItems() => List.generate(
+        _desc.length,
+        (i) => DocumentItemInput(
+          description: _desc[i].text.trim(),
+          quantity: double.parse(_qty[i].text),
+          price: double.parse(_price[i].text),
+          taxable: _taxable[i],
+          productId: _productIds[i],
+        ),
+      );
+
+  Future<void> _save({bool isDraft = false}) async {
     if (!_formKey.currentState!.validate()) return;
     if (_business == null) return;
-
-    final items = <DocumentItemInput>[];
-    for (int i = 0; i < _desc.length; i++) {
-      items.add(DocumentItemInput(
-        description: _desc[i].text.trim(),
-        quantity: double.parse(_qty[i].text),
-        price: double.parse(_price[i].text),
-        taxable: _taxable[i],
-        productId: _productIds[i],
-      ));
-    }
 
     final int validityDays = int.tryParse(_validityController.text) ?? 7;
     final DateTime documentDate = DateTime.now();
@@ -105,10 +105,11 @@ class _QuotationScreenState extends State<QuotationScreen> {
         type: 'quotation',
         business: _business!,
         contact: _contact,
-        items: items,
+        items: _buildItems(),
         notes: _notesController.text,
         date: documentDate,
         validUntil: validUntil,
+        isDraft: isDraft,
       );
 
       if (!mounted) return;
@@ -168,7 +169,20 @@ class _QuotationScreenState extends State<QuotationScreen> {
               maxLines: 2,
             ),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: _save, child: Text(l10n.save)),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: () => _save(),
+                style: FilledButton.styleFrom(foregroundColor: Colors.white),
+                child: Text(l10n.save),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => _save(isDraft: true),
+              child: Text(l10n.saveDraft),
+            ),
           ],
         ),
       ),

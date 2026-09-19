@@ -119,33 +119,34 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     );
   }
 
-  Future<void> _save() async {
+  List<DocumentItemInput> _buildItems() => List.generate(
+        _descriptionControllers.length,
+        (i) => DocumentItemInput(
+          description: _descriptionControllers[i].text.trim(),
+          quantity: double.parse(_quantityControllers[i].text),
+          price: double.parse(_priceControllers[i].text),
+          taxable: _taxableList[i],
+          productId: _productIds[i],
+        ),
+      );
+
+  Future<void> _save({bool isDraft = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_business == null) return;
 
     setState(() => _saving = true);
-
-    final items = <DocumentItemInput>[];
-    for (int i = 0; i < _descriptionControllers.length; i++) {
-      items.add(DocumentItemInput(
-        description: _descriptionControllers[i].text.trim(),
-        quantity: double.parse(_quantityControllers[i].text),
-        price: double.parse(_priceControllers[i].text),
-        taxable: _taxableList[i],
-        productId: _productIds[i],
-      ));
-    }
 
     try {
       final docId = await DocumentService.createDocument(
         type: 'invoice',
         business: _business!,
         contact: _selectedContact,
-        items: items,
+        items: _buildItems(),
         discount: _discount,
         paid: _paid,
         notes: _notesController.text,
         date: DateTime.now(),
+        isDraft: isDraft,
       );
 
       if (!mounted) return;
@@ -242,10 +243,15 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               width: double.infinity,
               height: 52,
               child: FilledButton(
-                onPressed: _saving ? null : _save,
+                onPressed: _saving ? null : () => _save(),
                 style: FilledButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Colors.white),
                 child: _saving ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.save),
               ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _saving ? null : () => _save(isDraft: true),
+              child: Text(l10n.saveDraft),
             ),
           ],
         ),

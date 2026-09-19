@@ -5,12 +5,14 @@ import '../models/contact.dart';
 import '../models/product.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
+import '../models/document_payment.dart';
+import '../models/document_status.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 4;
+  static const int dbVersion = 5;
 
   static Database? _database;
 
@@ -89,7 +91,7 @@ class DatabaseHelper {
         valid_until TEXT,
         notes TEXT,
         related_document_id INTEGER,
-        status TEXT DEFAULT 'active',
+        status TEXT DEFAULT 'issued',
         currency_code TEXT DEFAULT 'SDG',
         FOREIGN KEY (contact_id) REFERENCES contacts (id),
         FOREIGN KEY (related_document_id) REFERENCES documents (id)
@@ -117,10 +119,21 @@ class DatabaseHelper {
         next_number INTEGER NOT NULL
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE document_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        payment_method TEXT,
+        date TEXT NOT NULL,
+        notes TEXT,
+        FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+      )
+    ''');
   }
 
   Future<void> _upgradeTables(Database db, int oldVersion, int newVersion) async {
-    // Helper to check column existence
     Future<bool> columnExists(String table, String column) async {
       final columns = await db.rawQuery('PRAGMA table_info($table)');
       return columns.any((c) => c['name'] == column);
@@ -151,6 +164,32 @@ class DatabaseHelper {
       if (!await columnExists('documents', 'currency_code')) {
         await db.execute("ALTER TABLE documents ADD COLUMN currency_code TEXT DEFAULT 'SDG'");
       }
+    }
+
+    // Version 5: document_payments table + status migration
+    if (oldVersion < 5) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS document_payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          document_id INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          payment_method TEXT,
+          date TEXT NOT NULL,
+          notes TEXT,
+          FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+        )
+      ''');
+
+      // Migrate 'active' status to correct per-type status values
+      await db.execute("""
+        UPDATE documents SET status =
+          CASE
+            WHEN type = 'invoice' AND paid >= total THEN 'paid'
+            WHEN type = 'invoice' AND paid > 0      THEN 'partially_paid'
+            ELSE 'issued'
+          END
+        WHERE status = 'active'
+      """);
     }
   }
 
@@ -301,6 +340,8 @@ class DatabaseHelper {
 
       final docId = await txn.insert('documents', newDoc.toMap());
 
+      final isDraft = doc.status == DocumentStatus.draft;
+
       for (final item in items) {
         await txn.insert('document_items', {
           'document_id': docId,
@@ -312,7 +353,8 @@ class DatabaseHelper {
           'taxable': item.taxable ? 1 : 0,
         });
 
-        if (doc.type == 'invoice' && item.productId != null) {
+        // Deduct stock only for issued invoices, not drafts
+        if (doc.type == 'invoice' && !isDraft && item.productId != null) {
           await txn.rawUpdate(
             'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
             [item.quantity, item.productId],
@@ -337,18 +379,21 @@ class DatabaseHelper {
         where: 'document_id = ?',
         whereArgs: [doc.id],
       );
-      final existingDocument = await txn.query(
+      final existingRows = await txn.query(
         'documents',
-        columns: ['type'],
+        columns: ['type', 'status'],
         where: 'id = ?',
         whereArgs: [doc.id],
       );
-      if (existingDocument.isEmpty) {
+      if (existingRows.isEmpty) {
         throw StateError('Document not found');
       }
 
-      // Revert stock for old items
-      if (existingDocument.first['type'] == 'invoice') {
+      final oldType   = existingRows.first['type']   as String;
+      final oldStatus = existingRows.first['status'] as String? ?? DocumentStatus.issued;
+
+      // Revert stock for previously issued invoice items
+      if (oldType == 'invoice' && oldStatus != DocumentStatus.draft && oldStatus != DocumentStatus.cancelled) {
         for (final old in oldItems) {
           final productId = old['product_id'] as int?;
           final qty = old['quantity'] as num? ?? 0;
@@ -385,6 +430,8 @@ class DatabaseHelper {
 
       await txn.delete('document_items', where: 'document_id = ?', whereArgs: [doc.id]);
 
+      final newIsDraft = doc.status == DocumentStatus.draft;
+
       for (final item in newItems) {
         await txn.insert('document_items', {
           'document_id': doc.id,
@@ -396,7 +443,8 @@ class DatabaseHelper {
           'taxable': item.taxable ? 1 : 0,
         });
 
-        if (doc.type == 'invoice' && item.productId != null) {
+        // Apply stock only for issued invoices, not drafts
+        if (doc.type == 'invoice' && !newIsDraft && item.productId != null) {
           await txn.rawUpdate(
             'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
             [item.quantity, item.productId],
@@ -413,7 +461,11 @@ class DatabaseHelper {
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
 
-      if (doc.type == 'invoice') {
+      // Revert stock only for issued (non-draft, non-cancelled) invoices.
+      // Cancelled invoices already had stock reverted by cancelDocument.
+      if (doc.type == 'invoice' &&
+          doc.status != DocumentStatus.draft &&
+          doc.status != DocumentStatus.cancelled) {
         final items = await txn.query('document_items', where: 'document_id = ?', whereArgs: [id]);
         for (final item in items) {
           final productId = item['product_id'] as int?;
@@ -431,14 +483,108 @@ class DatabaseHelper {
     });
   }
 
+  Future<void> cancelDocument(int id) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final docRows = await txn.query('documents', where: 'id = ?', whereArgs: [id]);
+      if (docRows.isEmpty) return;
+      final doc = Document.fromMap(docRows.first);
+
+      if (doc.status == DocumentStatus.cancelled) {
+        throw StateError('Document is already cancelled');
+      }
+
+      // Revert stock for non-draft invoices (stock was deducted on issue)
+      if (doc.type == 'invoice' && doc.status != DocumentStatus.draft) {
+        final items = await txn.query('document_items', where: 'document_id = ?', whereArgs: [id]);
+        for (final item in items) {
+          final productId = item['product_id'] as int?;
+          final qty = item['quantity'] as num? ?? 0;
+          if (productId != null && qty > 0) {
+            await txn.rawUpdate(
+              'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+              [qty, productId],
+            );
+          }
+        }
+      }
+
+      await txn.update(
+        'documents',
+        {'status': DocumentStatus.cancelled},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    });
+  }
+
+  Future<void> recordPayment({
+    required int documentId,
+    required double amount,
+    String? paymentMethod,
+    String? notes,
+  }) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final docRows = await txn.query('documents', where: 'id = ?', whereArgs: [documentId]);
+      if (docRows.isEmpty) throw StateError('Document not found');
+      final doc = Document.fromMap(docRows.first);
+
+      if (doc.type != 'invoice') {
+        throw StateError('Payment recording is only supported for invoices');
+      }
+      if (doc.status == DocumentStatus.cancelled) {
+        throw StateError('Cannot record payment on a cancelled document');
+      }
+      if (doc.status == DocumentStatus.draft) {
+        throw StateError('Cannot record payment on a draft document');
+      }
+      if (amount <= 0) {
+        throw ArgumentError('Payment amount must be greater than zero');
+      }
+      if (amount > doc.remaining) {
+        throw ArgumentError('Payment cannot exceed remaining amount');
+      }
+
+      await txn.insert('document_payments', {
+        'document_id': documentId,
+        'amount': amount,
+        'payment_method': paymentMethod,
+        'date': DateTime.now().toIso8601String(),
+        'notes': notes,
+      });
+
+      final newPaid      = doc.paid + amount;
+      final newRemaining = (doc.total - newPaid).clamp(0.0, double.infinity);
+      final newStatus    = DocumentStatus.fromPayment(newPaid, doc.total);
+
+      await txn.update('documents', {
+        'paid':      newPaid,
+        'remaining': newRemaining,
+        'status':    newStatus,
+      }, where: 'id = ?', whereArgs: [documentId]);
+    });
+  }
+
+  Future<List<DocumentPayment>> getDocumentPayments(int documentId) async {
+    final db = await database;
+    final maps = await db.query(
+      'document_payments',
+      where: 'document_id = ?',
+      whereArgs: [documentId],
+      orderBy: 'date ASC',
+    );
+    return maps.map(DocumentPayment.fromMap).toList();
+  }
+
   Future<String> getNextDocumentNumber(DatabaseExecutor txn, String type) async {
     final prefix = switch (type) {
-      'invoice' => 'INV',
-      'quotation' => 'QUO',
-      'payment_receipt' => 'PAY',
-      'expense_voucher' => 'EXP',
-      'custom' => 'CUS',
-      _ => 'DOC',
+      'invoice'          => 'INV',
+      'quotation'        => 'QUO',
+      'payment_receipt'  => 'PAY',
+      'expense_voucher'  => 'EXP',
+      'custom'           => 'CUS',
+      _                  => 'DOC',
     };
     final rows = await txn.query('document_counters', where: 'type = ?', whereArgs: [type]);
     int next = 1;
@@ -465,8 +611,9 @@ class DatabaseHelper {
 
   Future<List<Document>> searchDocuments(String query, {String? type}) async {
     final db = await database;
-    String where = '(document_number LIKE ? OR contact_id IN (SELECT id FROM contacts WHERE name LIKE ?))';
-    final args = ['%$query%', '%$query%'];
+    String where =
+        '(document_number LIKE ? OR notes LIKE ? OR contact_id IN (SELECT id FROM contacts WHERE name LIKE ?))';
+    final args = ['%$query%', '%$query%', '%$query%'];
     if (type != null) {
       where += ' AND type = ?';
       args.add(type);
@@ -505,12 +652,13 @@ class DatabaseHelper {
         SUM(CASE WHEN type = 'invoice' THEN remaining ELSE 0 END) as outstanding
       FROM documents
       WHERE date >= ? AND date < ?
+        AND status != '${DocumentStatus.draft}'
     ''', [start.toIso8601String(), end.toIso8601String()]);
     if (result.isEmpty || result.first['sales'] == null) {
       return {'sales': 0, 'outstanding': 0};
     }
     return {
-      'sales': (result.first['sales'] as num?)?.toDouble() ?? 0,
+      'sales':       (result.first['sales']       as num?)?.toDouble() ?? 0,
       'outstanding': (result.first['outstanding'] as num?)?.toDouble() ?? 0,
     };
   }

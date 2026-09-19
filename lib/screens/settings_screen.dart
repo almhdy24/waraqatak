@@ -1,28 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../services/backup_service.dart';
+import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  Future<void> _launchPrivacyPolicy(BuildContext context) async {
-    final url = Uri.parse(AppConstants.privacyPolicyUrl);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).operationFailed),
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,7 +139,7 @@ class SettingsScreen extends StatelessWidget {
             title: Text(l10n.privacyPolicy),
             subtitle: Text(l10n.privacySettingsDescription),
             trailing: const Icon(Icons.open_in_new),
-            onTap: () => _launchPrivacyPolicy(context),
+            onTap: () => UrlLauncherUtils.launch(context, AppConstants.privacyPolicyUrl),
           ),
           ListTile(
             leading: const Icon(Icons.info_outline),

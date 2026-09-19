@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/document.dart';
+import '../widgets/status_badge.dart';
 import 'document_detail_screen.dart';
 
 class DocumentsScreen extends StatefulWidget {
@@ -120,7 +121,15 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             leading: Icon(_iconForType(doc.type)),
             title: Text(doc.documentNumber, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('${doc.recipientName ?? ''} - ${NumberFormat('#,##0').format(doc.total)} ${doc.currencySymbol}'),
-            trailing: Text(DateFormat('dd/MM/yyyy').format(doc.date), style: const TextStyle(fontSize: 12)),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(DateFormat('dd/MM/yyyy').format(doc.date), style: const TextStyle(fontSize: 12)),
+                const SizedBox(height: 4),
+                StatusBadge(status: doc.status),
+              ],
+            ),
             onTap: () async {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: doc.id!)));
               _load();

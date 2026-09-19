@@ -291,7 +291,35 @@ class AppLocalizations {
 
   String get facebook => _t('فيسبوك', 'Facebook');
   String get fromYourPhone => _t('من هاتفك', 'From your phone');
-  // داخل class AppLocalizations
-String get contact => _t('تواصل', 'Contact');
+  String get contact => _t('تواصل', 'Contact');
+
+  // ========== DOCUMENT STATUS ==========
+  String get statusDraft         => _t('مسودة',          'Draft');
+  String get statusIssued        => _t('صادر',           'Issued');
+  String get statusPartiallyPaid => _t('مدفوع جزئياً',   'Partially Paid');
+  String get statusPaid          => _t('مدفوع',          'Paid');
+  String get statusCancelled     => _t('ملغي',           'Cancelled');
+
+  // ========== PAYMENT RECORDING ==========
+  String get recordPayment        => _t('تسجيل دفعة',              'Record Payment');
+  String get paymentRecorded      => _t('تم تسجيل الدفعة بنجاح',   'Payment recorded');
+  String get paymentHistory       => _t('سجل الدفعات',             'Payment History');
+  String get paymentAmountLabel   => _t('مبلغ الدفعة',             'Payment Amount');
+
+  // ========== CANCELLATION ==========
+  String get cancelDocument        => _t('إلغاء المستند',                                              'Cancel Document');
+  String get confirmCancel         => _t('تأكيد الإلغاء',                                             'Confirm Cancellation');
+  String get cancelDocumentMessage => _t('هل تريد إلغاء هذا المستند؟ لا يمكن التراجع عن هذا الإجراء.', 'Cancel this document? This cannot be undone.');
+
+  // ========== DRAFT ==========
+  String get saveDraft => _t('حفظ كمسودة', 'Save as Draft');
+
+  // ========== DEVELOPER ==========
+  String get developer => _t('المطور', 'Developer');
+  String get madeBy => _t('تطوير', 'Made by');
+  String get visitWebsite => _t('الموقع الإلكتروني', 'Website');
+  String get viewOnGitHub => _t('GitHub', 'GitHub');
+  String get waraqatakProductPage => _t('صفحة المنتج', 'Product Page');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

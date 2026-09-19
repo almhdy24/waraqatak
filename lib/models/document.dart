@@ -41,7 +41,7 @@ class Document {
     this.validUntil,
     this.notes,
     this.relatedDocumentId,
-    this.status = 'active',
+    this.status = 'issued',
     this.currencyCode = 'SDG',
   });
 
@@ -91,7 +91,7 @@ class Document {
             : null,
         notes: map['notes'] as String?,
         relatedDocumentId: map['related_document_id'] as int?,
-        status: map['status'] as String? ?? 'active',
+        status: map['status'] as String? ?? 'issued',
         currencyCode: map['currency_code'] as String? ?? 'SDG',
       );
 }

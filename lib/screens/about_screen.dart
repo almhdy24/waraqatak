@@ -1,73 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
+import '../utils/url_launcher_utils.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
   Future<void> _launchWhatsApp(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final url = Uri.parse(
+    await UrlLauncherUtils.launch(
+      context,
       'https://wa.me/${AppConstants.whatsappNumber}'
       '?text=${Uri.encodeComponent(l10n.proContactMessage)}',
     );
-    await _launchUrl(context, url, external: true);
   }
 
   Future<void> _launchEmail(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final url = Uri(
+    final uri = Uri(
       scheme: 'mailto',
       path: AppConstants.supportEmail,
       queryParameters: {'subject': l10n.proEmailSubject},
     );
-    await _launchUrl(context, url);
+    await UrlLauncherUtils.launchUri(context, uri);
   }
 
   Future<void> _launchFacebook(BuildContext context) async {
-    final url = Uri.parse(AppConstants.facebookPage);
-    await _launchUrl(context, url, external: true);
+    await UrlLauncherUtils.launch(context, AppConstants.facebookPage);
   }
 
   Future<void> _launchPrivacyPolicy(BuildContext context) async {
-    final url = Uri.parse(AppConstants.privacyPolicyUrl);
-    await _launchUrl(context, url, external: true);
-  }
-
-  Future<void> _launchUrl(
-    BuildContext context,
-    Uri url, {
-    bool external = false,
-  }) async {
-    try {
-      if (!await canLaunchUrl(url)) {
-        if (context.mounted) _showError(context);
-        return;
-      }
-      await launchUrl(
-        url,
-        mode: external
-            ? LaunchMode.externalApplication
-            : LaunchMode.platformDefault,
-      );
-    } catch (_) {
-      if (context.mounted) _showError(context);
-    }
-  }
-
-  void _showError(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(l10n.operationFailed),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    await UrlLauncherUtils.launch(context, AppConstants.privacyPolicyUrl);
   }
 
   @override
@@ -142,6 +107,14 @@ class AboutScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _buildSupportSection(context, l10n),
+              const SizedBox(height: 30),
+              _buildSectionHeader(
+                context,
+                icon: Icons.code_rounded,
+                title: l10n.developer,
+              ),
+              const SizedBox(height: 12),
+              _buildDeveloperSection(context, l10n),
               const SizedBox(height: 30),
               _buildPrivacySection(context, l10n),
               const SizedBox(height: 32),
@@ -580,6 +553,38 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
+  // ─── Developer Section ──────────────────────────────
+  Widget _buildDeveloperSection(BuildContext context, AppLocalizations l10n) {
+    return Column(
+      children: [
+        _supportTile(
+          context: context,
+          icon: Icons.person_rounded,
+          title: AppConstants.developerName,
+          subtitle: AppConstants.developerBrand,
+          onTap: () => UrlLauncherUtils.launch(context, AppConstants.githubUrl),
+        ),
+        const SizedBox(height: 10),
+        _supportTile(
+          context: context,
+          icon: Icons.language_rounded,
+          title: l10n.visitWebsite,
+          subtitle: AppConstants.websiteUrl,
+          onTap: () => UrlLauncherUtils.launch(context, AppConstants.websiteUrl),
+        ),
+        const SizedBox(height: 10),
+        _supportTile(
+          context: context,
+          icon: Icons.open_in_new_rounded,
+          title: l10n.waraqatakProductPage,
+          subtitle: AppConstants.waraqatakProductUrl,
+          onTap: () =>
+              UrlLauncherUtils.launch(context, AppConstants.waraqatakProductUrl),
+        ),
+      ],
+    );
+  }
+
   // ─── Privacy Section (Link) ─────────────────────────
   Widget _buildPrivacySection(BuildContext context, AppLocalizations l10n) {
     final theme = Theme.of(context);
@@ -650,6 +655,11 @@ class AboutScreen extends StatelessWidget {
         const SizedBox(height: 5),
         Text(
           '${l10n.version} $version',
+          style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${l10n.madeBy} ${AppConstants.developerName}',
           style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
         ),
       ],

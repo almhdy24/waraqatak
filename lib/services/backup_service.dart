@@ -104,6 +104,7 @@ class BackupService {
     final db = await DatabaseHelper.instance.database;
 
     await db.transaction((txn) async {
+      await txn.delete('document_payments');
       await txn.delete('document_items');
       await txn.delete('documents');
       await txn.delete('contacts');
@@ -144,6 +145,12 @@ class BackupService {
       }
       for (final row in _convertRows(data['document_counters'])) {
         await txn.insert('document_counters', row);
+      }
+      // document_payments is optional (absent in backups created before Phase 1)
+      if (data.containsKey('document_payments') && data['document_payments'] is List) {
+        for (final row in _convertRows(data['document_payments'])) {
+          await txn.insert('document_payments', row);
+        }
       }
     });
 
@@ -232,6 +239,7 @@ class BackupService {
         'documents': await db.query('documents'),
         'document_items': await db.query('document_items'),
         'document_counters': await db.query('document_counters'),
+        'document_payments': await db.query('document_payments'),
       },
       'assets': {
         'logo_base64': logoBase64,

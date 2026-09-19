@@ -3,6 +3,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
+import '../models/document_status.dart';
 import '../utils/currency_utils.dart';
 
 class DocumentItemInput {
@@ -25,6 +26,8 @@ class DocumentItemInput {
 
 class DocumentService {
   /// Creates a new document.
+  /// [isDraft] — if true, the document is saved as a draft (invoice/quotation only);
+  /// stock is not deducted and the document is excluded from financial summaries.
   static Future<int> createDocument({
     required String type,
     required Business business,
@@ -37,6 +40,7 @@ class DocumentService {
     DateTime? date,
     DateTime? validUntil,
     String? paymentMethod,
+    bool isDraft = false,
   }) async {
     _validateBusiness(business);
     _validateTaxRate(business.taxRate);
@@ -122,6 +126,18 @@ class DocumentService {
       throw ArgumentError('Unknown document type: $type');
     }
 
+    // Determine status:
+    // - Drafts only valid for invoice and quotation.
+    // - Receipts/expenses are always issued immediately.
+    final String status;
+    if (isDraft && (isInvoice || isQuotation)) {
+      status = DocumentStatus.draft;
+    } else if (isInvoice) {
+      status = DocumentStatus.fromPayment(finalPaid, total);
+    } else {
+      status = DocumentStatus.issued;
+    }
+
     final document = Document(
       type: type,
       documentNumber: '',
@@ -137,7 +153,7 @@ class DocumentService {
       validUntil: isQuotation ? validUntil : null,
       notes: notes,
       relatedDocumentId: relatedDocumentId,
-      status: 'active',
+      status: status,
       currencyCode: business.currencyCode,
     );
 
@@ -156,6 +172,8 @@ class DocumentService {
   }
 
   /// Updates an existing document.
+  /// [isDraft] — if true, keeps the document as a draft. If false (default), the
+  /// document is issued (or its payment status is recomputed from paid/total).
   static Future<void> updateDocument({
     required int documentId,
     required String type,
@@ -169,6 +187,7 @@ class DocumentService {
     DateTime? date,
     DateTime? validUntil,
     String? paymentMethod,
+    bool isDraft = false,
   }) async {
     _validateBusiness(business);
     _validateTaxRate(business.taxRate);
@@ -176,6 +195,9 @@ class DocumentService {
     final existing = await db.getDocumentById(documentId);
     if (existing == null) {
       throw ArgumentError('Document not found');
+    }
+    if (existing.status == DocumentStatus.cancelled) {
+      throw StateError('Cannot edit a cancelled document');
     }
 
     final documentDate = date ?? existing.date;
@@ -260,6 +282,16 @@ class DocumentService {
 
     final effectiveRelatedDocumentId = relatedDocumentId ?? existing.relatedDocumentId;
 
+    // Compute new status (same logic as createDocument)
+    final String newStatus;
+    if (isDraft && (isInvoice || isQuotation)) {
+      newStatus = DocumentStatus.draft;
+    } else if (isInvoice) {
+      newStatus = DocumentStatus.fromPayment(finalPaid, total);
+    } else {
+      newStatus = DocumentStatus.issued;
+    }
+
     final updatedDocument = Document(
       id: documentId,
       type: type,
@@ -279,7 +311,7 @@ class DocumentService {
       validUntil: isQuotation ? validUntil : null,
       notes: notes,
       relatedDocumentId: effectiveRelatedDocumentId,
-      status: existing.status,
+      status: newStatus,
       currencyCode: existing.currencyCode,
     );
 
@@ -294,6 +326,30 @@ class DocumentService {
     )).toList();
 
     await db.updateDocumentWithItems(updatedDocument, documentItems, contact: contact);
+  }
+
+  // ==================== Payment & Lifecycle ====================
+
+  /// Records a payment against an invoice. Inserts a document_payments row and
+  /// updates paid/remaining/status on the document atomically.
+  static Future<void> recordPayment({
+    required int documentId,
+    required double amount,
+    String? paymentMethod,
+    String? notes,
+  }) async {
+    if (amount <= 0) throw ArgumentError('Payment amount must be greater than zero');
+    await DatabaseHelper.instance.recordPayment(
+      documentId: documentId,
+      amount: amount,
+      paymentMethod: paymentMethod,
+      notes: notes,
+    );
+  }
+
+  /// Marks a document as cancelled. For non-draft invoices, stock is reverted.
+  static Future<void> cancelDocument(int documentId) async {
+    await DatabaseHelper.instance.cancelDocument(documentId);
   }
 
   // ==================== Private Helpers ====================
