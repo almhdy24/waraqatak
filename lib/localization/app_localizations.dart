@@ -576,6 +576,8 @@ class AppLocalizations {
   // Actions
   String get subscribeNow              => _t('اشترك الآن',                            'Subscribe Now');
   String get renewNow                  => _t('جدّد الاشتراك',                         'Renew Now');
+  String get renewEarly                => _t('تجديد مبكر للاشتراك',                   'Renew Subscription Early');
+  String get licenseActiveDesc         => _t('اشتراكك نشط ومفعّل على هذا الجهاز.',   'Your subscription is active on this device.');
   String get checkOrderStatus          => _t('فحص حالة الطلب',                       'Check Order Status');
   String get submitOrder               => _t('إرسال الطلب',                           'Submit Order');
   String get tryAgain                  => _t('إعادة المحاولة',                        'Try Again');

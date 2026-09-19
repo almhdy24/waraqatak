@@ -6,10 +6,6 @@ import '../models/subscription_plan.dart';
 import '../services/license_service.dart';
 import 'payment_flow_screen.dart';
 
-/// Arabic-RTL subscription / plan selection screen.
-///
-/// Returns [true] if the user successfully activates a license so the caller
-/// can navigate to the main shell.
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
 
@@ -18,9 +14,10 @@ class SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
-  SubscriptionPlan _selected = SubscriptionPlan.plans.last; // annual default
+  SubscriptionPlan _selected = SubscriptionPlan.plans.last;
   EntitlementState? _entitlement;
-  bool _loadingState = true;
+  bool _loading = true;
+  bool _showRenewal = false;
 
   @override
   void initState() {
@@ -33,26 +30,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (!mounted) return;
     setState(() {
       _entitlement = s;
-      _loadingState = false;
+      _loading = false;
     });
   }
+
+  bool get _isLicensed => _entitlement?.status == EntitlementStatus.licensed;
 
   Future<void> _subscribe() async {
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-          builder: (_) => PaymentFlowScreen(plan: _selected)),
+      MaterialPageRoute(builder: (_) => PaymentFlowScreen(plan: _selected)),
     );
-    if (result == true && mounted) {
-      Navigator.pop(context, true);
-    }
+    if (result == true && mounted) Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
-    final isRenewal = _entitlement?.status == EntitlementStatus.licenseExpired;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F7F3),
@@ -62,63 +57,212 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: _loadingState
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-              children: [
-                // ── Header ──────────────────────────────────────────────────
-                _Header(entitlement: _entitlement, l10n: l10n, cs: cs),
-                const SizedBox(height: 24),
+          : _isLicensed && !_showRenewal
+              ? _buildLicensedView(l10n, cs)
+              : _buildPlansView(l10n, cs),
+    );
+  }
 
-                // ── Plans ────────────────────────────────────────────────────
-                Text(l10n.choosePlan,
+  // ── Licensed view ─────────────────────────────────────────────────────────
+
+  Widget _buildLicensedView(AppLocalizations l10n, ColorScheme cs) {
+    final e = _entitlement!;
+    final expiryStr = e.licenseExpiresAt
+        ?.toLocal()
+        .toString()
+        .split(' ')
+        .first;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+      children: [
+        // Status card
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.green.shade600, Colors.green.shade400],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            children: [
+              const Icon(Icons.verified_rounded, color: Colors.white, size: 56),
+              const SizedBox(height: 12),
+              Text(
+                l10n.licensedStatus,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                l10n.licenseActiveDesc,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              if (expiryStr != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  child: Text(
+                    '${l10n.licenseExpiresOn}  $expiryStr',
                     style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.limitedPromoOffer,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange.shade700,
-                      fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                ...SubscriptionPlan.plans.map((plan) => _PlanCard(
-                      plan: plan,
-                      isSelected: _selected.id == plan.id,
-                      l10n: l10n,
-                      cs: cs,
-                      onTap: () => setState(() => _selected = plan),
-                    )),
-
-                const SizedBox(height: 12),
-
-                // ── Trust signals ────────────────────────────────────────────
-                _TrustRow(l10n: l10n),
-                const SizedBox(height: 24),
-
-                // ── CTA ──────────────────────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: FilledButton(
-                    onPressed: _subscribe,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: Text(
-                      isRenewal ? l10n.renewNow : l10n.subscribeNow,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14),
                   ),
                 ),
               ],
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Data safety note
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.green.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.shield_outlined,
+                  size: 18, color: Colors.green.shade700),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.dataAlwaysSafe,
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.green.shade800),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 32),
+
+        // Renew early button
+        OutlinedButton.icon(
+          onPressed: () => setState(() => _showRenewal = true),
+          icon: const Icon(Icons.autorenew_rounded),
+          label: Text(l10n.renewEarly),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            side: BorderSide(color: cs.primary),
+            foregroundColor: cs.primary,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Plans view (trial / expired / manual renewal) ────────────────────────
+
+  Widget _buildPlansView(AppLocalizations l10n, ColorScheme cs) {
+    final isRenewal = _isLicensed ||
+        _entitlement?.status == EntitlementStatus.licenseExpired;
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      children: [
+        if (_showRenewal)
+          _BackTile(onTap: () => setState(() => _showRenewal = false)),
+
+        _Header(entitlement: _entitlement, l10n: l10n, cs: cs),
+        const SizedBox(height: 24),
+
+        Text(l10n.choosePlan,
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(
+          l10n.limitedPromoOffer,
+          style: TextStyle(
+              fontSize: 12,
+              color: Colors.orange.shade700,
+              fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+
+        ...SubscriptionPlan.plans.map((plan) => _PlanCard(
+              plan: plan,
+              isSelected: _selected.id == plan.id,
+              l10n: l10n,
+              cs: cs,
+              onTap: () => setState(() => _selected = plan),
+            )),
+
+        const SizedBox(height: 12),
+        _TrustRow(l10n: l10n),
+        const SizedBox(height: 24),
+
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: FilledButton(
+            onPressed: _subscribe,
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
+            child: Text(
+              isRenewal ? l10n.renewNow : l10n.subscribeNow,
+              style: const TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Back tile (shown when licensed user opens renewal) ───────────────────────
+
+class _BackTile extends StatelessWidget {
+  final VoidCallback onTap;
+  const _BackTile({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(
+          children: [
+            Icon(Icons.arrow_back_ios_new_rounded,
+                size: 14, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 4),
+            Text(
+              AppLocalizations.of(context).licensedStatus,
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -167,18 +311,30 @@ class _Header extends StatelessWidget {
       );
     }
 
+    // licensed (renewal flow), expired, or other blocking state
+    final isExpired = s.status == EntitlementStatus.licenseExpired ||
+        s.status == EntitlementStatus.trialExpired;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.error.withValues(alpha: 0.08),
+        color: isExpired
+            ? cs.error.withValues(alpha: 0.08)
+            : cs.primary.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.error.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: isExpired
+              ? cs.error.withValues(alpha: 0.3)
+              : cs.primary.withValues(alpha: 0.25),
+        ),
       ),
       child: Text(
         s.status == EntitlementStatus.licenseExpired
             ? l10n.licenseExpiredBody
             : l10n.trialExpiredBody,
-        style: TextStyle(fontSize: 14, color: cs.error),
+        style: TextStyle(
+            fontSize: 14,
+            color: isExpired ? cs.error : cs.primary),
       ),
     );
   }
@@ -203,11 +359,8 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        isSelected ? cs.primary : cs.outlineVariant;
-    final bg = isSelected
-        ? cs.primary.withValues(alpha: 0.06)
-        : Colors.white;
+    final borderColor = isSelected ? cs.primary : cs.outlineVariant;
+    final bg = isSelected ? cs.primary.withValues(alpha: 0.06) : Colors.white;
 
     return GestureDetector(
       onTap: onTap,
@@ -217,16 +370,13 @@ class _PlanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: borderColor,
-              width: isSelected ? 2 : 1),
+          border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title row
               Row(
                 children: [
                   Expanded(
@@ -237,43 +387,14 @@ class _PlanCard extends StatelessWidget {
                             color: isSelected ? cs.primary : null)),
                   ),
                   if (plan.isMostPopular)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        l10n.mostPopularBadge,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    )
+                    _badge(l10n.mostPopularBadge, cs.primary, Colors.white)
                   else if (plan.hasDiscount)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.orange.shade300),
-                      ),
-                      child: Text(
-                        l10n.limitedPromoOffer,
-                        style: TextStyle(
-                            color: Colors.orange.shade800,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
+                    _badge(l10n.limitedPromoOffer,
+                        Colors.orange.shade50, Colors.orange.shade800,
+                        border: Colors.orange.shade300),
                 ],
               ),
               const SizedBox(height: 10),
-
-              // Prices row
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -296,10 +417,7 @@ class _PlanCard extends StatelessWidget {
                   ],
                 ],
               ),
-
               const SizedBox(height: 6),
-
-              // Savings + monthly equivalent
               if (plan.savingsSDG != null)
                 Text(
                   '${l10n.saveBadge} ${SubscriptionPlan.fmt(plan.savingsSDG!)} SDG',
@@ -311,11 +429,8 @@ class _PlanCard extends StatelessWidget {
               if (plan.durationDays >= 90)
                 Text(
                   '${l10n.equivalentMonthly} ${SubscriptionPlan.fmt(plan.monthlyEquivalentSDG)} SDG ${l10n.perMonthSuffix}',
-                  style:
-                      TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
-
-              // Renewal indicator
               const SizedBox(height: 6),
               Row(
                 children: [
@@ -332,6 +447,19 @@ class _PlanCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _badge(String text, Color bg, Color fg, {Color? border}) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: border != null ? Border.all(color: border) : null,
+        ),
+        child: Text(text,
+            style: TextStyle(
+                color: fg, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
 }
 
 // ── Trust Row ─────────────────────────────────────────────────────────────────
@@ -341,28 +469,16 @@ class _TrustRow extends StatelessWidget {
   const _TrustRow({required this.l10n});
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _chip(Icons.security_outlined, l10n.dataAlwaysSafe),
-      ],
-    );
-  }
-
-  Widget _chip(IconData icon, String label) => Flexible(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: Colors.green.shade700),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(label,
-                  maxLines: 2,
-                  style: TextStyle(
-                      fontSize: 11, color: Colors.grey.shade600)),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.security_outlined, size: 14, color: Colors.green.shade700),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(l10n.dataAlwaysSafe,
+                maxLines: 2,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+          ),
+        ],
       );
 }
