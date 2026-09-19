@@ -12,7 +12,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 5;
+  static const int dbVersion = 6;
 
   static Database? _database;
 
@@ -128,7 +128,9 @@ class DatabaseHelper {
         payment_method TEXT,
         date TEXT NOT NULL,
         notes TEXT,
-        FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
+        receipt_document_id INTEGER,
+        FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE,
+        FOREIGN KEY (receipt_document_id) REFERENCES documents (id)
       )
     ''');
   }
@@ -139,7 +141,6 @@ class DatabaseHelper {
       return columns.any((c) => c['name'] == column);
     }
 
-    // Version 2: add payment_method and valid_until
     if (oldVersion < 2) {
       if (!await columnExists('documents', 'payment_method')) {
         await db.execute('ALTER TABLE documents ADD COLUMN payment_method TEXT');
@@ -149,14 +150,12 @@ class DatabaseHelper {
       }
     }
 
-    // Version 3: add logo_path to businesses
     if (oldVersion < 3) {
       if (!await columnExists('businesses', 'logo_path')) {
         await db.execute('ALTER TABLE businesses ADD COLUMN logo_path TEXT');
       }
     }
 
-    // Version 4: add currency_code to businesses and documents
     if (oldVersion < 4) {
       if (!await columnExists('businesses', 'currency_code')) {
         await db.execute("ALTER TABLE businesses ADD COLUMN currency_code TEXT DEFAULT 'SDG'");
@@ -166,7 +165,6 @@ class DatabaseHelper {
       }
     }
 
-    // Version 5: document_payments table + status migration
     if (oldVersion < 5) {
       await db.execute('''
         CREATE TABLE IF NOT EXISTS document_payments (
@@ -180,7 +178,6 @@ class DatabaseHelper {
         )
       ''');
 
-      // Migrate 'active' status to correct per-type status values
       await db.execute("""
         UPDATE documents SET status =
           CASE
@@ -190,6 +187,14 @@ class DatabaseHelper {
           END
         WHERE status = 'active'
       """);
+    }
+
+    if (oldVersion < 6) {
+      if (!await columnExists('document_payments', 'receipt_document_id')) {
+        await db.execute(
+          'ALTER TABLE document_payments ADD COLUMN receipt_document_id INTEGER',
+        );
+      }
     }
   }
 
@@ -339,7 +344,6 @@ class DatabaseHelper {
       );
 
       final docId = await txn.insert('documents', newDoc.toMap());
-
       final isDraft = doc.status == DocumentStatus.draft;
 
       for (final item in items) {
@@ -353,7 +357,6 @@ class DatabaseHelper {
           'taxable': item.taxable ? 1 : 0,
         });
 
-        // Deduct stock only for issued invoices, not drafts
         if (doc.type == 'invoice' && !isDraft && item.productId != null) {
           await txn.rawUpdate(
             'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
@@ -374,25 +377,13 @@ class DatabaseHelper {
         contactId = contact.id ?? await txn.insert('contacts', contact.toMap());
       }
 
-      final oldItems = await txn.query(
-        'document_items',
-        where: 'document_id = ?',
-        whereArgs: [doc.id],
-      );
-      final existingRows = await txn.query(
-        'documents',
-        columns: ['type', 'status'],
-        where: 'id = ?',
-        whereArgs: [doc.id],
-      );
-      if (existingRows.isEmpty) {
-        throw StateError('Document not found');
-      }
+      final oldItems = await txn.query('document_items', where: 'document_id = ?', whereArgs: [doc.id]);
+      final existingRows = await txn.query('documents', columns: ['type', 'status'], where: 'id = ?', whereArgs: [doc.id]);
+      if (existingRows.isEmpty) throw StateError('Document not found');
 
       final oldType   = existingRows.first['type']   as String;
       final oldStatus = existingRows.first['status'] as String? ?? DocumentStatus.issued;
 
-      // Revert stock for previously issued invoice items
       if (oldType == 'invoice' && oldStatus != DocumentStatus.draft && oldStatus != DocumentStatus.cancelled) {
         for (final old in oldItems) {
           final productId = old['product_id'] as int?;
@@ -429,7 +420,6 @@ class DatabaseHelper {
       }, where: 'id = ?', whereArgs: [doc.id]);
 
       await txn.delete('document_items', where: 'document_id = ?', whereArgs: [doc.id]);
-
       final newIsDraft = doc.status == DocumentStatus.draft;
 
       for (final item in newItems) {
@@ -443,7 +433,6 @@ class DatabaseHelper {
           'taxable': item.taxable ? 1 : 0,
         });
 
-        // Apply stock only for issued invoices, not drafts
         if (doc.type == 'invoice' && !newIsDraft && item.productId != null) {
           await txn.rawUpdate(
             'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
@@ -461,8 +450,6 @@ class DatabaseHelper {
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
 
-      // Revert stock only for issued (non-draft, non-cancelled) invoices.
-      // Cancelled invoices already had stock reverted by cancelDocument.
       if (doc.type == 'invoice' &&
           doc.status != DocumentStatus.draft &&
           doc.status != DocumentStatus.cancelled) {
@@ -494,7 +481,12 @@ class DatabaseHelper {
         throw StateError('Document is already cancelled');
       }
 
-      // Revert stock for non-draft invoices (stock was deducted on issue)
+      // Payment receipts: also reverse the linked invoice payment
+      if (doc.type == 'payment_receipt' && doc.relatedDocumentId != null) {
+        await _reverseReceiptPayment(txn, id, doc.relatedDocumentId!);
+        return;
+      }
+
       if (doc.type == 'invoice' && doc.status != DocumentStatus.draft) {
         final items = await txn.query('document_items', where: 'document_id = ?', whereArgs: [id]);
         for (final item in items) {
@@ -509,13 +501,40 @@ class DatabaseHelper {
         }
       }
 
-      await txn.update(
-        'documents',
-        {'status': DocumentStatus.cancelled},
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+      await txn.update('documents', {'status': DocumentStatus.cancelled}, where: 'id = ?', whereArgs: [id]);
     });
+  }
+
+  Future<void> _reverseReceiptPayment(
+    DatabaseExecutor txn,
+    int receiptId,
+    int invoiceId,
+  ) async {
+    // Delete the payment row linked to this receipt
+    await txn.delete('document_payments', where: 'receipt_document_id = ?', whereArgs: [receiptId]);
+
+    // Recalculate invoice from remaining payments
+    final invoiceRows = await txn.query('documents', where: 'id = ?', whereArgs: [invoiceId]);
+    if (invoiceRows.isNotEmpty) {
+      final invoice = Document.fromMap(invoiceRows.first);
+      if (invoice.status != DocumentStatus.cancelled) {
+        final sumRows = await txn.rawQuery(
+          'SELECT COALESCE(SUM(amount), 0) AS total FROM document_payments WHERE document_id = ?',
+          [invoiceId],
+        );
+        final newPaid = (sumRows.first['total'] as num?)?.toDouble() ?? 0;
+        final newRemaining = (invoice.total - newPaid).clamp(0.0, double.infinity);
+        final newStatus = DocumentStatus.fromPayment(newPaid, invoice.total);
+        await txn.update('documents', {
+          'paid': newPaid,
+          'remaining': newRemaining,
+          'status': newStatus,
+        }, where: 'id = ?', whereArgs: [invoiceId]);
+      }
+    }
+
+    // Cancel the receipt document
+    await txn.update('documents', {'status': DocumentStatus.cancelled}, where: 'id = ?', whereArgs: [receiptId]);
   }
 
   Future<void> recordPayment({
@@ -530,21 +549,11 @@ class DatabaseHelper {
       if (docRows.isEmpty) throw StateError('Document not found');
       final doc = Document.fromMap(docRows.first);
 
-      if (doc.type != 'invoice') {
-        throw StateError('Payment recording is only supported for invoices');
-      }
-      if (doc.status == DocumentStatus.cancelled) {
-        throw StateError('Cannot record payment on a cancelled document');
-      }
-      if (doc.status == DocumentStatus.draft) {
-        throw StateError('Cannot record payment on a draft document');
-      }
-      if (amount <= 0) {
-        throw ArgumentError('Payment amount must be greater than zero');
-      }
-      if (amount > doc.remaining) {
-        throw ArgumentError('Payment cannot exceed remaining amount');
-      }
+      if (doc.type != 'invoice') throw StateError('Payment recording is only supported for invoices');
+      if (doc.status == DocumentStatus.cancelled) throw StateError('Cannot record payment on a cancelled document');
+      if (doc.status == DocumentStatus.draft) throw StateError('Cannot record payment on a draft document');
+      if (amount <= 0) throw ArgumentError('Payment amount must be greater than zero');
+      if (amount > doc.remaining) throw ArgumentError('Payment cannot exceed remaining amount');
 
       await txn.insert('document_payments', {
         'document_id': documentId,
@@ -559,10 +568,81 @@ class DatabaseHelper {
       final newStatus    = DocumentStatus.fromPayment(newPaid, doc.total);
 
       await txn.update('documents', {
-        'paid':      newPaid,
+        'paid': newPaid,
         'remaining': newRemaining,
-        'status':    newStatus,
+        'status': newStatus,
       }, where: 'id = ?', whereArgs: [documentId]);
+    });
+  }
+
+  /// Records a payment against an invoice and creates a linked payment_receipt document.
+  /// Returns the receipt document id.
+  Future<int> recordPaymentWithReceipt({
+    required int documentId,
+    required double amount,
+    String? paymentMethod,
+    String? notes,
+  }) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final docRows = await txn.query('documents', where: 'id = ?', whereArgs: [documentId]);
+      if (docRows.isEmpty) throw StateError('Document not found');
+      final doc = Document.fromMap(docRows.first);
+
+      if (doc.type != 'invoice') throw StateError('Payment recording is only supported for invoices');
+      if (doc.status == DocumentStatus.cancelled) throw StateError('Cannot record payment on a cancelled document');
+      if (doc.status == DocumentStatus.draft) throw StateError('Cannot record payment on a draft document');
+      if (doc.status == DocumentStatus.paid) throw StateError('Invoice is already fully paid');
+      if (amount <= 0) throw ArgumentError('Payment amount must be greater than zero');
+      if (amount > doc.remaining) throw ArgumentError('Payment cannot exceed remaining amount');
+
+      // Create the payment_receipt document
+      final receiptNumber = await getNextDocumentNumber(txn, 'payment_receipt');
+      final now = DateTime.now();
+      final receiptId = await txn.insert('documents', {
+        'type': 'payment_receipt',
+        'document_number': receiptNumber,
+        'date': now.toIso8601String(),
+        'contact_id': doc.contactId,
+        'recipient_name': doc.recipientName,
+        'recipient_phone': doc.recipientPhone,
+        'subtotal': amount,
+        'discount': 0.0,
+        'tax_rate': 0.0,
+        'tax_amount': 0.0,
+        'total': amount,
+        'paid': amount,
+        'remaining': 0.0,
+        'payment_method': paymentMethod,
+        'valid_until': null,
+        'notes': doc.documentNumber,
+        'related_document_id': documentId,
+        'status': DocumentStatus.issued,
+        'currency_code': doc.currencyCode,
+      });
+
+      // Record the payment row linked to the receipt
+      await txn.insert('document_payments', {
+        'document_id': documentId,
+        'amount': amount,
+        'payment_method': paymentMethod,
+        'date': now.toIso8601String(),
+        'notes': notes,
+        'receipt_document_id': receiptId,
+      });
+
+      // Update invoice totals
+      final newPaid      = doc.paid + amount;
+      final newRemaining = (doc.total - newPaid).clamp(0.0, double.infinity);
+      final newStatus    = DocumentStatus.fromPayment(newPaid, doc.total);
+
+      await txn.update('documents', {
+        'paid': newPaid,
+        'remaining': newRemaining,
+        'status': newStatus,
+      }, where: 'id = ?', whereArgs: [documentId]);
+
+      return receiptId;
     });
   }
 
@@ -577,14 +657,188 @@ class DatabaseHelper {
     return maps.map(DocumentPayment.fromMap).toList();
   }
 
+  /// Returns the invoice converted from the given quotation, if any.
+  Future<Document?> getConvertedInvoice(int quotationId) async {
+    final db = await database;
+    final maps = await db.query(
+      'documents',
+      where: "type = 'invoice' AND related_document_id = ?",
+      whereArgs: [quotationId],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return Document.fromMap(maps.first);
+  }
+
+  /// Converts a quotation to a draft invoice, preserving all items and details.
+  /// Returns the new invoice document id.
+  Future<int> convertQuotationToInvoice(int quotationId) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final qRows = await txn.query('documents', where: 'id = ?', whereArgs: [quotationId]);
+      if (qRows.isEmpty) throw StateError('Quotation not found');
+      final quotation = Document.fromMap(qRows.first);
+
+      if (quotation.type != 'quotation') throw ArgumentError('Document is not a quotation');
+      if (quotation.status == DocumentStatus.cancelled) {
+        throw StateError('Cannot convert a cancelled quotation');
+      }
+
+      // Prevent duplicate conversion
+      final existing = await txn.query(
+        'documents',
+        where: "type = 'invoice' AND related_document_id = ?",
+        whereArgs: [quotationId],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) {
+        final inv = Document.fromMap(existing.first);
+        throw StateError('Already converted: ${inv.documentNumber}');
+      }
+
+      final invoiceNumber = await getNextDocumentNumber(txn, 'invoice');
+      final now = DateTime.now();
+
+      final invoiceId = await txn.insert('documents', {
+        'type': 'invoice',
+        'document_number': invoiceNumber,
+        'date': now.toIso8601String(),
+        'contact_id': quotation.contactId,
+        'recipient_name': quotation.recipientName,
+        'recipient_phone': quotation.recipientPhone,
+        'subtotal': quotation.subtotal,
+        'discount': quotation.discount,
+        'tax_rate': quotation.taxRate,
+        'tax_amount': quotation.taxAmount,
+        'total': quotation.total,
+        'paid': 0.0,
+        'remaining': quotation.total,
+        'payment_method': null,
+        'valid_until': null,
+        'notes': quotation.notes,
+        'related_document_id': quotationId,
+        'status': DocumentStatus.draft,
+        'currency_code': quotation.currencyCode,
+      });
+
+      // Copy items (no stock deduction — draft)
+      final qItems = await txn.query('document_items', where: 'document_id = ?', whereArgs: [quotationId]);
+      for (final item in qItems) {
+        await txn.insert('document_items', {
+          'document_id': invoiceId,
+          'product_id': item['product_id'],
+          'description': item['description'],
+          'quantity': item['quantity'],
+          'price': item['price'],
+          'total': item['total'],
+          'taxable': item['taxable'],
+        });
+      }
+
+      return invoiceId;
+    });
+  }
+
+  /// Promotes a draft document to issued, deducting stock for invoices.
+  Future<void> issueDocument(int id) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final rows = await txn.query('documents', where: 'id = ?', whereArgs: [id]);
+      if (rows.isEmpty) throw StateError('Document not found');
+      final doc = Document.fromMap(rows.first);
+
+      if (doc.status != DocumentStatus.draft) {
+        throw StateError('Document is not a draft');
+      }
+
+      if (doc.type == 'invoice') {
+        final items = await txn.query('document_items', where: 'document_id = ?', whereArgs: [id]);
+        for (final item in items) {
+          final productId = item['product_id'] as int?;
+          final qty = item['quantity'] as num? ?? 0;
+          if (productId != null && qty > 0) {
+            await txn.rawUpdate(
+              'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+              [qty, productId],
+            );
+          }
+        }
+      }
+
+      final newStatus = doc.type == 'invoice'
+          ? DocumentStatus.fromPayment(doc.paid, doc.total)
+          : DocumentStatus.issued;
+
+      await txn.update('documents', {'status': newStatus}, where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  /// Creates a new draft copy of an existing document (new number, current date, no payments).
+  Future<int> copyDocumentWithItems(int sourceId) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final rows = await txn.query('documents', where: 'id = ?', whereArgs: [sourceId]);
+      if (rows.isEmpty) throw StateError('Document not found');
+      final source = Document.fromMap(rows.first);
+
+      final newNumber = await getNextDocumentNumber(txn, source.type);
+      final now = DateTime.now();
+      final isItemBased = source.type == 'invoice' || source.type == 'quotation';
+
+      // Financial/receipt copies start as issued; invoice/quotation copies as draft
+      final newStatus = isItemBased ? DocumentStatus.draft : DocumentStatus.issued;
+      final newPaid      = isItemBased ? 0.0 : source.total;
+      final newRemaining = isItemBased ? source.total : 0.0;
+
+      final newId = await txn.insert('documents', {
+        'type': source.type,
+        'document_number': newNumber,
+        'date': now.toIso8601String(),
+        'contact_id': source.contactId,
+        'recipient_name': source.recipientName,
+        'recipient_phone': source.recipientPhone,
+        'subtotal': source.subtotal,
+        'discount': source.discount,
+        'tax_rate': source.taxRate,
+        'tax_amount': source.taxAmount,
+        'total': source.total,
+        'paid': newPaid,
+        'remaining': newRemaining,
+        'payment_method': source.paymentMethod,
+        'valid_until': source.type == 'quotation' ? source.validUntil?.toIso8601String() : null,
+        'notes': source.notes,
+        'related_document_id': null,
+        'status': newStatus,
+        'currency_code': source.currencyCode,
+      });
+
+      if (isItemBased) {
+        final items = await txn.query('document_items', where: 'document_id = ?', whereArgs: [sourceId]);
+        for (final item in items) {
+          await txn.insert('document_items', {
+            'document_id': newId,
+            'product_id': item['product_id'],
+            'description': item['description'],
+            'quantity': item['quantity'],
+            'price': item['price'],
+            'total': item['total'],
+            'taxable': item['taxable'],
+          });
+        }
+      }
+
+      return newId;
+    });
+  }
+
   Future<String> getNextDocumentNumber(DatabaseExecutor txn, String type) async {
     final prefix = switch (type) {
-      'invoice'          => 'INV',
-      'quotation'        => 'QUO',
-      'payment_receipt'  => 'PAY',
-      'expense_voucher'  => 'EXP',
-      'custom'           => 'CUS',
-      _                  => 'DOC',
+      'invoice'         => 'INV',
+      'quotation'       => 'QUO',
+      'payment_receipt' => 'PAY',
+      'expense_voucher' => 'EXP',
+      'custom'          => 'CUS',
+      _                 => 'DOC',
     };
     final rows = await txn.query('document_counters', where: 'type = ?', whereArgs: [type]);
     int next = 1;
@@ -612,8 +866,8 @@ class DatabaseHelper {
   Future<List<Document>> searchDocuments(String query, {String? type}) async {
     final db = await database;
     String where =
-        '(document_number LIKE ? OR notes LIKE ? OR contact_id IN (SELECT id FROM contacts WHERE name LIKE ?))';
-    final args = ['%$query%', '%$query%', '%$query%'];
+        '(document_number LIKE ? OR notes LIKE ? OR recipient_name LIKE ? OR recipient_phone LIKE ? OR contact_id IN (SELECT id FROM contacts WHERE name LIKE ? OR phone LIKE ?))';
+    final args = ['%$query%', '%$query%', '%$query%', '%$query%', '%$query%', '%$query%'];
     if (type != null) {
       where += ' AND type = ?';
       args.add(type);
@@ -653,6 +907,7 @@ class DatabaseHelper {
       FROM documents
       WHERE date >= ? AND date < ?
         AND status != '${DocumentStatus.draft}'
+        AND status != '${DocumentStatus.cancelled}'
     ''', [start.toIso8601String(), end.toIso8601String()]);
     if (result.isEmpty || result.first['sales'] == null) {
       return {'sales': 0, 'outstanding': 0};

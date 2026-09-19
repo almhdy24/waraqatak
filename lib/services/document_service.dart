@@ -330,16 +330,16 @@ class DocumentService {
 
   // ==================== Payment & Lifecycle ====================
 
-  /// Records a payment against an invoice. Inserts a document_payments row and
-  /// updates paid/remaining/status on the document atomically.
-  static Future<void> recordPayment({
+  /// Records a payment and creates a linked payment_receipt document.
+  /// Returns the new receipt document id.
+  static Future<int> recordPayment({
     required int documentId,
     required double amount,
     String? paymentMethod,
     String? notes,
   }) async {
     if (amount <= 0) throw ArgumentError('Payment amount must be greater than zero');
-    await DatabaseHelper.instance.recordPayment(
+    return DatabaseHelper.instance.recordPaymentWithReceipt(
       documentId: documentId,
       amount: amount,
       paymentMethod: paymentMethod,
@@ -347,9 +347,28 @@ class DocumentService {
     );
   }
 
-  /// Marks a document as cancelled. For non-draft invoices, stock is reverted.
+  /// Marks a document as cancelled.
+  /// For payment_receipts: also reverses the linked invoice payment transactionally.
+  /// For non-draft invoices: stock is reverted.
   static Future<void> cancelDocument(int documentId) async {
     await DatabaseHelper.instance.cancelDocument(documentId);
+  }
+
+  /// Converts an issued (or draft) quotation to a new draft invoice.
+  /// Returns the new invoice document id.
+  static Future<int> convertQuotationToInvoice(int quotationId) async {
+    return DatabaseHelper.instance.convertQuotationToInvoice(quotationId);
+  }
+
+  /// Promotes a draft document to issued, deducting stock for invoices.
+  static Future<void> issueDocument(int documentId) async {
+    await DatabaseHelper.instance.issueDocument(documentId);
+  }
+
+  /// Creates a new draft copy of an existing document.
+  /// Returns the new document id.
+  static Future<int> copyDocument(int documentId) async {
+    return DatabaseHelper.instance.copyDocumentWithItems(documentId);
   }
 
   // ==================== Private Helpers ====================

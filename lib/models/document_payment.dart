@@ -5,6 +5,7 @@ class DocumentPayment {
   final String? paymentMethod;
   final DateTime date;
   final String? notes;
+  final int? receiptDocumentId;
 
   const DocumentPayment({
     this.id,
@@ -13,6 +14,7 @@ class DocumentPayment {
     this.paymentMethod,
     required this.date,
     this.notes,
+    this.receiptDocumentId,
   });
 
   Map<String, dynamic> toMap() => {
@@ -22,6 +24,7 @@ class DocumentPayment {
         'payment_method': paymentMethod,
         'date': date.toIso8601String(),
         'notes': notes,
+        'receipt_document_id': receiptDocumentId,
       };
 
   factory DocumentPayment.fromMap(Map<String, dynamic> map) => DocumentPayment(
@@ -31,5 +34,6 @@ class DocumentPayment {
         paymentMethod: map['payment_method'] as String?,
         date: DateTime.parse(map['date'] as String),
         notes: map['notes'] as String?,
+        receiptDocumentId: map['receipt_document_id'] as int?,
       );
 }

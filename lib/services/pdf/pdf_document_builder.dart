@@ -24,6 +24,7 @@ class PdfDocumentBuilder {
     Contact? contact,
     required List<DocumentItem> items,
     required AppLocalizations l10n,
+    Document? relatedDocument,
   }) async {
     final pdf = pw.Document();
     final theme = PdfTheme.defaultTheme();
@@ -128,6 +129,26 @@ class PdfDocumentBuilder {
               regular: regular,
               textColor: theme.textColor,
               isArabic: isArabic,
+            ),
+          if (doc.type == 'payment_receipt' && relatedDocument != null)
+            _buildInfoRow(
+              label: l10n.relatedInvoice,
+              value: relatedDocument.documentNumber,
+              bold: bold,
+              regular: regular,
+              textColor: theme.textColor,
+              isArabic: isArabic,
+              valueDirection: pw.TextDirection.ltr,
+            ),
+          if (doc.type == 'invoice' && relatedDocument != null && relatedDocument.type == 'quotation')
+            _buildInfoRow(
+              label: l10n.sourceQuotation,
+              value: relatedDocument.documentNumber,
+              bold: bold,
+              regular: regular,
+              textColor: theme.textColor,
+              isArabic: isArabic,
+              valueDirection: pw.TextDirection.ltr,
             ),
           pw.SizedBox(height: 12),
 

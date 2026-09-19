@@ -46,7 +46,7 @@ class AppLocalizations {
   String get createQuotation => _t('عرض سعر جديد', 'New Quotation');
   String get createPaymentReceipt =>
       _t('إيصال دفع جديد', 'New Payment Receipt');
-  String get createExpenseVoucher => _t('سند صرف جديد', 'New Expense Voucher');
+  String get createExpenseVoucher => _t('سند مصروف جديد', 'New Expense Voucher');
   String get createDocument => _t('إنشاء مستند', 'Create Document');
   String get otherDocument => _t('مستند آخر', 'Other Document');
 
@@ -54,7 +54,7 @@ class AppLocalizations {
   String get invoice => _t('فاتورة', 'Invoice');
   String get quotation => _t('عرض سعر', 'Quotation');
   String get paymentReceipt => _t('إيصال دفع', 'Payment Receipt');
-  String get expenseVoucher => _t('سند صرف', 'Expense Voucher');
+  String get expenseVoucher => _t('سند مصروف', 'Expense Voucher');
   String get customDocument => _t('مستند مخصص', 'Custom Document');
 
   // ========== DASHBOARD ==========
@@ -87,6 +87,7 @@ class AppLocalizations {
   String get cancel => _t('إلغاء', 'Cancel');
   String get delete => _t('حذف', 'Delete');
   String get edit => _t('تعديل', 'Edit');
+  String get open => _t('فتح', 'Open');
   String get sharePdf => _t('مشاركة ملف PDF', 'Share PDF');
   String get print => _t('طباعة', 'Print');
 
@@ -294,25 +295,58 @@ class AppLocalizations {
   String get contact => _t('تواصل', 'Contact');
 
   // ========== DOCUMENT STATUS ==========
-  String get statusDraft         => _t('مسودة',          'Draft');
-  String get statusIssued        => _t('صادر',           'Issued');
-  String get statusPartiallyPaid => _t('مدفوع جزئياً',   'Partially Paid');
-  String get statusPaid          => _t('مدفوع',          'Paid');
-  String get statusCancelled     => _t('ملغي',           'Cancelled');
+  String get statusDraft         => _t('مسودة',           'Draft');
+  String get statusIssued        => _t('صادرة',           'Issued');
+  String get statusPartiallyPaid => _t('مدفوعة جزئياً',  'Partially Paid');
+  String get statusPaid          => _t('مدفوعة',          'Paid');
+  String get statusCancelled     => _t('ملغاة',           'Cancelled');
 
   // ========== PAYMENT RECORDING ==========
-  String get recordPayment        => _t('تسجيل دفعة',              'Record Payment');
-  String get paymentRecorded      => _t('تم تسجيل الدفعة بنجاح',   'Payment recorded');
-  String get paymentHistory       => _t('سجل الدفعات',             'Payment History');
-  String get paymentAmountLabel   => _t('مبلغ الدفعة',             'Payment Amount');
+  String get recordPayment      => _t('تسجيل دفعة',             'Record Payment');
+  String get paymentRecorded    => _t('تم تسجيل الدفعة بنجاح',  'Payment recorded');
+  String get paymentHistory     => _t('سجل الدفعات',            'Payment History');
+  String get paymentAmountLabel => _t('مبلغ الدفعة',            'Payment Amount');
+  String get noPaymentsYet      => _t('لا توجد دفعات بعد',      'No payments yet');
 
   // ========== CANCELLATION ==========
-  String get cancelDocument        => _t('إلغاء المستند',                                              'Cancel Document');
-  String get confirmCancel         => _t('تأكيد الإلغاء',                                             'Confirm Cancellation');
-  String get cancelDocumentMessage => _t('هل تريد إلغاء هذا المستند؟ لا يمكن التراجع عن هذا الإجراء.', 'Cancel this document? This cannot be undone.');
+  String get cancelDocument        => _t('إلغاء المستند', 'Cancel Document');
+  String get confirmCancel         => _t('تأكيد الإلغاء', 'Confirm Cancellation');
+  String get cancelDocumentMessage => _t(
+    'هل تريد إلغاء هذا المستند؟ لا يمكن التراجع عن هذا الإجراء.',
+    'Cancel this document? This cannot be undone.',
+  );
+  String get cancelReceiptMessage => _t(
+    'إلغاء هذا الإيصال سيعكس الدفعة المرتبطة به ويُحدّث حالة الفاتورة.',
+    'Cancelling this receipt will reverse its payment and update the invoice.',
+  );
 
-  // ========== DRAFT ==========
-  String get saveDraft => _t('حفظ كمسودة', 'Save as Draft');
+  // ========== DRAFT / ISSUE ==========
+  String get saveDraft    => _t('حفظ كمسودة',      'Save as Draft');
+  String get issueDocument => _t('إصدار المستند',   'Issue Document');
+  String get issueInvoice  => _t('إصدار الفاتورة',  'Issue Invoice');
+
+  // ========== DOCUMENT CYCLE ==========
+  String get convertToInvoice      => _t('تحويل إلى فاتورة',          'Convert to Invoice');
+  String get convertConfirm        => _t('تحويل عرض السعر إلى فاتورة؟', 'Convert this quotation to an invoice?');
+  String get convertConfirmBody    => _t(
+    'سيتم إنشاء فاتورة مسودة بناءً على بيانات عرض السعر. يمكنك مراجعتها قبل الإصدار.',
+    'A draft invoice will be created from this quotation. Review it before issuing.',
+  );
+  String get convertedToInvoice    => _t('تم تحويله إلى فاتورة',      'Converted to Invoice');
+  String get openInvoice           => _t('فتح الفاتورة',               'Open Invoice');
+  String get copyDocument          => _t('نسخ المستند',                'Copy Document');
+  String get documentCopied        => _t('تم نسخ المستند',             'Document copied');
+  String get relatedInvoice        => _t('عن فاتورة',                  'Related Invoice');
+  String get relatedDocument       => _t('المستند المرتبط',            'Related Document');
+  String get sourceQuotation       => _t('من عرض سعر',                 'From Quotation');
+  String get paymentReversed       => _t('تم عكس الدفعة',              'Payment reversed');
+  String get viewReceipt           => _t('عرض الإيصال',                'View Receipt');
+
+  // ========== DOCUMENTS SCREEN EMPTY STATES ==========
+  String get noDocumentsTitle    => _t('لا توجد مستندات بعد',      'No documents yet');
+  String get noDocumentsHint     => _t('أنشئ أول فاتورة أو عرض سعر وابدأ.', 'Create your first invoice or quotation.');
+  String get noSearchResults     => _t('لم نجد مستندات مطابقة',    'No matching documents');
+  String get noSearchResultsHint => _t('جرّب رقم المستند أو اسم العميل.', 'Try a document number or customer name.');
 
   // ========== DEVELOPER ==========
   String get developer => _t('المطور', 'Developer');

@@ -1,4 +1,4 @@
-﻿name: warqatek
+name: warqatek
 
 description: Waraqatak - invoices and business documents.
 
@@ -52,6 +52,7 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -65,3 +66,9 @@ flutter:
         - asset: assets/fonts/Tajawal-Regular.ttf
         - asset: assets/fonts/Tajawal-Bold.ttf
           weight: 700
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#315C52"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"

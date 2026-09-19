@@ -15,6 +15,7 @@ class PdfService {
     Contact? contact,
     required List<DocumentItem> items,
     required AppLocalizations l10n,
+    Document? relatedDocument,
   }) {
     return PdfDocumentBuilder.build(
       doc: doc,
@@ -22,6 +23,7 @@ class PdfService {
       contact: contact,
       items: items,
       l10n: l10n,
+      relatedDocument: relatedDocument,
     );
   }
 
@@ -31,6 +33,7 @@ class PdfService {
     Contact? contact,
     required List<DocumentItem> items,
     required AppLocalizations l10n,
+    Document? relatedDocument,
   }) async {
     final bytes = await generateDocumentPdf(
       doc: doc,
@@ -38,6 +41,7 @@ class PdfService {
       contact: contact,
       items: items,
       l10n: l10n,
+      relatedDocument: relatedDocument,
     );
     await SharePlus.instance.share(
       ShareParams(
