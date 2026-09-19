@@ -37,11 +37,23 @@ jobs:
       - name: Install NDK 29
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;29.0.14206865"
 
-      - name: Get dependencies
+      - name: Get app dependencies
         run: flutter pub get
 
-      - name: Analyze
+      - name: Get elmahdi_pay_flutter dependencies
+        working-directory: packages/elmahdi_pay_flutter
+        run: dart pub get
+
+      - name: Analyze app
         run: flutter analyze
+
+      - name: Analyze elmahdi_pay_flutter
+        working-directory: packages/elmahdi_pay_flutter
+        run: dart analyze
+
+      - name: Test elmahdi_pay_flutter
+        working-directory: packages/elmahdi_pay_flutter
+        run: dart test
 
       - name: Build split APKs
         run: flutter build apk --release --split-per-abi
