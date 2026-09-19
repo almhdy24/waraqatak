@@ -1275,6 +1275,157 @@ class DatabaseHelper {
     return maps.map((e) => Document.fromMap(e)).toList();
   }
 
+  // ==================== Dashboard & Reports ====================
+
+  /// Period-based financial summary for the dashboard.
+  /// Sales/purchases/payments respect the date range.
+  /// Customer/supplier outstanding is always all-time.
+  Future<Map<String, dynamic>> getPeriodSummary({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final db = await database;
+    final fromStr = from.toIso8601String();
+    final toStr = to.toIso8601String();
+
+    // Period financial totals
+    final finRows = await db.rawQuery('''
+      SELECT
+        COALESCE(SUM(CASE WHEN type = 'invoice'         THEN total ELSE 0 END), 0) AS sales,
+        COALESCE(SUM(CASE WHEN type = 'purchase'        THEN total ELSE 0 END), 0) AS purchases,
+        COALESCE(SUM(CASE WHEN type = 'payment_receipt' THEN total ELSE 0 END), 0) AS paymentsIn,
+        COALESCE(SUM(CASE WHEN type = 'expense_voucher' THEN total ELSE 0 END), 0) AS paymentsOut
+      FROM documents
+      WHERE status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+        AND date >= ? AND date <= ?
+    ''', [fromStr, toStr]);
+
+    final f = finRows.first;
+    final double sales = (f['sales'] as num?)?.toDouble() ?? 0;
+    final double purchases = (f['purchases'] as num?)?.toDouble() ?? 0;
+    final double paymentsIn = (f['paymentsIn'] as num?)?.toDouble() ?? 0;
+    final double paymentsOut = (f['paymentsOut'] as num?)?.toDouble() ?? 0;
+
+    // All-time outstanding balances
+    final balRows = await db.rawQuery('''
+      SELECT
+        COALESCE(SUM(CASE WHEN type = 'invoice'  THEN remaining ELSE 0 END), 0) AS customerOutstanding,
+        COALESCE(SUM(CASE WHEN type = 'purchase' THEN remaining ELSE 0 END), 0) AS supplierPayable
+      FROM documents
+      WHERE status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+    ''');
+
+    final b = balRows.first;
+    final double customerOutstanding = (b['customerOutstanding'] as num?)?.toDouble() ?? 0;
+    final double supplierPayable = (b['supplierPayable'] as num?)?.toDouble() ?? 0;
+
+    // Inventory snapshot (physical products only)
+    final invRows = await db.rawQuery('''
+      SELECT
+        COUNT(*) AS totalProducts,
+        COALESCE(SUM(CASE WHEN stock_quantity <= 0 THEN 1 ELSE 0 END), 0) AS outOfStock,
+        COALESCE(SUM(CASE WHEN min_stock > 0 AND stock_quantity > 0 AND stock_quantity <= min_stock THEN 1 ELSE 0 END), 0) AS lowStock
+      FROM products
+      WHERE type = 'product' AND is_active = 1
+    ''');
+
+    final i = invRows.first;
+    return {
+      'sales': sales,
+      'purchases': purchases,
+      'paymentsIn': paymentsIn,
+      'paymentsOut': paymentsOut,
+      'customerOutstanding': customerOutstanding,
+      'supplierPayable': supplierPayable,
+      'totalProducts': (i['totalProducts'] as num?)?.toInt() ?? 0,
+      'lowStock': (i['lowStock'] as num?)?.toInt() ?? 0,
+      'outOfStock': (i['outOfStock'] as num?)?.toInt() ?? 0,
+    };
+  }
+
+  /// Documents of a given type within a date range. Excludes drafts.
+  /// Include cancelled = true shows them so the report can display separately.
+  Future<List<Document>> getDocumentsInPeriod({
+    required String type,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final db = await database;
+    final maps = await db.query(
+      'documents',
+      where: "type = ? AND date >= ? AND date <= ? AND status != '${DocumentStatus.draft}'",
+      whereArgs: [type, from.toIso8601String(), to.toIso8601String()],
+      orderBy: 'date DESC',
+    );
+    return maps.map((e) => Document.fromMap(e)).toList();
+  }
+
+  /// Contact balance summary for customer/supplier report (all-time).
+  Future<List<Map<String, dynamic>>> getContactBalances(
+      String contactType, String docType) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT
+        c.id AS contact_id,
+        c.name,
+        c.phone,
+        COALESCE(SUM(d.total), 0)     AS total_amount,
+        COALESCE(SUM(d.paid), 0)      AS total_paid,
+        COALESCE(SUM(d.remaining), 0) AS outstanding,
+        COUNT(d.id)                   AS doc_count
+      FROM contacts c
+      LEFT JOIN documents d ON d.contact_id = c.id
+        AND d.type = ?
+        AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+      WHERE c.type = ?
+      GROUP BY c.id
+      ORDER BY outstanding DESC, c.name
+    ''', [docType, contactType]);
+  }
+
+  /// Product-level sales and purchase quantities within a period.
+  Future<List<Map<String, dynamic>>> getProductReport({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT
+        p.id, p.name, p.type AS product_type,
+        p.stock_quantity, p.min_stock, p.purchase_price,
+        COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN di.quantity ELSE 0 END), 0) AS sales_qty,
+        COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN di.total    ELSE 0 END), 0) AS sales_value,
+        COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN di.quantity ELSE 0 END), 0) AS purchase_qty,
+        COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN di.total    ELSE 0 END), 0) AS purchase_value
+      FROM products p
+      LEFT JOIN document_items di ON di.product_id = p.id
+      LEFT JOIN documents d ON d.id = di.document_id
+        AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+        AND d.date >= ? AND d.date <= ?
+      WHERE p.is_active = 1
+      GROUP BY p.id
+      ORDER BY sales_value DESC, p.name
+    ''', [from.toIso8601String(), to.toIso8601String()]);
+  }
+
+  /// Payments recorded in the given period with their linked document info.
+  Future<List<Map<String, dynamic>>> getPaymentReport({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final db = await database;
+    return db.rawQuery('''
+      SELECT
+        dp.id, dp.amount, dp.payment_method, dp.date, dp.notes,
+        dp.document_id,
+        d.document_number, d.type AS doc_type, d.recipient_name
+      FROM document_payments dp
+      JOIN documents d ON d.id = dp.document_id
+      WHERE dp.date >= ? AND dp.date <= ?
+      ORDER BY dp.date DESC
+    ''', [from.toIso8601String(), to.toIso8601String()]);
+  }
+
   Future<void> closeDatabase() async {
     if (_database != null) {
       await _database!.close();

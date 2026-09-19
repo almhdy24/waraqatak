@@ -2,12 +2,31 @@ import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../services/backup_service.dart';
+import '../utils/print_settings.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  PaperSize _paperSize = PaperSize.a4;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPaperSize();
+  }
+
+  Future<void> _loadPaperSize() async {
+    final size = await PrintSettings.getDefaultSize();
+    if (mounted) setState(() => _paperSize = size);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,6 +150,29 @@ class SettingsScreen extends StatelessWidget {
                 }
               }
             },
+          ),
+          const Divider(),
+
+          // Print settings
+          ListTile(
+            leading: const Icon(Icons.print_outlined),
+            title: Text(l10n.printSettings),
+          ),
+          ListTile(
+            leading: const SizedBox(width: 24),
+            title: Text(l10n.defaultPaperSize),
+            trailing: DropdownButton<PaperSize>(
+              value: _paperSize,
+              items: PaperSize.values.map((size) => DropdownMenuItem(
+                value: size,
+                child: Text(PrintSettings.labelFor(size, l10n)),
+              )).toList(),
+              onChanged: (v) async {
+                if (v == null) return;
+                await PrintSettings.setDefaultSize(v);
+                if (mounted) setState(() => _paperSize = v);
+              },
+            ),
           ),
           const Divider(),
 

@@ -417,5 +417,59 @@ class AppLocalizations {
           ? 'مخزون غير كافٍ لـ "$name": المتاح ${available.toStringAsFixed(2)}، المطلوب ${required.toStringAsFixed(2)}'
           : 'Insufficient stock for "$name": available ${available.toStringAsFixed(2)}, required ${required.toStringAsFixed(2)}';
 
+  // ========== PHASE 3.3 — DASHBOARD DATE FILTERS ==========
+  String get today         => _t('اليوم',          'Today');
+  String get last7Days     => _t('آخر 7 أيام',    'Last 7 Days');
+  String get thisMonth     => _t('هذا الشهر',     'This Month');
+  String get customRange   => _t('فترة مخصصة',    'Custom Range');
+
+  // ========== PHASE 3.3 — DASHBOARD CARDS ==========
+  String get salesPeriod         => _t('المبيعات',           'Sales');
+  String get purchasesPeriod     => _t('المشتريات',          'Purchases');
+  String get paymentsIn          => _t('مدفوعات واردة',      'Payments In');
+  String get paymentsOut         => _t('مدفوعات صادرة',      'Payments Out');
+  String get allTimeBalance      => _t('الرصيد الكلي',       'All-time Balance');
+  String get noDataForPeriod     => _t('لا توجد بيانات خلال هذه الفترة', 'No data for this period');
+  String get inventorySummary    => _t('ملخص المخزون',       'Inventory Summary');
+  String get trackedProducts     => _t('منتجات مسجّلة',      'Tracked Products');
+  String get viewInventory       => _t('عرض المخزون',        'View Inventory');
+  String get viewReports         => _t('التقارير',           'Reports');
+
+  // ========== PHASE 3.3 — REPORTS HUB ==========
+  String get reports          => _t('التقارير',            'Reports');
+  String get salesReport      => _t('تقرير المبيعات',      'Sales Report');
+  String get purchasesReport  => _t('تقرير المشتريات',     'Purchases Report');
+  String get paymentsReport   => _t('تقرير المدفوعات',     'Payments Report');
+  String get customerReport   => _t('تقرير العملاء',       'Customer Report');
+  String get supplierReport   => _t('تقرير الموردين',      'Supplier Report');
+  String get inventoryReport  => _t('تقرير المخزون',       'Inventory Report');
+  String get productReport    => _t('تقرير المنتجات',      'Product Report');
+
+  // ========== PHASE 3.3 — REPORT FIELDS ==========
+  String get totalSales       => _t('إجمالي المبيعات',     'Total Sales');
+  String get totalPurchasesAmt => _t('إجمالي المشتريات',   'Total Purchases');
+  String get totalPaid        => _t('إجمالي المدفوع',      'Total Paid');
+  String get totalOutstanding => _t('إجمالي المتبقي',      'Total Outstanding');
+  String get invoiceCount     => _t('عدد الفواتير',         'Invoices');
+  String get purchaseCount    => _t('عدد الطلبات',          'Orders');
+  String get cancelledCount   => _t('ملغاة',                'Cancelled');
+  String get finalized        => _t('مكتملة',               'Finalized');
+  String get receivedPayments => _t('مدفوعات واردة',        'Received Payments');
+  String get madePayments     => _t('مدفوعات صادرة',        'Made Payments');
+  String get salesQty         => _t('كمية المبيعات',        'Sales Qty');
+  String get salesValue       => _t('قيمة المبيعات',        'Sales Value');
+  String get purchasedQty     => _t('كمية المشتريات',       'Purchased Qty');
+  String get stockStatus      => _t('حالة المخزون',         'Stock Status');
+  String get noReportData     => _t('لا توجد بيانات لهذا التقرير', 'No report data');
+  String get relatedDoc       => _t('المستند المرجعي',      'Related Doc');
+
+  // ========== PHASE 3.3 — PRINT SETTINGS ==========
+  String get printSettings    => _t('إعدادات الطباعة',     'Print Settings');
+  String get paperSize        => _t('حجم الورق',            'Paper Size');
+  String get paperA4          => _t('A4',                   'A4');
+  String get paperA5          => _t('A5',                   'A5');
+  String get paperThermal80   => _t('حرارية 80مم',          'Thermal 80mm');
+  String get defaultPaperSize => _t('حجم الورق الافتراضي', 'Default Paper Size');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

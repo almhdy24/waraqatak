@@ -6,6 +6,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
+import '../utils/print_settings.dart';
 import 'pdf/pdf_document_builder.dart';
 
 class PdfService {
@@ -16,7 +17,9 @@ class PdfService {
     required List<DocumentItem> items,
     required AppLocalizations l10n,
     Document? relatedDocument,
-  }) {
+    PaperSize? paperSize,
+  }) async {
+    final size = paperSize ?? await PrintSettings.getDefaultSize();
     return PdfDocumentBuilder.build(
       doc: doc,
       business: business,
@@ -24,6 +27,7 @@ class PdfService {
       items: items,
       l10n: l10n,
       relatedDocument: relatedDocument,
+      paperSize: size,
     );
   }
 
@@ -34,6 +38,7 @@ class PdfService {
     required List<DocumentItem> items,
     required AppLocalizations l10n,
     Document? relatedDocument,
+    PaperSize? paperSize,
   }) async {
     final bytes = await generateDocumentPdf(
       doc: doc,
@@ -42,6 +47,7 @@ class PdfService {
       items: items,
       l10n: l10n,
       relatedDocument: relatedDocument,
+      paperSize: paperSize,
     );
     await SharePlus.instance.share(
       ShareParams(
