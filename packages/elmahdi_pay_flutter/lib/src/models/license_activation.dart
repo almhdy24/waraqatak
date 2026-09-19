@@ -23,8 +23,8 @@ class LicenseActivation {
 
   factory LicenseActivation.fromJson(Map<String, dynamic> json) =>
       LicenseActivation(
-        id: json['id'] as int,
-        licenseId: json['license_id'] as int,
+        id: int.parse(json['id'].toString()),
+        licenseId: int.parse(json['license_id'].toString()),
         deviceId: json['device_id'] as String,
         deviceLabel: json['device_label'] as String?,
         status: ActivationStatus.fromString(json['status'] as String),

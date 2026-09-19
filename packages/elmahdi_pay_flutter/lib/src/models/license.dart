@@ -24,14 +24,14 @@ class License {
   });
 
   factory License.fromJson(Map<String, dynamic> json) => License(
-        id: json['id'] as int,
-        orderId: json['order_id'] as int,
+        id: int.parse(json['id'].toString()),
+        orderId: int.parse(json['order_id'].toString()),
         appSlug: json['app_slug'] as String,
         licenseKey: json['license_key'] as String,
         status: LicenseStatus.fromString(json['status'] as String),
         issuedAt: _dt(json['issued_at'] as String),
         expiresAt: _dtOpt(json['expires_at'] as String?),
-        maxDevices: json['max_devices'] as int,
+        maxDevices: int.parse(json['max_devices'].toString()),
         createdAt: _dt(json['created_at'] as String),
       );
 
