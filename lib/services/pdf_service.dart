@@ -40,7 +40,10 @@ class PdfService {
       l10n: l10n,
     );
     await SharePlus.instance.share(
-      '${doc.documentNumber}.pdf',
+      ShareParams(
+        files: [XFile.fromData(bytes, mimeType: 'application/pdf')],
+        fileNameOverrides: ['${doc.documentNumber}.pdf'],
+      ),
     );
   }
 }

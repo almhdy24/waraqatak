@@ -29,14 +29,8 @@ class BackupService {
 
   static Future<void> createBackup() async {
     final jsonStr = await _buildBackupJson();
-    final fileName =
-        'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
-
-    final bytes = Uint8List.fromList(utf8.encode(jsonStr));
-
     await SharePlus.instance.share(
-      jsonStr,
-      subject: 'Warqatek Backup',
+      ShareParams(text: jsonStr, subject: 'Warqatek Backup'),
     );
   }
 
@@ -84,13 +78,12 @@ class BackupService {
   static Future<bool> restoreBackup() async {
     final result = await FilePicker().pickFiles(
       type: FileType.any,
-      withData: true,
     );
 
     if (result == null || result.files.isEmpty) return false;
 
-    final bytes = result.files.first.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    final bytes = await result.files.first.readAsBytes();
+    if (bytes.isEmpty) {
       throw Exception('Empty backup file');
     }
 

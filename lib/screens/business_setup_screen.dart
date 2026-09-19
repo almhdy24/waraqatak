@@ -82,12 +82,10 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
     try {
       final result = await FilePicker().pickFiles(
         type: FileType.image,
-        allowCompression: false,
-        withData: true,
       );
       if (result == null || result.files.isEmpty) return;
-      final bytes = result.files.single.bytes;
-      if (bytes == null) throw Exception('No data');
+      final bytes = await result.files.single.readAsBytes();
+      if (bytes.isEmpty) throw Exception('No data');
       final directory = await getApplicationDocumentsDirectory();
       final fileName = 'logo_${DateTime.now().millisecondsSinceEpoch}.png';
       final savedFile = File('${directory.path}/$fileName');
