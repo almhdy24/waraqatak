@@ -551,5 +551,61 @@ class AppLocalizations {
   String get taxProfile          => _t('الملف الضريبي',            'Tax Profile');
   String get noTaxProfile        => _t('بدون ملف ضريبي',           'No Tax Profile');
 
+  // ========== PHASE 3.8 — SUBSCRIPTION ==========
+  String get subscription              => _t('الاشتراك',                               'Subscription');
+  // Status labels
+  String get trialActiveStatus         => _t('تجربة مجانية نشطة',                     'Free Trial Active');
+  String get trialExpiredStatus        => _t('انتهت التجربة',                          'Trial Expired');
+  String get licensedStatus            => _t('مرخّص',                                  'Licensed');
+  String get licenseExpiredStatus      => _t('انتهى الترخيص',                         'License Expired');
+  String get licenseRevokedStatus      => _t('تم إلغاء الترخيص',                      'License Revoked');
+  String get orderPendingStatus        => _t('الطلب قيد المراجعة',                    'Order Pending');
+  String get orderRejectedStatus       => _t('تم رفض الطلب',                          'Order Rejected');
+  String get deviceLimitStatus         => _t('تجاوزت حد الأجهزة',                    'Device Limit Reached');
+  // Trial
+  String get daysLeftInTrial           => _t('يوم متبقٍ في التجربة',                  'day(s) left in trial');
+  String get trialFreeDays             => _t('١٤ يوماً مجاناً — بدون قيود',          '14 days free — no limits');
+  // Plans
+  String get choosePlan                => _t('اختر خطتك',                             'Choose Your Plan');
+  String get mostPopularBadge          => _t('الأكثر طلباً',                          'Most Popular');
+  String get saveBadge                 => _t('وفّر',                                  'Save');
+  String get perMonthSuffix            => _t('/ شهر',                                 '/ mo');
+  String get equivalentMonthly         => _t('ما يعادل',                              'Equiv.');
+  String get subscriptionRenewable     => _t('قابل للتجديد',                         'Renewable');
+  String get limitedPromoOffer         => _t('عرض ترويجي محدود',                      'Limited Promotional Offer');
+  // Actions
+  String get subscribeNow              => _t('اشترك الآن',                            'Subscribe Now');
+  String get renewNow                  => _t('جدّد الاشتراك',                         'Renew Now');
+  String get checkOrderStatus          => _t('فحص حالة الطلب',                       'Check Order Status');
+  String get submitOrder               => _t('إرسال الطلب',                           'Submit Order');
+  String get tryAgain                  => _t('إعادة المحاولة',                        'Try Again');
+  String get contactUs                 => _t('تواصل معنا',                            'Contact Us');
+  String get cancelAndResubmit         => _t('إلغاء وإعادة الاشتراك',                'Cancel & Re-subscribe');
+  String get continueUsingApp          => _t('الدخول إلى ورقاتك',                    'Enter Waraqatak');
+  String get activating                => _t('جارٍ التفعيل…',                        'Activating…');
+  // Paywall
+  String get trialExpiredHeadline      => _t('انتهت التجربة المجانية',                'Free Trial Ended');
+  String get trialExpiredBody          => _t('استمر في ورقاتك باشتراك يناسبك.',      'Continue with a plan that suits you.');
+  String get licenseExpiredHeadline    => _t('انتهى اشتراكك',                         'Subscription Ended');
+  String get licenseExpiredBody        => _t('جدّد اشتراكك للاستمرار.',              'Renew to continue using Waraqatak.');
+  String get dataAlwaysSafe            => _t('بياناتك محفوظة دائماً — حتى بعد انتهاء الاشتراك.', 'Your data is always safe — even after subscription ends.');
+  // Payment flow
+  String get choosePaymentMethod       => _t('طريقة الدفع',                           'Payment Method');
+  String get paymentInstructions       => _t('تعليمات الدفع',                         'Payment Instructions');
+  String get buyerNameLabel            => _t('اسمك الكامل',                           'Your Full Name');
+  String get buyerContactLabel         => _t('هاتف أو بريد إلكتروني',                'Phone or Email');
+  String get attachProof               => _t('إرفاق إيصال الدفع (اختياري)',          'Attach Payment Proof (optional)');
+  String get proofNoteLabel            => _t('ملاحظة (اختياري)',                      'Note (optional)');
+  String get orderSubmittedTitle       => _t('تم إرسال طلبك',                        'Order Submitted');
+  String get orderReferenceLabel       => _t('رقم الطلب',                             'Order Reference');
+  String get orderPendingBody          => _t('طلبك قيد مراجعة الإدارة. يمكنك فحص الحالة لاحقاً.', 'Your order is under admin review. Check status later.');
+  String get activationSuccessTitle    => _t('تم التفعيل!',                           'Activated!');
+  String get activationSuccessBody     => _t('ورقاتك نشطة الآن. استمتع باستخدامها.', 'Waraqatak is now active. Enjoy!');
+  String get licenseExpiresOn          => _t('ينتهي بتاريخ',                          'Expires on');
+  String get rejectionReason           => _t('سبب الرفض',                             'Rejection Reason');
+  String get noPaymentMethodsAvailable => _t('لا توجد طرق دفع متاحة حالياً',        'No payment methods available');
+  String get networkError              => _t('تعذّر الاتصال بالخادم',                 'Could not connect to server');
+  String get rateLimitError            => _t('الرجاء الانتظار قبل إعادة المحاولة',   'Please wait before retrying');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

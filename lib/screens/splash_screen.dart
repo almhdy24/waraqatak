@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../localization/app_localizations.dart';
+import '../models/entitlement.dart';
+import '../services/license_service.dart';
 import 'main_shell.dart';
+import 'paywall_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,13 +17,28 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
+    _init();
+  }
+
+  Future<void> _init() async {
+    // Run entitlement check concurrently with minimum splash delay.
+    EntitlementState? state;
+    await Future.wait([
+      LicenseService.instance.checkEntitlement().then((s) => state = s),
+      Future<void>.delayed(const Duration(milliseconds: 1200)),
+    ]);
+    if (!mounted) return;
+    if (state!.canUseApp) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const MainShell()),
       );
-    });
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => PaywallScreen(state: state!)),
+      );
+    }
   }
 
   @override

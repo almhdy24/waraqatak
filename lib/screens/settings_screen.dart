@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
+import '../models/entitlement.dart';
 import '../services/backup_service.dart';
+import '../services/license_service.dart';
 import '../utils/print_settings.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
+import 'subscription_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,16 +21,41 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   PaperSize _paperSize = PaperSize.a4;
+  EntitlementState? _entitlement;
 
   @override
   void initState() {
     super.initState();
     _loadPaperSize();
+    _loadEntitlement();
   }
 
   Future<void> _loadPaperSize() async {
     final size = await PrintSettings.getDefaultSize();
     if (mounted) setState(() => _paperSize = size);
+  }
+
+  Future<void> _loadEntitlement() async {
+    final s = await LicenseService.instance.checkEntitlement();
+    if (mounted) setState(() => _entitlement = s);
+  }
+
+  String _entitlementLabel(AppLocalizations l10n) {
+    final s = _entitlement;
+    if (s == null) return '';
+    return switch (s.status) {
+      EntitlementStatus.trialActive =>
+          '${s.trialDaysRemaining} ${l10n.daysLeftInTrial}',
+      EntitlementStatus.licensed => s.licenseExpiresAt != null
+          ? '${l10n.licenseExpiresOn} ${s.licenseExpiresAt!.toLocal().toString().split(' ').first}'
+          : l10n.licensedStatus,
+      EntitlementStatus.trialExpired    => l10n.trialExpiredStatus,
+      EntitlementStatus.licenseExpired  => l10n.licenseExpiredStatus,
+      EntitlementStatus.licenseRevoked  => l10n.licenseRevokedStatus,
+      EntitlementStatus.orderPending    => l10n.orderPendingStatus,
+      EntitlementStatus.orderRejected   => l10n.orderRejectedStatus,
+      EntitlementStatus.deviceLimitReached => l10n.deviceLimitStatus,
+    };
   }
 
   @override
@@ -42,6 +70,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
+          // ── Subscription ────────────────────────────────────────────────
+          ListTile(
+            leading: const Icon(Icons.workspace_premium_outlined),
+            title: Text(l10n.subscription),
+            subtitle: Text(_entitlementLabel(l10n)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+              );
+              _loadEntitlement();
+            },
+          ),
+          const Divider(),
           ListTile(
             leading: const Icon(Icons.business),
             title: Text(l10n.businessData),
