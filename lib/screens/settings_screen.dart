@@ -43,18 +43,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _entitlementLabel(AppLocalizations l10n) {
     final s = _entitlement;
     if (s == null) return '';
+
+    // Order state takes precedence in the label.
+    if (s.orderStatus == PendingOrderStatus.pending) return l10n.orderPendingStatus;
+    if (s.orderStatus == PendingOrderStatus.rejected) return l10n.orderRejectedStatus;
+
     return switch (s.status) {
       EntitlementStatus.trialActive =>
           '${s.trialDaysRemaining} ${l10n.daysLeftInTrial}',
       EntitlementStatus.licensed => s.licenseExpiresAt != null
           ? '${l10n.licenseExpiresOn} ${s.licenseExpiresAt!.toLocal().toString().split(' ').first}'
           : l10n.licensedStatus,
-      EntitlementStatus.trialExpired    => l10n.trialExpiredStatus,
-      EntitlementStatus.licenseExpired  => l10n.licenseExpiredStatus,
-      EntitlementStatus.licenseRevoked  => l10n.licenseRevokedStatus,
-      EntitlementStatus.orderPending    => l10n.orderPendingStatus,
-      EntitlementStatus.orderRejected   => l10n.orderRejectedStatus,
-      EntitlementStatus.deviceLimitReached => l10n.deviceLimitStatus,
+      EntitlementStatus.trialExpired   => l10n.trialExpiredStatus,
+      EntitlementStatus.licenseExpired => l10n.licenseExpiredStatus,
+      EntitlementStatus.licenseRevoked => l10n.licenseRevokedStatus,
     };
   }
 

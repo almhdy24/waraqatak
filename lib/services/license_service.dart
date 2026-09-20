@@ -32,7 +32,6 @@ class LicenseService {
   static const _kOrderRef      = 'wq_order_ref';
   static const _kIdempotency   = 'wq_idem_key';
   static const _kRejectNote    = 'wq_rejection_note';
-  static const _kDeviceLimit   = 'wq_device_limit';
 
   static const int _trialDays = 14;
 
@@ -66,80 +65,69 @@ class LicenseService {
 
     await _updateLastLaunch(now);
 
-    // 1. Check stored license
+    // ── Order state (separate from subscription entitlement) ─────────────────
+    //
+    // A pending or rejected order is informational only — it does NOT block
+    // the user from using the app. The underlying trial/license status
+    // determines that independently.
+    final orderRef = await _store.read(key: _kOrderRef);
+    final orderRef0 = (orderRef != null && orderRef.isNotEmpty) ? orderRef : null;
+    PendingOrderStatus orderStatus = PendingOrderStatus.none;
+    String? rejectNote;
+    if (orderRef0 != null) {
+      final raw = await _store.read(key: _kRejectNote);
+      rejectNote = (raw != null && raw.isNotEmpty) ? raw : null;
+      orderStatus = rejectNote != null
+          ? PendingOrderStatus.rejected
+          : PendingOrderStatus.pending;
+    }
+
+    // Helper: attach order state to any result without repeating fields.
+    EntitlementState withOrder(
+      EntitlementStatus s, {
+      int trialDays = 0,
+      DateTime? expiry,
+    }) =>
+        EntitlementState(
+          status: s,
+          deviceId: deviceId,
+          trialDaysRemaining: trialDays,
+          licenseExpiresAt: expiry,
+          orderStatus: orderStatus,
+          orderReference: orderRef0,
+          rejectionNote: rejectNote,
+        );
+
+    // ── License ───────────────────────────────────────────────────────────────
     final licenseKey = await _store.read(key: _kLicenseKey);
     if (licenseKey != null && licenseKey.isNotEmpty) {
       final statusStr = await _store.read(key: _kLicenseStatus);
       if (statusStr == 'revoked') {
-        return EntitlementState(
-          status: EntitlementStatus.licenseRevoked,
-          deviceId: deviceId,
-        );
-      }
-
-      final limitHit = await _store.read(key: _kDeviceLimit);
-      if (limitHit == 'true') {
-        return EntitlementState(
-          status: EntitlementStatus.deviceLimitReached,
-          deviceId: deviceId,
-        );
+        return withOrder(EntitlementStatus.licenseRevoked);
       }
 
       final expiryStr = await _store.read(key: _kLicenseExpiry);
-      final expiry = expiryStr != null && expiryStr.isNotEmpty
+      final expiry = (expiryStr != null && expiryStr.isNotEmpty)
           ? DateTime.tryParse(expiryStr)
           : null;
 
       if (expiry != null && expiry.isBefore(now)) {
-        return EntitlementState(
-          status: EntitlementStatus.licenseExpired,
-          deviceId: deviceId,
-          licenseExpiresAt: expiry,
-        );
+        return withOrder(EntitlementStatus.licenseExpired, expiry: expiry);
       }
-
-      return EntitlementState(
-        status: EntitlementStatus.licensed,
-        deviceId: deviceId,
-        licenseExpiresAt: expiry,
-      );
+      return withOrder(EntitlementStatus.licensed, expiry: expiry);
     }
 
-    // 2. Check pending/rejected order
-    final orderRef = await _store.read(key: _kOrderRef);
-    if (orderRef != null && orderRef.isNotEmpty) {
-      final note = await _store.read(key: _kRejectNote);
-      if (note != null) {
-        return EntitlementState(
-          status: EntitlementStatus.orderRejected,
-          deviceId: deviceId,
-          orderReference: orderRef,
-          rejectionNote: note,
-        );
-      }
-      return EntitlementState(
-        status: EntitlementStatus.orderPending,
-        deviceId: deviceId,
-        orderReference: orderRef,
-      );
-    }
-
-    // 3. Trial
+    // ── Trial ─────────────────────────────────────────────────────────────────
     final trialStart = await _getOrInitTrialStart(now);
-    final trialEnd = trialStart.add(const Duration(days: _trialDays));
-    final remaining = trialEnd.difference(now);
+    final remaining =
+        trialStart.add(const Duration(days: _trialDays)).difference(now);
 
     if (remaining.isNegative) {
-      return EntitlementState(
-        status: EntitlementStatus.trialExpired,
-        deviceId: deviceId,
-      );
+      return withOrder(EntitlementStatus.trialExpired);
     }
-
-    return EntitlementState(
-      status: EntitlementStatus.trialActive,
-      deviceId: deviceId,
-      trialDaysRemaining: remaining.inDays + 1,
+    return withOrder(
+      EntitlementStatus.trialActive,
+      trialDays: remaining.inDays + 1,
     );
   }
 
@@ -160,7 +148,7 @@ class LicenseService {
     if (s != null && s.isNotEmpty) {
       final last = DateTime.tryParse(s);
       if (last != null) {
-        final rollback = last.difference(now);
+        final rollback = last.difference(now); // positive when clock went back
         if (rollback > const Duration(minutes: 2)) {
           final trialStr = await _store.read(key: _kTrialStart);
           if (trialStr != null && trialStr.isNotEmpty) {
@@ -189,9 +177,9 @@ class LicenseService {
         key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '');
     await _store.write(
         key: _kLicenseStatus, value: isActive ? 'active' : 'revoked');
+    // Clear pending order now that a license is stored.
     await _store.delete(key: _kOrderRef);
     await _store.delete(key: _kRejectNote);
-    await _store.delete(key: _kDeviceLimit);
     invalidateCache();
   }
 
@@ -226,18 +214,6 @@ class LicenseService {
 
   Future<void> saveIdempotencyKey(String key) =>
       _store.write(key: _kIdempotency, value: key);
-
-  // ── Device Limit ───────────────────────────────────────────────────────────
-
-  Future<void> markDeviceLimitReached() async {
-    await _store.write(key: _kDeviceLimit, value: 'true');
-    invalidateCache();
-  }
-
-  Future<void> clearDeviceLimitFlag() async {
-    await _store.delete(key: _kDeviceLimit);
-    invalidateCache();
-  }
 
   // ── UUID v4 ────────────────────────────────────────────────────────────────
 

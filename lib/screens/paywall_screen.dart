@@ -5,11 +5,15 @@ import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/license_service.dart';
 import '../services/subscription_service.dart';
-import 'main_shell.dart';
 import 'subscription_screen.dart';
 
-/// Shown when the user has no valid entitlement (trial expired, license
-/// expired/revoked, etc.). Never deletes or corrupts local data.
+/// Shown when the user has a pending or rejected order, or when routed here
+/// from an expired/revoked state banner.
+///
+/// Returns [true] via [Navigator.pop] when a license is successfully activated,
+/// so callers can refresh their entitlement state.
+///
+/// Never deletes or corrupts local data.
 class PaywallScreen extends StatefulWidget {
   final EntitlementState state;
   const PaywallScreen({super.key, required this.state});
@@ -19,20 +23,17 @@ class PaywallScreen extends StatefulWidget {
 }
 
 class _PaywallScreenState extends State<PaywallScreen> {
-  bool _retrying = false;
   bool _checking = false;
 
+  /// Route to SubscriptionScreen. On success, pop this screen with true so
+  /// the caller (HomeScreen) refreshes entitlement.
   Future<void> _openSubscription() async {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
     );
     if (result == true && mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
-        (_) => false,
-      );
+      Navigator.pop(context, true);
     }
   }
 
@@ -50,23 +51,17 @@ class _PaywallScreenState extends State<PaywallScreen> {
           try {
             await SubscriptionService.activateAndStore(license, deviceId);
             if (!mounted) return;
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (_) => const MainShell()),
-              (_) => false,
-            );
+            Navigator.pop(context, true);
           } on ElmahdiPayForbiddenException catch (e) {
-            if (e.maxDevices != null) {
-              await LicenseService.instance.storeLicense(
-                licenseKey: license.licenseKey,
-                expiresAt: license.expiresAt,
-                isActive: true,
-              );
-              await LicenseService.instance.markDeviceLimitReached();
-            }
             if (!mounted) return;
-            _showError(AppLocalizations.of(context).deviceLimitStatus);
-          } catch (e) {
+            final l = AppLocalizations.of(context);
+            // Device limit is recoverable — keep the order reference so the
+            // user can retry after admin deactivates a device.
+            final msg = e.maxDevices != null
+                ? '${l.deviceLimitStatus}: ${e.activeDevices}/${e.maxDevices}'
+                : l.licenseRevokedStatus;
+            _showError(msg);
+          } catch (_) {
             if (!mounted) return;
             _showError(AppLocalizations.of(context).operationFailed);
           }
@@ -75,46 +70,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
         case OrderStatus.rejected:
           await LicenseService.instance.setOrderRejected(ref, order.adminNote);
           if (!mounted) return;
-          _showError('${AppLocalizations.of(context).rejectionReason}: ${order.adminNote ?? ''}');
+          _showError(
+            '${AppLocalizations.of(context).rejectionReason}: ${order.adminNote ?? ''}',
+          );
       }
-    } catch (e) {
-      if (!mounted) return;
-      _showError(AppLocalizations.of(context).operationFailed);
-    } finally {
-      if (mounted) setState(() => _checking = false);
-    }
-  }
-
-  Future<void> _retryDeviceActivation() async {
-    setState(() => _retrying = true);
-    try {
-      final key = await LicenseService.instance.licenseKey;
-      final deviceId = widget.state.deviceId;
-      if (key == null || key.isEmpty) {
-        if (!mounted) return;
-        _showError(AppLocalizations.of(context).operationFailed); // ignore: use_build_context_synchronously
-        return;
-      }
-      await LicenseService.instance.clearDeviceLimitFlag();
-      await SubscriptionService.retryActivation(key, deviceId);
-      if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
-        (_) => false,
-      );
-    } on ElmahdiPayForbiddenException catch (e) {
-      await LicenseService.instance.markDeviceLimitReached();
-      if (!mounted) return;
-      final l = AppLocalizations.of(context);
-      _showError(e.maxDevices != null
-          ? '${l.deviceLimitStatus}: ${e.activeDevices}/${e.maxDevices}'
-          : l.licenseRevokedStatus);
     } catch (_) {
       if (!mounted) return;
       _showError(AppLocalizations.of(context).operationFailed);
     } finally {
-      if (mounted) setState(() => _retrying = false);
+      if (mounted) setState(() => _checking = false);
     }
   }
 
@@ -126,8 +90,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   }
 
   void _showInfo(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -144,7 +107,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
           child: Column(
             children: [
               const Spacer(),
-              // Logo / branding
               Container(
                 width: 72,
                 height: 72,
@@ -162,14 +124,13 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Status card
               _StatusCard(state: s, l10n: l10n),
 
               const Spacer(),
 
-              // Data safety
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.green.shade50,
                   borderRadius: BorderRadius.circular(12),
@@ -177,7 +138,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.security, color: Colors.green.shade700, size: 20),
+                    Icon(Icons.security,
+                        color: Colors.green.shade700, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -191,7 +153,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Primary CTA
               ..._buildActions(s, l10n, cs),
               const SizedBox(height: 16),
             ],
@@ -203,95 +164,80 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
   List<Widget> _buildActions(
       EntitlementState s, AppLocalizations l10n, ColorScheme cs) {
-    switch (s.status) {
-      case EntitlementStatus.orderPending:
-        return [
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: _checking ? null : _checkOrderStatus,
-              child: _checking
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(l10n.checkOrderStatus),
-            ),
+    // ── Pending order: offer to check status or cancel ──────────────────────
+    if (s.orderStatus == PendingOrderStatus.pending) {
+      return [
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton(
+            onPressed: _checking ? null : _checkOrderStatus,
+            child: _checking
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(l10n.checkOrderStatus),
           ),
-          const SizedBox(height: 12),
-          TextButton(
+        ),
+        const SizedBox(height: 12),
+        TextButton(
+          onPressed: () async {
+            await LicenseService.instance.clearOrder();
+            if (!mounted) return;
+            await _openSubscription();
+          },
+          child: Text(l10n.cancelAndResubmit),
+        ),
+      ];
+    }
+
+    // ── Rejected order: clear and let user resubmit ─────────────────────────
+    if (s.orderStatus == PendingOrderStatus.rejected) {
+      return [
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: FilledButton(
             onPressed: () async {
               await LicenseService.instance.clearOrder();
               if (!mounted) return;
               await _openSubscription();
             },
-            child: Text(l10n.cancelAndResubmit),
+            child: Text(l10n.tryAgain),
           ),
-        ];
-
-      case EntitlementStatus.deviceLimitReached:
-        return [
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: _retrying ? null : _retryDeviceActivation,
-              child: _retrying
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : Text(l10n.tryAgain),
-            ),
-          ),
-        ];
-
-      case EntitlementStatus.licenseRevoked:
-        return [
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: OutlinedButton(
-              onPressed: _openSubscription,
-              child: Text(l10n.subscribeNow),
-            ),
-          ),
-        ];
-
-      case EntitlementStatus.orderRejected:
-        return [
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: () async {
-                await LicenseService.instance.clearOrder();
-                if (!mounted) return;
-                await _openSubscription();
-              },
-              child: Text(l10n.tryAgain),
-            ),
-          ),
-        ];
-
-      default: // trialExpired, licenseExpired
-        final isRenewal = s.status == EntitlementStatus.licenseExpired;
-        return [
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              onPressed: _openSubscription,
-              style: FilledButton.styleFrom(
-                  backgroundColor: cs.primary, foregroundColor: Colors.white),
-              child: Text(isRenewal ? l10n.renewNow : l10n.subscribeNow),
-            ),
-          ),
-        ];
+        ),
+      ];
     }
+
+    // ── Subscription state (no pending order) ───────────────────────────────
+    if (s.status == EntitlementStatus.licenseRevoked) {
+      return [
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: OutlinedButton(
+            onPressed: _openSubscription,
+            child: Text(l10n.subscribeNow),
+          ),
+        ),
+      ];
+    }
+
+    final isRenewal = s.status == EntitlementStatus.licenseExpired;
+    return [
+      SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: FilledButton(
+          onPressed: _openSubscription,
+          style: FilledButton.styleFrom(
+              backgroundColor: cs.primary, foregroundColor: Colors.white),
+          child: Text(isRenewal ? l10n.renewNow : l10n.subscribeNow),
+        ),
+      ),
+    ];
   }
 }
 
@@ -304,47 +250,48 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final (title, body, color, icon) = switch (state.status) {
-      EntitlementStatus.trialExpired => (
-          l10n.trialExpiredHeadline,
-          l10n.trialExpiredBody,
-          cs.error,
-          Icons.timer_off_outlined,
-        ),
-      EntitlementStatus.licenseExpired => (
-          l10n.licenseExpiredHeadline,
-          l10n.licenseExpiredBody,
-          cs.error,
-          Icons.event_busy_outlined,
-        ),
-      EntitlementStatus.licenseRevoked => (
-          l10n.licenseRevokedStatus,
-          l10n.contactUs,
-          Colors.orange,
-          Icons.block_outlined,
-        ),
-      EntitlementStatus.orderPending => (
-          l10n.orderPendingStatus,
-          '${l10n.orderReferenceLabel}: ${state.orderReference ?? ''}\n\n${l10n.orderPendingBody}',
-          cs.primary,
-          Icons.pending_outlined,
-        ),
-      EntitlementStatus.orderRejected => (
-          l10n.orderRejectedStatus,
-          state.rejectionNote?.isNotEmpty == true
-              ? '${l10n.rejectionReason}: ${state.rejectionNote}'
-              : l10n.orderRejectedStatus,
-          cs.error,
-          Icons.cancel_outlined,
-        ),
-      EntitlementStatus.deviceLimitReached => (
-          l10n.deviceLimitStatus,
-          l10n.contactUs,
-          Colors.orange,
-          Icons.devices_outlined,
-        ),
-      _ => (l10n.subscribeNow, '', cs.primary, Icons.lock_outline),
-    };
+    final String title;
+    final String body;
+    final Color color;
+    final IconData icon;
+
+    if (state.orderStatus == PendingOrderStatus.pending) {
+      title = l10n.orderPendingStatus;
+      body =
+          '${l10n.orderReferenceLabel}: ${state.orderReference ?? ''}\n\n${l10n.orderPendingBody}';
+      color = cs.primary;
+      icon = Icons.pending_outlined;
+    } else if (state.orderStatus == PendingOrderStatus.rejected) {
+      title = l10n.orderRejectedStatus;
+      body = state.rejectionNote?.isNotEmpty == true
+          ? '${l10n.rejectionReason}: ${state.rejectionNote}'
+          : l10n.orderRejectedStatus;
+      color = cs.error;
+      icon = Icons.cancel_outlined;
+    } else {
+      switch (state.status) {
+        case EntitlementStatus.trialExpired:
+          title = l10n.trialExpiredHeadline;
+          body = l10n.trialExpiredBody;
+          color = cs.error;
+          icon = Icons.timer_off_outlined;
+        case EntitlementStatus.licenseExpired:
+          title = l10n.licenseExpiredHeadline;
+          body = l10n.licenseExpiredBody;
+          color = cs.error;
+          icon = Icons.event_busy_outlined;
+        case EntitlementStatus.licenseRevoked:
+          title = l10n.licenseRevokedStatus;
+          body = l10n.contactUs;
+          color = Colors.orange;
+          icon = Icons.block_outlined;
+        default:
+          title = l10n.subscribeNow;
+          body = '';
+          color = cs.primary;
+          icon = Icons.lock_outline;
+      }
+    }
 
     return Container(
       width: double.infinity,

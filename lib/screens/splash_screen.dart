@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../localization/app_localizations.dart';
-import '../models/entitlement.dart';
 import '../services/license_service.dart';
 import 'main_shell.dart';
-import 'paywall_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,36 +18,23 @@ class _SplashScreenState extends State<SplashScreen> {
     _init();
   }
 
-  Future<EntitlementState> _safeCheckEntitlement() async {
-    try {
-      return await LicenseService.instance.checkEntitlement();
-    } catch (_) {
-      return const EntitlementState(
-        status: EntitlementStatus.trialActive,
-        deviceId: 'unknown',
-        trialDaysRemaining: 14,
-      );
-    }
-  }
-
   Future<void> _init() async {
-    EntitlementState? state;
+    // Pre-warm the entitlement cache while the splash is visible.
+    // HomeScreen reads the cache on load; no blocking gate here — the app
+    // is never fully locked, only paid creation actions are gated.
     await Future.wait([
-      _safeCheckEntitlement().then((s) => state = s),
+      Future<void>(() async {
+        try {
+          await LicenseService.instance.checkEntitlement();
+        } catch (_) {}
+      }),
       Future<void>.delayed(const Duration(milliseconds: 1200)),
     ]);
     if (!mounted) return;
-    if (state!.canUseApp) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainShell()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => PaywallScreen(state: state!)),
-      );
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainShell()),
+    );
   }
 
   @override

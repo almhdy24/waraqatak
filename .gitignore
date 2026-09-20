@@ -71,3 +71,7 @@ Thumbs.db
 
 # Kotlin generated files
 android/.kotlin/
+
+*.jks
+*.keystore
+android/key.properties

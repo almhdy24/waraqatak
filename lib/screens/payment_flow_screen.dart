@@ -189,16 +189,11 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
       if (!mounted) return;
       setState(() => _step = _Step.success);
     } on ElmahdiPayForbiddenException catch (e) {
-      if (e.maxDevices != null) {
-        await LicenseService.instance.storeLicense(
-          licenseKey: license.licenseKey,
-          expiresAt:  license.expiresAt,
-          isActive:   true,
-        );
-        await LicenseService.instance.markDeviceLimitReached();
-      }
       if (!mounted) return;
       final l = AppLocalizations.of(context);
+      // Device limit is a recoverable server-side error, not a permanent local
+      // state. Keep the order reference intact so the user can retry via
+      // "Check Order Status" after the admin deactivates another device.
       final msg = e.maxDevices != null
           ? '${l.deviceLimitStatus}: ${e.activeDevices}/${e.maxDevices}'
           : l.licenseRevokedStatus;

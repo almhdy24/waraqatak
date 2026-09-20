@@ -623,5 +623,18 @@ class AppLocalizations {
   String get buyerNameHelper       => _t('اسمك الكامل كما هو، حتى نتعرف على دفعتك',    'Your full name, so we can identify your payment');
   String get buyerContactHelper    => _t('هاتفك أو بريدك — نتواصل بك إذا احتجنا لذلك',  'Your phone or email — we\'ll reach you if needed');
 
+  // ========== FREE / PRO GATING ==========
+  String get proBadgeLabel           => _t('احترافي',                                   'Pro');
+  String get proFeatureTitle         => _t('ميزة احترافية',                             'Pro Feature');
+  String get proFeatureUnlockBody    => _t('هذه الميزة متاحة في خطة الاشتراك الاحترافي. بياناتك ومستنداتك الأساسية متاحة دائماً في الوضع المجاني.', 'This feature is available with a Pro subscription. Your data and core documents are always available in Free mode.');
+  String get proIncludesPurchases    => _t('أوامر الشراء والموردون',                   'Purchases & Suppliers');
+  String get proIncludesInventory    => _t('إدارة المخزون المتقدمة',                   'Advanced Inventory Management');
+  String get proIncludesReports      => _t('التقارير التفصيلية الكاملة',               'Full Detailed Reports');
+  String get proAdvancedReports      => _t('التقارير الاحترافية',                      'Advanced Reports');
+  String get proUpgradeAction        => _t('عرض خطط الاشتراك',                         'View Plans');
+  String get freeDataAlwaysAvailable => _t('بياناتك ومستنداتك محفوظة دائماً حتى في الوضع المجاني.', 'Your data and documents are always available, even in Free mode.');
+  String get manualRenewalNote       => _t('التجديد يدوي — لن يُحصل منك شيء تلقائياً.', 'Renewal is manual — you won\'t be charged automatically.');
+  String get freeModeBannerMsg       => _t('الوضع المجاني نشط — الفواتير والعملاء والمنتجات متاحة دائماً.', 'Free mode active — invoices, customers, and products are always available.');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

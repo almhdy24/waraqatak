@@ -7,7 +7,9 @@ import '../models/date_range_filter.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
 import '../models/entitlement.dart';
+import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../widgets/pro_upgrade_sheet.dart';
 import 'business_setup_screen.dart';
 import 'custom_document_screen.dart';
 import 'document_detail_screen.dart';
@@ -16,6 +18,7 @@ import 'inventory_screen.dart';
 import 'purchase_screen.dart';
 import 'quotation_screen.dart';
 import 'reports_screen.dart';
+import 'paywall_screen.dart';
 import 'subscription_screen.dart';
 import 'voucher_screen.dart';
 
@@ -34,6 +37,7 @@ class HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String? _error;
   EntitlementState? _entitlement;
+  bool _freeModeBannerDismissed = false;
 
   static final _numFmt = NumberFormat('#,##0');
 
@@ -86,6 +90,32 @@ class HomeScreenState extends State<HomeScreen> {
     if (mounted) _load();
   }
 
+  /// Open the subscription screen and refresh entitlement on return.
+  Future<void> _openSubscriptionScreen() async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+    );
+    if (!mounted) return;
+    LicenseService.instance.invalidateCache();
+    _load();
+  }
+
+  /// Gate a Pro feature. Shows [ProUpgradeSheet] when access is denied,
+  /// then routes to subscription screen if the user chooses to upgrade.
+  Future<void> _openProGated(
+      Feature feature, Future<void> Function() open) async {
+    if (FeatureAccess.canAccess(feature, _entitlement)) {
+      await open();
+      return;
+    }
+    if (!mounted) return;
+    final result = await ProUpgradeSheet.show(context, feature: feature);
+    if (result == true && mounted) {
+      await _openSubscriptionScreen();
+    }
+  }
+
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
@@ -119,7 +149,12 @@ class HomeScreenState extends State<HomeScreen> {
             ListTile(
               leading: const Icon(Icons.shopping_cart_outlined),
               title: Text(l10n.purchase),
-              onTap: () { Navigator.pop(ctx); _openScreen(const PurchaseScreen()); },
+              trailing: const ProBadge(),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await _openProGated(Feature.purchases,
+                    () => _openScreen(const PurchaseScreen()));
+              },
             ),
             ListTile(
               leading: const Icon(Icons.request_quote_outlined),
@@ -365,7 +400,8 @@ class HomeScreenState extends State<HomeScreen> {
               if (totalProducts > 0) ...[
                 const SizedBox(height: 12),
                 InkWell(
-                  onTap: () => _openScreen(const InventoryScreen()),
+                  onTap: () => _openProGated(Feature.inventory,
+                      () => _openScreen(const InventoryScreen())),
                   borderRadius: BorderRadius.circular(12),
                   child: Card(
                     elevation: 0,
@@ -469,62 +505,131 @@ class HomeScreenState extends State<HomeScreen> {
     if (e == null) return null;
 
     String? message;
-    Color? bgColor;
-    Color? textColor;
+    Color bgColor = Colors.blue.shade50;
+    Color textColor = Colors.blue.shade800;
     bool isWarning = false;
+    bool dismissible = false;
+    String? actionLabel;
+    VoidCallback? onAction;
 
-    if (e.status == EntitlementStatus.trialActive) {
-      isWarning = e.trialDaysRemaining <= 5;
-      message = '${e.trialDaysRemaining} ${l10n.daysLeftInTrial}';
-      bgColor = isWarning ? Colors.amber.shade100 : Colors.green.shade50;
-      textColor = isWarning ? Colors.amber.shade900 : Colors.green.shade800;
-    } else if (e.status == EntitlementStatus.licensed &&
-        e.licenseExpiresAt != null) {
-      final daysLeft = e.licenseExpiresAt!.difference(DateTime.now()).inDays;
-      if (daysLeft <= 14) {
-        message = '${l10n.licenseExpiresOn} '
-            '${e.licenseExpiresAt!.toLocal().toString().split(' ').first}';
-        bgColor = Colors.amber.shade100;
-        textColor = Colors.amber.shade900;
-        isWarning = true;
+    // ── Order state ──────────────────────────────────────────────────────────
+    if (e.orderStatus == PendingOrderStatus.pending) {
+      message = l10n.orderPendingStatus;
+      bgColor = Colors.blue.shade50;
+      textColor = Colors.blue.shade800;
+      actionLabel = l10n.checkOrderStatus;
+      onAction = () => Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => PaywallScreen(state: e)),
+          ).then((_) {
+            LicenseService.instance.invalidateCache();
+            _load();
+          });
+    } else if (e.orderStatus == PendingOrderStatus.rejected) {
+      message = l10n.orderRejectedStatus;
+      bgColor = Colors.orange.shade50;
+      textColor = Colors.orange.shade800;
+      isWarning = true;
+      actionLabel = l10n.tryAgain;
+      onAction = () async {
+        await LicenseService.instance.clearOrder();
+        if (!mounted) return;
+        await _openSubscriptionScreen();
+      };
+    }
+
+    // ── Subscription state ───────────────────────────────────────────────────
+    if (message == null) {
+      switch (e.status) {
+        case EntitlementStatus.trialActive:
+          isWarning = e.trialDaysRemaining <= 5;
+          message = '${e.trialDaysRemaining} ${l10n.daysLeftInTrial}';
+          bgColor = isWarning ? Colors.amber.shade100 : Colors.green.shade50;
+          textColor =
+              isWarning ? Colors.amber.shade900 : Colors.green.shade800;
+          actionLabel = l10n.subscribeNow;
+          onAction = _openSubscriptionScreen;
+        case EntitlementStatus.licensed:
+          if (e.licenseExpiresAt != null) {
+            final daysLeft =
+                e.licenseExpiresAt!.difference(DateTime.now()).inDays;
+            if (daysLeft <= 14) {
+              message =
+                  '${l10n.licenseExpiresOn} ${e.licenseExpiresAt!.toLocal().toString().split(' ').first}';
+              bgColor = Colors.amber.shade100;
+              textColor = Colors.amber.shade900;
+              isWarning = true;
+              actionLabel = l10n.renewNow;
+              onAction = _openSubscriptionScreen;
+            }
+          }
+        case EntitlementStatus.trialExpired:
+        case EntitlementStatus.licenseExpired:
+          if (_freeModeBannerDismissed) return null;
+          dismissible = true;
+          message = l10n.freeModeBannerMsg;
+          bgColor = const Color(0xFFEEF2FF);
+          textColor = const Color(0xFF3730A3);
+          actionLabel = l10n.subscribeNow;
+          onAction = _openSubscriptionScreen;
+        case EntitlementStatus.licenseRevoked:
+          if (_freeModeBannerDismissed) return null;
+          dismissible = true;
+          message = l10n.freeModeBannerMsg;
+          bgColor = Colors.orange.shade50;
+          textColor = Colors.orange.shade800;
+          isWarning = true;
+          actionLabel = l10n.contactUs;
+          onAction = _openSubscriptionScreen;
       }
     }
 
     if (message == null) return null;
 
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
-      ).then((_) => _load()),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isWarning ? Icons.warning_amber_rounded : Icons.info_outline,
-              size: 18,
-              color: textColor,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(message,
-                  style: TextStyle(
-                      fontSize: 13, color: textColor, fontWeight: FontWeight.w500)),
-            ),
-            Text(l10n.renewNow,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isWarning ? Icons.warning_amber_rounded : Icons.info_outline,
+            size: 18,
+            color: textColor,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(message,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: textColor,
+                    fontWeight: FontWeight.w500)),
+          ),
+          if (onAction != null && actionLabel != null) ...[
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onAction,
+              child: Text(
+                actionLabel,
                 style: TextStyle(
                     fontSize: 12,
                     color: textColor,
                     fontWeight: FontWeight.bold,
-                    decoration: TextDecoration.underline)),
+                    decoration: TextDecoration.underline),
+              ),
+            ),
           ],
-        ),
+          if (dismissible) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => setState(() => _freeModeBannerDismissed = true),
+              child: Icon(Icons.close, size: 16, color: textColor),
+            ),
+          ],
+        ],
       ),
     );
   }
