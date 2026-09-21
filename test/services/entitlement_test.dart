@@ -181,7 +181,7 @@ void main() {
   // ── SubscriptionPlan calculations ────────────────────────────────────────
 
   group('SubscriptionPlan', () {
-    test('monthly plan has no discount', () {
+    test('plan without originalPriceSDG has no discount', () {
       const p = SubscriptionPlan(
           id: 'monthly', nameAr: 'شهري', nameEn: 'Monthly',
           priceSDG: 20000, durationDays: 30);
@@ -189,7 +189,7 @@ void main() {
       expect(p.savingsSDG, isNull);
     });
 
-    test('annual plan has discount', () {
+    test('plan with originalPriceSDG higher than priceSDG has discount', () {
       const p = SubscriptionPlan(
           id: 'annual', nameAr: 'سنوي', nameEn: 'Annual',
           priceSDG: 180000, originalPriceSDG: 240000, durationDays: 365);
@@ -212,20 +212,21 @@ void main() {
       expect(p.monthlyEquivalentSDG, closeTo(20000, 0.01));
     });
 
-    test('catalogue has 4 plans', () {
-      expect(SubscriptionPlan.plans.length, 4);
+    test('priceSDG is preserved via copyWith', () {
+      const p = SubscriptionPlan(
+          id: 'x', nameAr: 'test', nameEn: 'test',
+          priceSDG: 50000, durationDays: 30, priceId: 7);
+      final copy = p.copyWith(isMostPopular: true);
+      expect(copy.priceSDG, 50000);
+      expect(copy.priceId, 7);
+      expect(copy.isMostPopular, isTrue);
     });
 
-    test('catalogue plan ids are unique', () {
-      final ids = SubscriptionPlan.plans.map((p) => p.id).toSet();
-      expect(ids.length, SubscriptionPlan.plans.length);
-    });
-
-    test('all catalogue plans have positive price and duration', () {
-      for (final p in SubscriptionPlan.plans) {
-        expect(p.priceSDG, greaterThan(0));
-        expect(p.durationDays, greaterThan(0));
-      }
+    test('priceId is preserved across construction', () {
+      const p = SubscriptionPlan(
+          id: 'x', nameAr: 'test', nameEn: 'test',
+          priceSDG: 20000, durationDays: 30, priceId: 42);
+      expect(p.priceId, 42);
     });
   });
 

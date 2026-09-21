@@ -1,10 +1,12 @@
-import 'dart:typed_data';
+import 'dart:math';
 
-import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
+import 'package:elmahdi_api/elmahdi_api.dart';
 
+import '../models/subscription_plan.dart';
+import '../utils/marketing_pricing.dart';
 import 'license_service.dart';
 
-/// Thin wrapper around the Elmahdi Pay SDK.
+/// Thin wrapper around the Elmahdi API SDK.
 ///
 /// - Never stores admin tokens or server secrets in the APK.
 /// - Idempotency key is generated once and persisted before each order
@@ -12,108 +14,139 @@ import 'license_service.dart';
 class SubscriptionService {
   SubscriptionService._();
 
-  // ── Configuration ──────────────────────────────────────────────────────────
-  static const String serverUrl = 'https://api.almhdy24.com';
-  static const String _appSlug  = 'com.elmahdi.waraqatak';
-  static const String _currency  = 'SDG';
+  static const String _appSlug = 'com.elmahdi.waraqatak';
 
-  // ── SDK client (lazy singleton) ────────────────────────────────────────────
+  static ElmahdiApi? _api;
 
-  static ElmahdiPayClient? _client;
-
-  static ElmahdiPayClient get _sdk {
-    _client ??= ElmahdiPayClient(
-      ElmahdiPayConfig(
-        baseUrl: serverUrl,
-        timeout: const Duration(seconds: 20),
-      ),
-    );
-    return _client!;
+  static ElmahdiApi get _sdk {
+    _api ??= ElmahdiApi(appSlug: _appSlug);
+    return _api!;
   }
 
-  // ── Public API ─────────────────────────────────────────────────────────────
+  // ── Products / Plans ───────────────────────────────────────────────────────
+
+  /// Fetches the server product catalogue and converts it to UI plan objects.
+  ///
+  /// Only active prices for the Waraqatak product are included.
+  /// [originalPriceSDG] on each plan is a client-computed marketing reference
+  /// price — it is never sent to the backend.
+  static Future<List<SubscriptionPlan>> fetchPlans() async {
+    final products = await _sdk.products.list();
+    return _plansFromProducts(products);
+  }
+
+  static List<SubscriptionPlan> _plansFromProducts(List<Product> products) {
+    final product = products.where((p) => p.slug == _appSlug).firstOrNull;
+    if (product == null) return const [];
+
+    final plans = <SubscriptionPlan>[];
+
+    for (final plan in product.plans) {
+      for (final price in plan.prices.where((p) => p.isActive)) {
+        final serverAmount = price.priceSdg ?? price.amount;
+        final durationType = MarketingPricing.inferFromName(plan.name);
+        final refPrice =
+            MarketingPricing.referencePrice(serverAmount, durationType);
+
+        plans.add(SubscriptionPlan(
+          id: '${plan.id}_${price.id}',
+          nameAr: plan.name,
+          nameEn: plan.name,
+          priceSDG: serverAmount,
+          originalPriceSDG: refPrice,
+          durationDays: MarketingPricing.daysForType(durationType),
+          isMostPopular: false,
+          priceId: price.id,
+        ));
+      }
+    }
+
+    // Mark the annual plan as most popular if present.
+    final annualIdx = plans.indexWhere(
+      (p) =>
+          MarketingPricing.inferFromName(p.nameAr) == PlanDurationType.annual,
+    );
+    if (annualIdx >= 0) {
+      plans[annualIdx] = plans[annualIdx].copyWith(isMostPopular: true);
+    }
+
+    return plans;
+  }
+
+  // ── Payment methods ────────────────────────────────────────────────────────
 
   static Future<List<PaymentMethod>> getPaymentMethods() =>
-      _sdk.public.getPaymentMethods();
+      _sdk.paymentMethods.list();
 
-  /// Create (or idempotently re-fetch) an order for [amount] SDG.
+  // ── Orders ─────────────────────────────────────────────────────────────────
+
+  /// Create (or idempotently re-fetch) an order for [priceId].
   ///
-  /// Generates and persists an idempotency key before the network call so
-  /// that retrying after a timeout never creates a duplicate order.
-  static Future<CreateOrderResult> createOrder({
+  /// [priceId] must be the server Price.id from a [SubscriptionPlan] loaded
+  /// via [fetchPlans]. The actual amount is determined server-side from the
+  /// price record — the client does not send or modify the amount.
+  static Future<CreateOrderResponse> createOrder({
+    required int priceId,
     required int paymentMethodId,
     required String buyerName,
     required String buyerContact,
-    required double amount,
     String? proofNote,
-    Uint8List? proofFileBytes,
-    String? proofFileName,
   }) async {
     var ikey = await LicenseService.instance.getSavedIdempotencyKey();
     if (ikey == null) {
-      ikey = ElmahdiPayClient.generateIdempotencyKey();
+      ikey = _generateIdempotencyKey();
       await LicenseService.instance.saveIdempotencyKey(ikey);
     }
 
-    final result = await _sdk.public.createOrder(CreateOrderRequest(
-      appSlug: _appSlug,
-      paymentMethodId: paymentMethodId,
-      buyerName: buyerName,
-      buyerContact: buyerContact,
-      amount: amount,
-      currency: _currency,
-      proofNote: proofNote,
-      idempotencyKey: ikey,
-      proofFileBytes: proofFileBytes,
-      proofFileName: proofFileName,
-    ));
+    final result = await _sdk.orders.create(
+      CreateOrderRequest(
+        priceId: priceId,
+        paymentMethodId: paymentMethodId,
+        buyerName: buyerName,
+        buyerContact: buyerContact,
+        proofNote: (proofNote?.isEmpty ?? true) ? null : proofNote,
+        idempotencyKey: ikey,
+      ),
+    );
 
     await LicenseService.instance.setOrderPending(result.reference);
     return result;
   }
 
   static Future<Order> getOrder(String reference) =>
-      _sdk.public.getOrder(reference);
+      _sdk.orders.get(reference);
 
-  /// Activate [license] on this device and persist it locally.
-  ///
-  /// Uses the same [deviceId] that was created on first launch — never
-  /// generates a new one for renewal or re-activation.
-  static Future<ActivateLicenseResult> activateAndStore(
+  // ── License activation ─────────────────────────────────────────────────────
+
+  /// Activate a license obtained from an approved order and persist it locally.
+  static Future<ActivateResponse> activateAndStore(
     License license,
     String deviceId,
   ) async {
-    final result = await _sdk.public.activateLicense(
-      ActivateLicenseRequest(
-        licenseKey: license.licenseKey,
-        deviceId: deviceId,
-      ),
+    final result = await _sdk.licenses.activate(
+      licenseKey: license.licenseKey,
+      deviceId: deviceId,
     );
+
+    // expiresAt is a String? in the new SDK.
+    final expiresAt =
+        license.expiresAt != null ? DateTime.tryParse(license.expiresAt!) : null;
 
     await LicenseService.instance.storeLicense(
       licenseKey: license.licenseKey,
-      expiresAt: license.expiresAt,
-      isActive: license.status == LicenseStatus.active,
+      expiresAt: expiresAt,
+      isActive: true,
     );
 
     return result;
   }
 
-  /// Retry activation using the stored license key (e.g. after device limit
-  /// was resolved by admin deactivating another device).
-  static Future<ActivateLicenseResult> retryActivation(
-    String licenseKey,
-    String deviceId,
-  ) =>
-      _sdk.public.activateLicense(
-        ActivateLicenseRequest(licenseKey: licenseKey, deviceId: deviceId),
-      );
-
   /// Activate a license by key only — used when the user manually enters their
   /// key after formatting their phone or reinstalling the app.
   static Future<void> activateByKey(String licenseKey, String deviceId) async {
-    await _sdk.public.activateLicense(
-      ActivateLicenseRequest(licenseKey: licenseKey, deviceId: deviceId),
+    await _sdk.licenses.activate(
+      licenseKey: licenseKey,
+      deviceId: deviceId,
     );
     await LicenseService.instance.storeLicense(
       licenseKey: licenseKey,
@@ -122,8 +155,35 @@ class SubscriptionService {
     );
   }
 
+  /// Re-activate using a stored license key (e.g. after admin resolves a
+  /// device-limit issue). Does not store — call [activateAndStore] for that.
+  static Future<ActivateResponse> retryActivation(
+    String licenseKey,
+    String deviceId,
+  ) =>
+      _sdk.licenses.activate(
+        licenseKey: licenseKey,
+        deviceId: deviceId,
+      );
+
+  // ── App info ───────────────────────────────────────────────────────────────
+
+  static Future<AppVersion> getAppVersion() => _sdk.apps.version();
+
+  static Future<AppConfig> getAppConfig() => _sdk.apps.config();
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
   static void close() {
-    _client?.close();
-    _client = null;
+    _api?.dispose();
+    _api = null;
+  }
+
+  // ── Internal ───────────────────────────────────────────────────────────────
+
+  static String _generateIdempotencyKey() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(32, (_) => rng.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 }

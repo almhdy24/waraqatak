@@ -1,6 +1,6 @@
+import 'package:elmahdi_api/elmahdi_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
@@ -17,32 +17,72 @@ class SubscriptionScreen extends StatefulWidget {
 }
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
-  SubscriptionPlan _selected = SubscriptionPlan.plans.last;
+  // Entitlement
   EntitlementState? _entitlement;
-  bool _loading = true;
+  bool _entitlementLoading = true;
+
+  // Plans (server-loaded)
+  List<SubscriptionPlan> _plans = [];
+  bool _plansLoading = true;
+  String? _plansError;
+  SubscriptionPlan? _selected;
+
   bool _showRenewal = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadEntitlement();
+    _loadPlans();
   }
 
-  Future<void> _load() async {
+  Future<void> _loadEntitlement() async {
     final s = await LicenseService.instance.checkEntitlement();
     if (!mounted) return;
     setState(() {
       _entitlement = s;
-      _loading = false;
+      _entitlementLoading = false;
     });
+  }
+
+  Future<void> _loadPlans() async {
+    setState(() {
+      _plansLoading = true;
+      _plansError = null;
+    });
+    try {
+      final plans = await SubscriptionService.fetchPlans();
+      if (!mounted) return;
+      setState(() {
+        _plans = plans;
+        _plansLoading = false;
+        if (_selected == null && plans.isNotEmpty) {
+          _selected = plans.last;
+        }
+      });
+    } on NetworkException {
+      if (!mounted) return;
+      setState(() {
+        _plansLoading = false;
+        _plansError = AppLocalizations.of(context).networkError;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _plansLoading = false;
+        _plansError = AppLocalizations.of(context).plansLoadError;
+      });
+    }
   }
 
   bool get _isLicensed => _entitlement?.status == EntitlementStatus.licensed;
 
   Future<void> _subscribe() async {
+    final plan = _selected;
+    if (plan == null) return;
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => PaymentFlowScreen(plan: _selected)),
+      MaterialPageRoute(builder: (_) => PaymentFlowScreen(plan: plan)),
     );
     if (result == true && mounted) Navigator.pop(context, true);
   }
@@ -60,7 +100,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: _loading
+      body: _entitlementLoading
           ? const Center(child: CircularProgressIndicator())
           : _isLicensed && !_showRenewal
               ? _buildLicensedView(l10n, cs)
@@ -72,16 +112,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Widget _buildLicensedView(AppLocalizations l10n, ColorScheme cs) {
     final e = _entitlement!;
-    final expiryStr = e.licenseExpiresAt
-        ?.toLocal()
-        .toString()
-        .split(' ')
-        .first;
+    final expiryStr =
+        e.licenseExpiresAt?.toLocal().toString().split(' ').first;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
       children: [
-        // Status card
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
@@ -112,8 +148,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               if (expiryStr != null) ...[
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(30),
@@ -130,10 +166,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             ],
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // Data safety note
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -149,17 +182,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               Expanded(
                 child: Text(
                   l10n.dataAlwaysSafe,
-                  style: TextStyle(
-                      fontSize: 12, color: Colors.green.shade800),
+                  style:
+                      TextStyle(fontSize: 12, color: Colors.green.shade800),
                 ),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 32),
-
-        // Renew early button
         OutlinedButton.icon(
           onPressed: () => setState(() => _showRenewal = true),
           icon: const Icon(Icons.autorenew_rounded),
@@ -176,7 +206,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  // ── Plans view (trial / expired / manual renewal) ────────────────────────
+  // ── Plans view ────────────────────────────────────────────────────────────
 
   Widget _buildPlansView(AppLocalizations l10n, ColorScheme cs) {
     final isRenewal = _isLicensed ||
@@ -192,8 +222,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         const SizedBox(height: 24),
 
         Text(l10n.choosePlan,
-            style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold)),
+            style:
+                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text(
           l10n.limitedPromoOffer,
@@ -204,13 +234,25 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         ),
         const SizedBox(height: 12),
 
-        ...SubscriptionPlan.plans.map((plan) => _PlanCard(
-              plan: plan,
-              isSelected: _selected.id == plan.id,
-              l10n: l10n,
-              cs: cs,
-              onTap: () => setState(() => _selected = plan),
-            )),
+        // Plans content: loading / error / cards
+        if (_plansLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_plansError != null)
+          _PlansErrorTile(error: _plansError!, onRetry: _loadPlans, l10n: l10n)
+        else if (_plans.isEmpty)
+          _PlansErrorTile(
+              error: l10n.plansLoadError, onRetry: _loadPlans, l10n: l10n)
+        else
+          ..._plans.map((plan) => _PlanCard(
+                plan: plan,
+                isSelected: _selected?.id == plan.id,
+                l10n: l10n,
+                cs: cs,
+                onTap: () => setState(() => _selected = plan),
+              )),
 
         const SizedBox(height: 12),
         _TrustRow(l10n: l10n),
@@ -220,7 +262,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           width: double.infinity,
           height: 54,
           child: FilledButton(
-            onPressed: _subscribe,
+            onPressed: (_selected != null && !_plansLoading) ? _subscribe : null,
             style: FilledButton.styleFrom(
               backgroundColor: cs.primary,
               foregroundColor: Colors.white,
@@ -229,8 +271,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             ),
             child: Text(
               isRenewal ? l10n.renewNow : l10n.subscribeNow,
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold),
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -245,7 +287,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 }
 
-// ── Back tile (shown when licensed user opens renewal) ───────────────────────
+// ── Back tile ─────────────────────────────────────────────────────────────────
 
 class _BackTile extends StatelessWidget {
   final VoidCallback onTap;
@@ -260,7 +302,8 @@ class _BackTile extends StatelessWidget {
         child: Row(
           children: [
             Icon(Icons.arrow_back_ios_new_rounded,
-                size: 14, color: Theme.of(context).colorScheme.primary),
+                size: 14,
+                color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 4),
             Text(
               AppLocalizations.of(context).licensedStatus,
@@ -320,7 +363,6 @@ class _Header extends StatelessWidget {
       );
     }
 
-    // licensed (renewal flow), expired, or other blocking state
     final isExpired = s.status == EntitlementStatus.licenseExpired ||
         s.status == EntitlementStatus.trialExpired;
 
@@ -342,8 +384,48 @@ class _Header extends StatelessWidget {
             ? l10n.licenseExpiredBody
             : l10n.trialExpiredBody,
         style: TextStyle(
-            fontSize: 14,
-            color: isExpired ? cs.error : cs.primary),
+            fontSize: 14, color: isExpired ? cs.error : cs.primary),
+      ),
+    );
+  }
+}
+
+// ── Plans error tile ──────────────────────────────────────────────────────────
+
+class _PlansErrorTile extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+  final AppLocalizations l10n;
+  const _PlansErrorTile(
+      {required this.error, required this.onRetry, required this.l10n});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.error.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.error.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        children: [
+          Text(error,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: cs.error)),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: Text(l10n.retry),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: cs.error,
+              side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -369,7 +451,8 @@ class _PlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final borderColor = isSelected ? cs.primary : cs.outlineVariant;
-    final bg = isSelected ? cs.primary.withValues(alpha: 0.06) : Colors.white;
+    final bg =
+        isSelected ? cs.primary.withValues(alpha: 0.06) : Colors.white;
 
     return GestureDetector(
       onTap: onTap,
@@ -379,7 +462,8 @@ class _PlanCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
+          border:
+              Border.all(color: borderColor, width: isSelected ? 2 : 1),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -398,8 +482,8 @@ class _PlanCard extends StatelessWidget {
                   if (plan.isMostPopular)
                     _badge(l10n.mostPopularBadge, cs.primary, Colors.white)
                   else if (plan.hasDiscount)
-                    _badge(l10n.limitedPromoOffer,
-                        Colors.orange.shade50, Colors.orange.shade800,
+                    _badge(l10n.limitedPromoOffer, Colors.orange.shade50,
+                        Colors.orange.shade800,
                         border: Colors.orange.shade300),
                 ],
               ),
@@ -438,7 +522,8 @@ class _PlanCard extends StatelessWidget {
               if (plan.durationDays >= 90)
                 Text(
                   '${l10n.equivalentMonthly} ${SubscriptionPlan.fmt(plan.monthlyEquivalentSDG)} SDG ${l10n.perMonthSuffix}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  style:
+                      TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
               const SizedBox(height: 6),
               Row(
@@ -484,7 +569,8 @@ class _RestoreKeyTile extends StatelessWidget {
     return GestureDetector(
       onTap: () => _showSheet(context, l10n, cs),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(14),
@@ -492,7 +578,8 @@ class _RestoreKeyTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.vpn_key_outlined, size: 20, color: cs.onSurfaceVariant),
+            Icon(Icons.vpn_key_outlined,
+                size: 20, color: cs.onSurfaceVariant),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -531,7 +618,8 @@ class _RestoreKeyTile extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _KeyEntrySheet(l10n: l10n, cs: cs, onRestored: onRestored),
+      builder: (_) =>
+          _KeyEntrySheet(l10n: l10n, cs: cs, onRestored: onRestored),
     );
   }
 }
@@ -571,17 +659,25 @@ class _KeyEntrySheetState extends State<_KeyEntrySheet> {
       if (!mounted) return;
       Navigator.pop(context);
       widget.onRestored();
-    } on ElmahdiPayForbiddenException {
+    } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = widget.l10n.invalidLicenseKey;
+        _error = e.isForbidden
+            ? widget.l10n.invalidLicenseKey
+            : widget.l10n.serverError;
       });
-    } catch (e) {
+    } on NetworkException {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = widget.l10n.networkError;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = widget.l10n.operationFailed;
       });
     }
   }
@@ -591,12 +687,13 @@ class _KeyEntrySheetState extends State<_KeyEntrySheet> {
     final l10n = widget.l10n;
     final cs = widget.cs;
     return Padding(
-      padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         child: Column(
@@ -605,7 +702,8 @@ class _KeyEntrySheetState extends State<_KeyEntrySheet> {
           children: [
             Center(
               child: Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 decoration: BoxDecoration(
                   color: cs.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
@@ -618,7 +716,10 @@ class _KeyEntrySheetState extends State<_KeyEntrySheet> {
                     fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(l10n.formattedPhoneNote,
-                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, height: 1.4)),
+                style: TextStyle(
+                    fontSize: 13,
+                    color: cs.onSurfaceVariant,
+                    height: 1.4)),
             const SizedBox(height: 20),
             TextField(
               controller: _ctrl,
@@ -649,7 +750,8 @@ class _KeyEntrySheetState extends State<_KeyEntrySheet> {
                 ),
                 child: _loading
                     ? const SizedBox(
-                        width: 22, height: 22,
+                        width: 22,
+                        height: 22,
                         child: CircularProgressIndicator(
                             strokeWidth: 2, color: Colors.white))
                     : Text(l10n.activate,
@@ -674,12 +776,14 @@ class _TrustRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.security_outlined, size: 14, color: Colors.green.shade700),
+          Icon(Icons.security_outlined,
+              size: 14, color: Colors.green.shade700),
           const SizedBox(width: 4),
           Flexible(
             child: Text(l10n.dataAlwaysSafe,
                 maxLines: 2,
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                style:
+                    TextStyle(fontSize: 11, color: Colors.grey.shade600)),
           ),
         ],
       );
