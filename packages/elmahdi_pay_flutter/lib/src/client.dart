@@ -12,7 +12,7 @@ export 'config.dart';
 class ElmahdiPayClient {
   final ElmahdiPayConfig config;
 
-  /// All buyer-facing API methods: payment methods, orders, license activation.
+  /// Buyer-facing API: payment methods, orders, license activation.
   late final PublicApi public;
 
   final HttpClient _http;

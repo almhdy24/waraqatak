@@ -4,7 +4,6 @@ import '../http_client.dart';
 import '../models/license_activation.dart';
 import '../models/order.dart';
 import '../models/payment_method.dart';
-import '../models/settings.dart';
 
 class PublicApi {
   final HttpClient _http;
@@ -19,12 +18,6 @@ class PublicApi {
     return (json['data'] as List)
         .map((e) => PaymentMethod.fromJson(e as Map<String, dynamic>))
         .toList();
-  }
-
-  /// Returns the current USD→SDG exchange rate (may be null if not configured).
-  Future<PaySettings> getSettings() async {
-    final json = await _http.get('/pay/settings');
-    return PaySettings.fromJson(json);
   }
 
   /// Submits a new payment order.
@@ -65,12 +58,13 @@ class PublicApi {
 
   /// Activates [ActivateLicenseRequest.licenseKey] on a device.
   ///
-  /// Re-sending the same [ActivateLicenseRequest.deviceId] is safe — the server
-  /// updates `last_seen_at` and returns [ActivateLicenseResult.reactivated] = true.
+  /// Returns an [ActivateLicenseResult] containing a signed [activationToken]
+  /// for offline verification.
   ///
-  /// Throws [ElmahdiPayForbiddenException] when:
-  ///   - license is revoked or expired
-  ///   - device limit reached ([ElmahdiPayForbiddenException.maxDevices]/[ElmahdiPayForbiddenException.activeDevices] are set)
+  /// Throws [ElmahdiPayForbiddenException] when the license is revoked or expired.
+  /// Throws [ElmahdiPayNotFoundException] when the license key is invalid.
+  /// Throws [ElmahdiPayAlreadyActivatedException] (409) when already activated
+  /// on a different machine — admin must reset the activation first.
   Future<ActivateLicenseResult> activateLicense(
     ActivateLicenseRequest request,
   ) async {

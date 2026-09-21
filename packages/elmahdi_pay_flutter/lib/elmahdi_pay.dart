@@ -1,11 +1,18 @@
-/// Elmahdi Pay Flutter SDK — buyer-facing client.
+/// Elmahdi Pay Flutter SDK.
 ///
-/// Quick start:
+/// Public API (no auth):
 /// ```dart
-/// import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
-///
 /// final client = ElmahdiPayClient(ElmahdiPayConfig(baseUrl: 'https://your-server.com'));
 /// final methods = await client.public.getPaymentMethods();
+/// ```
+///
+/// Admin API (Bearer token required):
+/// ```dart
+/// final client = ElmahdiPayClient(ElmahdiPayConfig(
+///   baseUrl: 'https://your-server.com',
+///   adminToken: 'your-admin-token',
+/// ));
+/// final stats = await client.admin.getStats();
 /// ```
 library elmahdi_pay;
 

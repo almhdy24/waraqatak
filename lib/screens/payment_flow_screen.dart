@@ -1,4 +1,7 @@
-import 'package:elmahdi_api/elmahdi_api.dart';
+import 'dart:typed_data';
+
+import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../localization/app_localizations.dart';
@@ -32,14 +35,21 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
   _Step _step = _Step.loadingMethods;
   String? _error;
 
+  // Payment methods
   List<PaymentMethod> _methods = [];
   PaymentMethod? _selectedMethod;
 
+  // Form
   final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
+  final _nameCtrl    = TextEditingController();
   final _contactCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
+  final _noteCtrl    = TextEditingController();
 
+  // Proof
+  Uint8List? _proofBytes;
+  String?    _proofName;
+
+  // Order
   String? _orderRef;
   String? _rejectionNote;
 
@@ -73,12 +83,6 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
         _selectedMethod = methods.first;
         _step = _Step.fillForm;
       });
-    } on NetworkException {
-      if (!mounted) return;
-      setState(() {
-        _step = _Step.fillForm;
-        _error = AppLocalizations.of(context).networkError;
-      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -88,39 +92,50 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
     }
   }
 
+  Future<void> _pickProof() async {
+    try {
+      final file = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'],
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _proofBytes = bytes;
+        _proofName  = file.name;
+      });
+    } catch (_) {}
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedMethod == null) return;
 
-    // Guard: priceId must be set for all server-loaded plans.
-    final priceId = widget.plan.priceId;
-    if (priceId == null) {
-      setState(() => _error = AppLocalizations.of(context).serverError);
-      return;
-    }
-
     setState(() {
-      _step = _Step.submitting;
+      _step  = _Step.submitting;
       _error = null;
     });
 
     try {
       final result = await SubscriptionService.createOrder(
-        priceId: priceId,
         paymentMethodId: _selectedMethod!.id,
-        buyerName: _nameCtrl.text.trim(),
-        buyerContact: _contactCtrl.text.trim(),
-        proofNote: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+        buyerName:       _nameCtrl.text.trim(),
+        buyerContact:    _contactCtrl.text.trim(),
+        amount:          widget.plan.priceSDG,
+        proofNote:       _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+        proofFileBytes:  _proofBytes,
+        proofFileName:   _proofName,
       );
       if (!mounted) return;
       setState(() {
         _orderRef = result.reference;
-        _step = _Step.pending;
+        _step     = _Step.pending;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _step = _Step.fillForm;
+        _step  = _Step.fillForm;
         _error = _friendlyError(e);
       });
     }
@@ -131,7 +146,7 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
     if (ref == null) return;
 
     setState(() {
-      _step = _Step.checking;
+      _step  = _Step.checking;
       _error = null;
     });
 
@@ -146,13 +161,13 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
           await LicenseService.instance.setOrderRejected(ref, order.adminNote);
           if (!mounted) return;
           setState(() {
-            _step = _Step.pending;
+            _step          = _Step.pending;
             _rejectionNote = order.adminNote;
             _error = AppLocalizations.of(context).orderRejectedStatus;
           });
         case OrderStatus.pending:
           setState(() {
-            _step = _Step.pending;
+            _step  = _Step.pending;
             _error = null;
           });
           _showInfo(AppLocalizations.of(context).orderPendingBody);
@@ -160,7 +175,7 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _step = _Step.pending;
+        _step  = _Step.pending;
         _error = _friendlyError(e);
       });
     }
@@ -173,27 +188,23 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
       await SubscriptionService.activateAndStore(license, deviceId);
       if (!mounted) return;
       setState(() => _step = _Step.success);
-    } on ApiException catch (e) {
+    } on ElmahdiPayForbiddenException catch (e) {
       if (!mounted) return;
       final l = AppLocalizations.of(context);
-      final String msg;
-      if (e.isForbidden) {
-        final maxDevices = e.body?['max_devices'] as int?;
-        final activeDevices = e.body?['active'] as int?;
-        msg = maxDevices != null
-            ? '${l.deviceLimitStatus}: ${activeDevices ?? '?'}/$maxDevices'
-            : l.licenseRevokedStatus;
-      } else {
-        msg = _friendlyError(e);
-      }
+      // Device limit is a recoverable server-side error, not a permanent local
+      // state. Keep the order reference intact so the user can retry via
+      // "Check Order Status" after the admin deactivates another device.
+      final msg = e.maxDevices != null
+          ? '${l.deviceLimitStatus}: ${e.activeDevices}/${e.maxDevices}'
+          : l.licenseRevokedStatus;
       setState(() {
-        _step = _Step.pending;
+        _step  = _Step.pending;
         _error = msg;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _step = _Step.pending;
+        _step  = _Step.pending;
         _error = _friendlyError(e);
       });
     }
@@ -201,12 +212,9 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
 
   String _friendlyError(Object e) {
     final l = AppLocalizations.of(context);
-    if (e is NetworkException) return l.networkError;
-    if (e is ApiException) {
-      if (e.statusCode == 429) return l.rateLimitError;
-      if (e.isUnprocessable) return e.message;
-      return l.serverError;
-    }
+    if (e is ElmahdiPayNetworkException)   return l.networkError;
+    if (e is ElmahdiPayRateLimitException) return l.rateLimitError;
+    if (e is ElmahdiPayValidationException) return e.message;
     return l.operationFailed;
   }
 
@@ -236,13 +244,14 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
   Widget _buildStep(AppLocalizations l10n) {
     return switch (_step) {
       _Step.loadingMethods => const Center(
-          key: ValueKey('loading'), child: CircularProgressIndicator()),
-      _Step.fillForm => _buildForm(l10n),
+          key: ValueKey('loading'),
+          child: CircularProgressIndicator()),
+      _Step.fillForm   => _buildForm(l10n),
       _Step.submitting => _buildBusy(l10n, l10n.submitOrder),
-      _Step.pending => _buildPending(l10n),
-      _Step.checking => _buildBusy(l10n, l10n.checkOrderStatus),
+      _Step.pending    => _buildPending(l10n),
+      _Step.checking   => _buildBusy(l10n, l10n.checkOrderStatus),
       _Step.activating => _buildBusy(l10n, l10n.activating),
-      _Step.success => _buildSuccess(l10n),
+      _Step.success    => _buildSuccess(l10n),
     };
   }
 
@@ -268,11 +277,14 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
         key: const ValueKey('form'),
         padding: const EdgeInsets.all(16),
         children: [
+          // Amount summary
           _AmountCard(plan: widget.plan, l10n: l10n, cs: cs),
           const SizedBox(height: 16),
 
-          if (_error != null) _ErrorBanner(message: _error!, cs: cs),
+          if (_error != null)
+            _ErrorBanner(message: _error!, cs: cs),
 
+          // Payment method
           if (_methods.isNotEmpty) ...[
             Card(
               elevation: 0,
@@ -291,10 +303,10 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                     ..._methods.map((m) => _MethodTile(
                           method: m,
                           isSelected: _selectedMethod?.id == m.id,
-                          onTap: () => setState(() => _selectedMethod = m),
+                          onTap: () =>
+                              setState(() => _selectedMethod = m),
                         )),
-                    if (_selectedMethod?.instructions != null &&
-                        _selectedMethod!.instructions.isNotEmpty) ...[
+                    if (_selectedMethod?.instructions != null) ...[
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -310,7 +322,7 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13)),
                             const SizedBox(height: 4),
-                            Text(_selectedMethod!.instructions,
+                            Text(_selectedMethod!.instructions!,
                                 style: const TextStyle(
                                     fontSize: 13, height: 1.5)),
                           ],
@@ -324,15 +336,14 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
             const SizedBox(height: 12),
           ],
 
+          // Help note
           Container(
             margin: const EdgeInsets.only(bottom: 12),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
               color: cs.primary.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(12),
-              border:
-                  Border.all(color: cs.primary.withValues(alpha: 0.2)),
+              border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -342,14 +353,14 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                 Expanded(
                   child: Text(
                     l10n.enterCorrectDataNote,
-                    style: TextStyle(
-                        fontSize: 13, color: cs.primary, height: 1.45),
+                    style: TextStyle(fontSize: 13, color: cs.primary, height: 1.45),
                   ),
                 ),
               ],
             ),
           ),
 
+          // Buyer details
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(
@@ -367,8 +378,9 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                       helperMaxLines: 2,
                     ),
                     textInputAction: TextInputAction.next,
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? l10n.required : null,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? l10n.required
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -379,8 +391,9 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                       helperMaxLines: 2,
                     ),
                     keyboardType: TextInputType.emailAddress,
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? l10n.required : null,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? l10n.required
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -391,6 +404,39 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                   ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Proof upload
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: cs.outlineVariant)),
+            child: ListTile(
+              leading: Icon(
+                  _proofBytes != null
+                      ? Icons.check_circle_outline
+                      : Icons.upload_file_outlined,
+                  color: _proofBytes != null
+                      ? Colors.green
+                      : cs.primary),
+              title: Text(_proofName ?? l10n.attachProof),
+              subtitle: _proofBytes != null
+                  ? Text('${(_proofBytes!.length / 1024).toStringAsFixed(1)} KB',
+                      style: const TextStyle(fontSize: 11))
+                  : null,
+              onTap: _pickProof,
+              trailing: _proofBytes != null
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() {
+                        _proofBytes = null;
+                        _proofName  = null;
+                      }),
+                    )
+                  : null,
             ),
           ),
           const SizedBox(height: 24),
@@ -404,8 +450,7 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                   backgroundColor: cs.primary,
                   foregroundColor: Colors.white),
               child: Text(l10n.submitOrder,
-                  style:
-                      const TextStyle(fontWeight: FontWeight.bold)),
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -432,18 +477,14 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            isRejected
-                ? l10n.orderRejectedStatus
-                : l10n.orderSubmittedTitle,
-            style:
-                const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            isRejected ? l10n.orderRejectedStatus : l10n.orderSubmittedTitle,
+            style: const TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           if (_orderRef != null)
-            SelectableText(
-              '${l10n.orderReferenceLabel}: $_orderRef',
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            ),
+            SelectableText('${l10n.orderReferenceLabel}: $_orderRef',
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
           const SizedBox(height: 8),
           Text(
             isRejected
@@ -475,10 +516,10 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
                   await LicenseService.instance.clearOrder();
                   if (!mounted) return;
                   setState(() {
-                    _orderRef = null;
+                    _orderRef      = null;
                     _rejectionNote = null;
-                    _error = null;
-                    _step = _Step.fillForm;
+                    _error         = null;
+                    _step          = _Step.fillForm;
                   });
                 },
                 child: Text(l10n.tryAgain),
@@ -500,8 +541,7 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.check_circle_outline,
-              size: 80, color: Colors.green),
+          Icon(Icons.check_circle_outline, size: 80, color: Colors.green),
           const SizedBox(height: 16),
           Text(l10n.activationSuccessTitle,
               style: const TextStyle(
@@ -528,7 +568,7 @@ class _PaymentFlowScreenState extends State<PaymentFlowScreen> {
   }
 }
 
-// ── Amount Card ───────────────────────────────────────────────────────────────
+// ── Supporting widgets ────────────────────────────────────────────────────────
 
 class _AmountCard extends StatelessWidget {
   final SubscriptionPlan plan;
@@ -550,35 +590,16 @@ class _AmountCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(plan.name(l10n.langCode),
-              style: const TextStyle(color: Colors.white70, fontSize: 13)),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${SubscriptionPlan.fmt(plan.priceSDG)} SDG',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold),
-              ),
-              if (plan.hasDiscount) ...[
-                const SizedBox(width: 10),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: Text(
-                    '${SubscriptionPlan.fmt(plan.originalPriceSDG!)} SDG',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 14,
-                      decoration: TextDecoration.lineThrough,
-                      decorationColor: Colors.white54,
-                    ),
-                  ),
-                ),
-              ],
-            ],
+              style: const TextStyle(
+                  color: Colors.white70, fontSize: 13)),
+          Text(
+            '${SubscriptionPlan.fmt(plan.priceSDG)} SDG',
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold),
           ),
-          if (plan.savingsSDG != null)
+          if (plan.hasDiscount)
             Text(
               '${l10n.saveBadge} ${SubscriptionPlan.fmt(plan.savingsSDG!)} SDG',
               style: const TextStyle(color: Colors.white70, fontSize: 12),
@@ -589,14 +610,14 @@ class _AmountCard extends StatelessWidget {
   }
 }
 
-// ── Method Tile ───────────────────────────────────────────────────────────────
-
 class _MethodTile extends StatelessWidget {
   final PaymentMethod method;
   final bool isSelected;
   final VoidCallback onTap;
   const _MethodTile(
-      {required this.method, required this.isSelected, required this.onTap});
+      {required this.method,
+      required this.isSelected,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -637,8 +658,6 @@ class _MethodTile extends StatelessWidget {
     );
   }
 }
-
-// ── Error Banner ──────────────────────────────────────────────────────────────
 
 class _ErrorBanner extends StatelessWidget {
   final String message;

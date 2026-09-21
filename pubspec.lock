@@ -129,15 +129,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.15"
-  elmahdi_api:
+  elmahdi_pay_flutter:
     dependency: "direct main"
     description:
-      path: "."
-      ref: main
-      resolved-ref: f89bdbcd2777e454cd79dcb0679bb08641efe3f9
-      url: "https://github.com/almhdy24/elmahdi_api.git"
-    source: git
-    version: "0.1.0"
+      path: "packages/elmahdi_pay_flutter"
+      relative: true
+    source: path
+    version: "1.0.0"
   fake_async:
     dependency: transitive
     description:

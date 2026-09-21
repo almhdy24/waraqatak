@@ -606,11 +606,8 @@ class AppLocalizations {
   String get licenseExpiresOn          => _t('ينتهي بتاريخ',                          'Expires on');
   String get rejectionReason           => _t('سبب الرفض',                             'Rejection Reason');
   String get noPaymentMethodsAvailable => _t('لا توجد طرق دفع متاحة حالياً',        'No payment methods available');
-  String get networkError              => _t('لا يوجد اتصال بالإنترنت',              'No internet connection');
-  String get serverError               => _t('خطأ في الخادم، أعد المحاولة لاحقاً',  'Server error, please try again');
-  String get requestTimedOut           => _t('انتهت مهلة الاتصال',                   'Request timed out');
+  String get networkError              => _t('تعذّر الاتصال بالخادم',                 'Could not connect to server');
   String get rateLimitError            => _t('الرجاء الانتظار قبل إعادة المحاولة',   'Please wait before retrying');
-  String get plansLoadError            => _t('تعذّر تحميل الخطط، تحقق من الاتصال',  'Could not load plans, check connection');
 
   // ── License key restore ────────────────────────────────────────────────────
   String get haveALicenseKey       => _t('هل لديك مفتاح ترخيص؟',                       'Have a license key?');

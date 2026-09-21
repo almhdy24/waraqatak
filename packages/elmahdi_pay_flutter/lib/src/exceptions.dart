@@ -53,6 +53,13 @@ class ElmahdiPayValidationException extends ElmahdiPayApiException {
   }) : super(statusCode: 422, message: message, errors: errors);
 }
 
+/// Thrown for 409 responses — license already activated on another device.
+class ElmahdiPayAlreadyActivatedException extends ElmahdiPayApiException {
+  const ElmahdiPayAlreadyActivatedException({
+    String message = 'License already activated on another device',
+  }) : super(statusCode: 409, message: message);
+}
+
 class ElmahdiPayRateLimitException extends ElmahdiPayApiException {
   const ElmahdiPayRateLimitException({
     String message = 'Rate limit exceeded — try again later',

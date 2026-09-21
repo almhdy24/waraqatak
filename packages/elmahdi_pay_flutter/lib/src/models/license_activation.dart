@@ -1,75 +1,65 @@
 import 'enums.dart';
 
+/// Simplified activation record returned by the admin activations endpoint.
 class LicenseActivation {
   final int id;
-  final int licenseId;
   final String deviceId;
   final String? deviceLabel;
   final ActivationStatus status;
   final DateTime activatedAt;
   final DateTime lastSeenAt;
-  final DateTime? deactivatedAt;
 
   const LicenseActivation({
     required this.id,
-    required this.licenseId,
     required this.deviceId,
     this.deviceLabel,
     required this.status,
     required this.activatedAt,
     required this.lastSeenAt,
-    this.deactivatedAt,
   });
 
   factory LicenseActivation.fromJson(Map<String, dynamic> json) =>
       LicenseActivation(
         id: int.parse(json['id'].toString()),
-        licenseId: int.parse(json['license_id'].toString()),
         deviceId: json['device_id'] as String,
         deviceLabel: json['device_label'] as String?,
         status: ActivationStatus.fromString(json['status'] as String),
         activatedAt: _dt(json['activated_at'] as String),
         lastSeenAt: _dt(json['last_seen_at'] as String),
-        deactivatedAt: _dtOpt(json['deactivated_at'] as String?),
       );
 }
 
+/// Request body for POST /api/v1/pay/licenses/activate.
 class ActivateLicenseRequest {
   final String licenseKey;
-  final String deviceId;
-  final String? deviceLabel;
+
+  /// Machine identifier — stored as [machine_id] on the server.
+  final String machineId;
 
   const ActivateLicenseRequest({
     required this.licenseKey,
-    required this.deviceId,
-    this.deviceLabel,
+    required this.machineId,
   });
 
   Map<String, dynamic> toJson() => {
         'license_key': licenseKey,
-        'device_id': deviceId,
-        if (deviceLabel != null) 'device_label': deviceLabel,
+        'machine_id': machineId,
       };
 }
 
+/// Successful response from POST /api/v1/pay/licenses/activate.
+///
+/// The [activationToken] is a signed JWT-style token the app can persist for
+/// offline verification.
 class ActivateLicenseResult {
-  final LicenseActivation activation;
+  final String activationToken;
 
-  /// True when this device was already activated — [LicenseActivation.lastSeenAt] was updated.
-  final bool reactivated;
-
-  const ActivateLicenseResult({
-    required this.activation,
-    required this.reactivated,
-  });
+  const ActivateLicenseResult({required this.activationToken});
 
   factory ActivateLicenseResult.fromJson(Map<String, dynamic> json) =>
       ActivateLicenseResult(
-        activation:
-            LicenseActivation.fromJson(json['data'] as Map<String, dynamic>),
-        reactivated: json['reactivated'] as bool? ?? false,
+        activationToken: json['activation_token'] as String,
       );
 }
 
 DateTime _dt(String s) => DateTime.parse(s.replaceAll(' ', 'T'));
-DateTime? _dtOpt(String? s) => s == null ? null : _dt(s);

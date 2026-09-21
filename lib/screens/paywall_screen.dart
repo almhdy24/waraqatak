@@ -1,4 +1,4 @@
-import 'package:elmahdi_api/elmahdi_api.dart';
+import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/material.dart';
 
 import '../localization/app_localizations.dart';
@@ -52,19 +52,14 @@ class _PaywallScreenState extends State<PaywallScreen> {
             await SubscriptionService.activateAndStore(license, deviceId);
             if (!mounted) return;
             Navigator.pop(context, true);
-          } on ApiException catch (e) {
+          } on ElmahdiPayForbiddenException catch (e) {
             if (!mounted) return;
             final l = AppLocalizations.of(context);
-            final String msg;
-            if (e.isForbidden) {
-              final maxDevices = e.body?['max_devices'] as int?;
-              final activeDevices = e.body?['active'] as int?;
-              msg = maxDevices != null
-                  ? '${l.deviceLimitStatus}: ${activeDevices ?? '?'}/$maxDevices'
-                  : l.licenseRevokedStatus;
-            } else {
-              msg = l.serverError;
-            }
+            // Device limit is recoverable — keep the order reference so the
+            // user can retry after admin deactivates a device.
+            final msg = e.maxDevices != null
+                ? '${l.deviceLimitStatus}: ${e.activeDevices}/${e.maxDevices}'
+                : l.licenseRevokedStatus;
             _showError(msg);
           } catch (_) {
             if (!mounted) return;

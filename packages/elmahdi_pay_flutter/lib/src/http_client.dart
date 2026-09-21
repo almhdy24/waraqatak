@@ -113,6 +113,8 @@ class HttpClient {
         );
       case 404:
         throw ElmahdiPayNotFoundException(message: message);
+      case 409:
+        throw ElmahdiPayAlreadyActivatedException(message: message);
       case 422:
         throw ElmahdiPayValidationException(message: message, errors: errors);
       case 429:

@@ -48,11 +48,9 @@ dependencies:
   # Secure storage — device ID, trial start, license key
   flutter_secure_storage: ^11.2.0
 
-  # Elmahdi API — shared SDK for subscription, license, products, and app config
-  elmahdi_api:
-    git:
-      url: https://github.com/almhdy24/elmahdi_api.git
-      ref: main
+  # Elmahdi Pay — subscription & license SDK
+  elmahdi_pay_flutter:
+    path: packages/elmahdi_pay_flutter
 
 dependency_overrides:
   # path_provider_android 2.3.x introduced a JNI/NDK-28 dependency that

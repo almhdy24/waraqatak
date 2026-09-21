@@ -1,28 +1,19 @@
 import 'package:intl/intl.dart';
 
-/// UI plan model populated from server Products→Plans→Prices.
-///
-/// [priceSDG] is the server price — the real final amount the user pays.
-/// [originalPriceSDG] is a client-computed marketing reference price for
-/// display only; it is never sent to the backend.
-/// [priceId] is the server Price.id required for order creation.
+/// Central subscription plan catalogue — change prices here only.
 class SubscriptionPlan {
   final String id;
   final String nameAr;
   final String nameEn;
 
-  /// Server price in SDG — the real checkout amount. Never modify.
+  /// Current promotional price in SDG.
   final double priceSDG;
 
-  /// Client-computed marketing reference price for display only.
-  /// Calculated by [MarketingPricing]. NEVER sent to the backend.
+  /// Reference (original) price in SDG — shown struck-through when set.
   final double? originalPriceSDG;
 
   final int durationDays;
   final bool isMostPopular;
-
-  /// Server Price.id — required for [SubscriptionService.createOrder].
-  final int? priceId;
 
   const SubscriptionPlan({
     required this.id,
@@ -32,7 +23,6 @@ class SubscriptionPlan {
     this.originalPriceSDG,
     required this.durationDays,
     this.isMostPopular = false,
-    this.priceId,
   });
 
   bool get hasDiscount =>
@@ -46,17 +36,43 @@ class SubscriptionPlan {
 
   String name(String langCode) => langCode == 'ar' ? nameAr : nameEn;
 
-  SubscriptionPlan copyWith({bool? isMostPopular}) => SubscriptionPlan(
-        id: id,
-        nameAr: nameAr,
-        nameEn: nameEn,
-        priceSDG: priceSDG,
-        originalPriceSDG: originalPriceSDG,
-        durationDays: durationDays,
-        isMostPopular: isMostPopular ?? this.isMostPopular,
-        priceId: priceId,
-      );
-
   static final _fmt = NumberFormat('#,###');
   static String fmt(double v) => _fmt.format(v);
+
+  // ── Catalogue ──────────────────────────────────────────────────────────────
+
+  static const List<SubscriptionPlan> plans = [
+    SubscriptionPlan(
+      id: 'monthly',
+      nameAr: 'شهري',
+      nameEn: 'Monthly',
+      priceSDG: 20000,
+      durationDays: 30,
+    ),
+    SubscriptionPlan(
+      id: 'quarterly',
+      nameAr: '٣ أشهر',
+      nameEn: '3 Months',
+      priceSDG: 55000,
+      originalPriceSDG: 60000,
+      durationDays: 90,
+    ),
+    SubscriptionPlan(
+      id: 'biannual',
+      nameAr: '٦ أشهر',
+      nameEn: '6 Months',
+      priceSDG: 100000,
+      originalPriceSDG: 120000,
+      durationDays: 180,
+    ),
+    SubscriptionPlan(
+      id: 'annual',
+      nameAr: 'سنوي',
+      nameEn: 'Annual',
+      priceSDG: 180000,
+      originalPriceSDG: 240000,
+      durationDays: 365,
+      isMostPopular: true,
+    ),
+  ];
 }
