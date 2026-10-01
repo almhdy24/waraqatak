@@ -74,6 +74,8 @@ android/.kotlin/
 
 *.jks
 *.keystore
+*.pem
+key.properties
 android/key.properties
 upload-keystore.base64
 waraqatak-upload-cert.pem
