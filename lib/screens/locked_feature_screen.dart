@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../localization/app_localizations.dart';
 import 'activation_screen.dart';
+import 'transparency_screen.dart';
 
 /// Neutral locked screen shown when a Pro feature is accessed without an
 /// active trial or valid activation. Contains only approved copy — no
@@ -91,6 +92,16 @@ class LockedFeatureScreen extends StatelessWidget {
                   icon: const Icon(Icons.vpn_key_outlined),
                   label: Text(l10n.enterActivationKeyAction),
                 ),
+              ),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const TransparencyScreen()),
+                ),
+                icon: const Icon(Icons.info_outline, size: 18),
+                label: Text(l10n.seeFreeVsPro),
               ),
               const SizedBox(height: 16),
             ],

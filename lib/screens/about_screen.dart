@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../utils/url_launcher_utils.dart';
+import 'transparency_screen.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -140,6 +141,8 @@ class AboutScreen extends StatelessWidget {
               const SizedBox(height: 12),
               _buildDeveloperSection(context, l10n),
               const SizedBox(height: 30),
+              _buildTransparencySection(context, l10n),
+              const SizedBox(height: 12),
               _buildPrivacySection(context, l10n),
               const SizedBox(height: 12),
               _buildLicensesSection(context, l10n),
@@ -465,6 +468,62 @@ class AboutScreen extends StatelessWidget {
               UrlLauncherUtils.launch(context, AppConstants.waraqatakProductUrl),
         ),
       ],
+    );
+  }
+
+  // ─── Transparency link (free vs Pro) ───────────────
+  Widget _buildTransparencySection(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Material(
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TransparencyScreen()),
+        ),
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: colors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.transparencyTitle,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      l10n.seeFreeVsPro,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Directionality.of(context) == TextDirection.rtl
+                    ? Icons.chevron_left_rounded
+                    : Icons.chevron_right_rounded,
+                color: colors.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

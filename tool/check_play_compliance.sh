@@ -73,6 +73,7 @@ ACQUISITION_SCAN=(
   "lib/screens/locked_feature_screen.dart"
   "lib/screens/activation_screen.dart"
   "lib/screens/license_screen.dart"
+  "lib/screens/transparency_screen.dart"
   "lib/widgets/pro_upgrade_sheet.dart"
   "lib/localization/app_localizations.dart"
 )
@@ -140,6 +141,23 @@ for target in "${ACQUISITION_SCAN[@]}"; do
       -e 'get removeKeyConfirmBody ' \
       -e 'get removeKeyConfirmAction ' \
       -e 'get keyRemovedSnack ' \
+      -e 'get transparencyTitle ' \
+      -e 'get transparencyIntro ' \
+      -e 'get transparencyFreeHeader ' \
+      -e 'get transparencyProHeader ' \
+      -e 'get seeFreeVsPro ' \
+      -e 'get featureInvoices ' \
+      -e 'get featureQuotations ' \
+      -e 'get featureVouchers ' \
+      -e 'get featureCustomDocuments ' \
+      -e 'get featureCustomers ' \
+      -e 'get featureProducts ' \
+      -e 'get featureBarcode ' \
+      -e 'get featureBasicReports ' \
+      -e 'get featureBackupRestore ' \
+      -e 'get featurePurchases ' \
+      -e 'get featureInventory ' \
+      -e 'get featureAdvancedReports ' \
       -e 'get enterActivationKey ' \
       -e 'get enterActivationKeyAction ' \
       -e 'get activationKeyHint ' \

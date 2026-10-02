@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/license_service.dart';
 import 'activation_screen.dart';
+import 'transparency_screen.dart';
 
 /// Settings → License.
 ///
@@ -178,6 +179,24 @@ class _LicenseScreenState extends State<LicenseScreen> {
                     icon: const Icon(Icons.vpn_key_outlined),
                     label: Text(l10n.enterOrChangeKey),
                     style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const TransparencyScreen()),
+                    ),
+                    icon: const Icon(Icons.info_outline),
+                    label: Text(l10n.seeFreeVsPro),
+                    style: OutlinedButton.styleFrom(
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),

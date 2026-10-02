@@ -655,6 +655,47 @@ class AppLocalizations {
   String get keyRemovedSnack =>
       _t('تمت إزالة المفتاح من هذا الجهاز.', 'Key removed from this device.');
 
+  // ── Transparency screen (free vs Pro) ─────────────────────────────────────
+  String get transparencyTitle =>
+      _t('ما المتاح مجاناً وما يتطلب التفعيل', 'What is free and what requires activation');
+  String get transparencyIntro => _t(
+        'كل ما يلي يعمل دون إنترنت ودون أي عملية شراء داخل التطبيق. تحتاج ميزات محددة إلى مفتاح تفعيل.',
+        'Everything below works offline with no in-app purchase. A few specific features require an activation key.',
+      );
+  String get transparencyFreeHeader =>
+      _t('متاحة دائماً', 'Always available');
+  String get transparencyProHeader =>
+      _t('تتطلب مفتاح تفعيل', 'Require an activation key');
+  String get seeFreeVsPro =>
+      _t('ما المتاح مجاناً؟', 'See what is free vs Pro');
+
+  // Feature labels — reused by the transparency screen. Mapped from the
+  // `Feature` enum in `lib/services/feature_access.dart`.
+  String get featureInvoices        =>
+      _t('الفواتير وعروض الأسعار والمستندات', 'Invoices, quotations, and documents');
+  String get featureQuotations      =>
+      _t('عروض الأسعار', 'Quotations');
+  String get featureVouchers        =>
+      _t('سندات القبض والصرف', 'Receipt and expense vouchers');
+  String get featureCustomDocuments =>
+      _t('المستندات المخصصة', 'Custom documents');
+  String get featureCustomers       =>
+      _t('العملاء وأرصدتهم', 'Customers and balances');
+  String get featureProducts        =>
+      _t('المنتجات والأسعار', 'Products and prices');
+  String get featureBarcode         =>
+      _t('ماسح الباركود', 'Barcode scanner');
+  String get featureBasicReports    =>
+      _t('التقارير الأساسية', 'Basic reports');
+  String get featureBackupRestore   =>
+      _t('النسخ الاحتياطي والاستعادة', 'Backup and restore');
+  String get featurePurchases       =>
+      _t('أوامر الشراء والموردون', 'Purchase orders and suppliers');
+  String get featureInventory       =>
+      _t('إدارة المخزون المتقدمة', 'Advanced inventory management');
+  String get featureAdvancedReports =>
+      _t('التقارير التفصيلية الكاملة', 'Full detailed reports');
+
   // ========== FREE / PRO GATING ==========
   String get proBadgeLabel           => _t('احترافي',                                   'Pro');
   String get proFeatureTitle         => _t('ميزة احترافية',                             'Pro Feature');
