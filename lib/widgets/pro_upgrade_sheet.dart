@@ -97,8 +97,14 @@ class ProUpgradeSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              l10n.proFeatureUnlockBody,
+              l10n.proFeaturesActivation,
               style: const TextStyle(fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.getActivationKeyInfo,
+              style: TextStyle(
+                  fontSize: 13, color: Colors.grey.shade700, height: 1.4),
             ),
             const SizedBox(height: 12),
             _bullet(context, l10n.proIncludesPurchases),
@@ -126,16 +132,10 @@ class ProUpgradeSheet extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.manualRenewalNote,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-              textAlign: TextAlign.center,
-            ),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text(l10n.proUpgradeAction),
+              child: Text(l10n.enterActivationKeyAction),
             ),
             const SizedBox(height: 8),
             TextButton(

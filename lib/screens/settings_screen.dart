@@ -8,9 +8,9 @@ import '../utils/print_settings.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
+import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
-import 'subscription_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -44,16 +44,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final s = _entitlement;
     if (s == null) return '';
 
-    // Order state takes precedence in the label.
-    if (s.orderStatus == PendingOrderStatus.pending) return l10n.orderPendingStatus;
-    if (s.orderStatus == PendingOrderStatus.rejected) return l10n.orderRejectedStatus;
-
     return switch (s.status) {
       EntitlementStatus.trialActive =>
           '${s.trialDaysRemaining} ${l10n.daysLeftInTrial}',
       EntitlementStatus.licensed => s.licenseExpiresAt != null
           ? '${l10n.licenseExpiresOn} ${s.licenseExpiresAt!.toLocal().toString().split(' ').first}'
-          : l10n.licensedStatus,
+          : l10n.activatedStatus,
       EntitlementStatus.trialExpired   => l10n.trialExpiredStatus,
       EntitlementStatus.licenseExpired => l10n.licenseExpiredStatus,
       EntitlementStatus.licenseRevoked => l10n.licenseRevokedStatus,
@@ -72,16 +68,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
-          // ── Subscription ────────────────────────────────────────────────
+          // ── Activation ──────────────────────────────────────────────────
           ListTile(
             leading: const Icon(Icons.workspace_premium_outlined),
-            title: Text(l10n.subscription),
+            title: Text(l10n.licenseScreenTitle),
             subtitle: Text(_entitlementLabel(l10n)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                MaterialPageRoute(builder: (_) => const LicenseScreen()),
               );
               _loadEntitlement();
             },
@@ -135,6 +131,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.save_outlined),
             title: Text(l10n.saveBackupTo),
             onTap: () async {
+              final proceed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text(l10n.backupUnencryptedTitle),
+                  content: Text(l10n.backupUnencryptedWarning),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: Text(l10n.cancel),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: Text(l10n.continueAction),
+                    ),
+                  ],
+                ),
+              );
+              if (proceed != true) return;
               try {
                 final saved = await BackupService.createBackupUserChosen();
                 if (context.mounted && saved) {

@@ -10,6 +10,7 @@ import '../models/entitlement.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
+import 'activation_screen.dart';
 import 'business_setup_screen.dart';
 import 'custom_document_screen.dart';
 import 'document_detail_screen.dart';
@@ -18,8 +19,6 @@ import 'inventory_screen.dart';
 import 'purchase_screen.dart';
 import 'quotation_screen.dart';
 import 'reports_screen.dart';
-import 'paywall_screen.dart';
-import 'subscription_screen.dart';
 import 'voucher_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -90,11 +89,11 @@ class HomeScreenState extends State<HomeScreen> {
     if (mounted) _load();
   }
 
-  /// Open the subscription screen and refresh entitlement on return.
-  Future<void> _openSubscriptionScreen() async {
+  /// Open the activation screen and refresh entitlement on return.
+  Future<void> _openActivationScreen() async {
     await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+      MaterialPageRoute(builder: (_) => const ActivationScreen()),
     );
     if (!mounted) return;
     LicenseService.instance.invalidateCache();
@@ -102,7 +101,7 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   /// Gate a Pro feature. Shows [ProUpgradeSheet] when access is denied,
-  /// then routes to subscription screen if the user chooses to upgrade.
+  /// then routes to activation screen if the user chooses to enter a key.
   Future<void> _openProGated(
       Feature feature, Future<void> Function() open) async {
     if (FeatureAccess.canAccess(feature, _entitlement)) {
@@ -112,7 +111,7 @@ class HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
     final result = await ProUpgradeSheet.show(context, feature: feature);
     if (result == true && mounted) {
-      await _openSubscriptionScreen();
+      await _openActivationScreen();
     }
   }
 
@@ -512,76 +511,47 @@ class HomeScreenState extends State<HomeScreen> {
     String? actionLabel;
     VoidCallback? onAction;
 
-    // ── Order state ──────────────────────────────────────────────────────────
-    if (e.orderStatus == PendingOrderStatus.pending) {
-      message = l10n.orderPendingStatus;
-      bgColor = Colors.blue.shade50;
-      textColor = Colors.blue.shade800;
-      actionLabel = l10n.checkOrderStatus;
-      onAction = () => Navigator.push<bool>(
-            context,
-            MaterialPageRoute(builder: (_) => PaywallScreen(state: e)),
-          ).then((_) {
-            LicenseService.instance.invalidateCache();
-            _load();
-          });
-    } else if (e.orderStatus == PendingOrderStatus.rejected) {
-      message = l10n.orderRejectedStatus;
-      bgColor = Colors.orange.shade50;
-      textColor = Colors.orange.shade800;
-      isWarning = true;
-      actionLabel = l10n.tryAgain;
-      onAction = () async {
-        await LicenseService.instance.clearOrder();
-        if (!mounted) return;
-        await _openSubscriptionScreen();
-      };
-    }
-
-    // ── Subscription state ───────────────────────────────────────────────────
-    if (message == null) {
-      switch (e.status) {
-        case EntitlementStatus.trialActive:
-          isWarning = e.trialDaysRemaining <= 5;
-          message = '${e.trialDaysRemaining} ${l10n.daysLeftInTrial}';
-          bgColor = isWarning ? Colors.amber.shade100 : Colors.green.shade50;
-          textColor =
-              isWarning ? Colors.amber.shade900 : Colors.green.shade800;
-          actionLabel = l10n.subscribeNow;
-          onAction = _openSubscriptionScreen;
-        case EntitlementStatus.licensed:
-          if (e.licenseExpiresAt != null) {
-            final daysLeft =
-                e.licenseExpiresAt!.difference(DateTime.now()).inDays;
-            if (daysLeft <= 14) {
-              message =
-                  '${l10n.licenseExpiresOn} ${e.licenseExpiresAt!.toLocal().toString().split(' ').first}';
-              bgColor = Colors.amber.shade100;
-              textColor = Colors.amber.shade900;
-              isWarning = true;
-              actionLabel = l10n.renewNow;
-              onAction = _openSubscriptionScreen;
-            }
+    switch (e.status) {
+      case EntitlementStatus.trialActive:
+        isWarning = e.trialDaysRemaining <= 5;
+        message = '${e.trialDaysRemaining} ${l10n.daysLeftInTrial}';
+        bgColor = isWarning ? Colors.amber.shade100 : Colors.green.shade50;
+        textColor =
+            isWarning ? Colors.amber.shade900 : Colors.green.shade800;
+        actionLabel = l10n.enterActivationKeyAction;
+        onAction = _openActivationScreen;
+      case EntitlementStatus.licensed:
+        if (e.licenseExpiresAt != null) {
+          final daysLeft =
+              e.licenseExpiresAt!.difference(DateTime.now()).inDays;
+          if (daysLeft <= 14) {
+            message =
+                '${l10n.licenseExpiresOn} ${e.licenseExpiresAt!.toLocal().toString().split(' ').first}';
+            bgColor = Colors.amber.shade100;
+            textColor = Colors.amber.shade900;
+            isWarning = true;
+            actionLabel = l10n.enterActivationKeyAction;
+            onAction = _openActivationScreen;
           }
-        case EntitlementStatus.trialExpired:
-        case EntitlementStatus.licenseExpired:
-          if (_freeModeBannerDismissed) return null;
-          dismissible = true;
-          message = l10n.freeModeBannerMsg;
-          bgColor = const Color(0xFFEEF2FF);
-          textColor = const Color(0xFF3730A3);
-          actionLabel = l10n.subscribeNow;
-          onAction = _openSubscriptionScreen;
-        case EntitlementStatus.licenseRevoked:
-          if (_freeModeBannerDismissed) return null;
-          dismissible = true;
-          message = l10n.freeModeBannerMsg;
-          bgColor = Colors.orange.shade50;
-          textColor = Colors.orange.shade800;
-          isWarning = true;
-          actionLabel = l10n.contactUs;
-          onAction = _openSubscriptionScreen;
-      }
+        }
+      case EntitlementStatus.trialExpired:
+      case EntitlementStatus.licenseExpired:
+        if (_freeModeBannerDismissed) return null;
+        dismissible = true;
+        message = l10n.freeModeBannerMsg;
+        bgColor = const Color(0xFFEEF2FF);
+        textColor = const Color(0xFF3730A3);
+        actionLabel = l10n.enterActivationKeyAction;
+        onAction = _openActivationScreen;
+      case EntitlementStatus.licenseRevoked:
+        if (_freeModeBannerDismissed) return null;
+        dismissible = true;
+        message = l10n.freeModeBannerMsg;
+        bgColor = Colors.orange.shade50;
+        textColor = Colors.orange.shade800;
+        isWarning = true;
+        actionLabel = l10n.enterActivationKeyAction;
+        onAction = _openActivationScreen;
     }
 
     if (message == null) return null;
