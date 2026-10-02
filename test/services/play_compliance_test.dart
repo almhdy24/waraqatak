@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:warqatek/core/constants/app_constants.dart';
 import 'package:warqatek/localization/app_localizations.dart';
 
 /// Guards that user-facing Pro / activation copy never leaks:
@@ -170,6 +171,49 @@ void main() {
       expect(en.backupUnencryptedTitle, isNotEmpty);
       expect(en.backupUnencryptedWarning.toLowerCase(),
           contains('unencrypted'));
+    });
+  });
+
+  group('URL allowlist — AppConstants outbound links', () {
+    // The ONLY outbound URLs the app is permitted to open. The shell guard
+    // (`tool/check_play_compliance.sh` → Pass 3) scans the reviewer-visible
+    // screens for the same allowlist; this test anchors the three constants
+    // and makes any new URL constant a diff that will be noticed in review.
+    const allowed = {
+      'https://almhdy24.com/products/waraqatak/privacy.html',
+      'https://almhdy24.com/products/waraqatak/terms.html',
+      'https://almhdy24.com/products/waraqatak/delete.html',
+    };
+
+    test('three product-site URLs match the allowlist exactly', () {
+      expect(allowed, contains(AppConstants.privacyPolicyUrl));
+      expect(allowed, contains(AppConstants.termsUrl));
+      expect(allowed, contains(AppConstants.deleteDataUrl));
+    });
+
+    test('each URL is https and lives on almhdy24.com/products/waraqatak/',
+        () {
+      for (final url in [
+        AppConstants.privacyPolicyUrl,
+        AppConstants.termsUrl,
+        AppConstants.deleteDataUrl,
+      ]) {
+        expect(url.startsWith('https://almhdy24.com/products/waraqatak/'),
+            isTrue, reason: '$url does not match the product-site prefix');
+        expect(url.endsWith('.html'), isTrue,
+            reason: '$url does not end with .html');
+      }
+    });
+
+    test('support channel is email-only — no whatsapp / phone / url', () {
+      // AppConstants intentionally exposes one outbound channel for user
+      // contact: a plain email address. Any url-scheme or phone-number
+      // constant would mean the app is leaking an acquisition path.
+      expect(AppConstants.supportEmail, contains('@'));
+      expect(AppConstants.supportEmail.toLowerCase().contains('http'),
+          isFalse);
+      expect(AppConstants.supportEmail.contains('wa.me'), isFalse);
+      expect(AppConstants.supportEmail.contains('+'), isFalse);
     });
   });
 
