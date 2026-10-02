@@ -108,12 +108,9 @@ class _AccountingScreenState extends State<AccountingScreen> {
 
     return Column(
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ReportDateFilter(
-            range: _range,
-            onChanged: (r) => setState(() => _range = r),
-          ),
+        ReportDateFilter(
+          range: _range,
+          onChanged: (r) => setState(() => _range = r),
         ),
         if (book.currencies.length > 1)
           Padding(
