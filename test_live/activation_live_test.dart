@@ -1,6 +1,10 @@
 // LIVE end-to-end test against api.almhdy24.com. Not part of `flutter test`
 // (lives outside test/). Run with:
 //   LIVE_LICENSE_ID=1 ADMIN_TOKEN=... flutter test test_live/
+//
+// The print() calls are the test's step-by-step report for the person
+// running it manually.
+// ignore_for_file: avoid_print
 import 'dart:convert';
 import 'dart:io';
 
