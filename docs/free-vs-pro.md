@@ -44,7 +44,7 @@ Require an active trial or a stored activation key.
 |--------------------|-----------------------------------------------------|
 | `purchases`        | Purchase orders, suppliers, and purchase history    |
 | `inventory`        | Stock movements, reorder points, warehouse ledger   |
-| `advancedReports`  | Detailed profit, aging, and reconciliation reports  |
+| `advancedReports`  | Purchases/supplier/inventory/product reports and accounting statements (income statement, balance sheet, trial balance, account ledger) |
 
 ## Entitlement outcomes
 
@@ -77,8 +77,10 @@ future PR adding one of these must also update `docs/play-compliance.md`:
 
 - In-app purchase, in-app price, in-app ordering, or any Google Play
   Billing SKU.
-- Links to a pricing page, a WhatsApp number, a Facebook page, or a
-  "contact to buy" page.
+- Links to a pricing page or a "contact to buy" page. Support links
+  (email, WhatsApp, Facebook, website) exist only on the About screen,
+  describe help and contact only, and never mention licences or keys (see
+  "Support surface" in `docs/play-compliance.md`).
 - Phone numbers for sales.
 - "Buy Pro", "subscribe", "pay now", "checkout" wording in any
   reviewer-visible screen (see Pass 1 of the compliance guard).
