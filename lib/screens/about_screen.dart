@@ -7,17 +7,14 @@ import '../localization/app_localizations.dart';
 import '../utils/url_launcher_utils.dart';
 import 'transparency_screen.dart';
 
+/// About screen.
+///
+/// Deliberately minimal outbound surface: one email tile, three
+/// developer-site links (privacy, terms, delete-data), and the Flutter
+/// `showLicensePage`. No prices, no WhatsApp, no Facebook, no
+/// acquisition hints, no activation-key wording.
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
-
-  Future<void> _launchWhatsApp(BuildContext context) async {
-    final l10n = AppLocalizations.of(context);
-    await UrlLauncherUtils.launch(
-      context,
-      'https://wa.me/${AppConstants.whatsappNumber}'
-      '?text=${Uri.encodeComponent(l10n.contactMessage)}',
-    );
-  }
 
   Future<void> _launchEmail(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
@@ -27,14 +24,6 @@ class AboutScreen extends StatelessWidget {
       queryParameters: {'subject': l10n.contactEmailSubject},
     );
     await UrlLauncherUtils.launchUri(context, uri);
-  }
-
-  Future<void> _launchFacebook(BuildContext context) async {
-    await UrlLauncherUtils.launch(context, AppConstants.facebookPage);
-  }
-
-  Future<void> _launchPrivacyPolicy(BuildContext context) async {
-    await UrlLauncherUtils.launch(context, AppConstants.privacyPolicyUrl);
   }
 
   @override
@@ -76,8 +65,10 @@ class AboutScreen extends StatelessWidget {
                   _Feature(Icons.description_outlined, l10n.customDocument),
                   _Feature(Icons.picture_as_pdf_outlined, l10n.sharePdf),
                   _Feature(Icons.sync_alt_rounded, l10n.documentStatusTracking),
-                  _Feature(Icons.account_balance_wallet_outlined, l10n.paymentTracking),
-                  _Feature(Icons.published_with_changes_rounded, l10n.convertToInvoice),
+                  _Feature(Icons.account_balance_wallet_outlined,
+                      l10n.paymentTracking),
+                  _Feature(Icons.published_with_changes_rounded,
+                      l10n.convertToInvoice),
                 ],
                 color: const Color(0xFF3B5BDB),
               ),
@@ -132,18 +123,34 @@ class AboutScreen extends StatelessWidget {
               const SizedBox(height: 12),
               _buildSupportSection(context, l10n),
               const SizedBox(height: 30),
-              _buildSectionHeader(
-                context,
-                icon: Icons.code_rounded,
-                title: l10n.developer,
-                color: const Color(0xFF6741D9),
-              ),
-              const SizedBox(height: 12),
-              _buildDeveloperSection(context, l10n),
-              const SizedBox(height: 30),
               _buildTransparencySection(context, l10n),
               const SizedBox(height: 12),
-              _buildPrivacySection(context, l10n),
+              _buildLinkTile(
+                context,
+                icon: Icons.privacy_tip_outlined,
+                title: l10n.privacyPolicy,
+                subtitle: l10n.privacySettingsDescription,
+                onTap: () => UrlLauncherUtils.launch(
+                    context, AppConstants.privacyPolicyUrl),
+              ),
+              const SizedBox(height: 12),
+              _buildLinkTile(
+                context,
+                icon: Icons.gavel_outlined,
+                title: l10n.termsOfUse,
+                subtitle: l10n.termsDescription,
+                onTap: () =>
+                    UrlLauncherUtils.launch(context, AppConstants.termsUrl),
+              ),
+              const SizedBox(height: 12),
+              _buildLinkTile(
+                context,
+                icon: Icons.delete_sweep_outlined,
+                title: l10n.deleteAccountData,
+                subtitle: l10n.deleteAccountDataDescription,
+                onTap: () => UrlLauncherUtils.launch(
+                    context, AppConstants.deleteDataUrl),
+              ),
               const SizedBox(height: 12),
               _buildLicensesSection(context, l10n),
               const SizedBox(height: 32),
@@ -161,28 +168,33 @@ class AboutScreen extends StatelessWidget {
     final colors = theme.colorScheme;
     return Column(
       children: [
-        Container(
-          width: 110,
-          height: 110,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [colors.primary, colors.tertiary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: colors.primary.withValues(alpha: 0.35),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+        Semantics(
+          label: l10n.appLogoLabel,
+          image: true,
+          child: Container(
+            width: 110,
+            height: 110,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [colors.primary, colors.tertiary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ],
-          ),
-          padding: const EdgeInsets.all(22),
-          child: SvgPicture.asset(
-            'assets/logo.svg',
-            colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.primary.withValues(alpha: 0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(22),
+            child: SvgPicture.asset(
+              'assets/logo.svg',
+              colorFilter:
+                  const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -245,7 +257,8 @@ class AboutScreen extends StatelessWidget {
         children: [
           Text(
             l10n.about,
-            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
           Text(
@@ -284,7 +297,8 @@ class AboutScreen extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
       ],
@@ -306,7 +320,11 @@ class AboutScreen extends StatelessWidget {
           for (int i = 0; i < features.length; i++) ...[
             _featureRow(context, features[i], color: color),
             if (i < features.length - 1)
-              Divider(height: 1, indent: 62, endIndent: 16, color: colors.outlineVariant),
+              Divider(
+                  height: 1,
+                  indent: 62,
+                  endIndent: 16,
+                  color: colors.outlineVariant),
           ],
         ],
       ),
@@ -333,7 +351,8 @@ class AboutScreen extends StatelessWidget {
           Expanded(
             child: Text(
               feature.title,
-              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           Icon(Icons.check_circle_rounded, size: 19, color: c),
@@ -342,69 +361,72 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
-  // ─── Support Section ────────────────────────────────
+  // ─── Support Section (email only) ───────────────────
   Widget _buildSupportSection(BuildContext context, AppLocalizations l10n) {
-    return Column(
-      children: [
-        _supportTile(
-          context: context, // ✅ fixed: named argument
-          icon: Icons.chat_rounded,
-          title: l10n.contactWhatsApp,
-          subtitle: AppConstants.whatsappNumber,
-          onTap: () => _launchWhatsApp(context),
-        ),
-        const SizedBox(height: 10),
-        _supportTile(
-          context: context, // ✅ fixed
-          icon: Icons.email_outlined,
-          title: l10n.contactEmail,
-          subtitle: AppConstants.supportEmail,
-          onTap: () => _launchEmail(context),
-        ),
-        const SizedBox(height: 10),
-        _supportTile(
-          context: context, // ✅ fixed
-          icon: Icons.facebook_rounded,
-          title: l10n.facebook,
-          subtitle: null,
-          onTap: () => _launchFacebook(context),
-        ),
-      ],
+    return _buildLinkTile(
+      context,
+      icon: Icons.email_outlined,
+      title: l10n.contactEmail,
+      subtitle: AppConstants.supportEmail,
+      onTap: () => _launchEmail(context),
     );
   }
 
-  Widget _supportTile({
-    required BuildContext context,
+  // ─── Transparency link (free vs Pro) ───────────────
+  Widget _buildTransparencySection(
+      BuildContext context, AppLocalizations l10n) {
+    return _buildLinkTile(
+      context,
+      icon: Icons.info_outline,
+      title: l10n.transparencyTitle,
+      subtitle: l10n.seeFreeVsPro,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const TransparencyScreen()),
+      ),
+    );
+  }
+
+  // ─── Open-source licenses link ──────────────────────
+  Widget _buildLicensesSection(BuildContext context, AppLocalizations l10n) {
+    return _buildLinkTile(
+      context,
+      icon: Icons.description_outlined,
+      title: l10n.openSourceLicenses,
+      subtitle: l10n.openSourceLicensesDescription,
+      onTap: () => showLicensePage(
+        context: context,
+        applicationName: l10n.appName,
+        applicationLegalese: l10n.openSourceLicensesLegalese,
+      ),
+    );
+  }
+
+  // ─── Shared row for outbound links ──────────────────
+  Widget _buildLinkTile(
+    BuildContext context, {
     required IconData icon,
     required String title,
-    required String? subtitle,
+    required String subtitle,
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     return Material(
-      color: colors.surface,
+      color: colors.surfaceContainerLow,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: colors.outlineVariant),
           ),
           child: Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: colors.onPrimaryContainer, size: 21),
-              ),
+              Icon(icon, color: colors.primary),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -412,208 +434,12 @@ class AboutScreen extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
-                color: colors.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─── Developer Section ──────────────────────────────
-  Widget _buildDeveloperSection(BuildContext context, AppLocalizations l10n) {
-    return Column(
-      children: [
-        _supportTile(
-          context: context,
-          icon: Icons.person_rounded,
-          title: AppConstants.developerName,
-          subtitle: AppConstants.developerBrand,
-          onTap: () => UrlLauncherUtils.launch(context, AppConstants.githubUrl),
-        ),
-        const SizedBox(height: 10),
-        _supportTile(
-          context: context,
-          icon: Icons.language_rounded,
-          title: l10n.visitWebsite,
-          subtitle: AppConstants.websiteUrl,
-          onTap: () => UrlLauncherUtils.launch(context, AppConstants.websiteUrl),
-        ),
-        const SizedBox(height: 10),
-        _supportTile(
-          context: context,
-          icon: Icons.open_in_new_rounded,
-          title: l10n.waraqatakProductPage,
-          subtitle: AppConstants.waraqatakProductUrl,
-          onTap: () =>
-              UrlLauncherUtils.launch(context, AppConstants.waraqatakProductUrl),
-        ),
-      ],
-    );
-  }
-
-  // ─── Transparency link (free vs Pro) ───────────────
-  Widget _buildTransparencySection(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Material(
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const TransparencyScreen()),
-        ),
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.info_outline, color: colors.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.transparencyTitle,
                       style: theme.textTheme.titleSmall
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      l10n.seeFreeVsPro,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
-                color: colors.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─── Privacy Section (Link) ─────────────────────────
-  Widget _buildPrivacySection(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Material(
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: () => _launchPrivacyPolicy(context),
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.privacy_tip_outlined, color: colors.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.privacyPolicy,
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      l10n.privacySettingsDescription,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Directionality.of(context) == TextDirection.rtl
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
-                color: colors.onSurfaceVariant,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─── Open-source licenses link ──────────────────────
-  Widget _buildLicensesSection(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    return Material(
-      color: colors.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: () => showLicensePage(
-          context: context,
-          applicationName: l10n.appName,
-          applicationLegalese: l10n.openSourceLicensesLegalese,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: colors.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.description_outlined, color: colors.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.openSourceLicenses,
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      l10n.openSourceLicensesDescription,
+                      subtitle,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colors.onSurfaceVariant,
                         height: 1.35,
@@ -636,7 +462,8 @@ class AboutScreen extends StatelessWidget {
   }
 
   // ─── Footer ──────────────────────────────────────────
-  Widget _buildFooter(BuildContext context, AppLocalizations l10n, String version) {
+  Widget _buildFooter(
+      BuildContext context, AppLocalizations l10n, String version) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     return Column(
@@ -653,12 +480,14 @@ class AboutScreen extends StatelessWidget {
         const SizedBox(height: 5),
         Text(
           '${l10n.version} $version',
-          style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: colors.onSurfaceVariant),
         ),
         const SizedBox(height: 4),
         Text(
           '${l10n.madeBy} ${AppConstants.developerName}',
-          style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: colors.onSurfaceVariant),
         ),
       ],
     );

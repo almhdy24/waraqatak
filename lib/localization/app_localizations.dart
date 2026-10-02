@@ -253,7 +253,6 @@ class AppLocalizations {
       _t('متابعة حالة المستندات', 'Document status tracking');
 
   // ========== CONTACT ==========
-  String get contactWhatsApp => _t('واتساب', 'WhatsApp');
   String get contactEmail => _t('البريد الإلكتروني', 'Email');
   String get contactMessage => _t(
         'السلام عليكم، أريد التواصل بخصوص تطبيق ورقتك.',
@@ -268,6 +267,18 @@ class AppLocalizations {
         'تعرف على كيفية تعامل ورقتك مع بياناتك وبيانات نشاطك التجاري.',
         'Learn how Waraqatak handles your data and business information.',
       );
+  String get termsOfUse => _t('شروط الاستخدام', 'Terms of Use');
+  String get termsDescription => _t(
+        'الشروط التي يحكم استخدامك لتطبيق ورقتك.',
+        'The terms that govern your use of Waraqatak.',
+      );
+  String get deleteAccountData =>
+      _t('حذف بيانات الحساب', 'Delete account data');
+  String get deleteAccountDataDescription => _t(
+        'إرشادات لحذف بياناتك من هذا الجهاز ومن خوادم المطور.',
+        'How to delete your data from this device and from the developer servers.',
+      );
+  String get appLogoLabel => _t('شعار ورقتك', 'Waraqatak logo');
 
   // ========== OPEN-SOURCE LICENSES ==========
   String get appName => _t('ورقتك', 'Waraqatak');
@@ -293,7 +304,6 @@ class AppLocalizations {
       );
   String get continueAction => _t('متابعة', 'Continue');
 
-  String get facebook => _t('فيسبوك', 'Facebook');
   String get fromYourPhone => _t('من هاتفك', 'From your phone');
   String get contact => _t('تواصل', 'Contact');
 
@@ -392,11 +402,7 @@ class AppLocalizations {
   String get servicesOnly => _t('الخدمات', 'Services');
 
   // ========== DEVELOPER ==========
-  String get developer => _t('المطور', 'Developer');
   String get madeBy => _t('تطوير', 'Made by');
-  String get visitWebsite => _t('الموقع الإلكتروني', 'Website');
-  String get viewOnGitHub => _t('GitHub', 'GitHub');
-  String get waraqatakProductPage => _t('صفحة المنتج', 'Product Page');
 
   // ========== PHASE 3.2 — PURCHASES ==========
   String get purchase          => _t('أمر شراء',        'Purchase Order');

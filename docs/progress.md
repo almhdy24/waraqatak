@@ -88,3 +88,79 @@ server-side will continue to grant Pro locally until the user re-attempts
 activation or reinstalls. This is a deliberate consequence of the
 Play "consumption-only" model — the server has no push channel to the
 device.
+
+## Step 2 — Honest status and error copy
+
+- `lib/services/license_service.dart`: adds `clearLicense()` which
+  deletes `wq_license_key`, `wq_license_expiry`, `wq_license_status`
+  and invalidates the cache. Device-ID and trial markers are
+  intentionally **not** touched.
+- `lib/screens/license_screen.dart` (new): shows Status / Type /
+  Expiry, a plain-language "What happens on expiry" block, an
+  "Enter or change activation key" button, and a
+  "Remove key from this device" action behind a confirmation.
+- `lib/screens/settings_screen.dart`: Settings → License routes to
+  the new screen (previously routed to `ActivationScreen`).
+- Localization: `deviceAlreadyActivated` is retired; new keys cover
+  license status, type, expiry, and the remove-key flow in AR + EN.
+- Compliance guard: scope expanded to the License screen and its
+  localization getters.
+- `docs/play-compliance.md`: mandated-copy table updated.
+
+## Step 3 — Transparency screen
+
+- `lib/services/feature_access.dart`: `proFeatures` is now a public
+  `const Set<Feature>`, and `freeFeatures` is derived as
+  `Feature.values.toSet().difference(proFeatures)`. One source of
+  truth for the free-vs-Pro split.
+- `lib/screens/transparency_screen.dart` (new): renders both lists
+  from `FeatureAccess` with Material 3 colours; no prices, no CTAs,
+  no acquisition hints.
+- Entry points: Settings → License → "See what is free vs Pro",
+  `LockedFeatureScreen` info button, About → Transparency section.
+- Localization: `transparencyXxx` + 12 `featureXxx` labels (AR + EN).
+- Compliance guard: scope expanded to the Transparency screen and
+  its localization getters.
+
+## Step 4 — About page + hero icon
+
+- `lib/core/constants/app_constants.dart`: outbound surface
+  reduced to one email + three URLs
+  (`privacy.html`, `terms.html`, `delete.html`). WhatsApp, Facebook,
+  GitHub, root website, and product-page URLs removed.
+- `lib/screens/about_screen.dart`:
+  - Hero `Container` wrapped in `Semantics(label: appLogoLabel,
+    image: true)` so a screen reader announces "Waraqatak logo"
+    instead of silence.
+  - Support section is email-only.
+  - Developer section removed.
+  - Three link tiles — Privacy, Terms, Delete-data — render under
+    the Support section.
+  - `showLicensePage` tile unchanged.
+- Localization: adds `termsOfUse`, `termsDescription`,
+  `deleteAccountData`, `deleteAccountDataDescription`,
+  `appLogoLabel`. Removes orphan getters `contactWhatsApp`,
+  `facebook`, `developer`, `visitWebsite`, `viewOnGitHub`,
+  `waraqatakProductPage`.
+- `test/screens/about_hero_contrast_test.dart` (new): pure-Dart WCAG
+  contrast-ratio test that pulls `primary` and `tertiary` from the
+  live `ColorScheme.fromSeed(...)` config and asserts ≥ 4.5:1 vs
+  white. Tracks the theme automatically if the seed changes.
+
+### Website URL verification — ALL THREE 404
+
+`curl -sI` against each allowlisted URL on 2026-10-02 returned
+`HTTP/2 404`:
+
+| URL                                                           | Status |
+|---------------------------------------------------------------|--------|
+| `https://almhdy24.com/products/waraqatak/privacy.html`        | 404    |
+| `https://almhdy24.com/products/waraqatak/terms.html`          | 404    |
+| `https://almhdy24.com/products/waraqatak/delete.html`         | 404    |
+
+The HTML files exist on the author's dev tree at
+`~/almhdy24.com/products/waraqatak/*.html` but are not reachable
+from the public site. **This blocks Play review** — a reviewer
+tapping any of the three About-screen links will see a 404.
+Carried forward to Step 5 as the top consistency finding; the fix is
+server-side (deploy the three HTML files), not an app change.
