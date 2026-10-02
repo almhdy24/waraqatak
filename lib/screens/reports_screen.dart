@@ -4,6 +4,7 @@ import '../models/entitlement.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
+import 'reports/accounting_screen.dart';
 import 'reports/customer_report_screen.dart';
 import 'reports/inventory_report_screen.dart';
 import 'reports/payments_report_screen.dart';
@@ -58,6 +59,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     final reports = [
+      _ReportEntry(
+        icon: Icons.account_balance_outlined,
+        color: primaryColor,
+        title: l10n.accounting,
+        screen: const AccountingScreen(),
+        proFeature: Feature.advancedReports,
+      ),
       _ReportEntry(
         icon: Icons.trending_up_rounded,
         color: Colors.green,

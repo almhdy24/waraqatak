@@ -11,6 +11,7 @@ import 'document_detail_screen.dart';
 import 'invoice_screen.dart';
 import 'purchase_screen.dart';
 import '../widgets/responsive.dart';
+import '../widgets/status_badge.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   final Contact contact;
@@ -105,8 +106,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   Widget _buildBody(BuildContext context, AppLocalizations l10n,
       ColorScheme cs, String currency) {
     final relevantType = _isSupplier ? 'purchase' : 'invoice';
-    final relevantDocs =
-        _documents!.where((d) => d.type == relevantType).toList();
+    // Same scope as the outstanding balance: drafts and cancelled documents
+    // are not amounts owed.
+    final relevantDocs = _documents!
+        .where((d) =>
+            d.type == relevantType &&
+            d.status != DocumentStatus.draft &&
+            d.status != DocumentStatus.cancelled)
+        .toList();
     final totalAmount =
         relevantDocs.fold<double>(0, (s, d) => s + d.total);
     final totalPaid =
@@ -476,14 +483,6 @@ class _DocumentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isPaid = doc.status == DocumentStatus.paid;
-    final isPartial = doc.status == DocumentStatus.partiallyPaid;
-
-    final statusColor = isPaid
-        ? Colors.green
-        : isPartial
-            ? Colors.orange
-            : cs.onSurfaceVariant;
 
     return Card(
       elevation: 0,
@@ -535,21 +534,7 @@ class _DocumentTile extends StatelessWidget {
                         fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      doc.status,
-                      style: TextStyle(
-                          fontSize: 9,
-                          color: statusColor,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
+                  StatusBadge(status: doc.status),
                 ],
               ),
               const SizedBox(width: 4),

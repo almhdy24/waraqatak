@@ -800,5 +800,61 @@ class AppLocalizations {
   String get pdfSampleCustomer   => _t('عميل تجريبي', 'Sample customer');
   String get pdfSampleNotes      => _t('هذه معاينة للتصميم فقط.', 'This is a design preview only.');
 
+  // ========== ACCOUNTING ==========
+  String get accounting            => _t('المحاسبة والقوائم المالية', 'Accounting & statements');
+  String get incomeStatement       => _t('قائمة الدخل', 'Income statement');
+  String get balanceSheet          => _t('الميزانية العمومية', 'Balance sheet');
+  String get trialBalance          => _t('ميزان المراجعة', 'Trial balance');
+  String get chartOfAccounts       => _t('الحسابات', 'Accounts');
+  String get accountStatement      => _t('كشف حساب (دفتر الأستاذ)', 'Account ledger');
+  String get journalEntry          => _t('قيد يومية', 'Journal entry');
+  String get debit                 => _t('مدين', 'Debit');
+  String get credit                => _t('دائن', 'Credit');
+  String get accountBalance        => _t('الرصيد', 'Balance');
+  String get accountCode           => _t('الرمز', 'Code');
+  String get accountColumn         => _t('الحساب', 'Account');
+  String get openingBalance        => _t('الرصيد الافتتاحي', 'Opening balance');
+  String get closingBalance        => _t('الرصيد الختامي', 'Closing balance');
+  String get revenueSection        => _t('الإيرادات', 'Revenue');
+  String get grossProfit           => _t('مجمل الربح', 'Gross profit');
+  String get expensesSection       => _t('المصروفات', 'Expenses');
+  String get netProfit             => _t('صافي الربح', 'Net profit');
+  String get netLoss               => _t('صافي الخسارة', 'Net loss');
+  String get assetsSection         => _t('الأصول', 'Assets');
+  String get liabilitiesSection    => _t('الالتزامات', 'Liabilities');
+  String get equitySection         => _t('حقوق الملكية', 'Equity');
+  String get retainedEarnings      => _t('الأرباح المحتجزة', 'Retained earnings');
+  String get totalAssets           => _t('إجمالي الأصول', 'Total assets');
+  String get totalLiabilitiesEquity => _t('إجمالي الالتزامات وحقوق الملكية', 'Total liabilities & equity');
+  String get balancedLabel         => _t('متوازن', 'Balanced');
+  String get notBalancedLabel      => _t('غير متوازن', 'Not balanced');
+  String get noEntriesYet          => _t('لا توجد قيود بعد', 'No entries yet');
+  String asOfDate(String d)        => _t('كما في $d', 'As of $d');
+  String get accountingNote        => _t(
+      'تُنشأ القيود تلقائياً بنظام القيد المزدوج من مستنداتك، ولا تُرحَّل المسودات والمستندات الملغاة. يُقيَّم المخزون بطريقة المتوسط المرجح.',
+      'Double-entry records are created automatically from your documents; drafts and cancelled documents are not posted. Stock is valued at weighted-average cost.');
+  String get entryInvoicePayment   => _t('تحصيل فاتورة', 'Invoice payment');
+  String get entryPurchasePayment  => _t('سداد أمر شراء', 'Purchase order payment');
+  String get entryCostOfSales      => _t('تكلفة المبيعات', 'Cost of sales');
+  String get entryOpeningStock     => _t('مخزون افتتاحي', 'Opening stock');
+  String get entryStockAdjustment  => _t('تسوية مخزون', 'Stock adjustment');
+
+  String accountName(String code) => switch (code) {
+        '1110' => _t('الصندوق (النقدية)', 'Cash on hand'),
+        '1120' => _t('البنوك والمحافظ الإلكترونية', 'Bank & e-wallets'),
+        '1130' => _t('العملاء (ذمم مدينة)', 'Accounts receivable'),
+        '1140' => _t('المخزون', 'Inventory'),
+        '1150' => _t('ضريبة مستردة (مدخلات)', 'Tax receivable (input)'),
+        '2110' => _t('الموردون (ذمم دائنة)', 'Accounts payable'),
+        '2120' => _t('ضريبة مستحقة (مخرجات)', 'Tax payable (output)'),
+        '3100' => _t('رأس المال / أرصدة افتتاحية', 'Opening balance equity'),
+        '4100' => _t('إيرادات المبيعات', 'Sales revenue'),
+        '4900' => _t('إيرادات أخرى', 'Other income'),
+        '5100' => _t('تكلفة البضاعة المباعة', 'Cost of goods sold'),
+        '5200' => _t('عجز وتسويات المخزون', 'Inventory adjustments'),
+        '6100' => _t('المصروفات التشغيلية', 'Operating expenses'),
+        _ => code,
+      };
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

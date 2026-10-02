@@ -1234,6 +1234,33 @@ class DatabaseHelper {
     return receiptId;
   }
 
+  /// Consistent read-only snapshot of everything the derived accounting
+  /// ledger is built from (one read transaction, nothing is written).
+  Future<
+      ({
+        List<Document> documents,
+        List<DocumentItem> items,
+        List<Product> products,
+        List<StockMovement> movements,
+        List<DocumentPayment> payments,
+      })> getLedgerData() async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final docs = await txn.query('documents', orderBy: 'date ASC, id ASC');
+      final items = await txn.query('document_items');
+      final products = await txn.query('products');
+      final movements = await txn.query('stock_movements', orderBy: 'date ASC, id ASC');
+      final payments = await txn.query('document_payments', orderBy: 'date ASC, id ASC');
+      return (
+        documents: docs.map(Document.fromMap).toList(),
+        items: items.map(DocumentItem.fromMap).toList(),
+        products: products.map(Product.fromMap).toList(),
+        movements: movements.map(StockMovement.fromMap).toList(),
+        payments: payments.map(DocumentPayment.fromMap).toList(),
+      );
+    });
+  }
+
   Future<List<DocumentPayment>> getDocumentPayments(int documentId) async {
     final db = await database;
     final maps = await db.query(
