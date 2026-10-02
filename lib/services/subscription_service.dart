@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/foundation.dart';
 
