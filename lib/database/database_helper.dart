@@ -397,14 +397,18 @@ class DatabaseHelper {
         "ALTER TABLE businesses ADD COLUMN invoice_title TEXT",
         "ALTER TABLE businesses ADD COLUMN legal_footer TEXT",
       ]) {
-        try { await db.execute(col); } catch (_) {}
+        try { await db.execute(col); } on DatabaseException catch (_) {
+          // Column already exists on this install — ignore and continue.
+        }
       }
       // contacts: legal identity
       for (final col in [
         "ALTER TABLE contacts ADD COLUMN legal_name TEXT",
         "ALTER TABLE contacts ADD COLUMN tax_id TEXT",
       ]) {
-        try { await db.execute(col); } catch (_) {}
+        try { await db.execute(col); } on DatabaseException catch (_) {
+          // Column already exists on this install — ignore and continue.
+        }
       }
       // products: tax profile link
       if (!await columnExists('products', 'tax_profile_id')) {
@@ -464,7 +468,11 @@ class DatabaseHelper {
               'is_predefined': 0,
             }, conflictAlgorithm: ConflictAlgorithm.ignore);
           }
-        } catch (_) {}
+        } on FormatException catch (_) {
+          // Legacy prefs blob is corrupt — skip custom-method migration.
+        } on TypeError catch (_) {
+          // Legacy prefs blob has unexpected shape — skip.
+        }
       }
 
       // Ensure at least one default exists (fall back to cash)

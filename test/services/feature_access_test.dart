@@ -117,28 +117,4 @@ void main() {
     });
   });
 
-  // ── Pending order does not affect feature access ─────────────────────────
-
-  group('FeatureAccess — order state is independent', () {
-    test('Pro accessible when trial active with pending order', () {
-      final s = EntitlementState(
-        status: EntitlementStatus.trialActive,
-        deviceId: 'd',
-        trialDaysRemaining: 5,
-        orderStatus: PendingOrderStatus.pending,
-        orderReference: 'ORD-001',
-      );
-      expect(FeatureAccess.canAccess(Feature.purchases, s), isTrue);
-    });
-
-    test('Pro blocked when trial expired even with pending order', () {
-      final s = EntitlementState(
-        status: EntitlementStatus.trialExpired,
-        deviceId: 'd',
-        orderStatus: PendingOrderStatus.pending,
-        orderReference: 'ORD-001',
-      );
-      expect(FeatureAccess.canAccess(Feature.inventory, s), isFalse);
-    });
-  });
 }

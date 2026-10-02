@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -8,21 +11,38 @@ import 'screens/splash_screen.dart';
 import 'theme.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  // Edge-to-edge: let Flutter draw behind status bar and navigation bar.
-  // Scaffold + SafeArea handle insets correctly.
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.transparent,
-    systemNavigationBarDividerColor: Colors.transparent,
-    systemNavigationBarIconBrightness: Brightness.dark,
-  ));
-  await DatabaseHelper.instance.database;
-  final prefs = await SharedPreferences.getInstance();
-  final lang = prefs.getString('language') ?? 'ar';
-  runApp(WarqatekApp(initialLanguage: lang));
+  runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+      developer.log(
+        'FlutterError',
+        error: details.exception,
+        stackTrace: details.stack,
+      );
+    };
+
+    PlatformDispatcher.instance.onError = (error, stack) {
+      developer.log('PlatformDispatcher', error: error, stackTrace: stack);
+      return true;
+    };
+
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ));
+    await DatabaseHelper.instance.database;
+    final prefs = await SharedPreferences.getInstance();
+    final lang = prefs.getString('language') ?? 'ar';
+    runApp(WarqatekApp(initialLanguage: lang));
+  }, (error, stack) {
+    developer.log('Uncaught zone error', error: error, stackTrace: stack);
+  });
 }
 
 class WarqatekApp extends StatefulWidget {

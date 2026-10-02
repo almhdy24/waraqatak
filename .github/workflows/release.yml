@@ -37,6 +37,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Play compliance guard
+        run: bash tool/check_play_compliance.sh
+
       - name: Analyze
         run: flutter analyze
 
