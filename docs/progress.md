@@ -59,14 +59,14 @@ changes, or if the base URL drops to HTTP.
 
 ### What is persisted on `success`
 
-`LicenseService.storeLicense(licenseKey, expiresAt: null, isActive: true)`
+`LicenseService.storeLicense(licenseKey, expiresAt: <key's expires_at>, isActive: true)`
 writes three keys through `flutter_secure_storage`
 (Android `EncryptedSharedPreferences`, Android Keystore, API 23+):
 
 | Key                 | Value on success     |
 |---------------------|----------------------|
 | `wq_license_key`    | the normalized key   |
-| `wq_license_expiry` | `''` (empty string)  |
+| `wq_license_expiry` | key's `expires_at`, `''` for lifetime |
 | `wq_license_status` | `'active'`           |
 
 Nothing else is written. The server's `activation_token` from the response

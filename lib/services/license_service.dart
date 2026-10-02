@@ -1,8 +1,10 @@
 import 'dart:math';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/entitlement.dart';
+import 'license_key.dart';
 
 /// Manages device identity, trial tracking, and license persistence.
 ///
@@ -37,13 +39,42 @@ class LicenseService {
 
   // ── Device ID ──────────────────────────────────────────────────────────────
 
+  static const _deviceChannel = MethodChannel('com.elmahdi.waraqatak/device');
+
+  /// Device identifier sent to the licensing server as `machine_id`.
+  ///
+  /// An already stored id is always kept, so existing activations stay valid.
+  /// New installs derive the id from a hash of the Android ID, which is
+  /// stable across uninstall/reinstall on the same device, so a reinstall
+  /// can re-activate the same key. Falls back to a random UUID.
   Future<String> getOrCreateDeviceId() async {
     var id = await _store.read(key: _kDeviceId);
     if (id == null || id.isEmpty) {
-      id = _generateUuidV4();
+      id = await _stableDeviceId() ?? _generateUuidV4();
       await _store.write(key: _kDeviceId, value: id);
     }
     return id;
+  }
+
+  Future<String?> _stableDeviceId() async {
+    try {
+      final hash = await _deviceChannel.invokeMethod<String>('stableIdHash');
+      return hash == null ? null : uuidFromHash(hash);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Formats the first 128 bits of a hex digest as a UUID (version 8,
+  /// RFC 9562 custom), keeping the `machine_id` shape of earlier installs.
+  static String? uuidFromHash(String hexDigest) {
+    final hex = hexDigest.toLowerCase();
+    if (!RegExp(r'^[0-9a-f]{32,}$').hasMatch(hex)) return null;
+    final b = List<int>.generate(
+        16, (i) => int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16));
+    b[6] = (b[6] & 0x0f) | 0x80; // version 8
+    b[8] = (b[8] & 0x3f) | 0x80; // variant 10
+    return _formatUuid(b);
   }
 
   // ── Entitlement ────────────────────────────────────────────────────────────
@@ -74,9 +105,11 @@ class LicenseService {
       }
 
       final expiryStr = await _store.read(key: _kLicenseExpiry);
+      // Licenses stored before expiries were recorded fall back to the
+      // expiry signed into the key itself.
       final expiry = (expiryStr != null && expiryStr.isNotEmpty)
           ? DateTime.tryParse(expiryStr)
-          : null;
+          : LicenseKeyClaims.tryParse(licenseKey)?.expiresAt;
 
       if (expiry != null && expiry.isBefore(now)) {
         return EntitlementState(
@@ -182,6 +215,10 @@ class LicenseService {
     final b = List<int>.generate(16, (_) => rng.nextInt(256));
     b[6] = (b[6] & 0x0f) | 0x40; // version 4
     b[8] = (b[8] & 0x3f) | 0x80; // variant 10
+    return _formatUuid(b);
+  }
+
+  static String _formatUuid(List<int> b) {
     String h(int v) => v.toRadixString(16).padLeft(2, '0');
     return '${h(b[0])}${h(b[1])}${h(b[2])}${h(b[3])}-'
         '${h(b[4])}${h(b[5])}-'

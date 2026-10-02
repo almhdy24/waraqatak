@@ -62,6 +62,14 @@ not re-contact `api.almhdy24.com` after a successful activation, so a
 server-side revocation takes effect only when the user next re-attempts
 activation.
 
+The expiry comes from the signed key itself: keys are
+`base64url(payload).base64url(signature)` and the payload carries
+`app_slug` and `expires_at` (null for lifetime). Before contacting the
+server the app rejects keys whose `app_slug` is not `com.elmahdi.waraqatak`
+or whose `expires_at` has passed, and on success it stores `expires_at` so
+time-limited keys expire on the device. The signature is verified only by
+the server.
+
 ## Non-features (deliberate omissions)
 
 The app does **not** have any of the following, by Play policy. Any
