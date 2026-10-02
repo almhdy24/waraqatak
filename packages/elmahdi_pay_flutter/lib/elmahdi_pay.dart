@@ -1,18 +1,12 @@
-/// Elmahdi Pay Flutter SDK.
+/// Elmahdi Pay Flutter SDK — activation-only.
 ///
-/// Public API (no auth):
 /// ```dart
-/// final client = ElmahdiPayClient(ElmahdiPayConfig(baseUrl: 'https://your-server.com'));
-/// final methods = await client.public.getPaymentMethods();
-/// ```
-///
-/// Admin API (Bearer token required):
-/// ```dart
-/// final client = ElmahdiPayClient(ElmahdiPayConfig(
-///   baseUrl: 'https://your-server.com',
-///   adminToken: 'your-admin-token',
-/// ));
-/// final stats = await client.admin.getStats();
+/// final client = ElmahdiPayClient(
+///   ElmahdiPayConfig(baseUrl: 'https://your-server.com'),
+/// );
+/// await client.public.activateLicense(
+///   ActivateLicenseRequest(licenseKey: key, machineId: machineId),
+/// );
 /// ```
 library elmahdi_pay;
 

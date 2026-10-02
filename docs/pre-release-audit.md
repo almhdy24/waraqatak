@@ -6,6 +6,12 @@
 - **Scope:** full codebase, Android config, bundled `packages/elmahdi_pay_flutter` SDK, CI workflows, git history.
 - **Reviewer:** static review only; `flutter analyze` / `flutter test` were **not** executed (Flutter SDK is not usable in the current Termux shell — AGENTS.md §Environment).
 
+> **Follow-up (2026-10-02):** The Blocker-class Payments issue (B1) and the
+> accompanying privacy / disclosure items have been addressed on the
+> `play-compliance` branch under the consumption-only model. See
+> [`docs/play-compliance.md`](play-compliance.md) for what changed and
+> why. The findings below are preserved as the pre-fix baseline.
+
 ---
 
 ## Summary verdict: **NOT READY**

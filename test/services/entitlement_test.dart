@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/models/entitlement.dart';
-import 'package:warqatek/models/subscription_plan.dart';
 
 void main() {
   // ── EntitlementState.isSubscriptionActive ────────────────────────────────
@@ -34,53 +33,6 @@ void main() {
       final s = EntitlementState(
           status: EntitlementStatus.licenseRevoked, deviceId: 'd');
       expect(s.isSubscriptionActive, isFalse);
-    });
-  });
-
-  // ── Order state is independent of subscription entitlement ───────────────
-
-  group('Order state vs subscription state', () {
-    test('trialActive with pending order is still active', () {
-      final s = EntitlementState(
-        status: EntitlementStatus.trialActive,
-        deviceId: 'd',
-        trialDaysRemaining: 5,
-        orderStatus: PendingOrderStatus.pending,
-        orderReference: 'ORD-001',
-      );
-      expect(s.isSubscriptionActive, isTrue);
-      expect(s.orderStatus, PendingOrderStatus.pending);
-    });
-
-    test('trialExpired with pending order is still not active', () {
-      final s = EntitlementState(
-        status: EntitlementStatus.trialExpired,
-        deviceId: 'd',
-        orderStatus: PendingOrderStatus.pending,
-        orderReference: 'ORD-001',
-      );
-      expect(s.isSubscriptionActive, isFalse);
-      expect(s.orderStatus, PendingOrderStatus.pending);
-    });
-
-    test('licensed with rejected order is still active', () {
-      final s = EntitlementState(
-        status: EntitlementStatus.licensed,
-        deviceId: 'd',
-        orderStatus: PendingOrderStatus.rejected,
-        orderReference: 'ORD-001',
-        rejectionNote: 'Unclear proof',
-      );
-      expect(s.isSubscriptionActive, isTrue);
-      expect(s.orderStatus, PendingOrderStatus.rejected);
-      expect(s.rejectionNote, 'Unclear proof');
-    });
-
-    test('no order by default', () {
-      final s = EntitlementState(
-          status: EntitlementStatus.trialActive, deviceId: 'd', trialDaysRemaining: 3);
-      expect(s.orderStatus, PendingOrderStatus.none);
-      expect(s.orderReference, isNull);
     });
   });
 
@@ -175,99 +127,6 @@ void main() {
       final now = DateTime(2025, 1, 7); // 3-day rewind
       final adjusted = applyRollback(trialStart, last, now);
       expect(adjusted, DateTime(2025, 1, 4));
-    });
-  });
-
-  // ── SubscriptionPlan calculations ────────────────────────────────────────
-
-  group('SubscriptionPlan', () {
-    test('monthly plan has no discount', () {
-      const p = SubscriptionPlan(
-          id: 'monthly', nameAr: 'شهري', nameEn: 'Monthly',
-          priceSDG: 20000, durationDays: 30);
-      expect(p.hasDiscount, isFalse);
-      expect(p.savingsSDG, isNull);
-    });
-
-    test('annual plan has discount', () {
-      const p = SubscriptionPlan(
-          id: 'annual', nameAr: 'سنوي', nameEn: 'Annual',
-          priceSDG: 180000, originalPriceSDG: 240000, durationDays: 365);
-      expect(p.hasDiscount, isTrue);
-      expect(p.savingsSDG, 60000);
-    });
-
-    test('monthly equivalent for annual plan', () {
-      const p = SubscriptionPlan(
-          id: 'annual', nameAr: 'سنوي', nameEn: 'Annual',
-          priceSDG: 180000, durationDays: 365);
-      // 180000 / (365/30) ≈ 14794.5
-      expect(p.monthlyEquivalentSDG, closeTo(14794.5, 1.0));
-    });
-
-    test('monthly plan monthly equivalent equals its price', () {
-      const p = SubscriptionPlan(
-          id: 'monthly', nameAr: 'شهري', nameEn: 'Monthly',
-          priceSDG: 20000, durationDays: 30);
-      expect(p.monthlyEquivalentSDG, closeTo(20000, 0.01));
-    });
-
-    test('catalogue has 4 plans', () {
-      expect(SubscriptionPlan.plans.length, 4);
-    });
-
-    test('catalogue plan ids are unique', () {
-      final ids = SubscriptionPlan.plans.map((p) => p.id).toSet();
-      expect(ids.length, SubscriptionPlan.plans.length);
-    });
-
-    test('all catalogue plans have positive price and duration', () {
-      for (final p in SubscriptionPlan.plans) {
-        expect(p.priceSDG, greaterThan(0));
-        expect(p.durationDays, greaterThan(0));
-      }
-    });
-  });
-
-  // ── Renewal date math ────────────────────────────────────────────────────
-  //
-  // The server computes renewal expiry as max(currentExpiry, now) + planDays.
-  // These tests document and verify the expected pure-math behaviour.
-
-  group('Renewal date math', () {
-    DateTime computeNewExpiry(DateTime? currentExpiry, DateTime now, int planDays) {
-      final base = (currentExpiry != null && currentExpiry.isAfter(now))
-          ? currentExpiry
-          : now;
-      return base.add(Duration(days: planDays));
-    }
-
-    test('renewal with future expiry extends from that expiry', () {
-      final now = DateTime(2025, 6, 1);
-      final currentExpiry = DateTime(2025, 7, 1); // 30 days in future
-      final newExpiry = computeNewExpiry(currentExpiry, now, 30);
-      expect(newExpiry, DateTime(2025, 7, 31)); // extends from July 1
-    });
-
-    test('renewal with past expiry extends from now', () {
-      final now = DateTime(2025, 6, 1);
-      final currentExpiry = DateTime(2025, 5, 1); // expired
-      final newExpiry = computeNewExpiry(currentExpiry, now, 30);
-      expect(newExpiry, DateTime(2025, 7, 1)); // extends from today
-    });
-
-    test('renewal with null expiry (never-expires license) extends from now', () {
-      final now = DateTime(2025, 6, 1);
-      final newExpiry = computeNewExpiry(null, now, 90);
-      expect(newExpiry, DateTime(2025, 8, 30));
-    });
-
-    test('same-day renewal extends from now not from today-midnight', () {
-      final now = DateTime(2025, 6, 1, 14, 30); // afternoon
-      final currentExpiry = DateTime(2025, 6, 1, 8, 0); // expired this morning
-      final newExpiry = computeNewExpiry(currentExpiry, now, 30);
-      // expires < now so base = now
-      expect(newExpiry, now.add(const Duration(days: 30)));
     });
   });
 

@@ -29,9 +29,6 @@ class LicenseService {
   static const _kLicenseKey    = 'wq_license_key';
   static const _kLicenseExpiry = 'wq_license_expiry';
   static const _kLicenseStatus = 'wq_license_status';
-  static const _kOrderRef      = 'wq_order_ref';
-  static const _kIdempotency   = 'wq_idem_key';
-  static const _kRejectNote    = 'wq_rejection_note';
 
   static const int _trialDays = 14;
 
@@ -65,45 +62,15 @@ class LicenseService {
 
     await _updateLastLaunch(now);
 
-    // ── Order state (separate from subscription entitlement) ─────────────────
-    //
-    // A pending or rejected order is informational only — it does NOT block
-    // the user from using the app. The underlying trial/license status
-    // determines that independently.
-    final orderRef = await _store.read(key: _kOrderRef);
-    final orderRef0 = (orderRef != null && orderRef.isNotEmpty) ? orderRef : null;
-    PendingOrderStatus orderStatus = PendingOrderStatus.none;
-    String? rejectNote;
-    if (orderRef0 != null) {
-      final raw = await _store.read(key: _kRejectNote);
-      rejectNote = (raw != null && raw.isNotEmpty) ? raw : null;
-      orderStatus = rejectNote != null
-          ? PendingOrderStatus.rejected
-          : PendingOrderStatus.pending;
-    }
-
-    // Helper: attach order state to any result without repeating fields.
-    EntitlementState withOrder(
-      EntitlementStatus s, {
-      int trialDays = 0,
-      DateTime? expiry,
-    }) =>
-        EntitlementState(
-          status: s,
-          deviceId: deviceId,
-          trialDaysRemaining: trialDays,
-          licenseExpiresAt: expiry,
-          orderStatus: orderStatus,
-          orderReference: orderRef0,
-          rejectionNote: rejectNote,
-        );
-
     // ── License ───────────────────────────────────────────────────────────────
     final licenseKey = await _store.read(key: _kLicenseKey);
     if (licenseKey != null && licenseKey.isNotEmpty) {
       final statusStr = await _store.read(key: _kLicenseStatus);
       if (statusStr == 'revoked') {
-        return withOrder(EntitlementStatus.licenseRevoked);
+        return EntitlementState(
+          status: EntitlementStatus.licenseRevoked,
+          deviceId: deviceId,
+        );
       }
 
       final expiryStr = await _store.read(key: _kLicenseExpiry);
@@ -112,9 +79,17 @@ class LicenseService {
           : null;
 
       if (expiry != null && expiry.isBefore(now)) {
-        return withOrder(EntitlementStatus.licenseExpired, expiry: expiry);
+        return EntitlementState(
+          status: EntitlementStatus.licenseExpired,
+          deviceId: deviceId,
+          licenseExpiresAt: expiry,
+        );
       }
-      return withOrder(EntitlementStatus.licensed, expiry: expiry);
+      return EntitlementState(
+        status: EntitlementStatus.licensed,
+        deviceId: deviceId,
+        licenseExpiresAt: expiry,
+      );
     }
 
     // ── Trial ─────────────────────────────────────────────────────────────────
@@ -123,11 +98,15 @@ class LicenseService {
         trialStart.add(const Duration(days: _trialDays)).difference(now);
 
     if (remaining.isNegative) {
-      return withOrder(EntitlementStatus.trialExpired);
+      return EntitlementState(
+        status: EntitlementStatus.trialExpired,
+        deviceId: deviceId,
+      );
     }
-    return withOrder(
-      EntitlementStatus.trialActive,
-      trialDays: remaining.inDays + 1,
+    return EntitlementState(
+      status: EntitlementStatus.trialActive,
+      deviceId: deviceId,
+      trialDaysRemaining: remaining.inDays + 1,
     );
   }
 
@@ -177,43 +156,10 @@ class LicenseService {
         key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '');
     await _store.write(
         key: _kLicenseStatus, value: isActive ? 'active' : 'revoked');
-    // Clear pending order now that a license is stored.
-    await _store.delete(key: _kOrderRef);
-    await _store.delete(key: _kRejectNote);
     invalidateCache();
   }
 
   Future<String?> get licenseKey => _store.read(key: _kLicenseKey);
-
-  // ── Order State ────────────────────────────────────────────────────────────
-
-  Future<void> setOrderPending(String reference) async {
-    await _store.write(key: _kOrderRef, value: reference);
-    await _store.delete(key: _kRejectNote);
-    invalidateCache();
-  }
-
-  Future<void> setOrderRejected(String reference, String? note) async {
-    await _store.write(key: _kOrderRef, value: reference);
-    await _store.write(key: _kRejectNote, value: note ?? '');
-    invalidateCache();
-  }
-
-  Future<void> clearOrder() async {
-    await _store.delete(key: _kOrderRef);
-    await _store.delete(key: _kRejectNote);
-    await _store.delete(key: _kIdempotency);
-    invalidateCache();
-  }
-
-  Future<String?> get pendingOrderRef => _store.read(key: _kOrderRef);
-
-  // ── Idempotency Key ────────────────────────────────────────────────────────
-
-  Future<String?> getSavedIdempotencyKey() => _store.read(key: _kIdempotency);
-
-  Future<void> saveIdempotencyKey(String key) =>
-      _store.write(key: _kIdempotency, value: key);
 
   // ── UUID v4 ────────────────────────────────────────────────────────────────
 

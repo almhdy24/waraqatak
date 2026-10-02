@@ -117,7 +117,7 @@ class AboutScreen extends StatelessWidget {
                   _Feature(Icons.save_outlined, l10n.saveBackupTo),
                   _Feature(Icons.restore_rounded, l10n.restore),
                   _Feature(Icons.workspace_premium_outlined, l10n.trialFreeDays),
-                  _Feature(Icons.shield_outlined, l10n.dataAlwaysSafe),
+                  _Feature(Icons.shield_outlined, l10n.freeDataAlwaysAvailable),
                 ],
                 color: const Color(0xFF087F5B),
               ),
@@ -141,6 +141,8 @@ class AboutScreen extends StatelessWidget {
               _buildDeveloperSection(context, l10n),
               const SizedBox(height: 30),
               _buildPrivacySection(context, l10n),
+              const SizedBox(height: 12),
+              _buildLicensesSection(context, l10n),
               const SizedBox(height: 32),
               _buildFooter(context, l10n, version),
             ],
@@ -497,6 +499,62 @@ class AboutScreen extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       l10n.privacySettingsDescription,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Directionality.of(context) == TextDirection.rtl
+                    ? Icons.chevron_left_rounded
+                    : Icons.chevron_right_rounded,
+                color: colors.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Open-source licenses link ──────────────────────
+  Widget _buildLicensesSection(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Material(
+      color: colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () => showLicensePage(
+          context: context,
+          applicationName: l10n.appName,
+          applicationLegalese: l10n.openSourceLicensesLegalese,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: colors.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.description_outlined, color: colors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.openSourceLicenses,
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      l10n.openSourceLicensesDescription,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colors.onSurfaceVariant,
                         height: 1.35,
