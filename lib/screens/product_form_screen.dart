@@ -5,6 +5,7 @@ import '../models/product.dart';
 import '../models/tax_profile.dart';
 import '../services/product_service.dart';
 import 'barcode_scanner_screen.dart';
+import '../widgets/responsive.dart';
 
 class ProductFormScreen extends StatefulWidget {
   final Product? product;
@@ -204,7 +205,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             child: Text(l10n.delete),
           ),
@@ -249,7 +250,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             ),
         ],
       ),
-      body: Form(
+      body: ResponsiveCenter(child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
@@ -480,20 +481,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 24,
                         height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary),
                       )
                     : Text(l10n.save),
               ),
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

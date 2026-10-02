@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/tax_profile.dart';
+import '../widgets/responsive.dart';
 
 class TaxProfilesScreen extends StatefulWidget {
   const TaxProfilesScreen({super.key});
@@ -207,7 +208,7 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
         onPressed: () => _showForm(),
         child: const Icon(Icons.add),
       ),
-      body: _profiles == null
+      body: ResponsiveCenter(child: _profiles == null
           ? const Center(child: CircularProgressIndicator())
           : _profiles!.isEmpty
               ? Center(
@@ -237,7 +238,7 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                           horizontal: 12, vertical: 4),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
-                        side: const BorderSide(color: Color(0xFFE5E7EB)),
+                        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                       ),
                       child: ListTile(
                         leading: CircleAvatar(
@@ -324,7 +325,7 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                       ),
                     );
                   },
-                ),
+                )),
     );
   }
 }

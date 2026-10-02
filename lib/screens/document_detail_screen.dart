@@ -15,6 +15,7 @@ import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
 import '../widgets/status_badge.dart';
 import 'edit_document_screen.dart';
+import '../widgets/responsive.dart';
 
 class DocumentDetailScreen extends StatefulWidget {
   final int documentId;
@@ -152,7 +153,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             child: Text(l10n.delete),
           ),
@@ -187,7 +188,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
             child: Text(l10n.cancelDocument),
           ),
@@ -412,7 +413,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
     if (_error != null || _document == null || _business == null) {
       return Scaffold(
-        body: Center(
+        body: ResponsiveCenter(child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -424,7 +425,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
               FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
             ],
           ),
-        ),
+        )),
       );
     }
 
@@ -532,7 +533,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         ],
       ),
       floatingActionButton: fab,
-      body: ListView(
+      body: ResponsiveCenter(child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
           // ── Header card ──────────────────────────────────
@@ -763,7 +764,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
           if (fab != null) const SizedBox(height: 80),
         ],
-      ),
+      )),
     );
   }
 
@@ -803,7 +804,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     style: DefaultTextStyle.of(context).style.copyWith(fontSize: 14),
                     children: [
                       TextSpan(text: '$label: ',
-                          style: const TextStyle(color: Color(0xFF6B7280))),
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       TextSpan(text: docNumber,
                           style: TextStyle(
                               fontWeight: FontWeight.w700, color: colors.primary)),

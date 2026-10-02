@@ -10,6 +10,7 @@ import 'contact_form_screen.dart';
 import 'document_detail_screen.dart';
 import 'invoice_screen.dart';
 import 'purchase_screen.dart';
+import '../widgets/responsive.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   final Contact contact;
@@ -93,11 +94,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           ),
         ],
       ),
-      body: _error != null
+      body: ResponsiveCenter(child: _error != null
           ? _ErrorView(message: l10n.operationFailed, onRetry: _load)
           : _documents == null || _business == null
               ? const Center(child: CircularProgressIndicator())
-              : _buildBody(context, l10n, cs, currency),
+              : _buildBody(context, l10n, cs, currency)),
     );
   }
 

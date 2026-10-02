@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../localization/app_localizations.dart';
 import '../services/feature_access.dart';
+import '../widgets/responsive.dart';
 
 /// Transparency screen — explicit free-vs-Pro breakdown.
 ///
@@ -60,7 +61,7 @@ class TransparencyScreen extends StatelessWidget {
         title: Text(l10n.transparencyTitle),
         centerTitle: true,
       ),
-      body: ListView(
+      body: ResponsiveCenter(child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
@@ -118,7 +119,7 @@ class TransparencyScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 

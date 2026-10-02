@@ -8,6 +8,7 @@ import '../services/document_service.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
+import '../widgets/responsive.dart';
 
 class _TotalsCard extends StatelessWidget {
   final AppLocalizations l10n;
@@ -208,7 +209,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
     final totals = _totals;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.quotation), centerTitle: true),
-      body: Form(
+      body: ResponsiveCenter(child: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -266,7 +267,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
               height: 52,
               child: FilledButton(
                 onPressed: () => _save(),
-                style: FilledButton.styleFrom(foregroundColor: Colors.white),
+                style: FilledButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.onPrimary),
                 child: Text(l10n.save),
               ),
             ),
@@ -277,7 +278,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

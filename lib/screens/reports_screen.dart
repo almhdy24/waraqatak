@@ -12,6 +12,7 @@ import 'reports/purchases_report_screen.dart';
 import 'reports/sales_report_screen.dart';
 import 'reports/supplier_report_screen.dart';
 import 'activation_screen.dart';
+import '../widgets/responsive.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -107,7 +108,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.reports), centerTitle: true),
-      body: ListView.separated(
+      body: ResponsiveCenter(child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: reports.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -119,7 +120,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
             ),
             child: ListTile(
               leading: CircleAvatar(
@@ -146,7 +147,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           );
         },
-      ),
+      )),
     );
   }
 }

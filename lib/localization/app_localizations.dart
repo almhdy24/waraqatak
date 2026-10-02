@@ -713,5 +713,67 @@ class AppLocalizations {
   String get freeDataAlwaysAvailable => _t('بياناتك ومستنداتك محفوظة دائماً حتى في الوضع المجاني.', 'Your data and documents are always available, even in Free mode.');
   String get freeModeBannerMsg       => _t('الوضع المجاني نشط — الفواتير والعملاء والمنتجات متاحة دائماً.', 'Free mode active — invoices, customers, and products are always available.');
 
+  // ========== ABOUT & SUPPORT ==========
+  String get supportAndContact      => _t('الدعم والتواصل', 'Support & contact');
+  String get whatsappSupport        => _t('واتساب', 'WhatsApp');
+  String get whatsappSupportDesc    => _t('للمساعدة الفنية والاستفسارات', 'Technical help and questions');
+  String get supportWhatsAppGreeting => _t('مرحباً، أحتاج مساعدة في تطبيق ورقتك', 'Hello, I need help with Waraqatak');
+  String get facebookPage           => _t('صفحتنا على فيسبوك', 'Our Facebook page');
+  String get facebookPageDesc       => _t('الأخبار والتحديثات والنصائح', 'News, updates and tips');
+  String get developerWebsite       => _t('موقع المطوّر', 'Developer website');
+  String get whatYouCanDo           => _t('ماذا يمكنك أن تفعل', 'What you can do');
+  String get legalAndPrivacy        => _t('الخصوصية والشروط', 'Privacy & terms');
+  String get rateApp                => _t('قيّم التطبيق', 'Rate app');
+  String get shareApp               => _t('شارك التطبيق', 'Share app');
+  String get getHelp                => _t('مساعدة', 'Get help');
+  String get shareAppMessage        => _t('جرّب تطبيق ورقتك لإنشاء الفواتير والمستندات بسهولة:', 'Try Waraqatak to create invoices and business documents easily:');
+
+  // ========== SETTINGS SECTIONS & APPEARANCE ==========
+  String get settingsSectionBusiness   => _t('النشاط التجاري', 'Business');
+  String get settingsSectionAppearance => _t('المظهر واللغة', 'Appearance & language');
+  String get settingsSectionData       => _t('البيانات والنسخ الاحتياطي', 'Data & backup');
+  String get settingsSectionSupport    => _t('الدعم والمعلومات', 'Support & info');
+  String get themeModeLabel            => _t('المظهر', 'Theme');
+  String get themeLight                => _t('فاتح', 'Light');
+  String get themeDark                 => _t('داكن', 'Dark');
+  String get themeSystem               => _t('تلقائي', 'System');
+  String get aboutSubtitle             => _t('الدعم والتواصل والإصدار', 'Support, contact and version');
+
+  // ========== PDF CUSTOMIZATION ==========
+  String get pdfSignature        => _t('التوقيع', 'Signature');
+  String get pdfStamp            => _t('الختم', 'Stamp');
+  String get pdfCustomize        => _t('تخصيص المستندات (PDF)', 'Document design (PDF)');
+  String get pdfCustomizeDesc    => _t('الألوان والقالب والشعار والحقول', 'Colors, template, logo and fields');
+  String get pdfPreview          => _t('معاينة', 'Preview');
+  String get pdfTemplate         => _t('القالب', 'Template');
+  String get pdfTemplateClassic  => _t('كلاسيكي', 'Classic');
+  String get pdfTemplateModern   => _t('عصري', 'Modern');
+  String get pdfTemplateMinimal  => _t('بسيط', 'Minimal');
+  String get pdfAccentColor      => _t('اللون الرئيسي', 'Accent color');
+  String get pdfLogo             => _t('الشعار', 'Logo');
+  String get pdfLogoCircle       => _t('دائري', 'Circle');
+  String get pdfLogoRounded      => _t('مربع', 'Square');
+  String get pdfLogoHidden       => _t('إخفاء', 'Hidden');
+  String get pdfTextSize         => _t('حجم الخط', 'Text size');
+  String get pdfTextSmall        => _t('صغير', 'Small');
+  String get pdfTextNormal       => _t('متوسط', 'Normal');
+  String get pdfTextLarge        => _t('كبير', 'Large');
+  String get pdfFields           => _t('محتوى المستند', 'Document content');
+  String get pdfShowBusinessContact => _t('بيانات التواصل للنشاط', 'Business contact details');
+  String get pdfShowTaxId        => _t('الرقم الضريبي', 'Tax ID');
+  String get pdfShowCustomer     => _t('بيانات العميل', 'Customer details');
+  String get pdfShowNotes        => _t('الملاحظات', 'Notes');
+  String get pdfShowPaymentSummary => _t('المدفوع والمتبقي (الفواتير)', 'Paid and remaining (invoices)');
+  String get pdfShowSignature    => _t('خانة التوقيع والختم', 'Signature and stamp area');
+  String get pdfShowPageNumbers  => _t('أرقام الصفحات', 'Page numbers');
+  String get pdfZebraRows        => _t('تظليل صفوف الجدول بالتناوب', 'Striped table rows');
+  String get pdfFooterText       => _t('نص التذييل', 'Footer text');
+  String get pdfFooterTextHint   => _t('مثال: شكراً لتعاملكم معنا', 'e.g. Thank you for your business');
+  String get pdfResetDefaults    => _t('استعادة الإعدادات الافتراضية', 'Reset to defaults');
+  String get pdfSampleItem1      => _t('خدمة تصميم', 'Design service');
+  String get pdfSampleItem2      => _t('منتج تجريبي', 'Sample product');
+  String get pdfSampleCustomer   => _t('عميل تجريبي', 'Sample customer');
+  String get pdfSampleNotes      => _t('هذه معاينة للتصميم فقط.', 'This is a design preview only.');
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

@@ -101,9 +101,20 @@ REVIEWER_VISIBLE=(
   "lib/screens/activation_screen.dart"
 )
 
+# Support surface: the only files allowed to reference the support channels
+# (WhatsApp / Facebook / website / Play listing). They are still URL-
+# allowlisted and still scanned for price / pricing-page tokens.
+SUPPORT_SURFACE=(
+  "lib/core/constants/app_constants.dart"
+  "lib/screens/about_screen.dart"
+)
+
 # The ONLY outbound hosts the app is permitted to reach. Three product-site
 # pages (privacy, terms, delete-data) plus the activation API host.
 URL_ALLOWLIST_RE='^(https://almhdy24\.com/products/waraqatak/(privacy|terms|delete)\.html|https://api\.almhdy24\.com(/.*)?)$'
+
+# Support links, allowed on SUPPORT_SURFACE files only.
+SUPPORT_URL_RE='^(https://wa\.me/249993452125|https://www\.facebook\.com/profile\.php\?id=61593843478292|https://almhdy24\.com|https://play\.google\.com/store/apps/details\?id=com\.elmahdi\.waraqatak)$'
 
 # Hard-forbidden tokens on reviewer-visible screens, case-insensitive,
 # matched against non-comment lines only. The guard-script path and
@@ -111,6 +122,17 @@ URL_ALLOWLIST_RE='^(https://almhdy24\.com/products/waraqatak/(privacy|terms|dele
 # intentionally not flagged — the pass sees string literals and code
 # identifiers, not docstrings.
 LEAK_PATTERN='whatsapp|wa\.me|facebook|pro\.html|pricing|\+[0-9]{3,}'
+# On the support surface, support-channel names are expected; prices and
+# pricing pages are still forbidden.
+SUPPORT_LEAK_PATTERN='pro\.html|pricing|\+[0-9]{3,}'
+
+is_support_surface() {
+  local f
+  for f in "${SUPPORT_SURFACE[@]}"; do
+    [ "$f" = "$1" ] && return 0
+  done
+  return 1
+}
 
 # Files to scan in the purchase-vocabulary pass (Dart source only; tests
 # and generated code are excluded).
@@ -225,6 +247,10 @@ for file in "${REVIEWER_VISIBLE[@]}"; do
                    || true); do
       # Trim trailing non-URL punctuation.
       clean=$(printf '%s' "$url" | sed -E 's/[.,);\]"'"'"']+$//')
+      if is_support_surface "$file" &&
+         printf '%s' "$clean" | grep -qE "$SUPPORT_URL_RE"; then
+        continue
+      fi
       if ! printf '%s' "$clean" | grep -qE "$URL_ALLOWLIST_RE"; then
         echo "FAIL [url-allowlist]: $file:$lineno $clean"
         violations=$((violations + 1))
@@ -240,8 +266,10 @@ done
 # Comment-stripped; preserves original line numbers via awk's NR prefix.
 for file in "${REVIEWER_VISIBLE[@]}"; do
   [ -f "$file" ] || continue
+  pattern="$LEAK_PATTERN"
+  is_support_surface "$file" && pattern="$SUPPORT_LEAK_PATTERN"
   if matches=$(awk '!/^[[:space:]]*\/\//{print NR":"$0}' "$file" \
-               | grep -Ei "$LEAK_PATTERN"); then
+               | grep -Ei "$pattern"); then
     echo "FAIL [leak]: $file"
     echo "$matches" | sed 's/^/    /'
     violations=$((violations + 1))

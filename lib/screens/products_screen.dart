@@ -6,6 +6,7 @@ import '../models/product.dart';
 import '../services/product_service.dart';
 import 'inventory_screen.dart';
 import 'product_form_screen.dart';
+import '../widgets/responsive.dart';
 
 class ProductsScreen extends StatefulWidget {
   final int refreshToken;
@@ -170,7 +171,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
@@ -216,7 +217,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
           Expanded(child: _buildList(context, l10n, cs)),
         ],
-      ),
+      )),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'fab_products',
         onPressed: () => Navigator.push(

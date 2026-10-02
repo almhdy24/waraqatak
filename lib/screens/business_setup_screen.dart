@@ -7,6 +7,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/currency.dart';
 import 'payment_methods_screen.dart';
+import '../widgets/responsive.dart';
 
 class BusinessSetupScreen extends StatefulWidget {
   const BusinessSetupScreen({super.key});
@@ -160,7 +161,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.businessData), centerTitle: true),
-      body: Form(
+      body: ResponsiveCenter(child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
@@ -343,7 +344,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
                     backgroundColor: primaryColor,
-                    foregroundColor: Colors.white),
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary),
                 child: _saving
                     ? const SizedBox(
                         width: 24,
@@ -355,7 +356,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

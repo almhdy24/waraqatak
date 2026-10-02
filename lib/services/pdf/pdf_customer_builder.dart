@@ -1,9 +1,10 @@
-import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../localization/app_localizations.dart';
 import '../../models/contact.dart';
 import '../../models/document.dart';
+import '../../utils/pdf_settings.dart';
+import 'pdf_theme.dart';
 import 'pdf_text_utils.dart';
 
 class PdfCustomerBuilder {
@@ -13,9 +14,11 @@ class PdfCustomerBuilder {
     required AppLocalizations l10n,
     required pw.Font bold,
     required pw.Font regular,
-    required PdfColor textColor,
+    required PdfTheme theme,
     required bool isArabic,
   }) {
+    final textColor = theme.textColor;
+    final minimal = theme.style.template == PdfTemplate.minimal;
     final name = contact?.name ?? doc.recipientName ?? '';
     final phone = contact?.phone ?? doc.recipientPhone;
     final address = contact?.address;
@@ -23,10 +26,22 @@ class PdfCustomerBuilder {
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 12),
       padding: const pw.EdgeInsets.all(8),
-      decoration: pw.BoxDecoration(
-        color: const PdfColor.fromInt(0xFFF8F7F3),
-        border: pw.Border.all(color: const PdfColor.fromInt(0xFFE5E7EB)),
-      ),
+      decoration: minimal
+          ? pw.BoxDecoration(
+              border: pw.Border(
+                right: isArabic
+                    ? pw.BorderSide(color: theme.primaryColor, width: 2)
+                    : pw.BorderSide.none,
+                left: isArabic
+                    ? pw.BorderSide.none
+                    : pw.BorderSide(color: theme.primaryColor, width: 2),
+              ),
+            )
+          : pw.BoxDecoration(
+              color: theme.lightBg,
+              border: pw.Border.all(color: theme.borderColor),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+            ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
@@ -38,8 +53,8 @@ class PdfCustomerBuilder {
               '${l10n.customerOrParty}:',
               style: pw.TextStyle(
                 font: bold,
-                fontSize: 13,
-                color: textColor,
+                fontSize: theme.fs(11),
+                color: theme.primaryColor,
               ),
             ),
           ),
@@ -48,7 +63,7 @@ class PdfCustomerBuilder {
           PdfTextUtils.directionalText(
             name,
             font: bold,
-            fontSize: 13,
+            fontSize: theme.fs(13),
             color: textColor,
           ),
           if (phone != null) ...[
@@ -61,7 +76,7 @@ class PdfCustomerBuilder {
                 '${l10n.phone}:',
                 style: pw.TextStyle(
                   font: regular,
-                  fontSize: 11,
+                  fontSize: theme.fs(11),
                   color: textColor,
                 ),
               ),
@@ -70,7 +85,7 @@ class PdfCustomerBuilder {
             PdfTextUtils.directionalText(
               phone,
               font: regular,
-              fontSize: 11,
+              fontSize: theme.fs(11),
               color: textColor,
               fallbackDirection: pw.TextDirection.ltr,
             ),
@@ -85,7 +100,7 @@ class PdfCustomerBuilder {
                 '${l10n.address}:',
                 style: pw.TextStyle(
                   font: regular,
-                  fontSize: 11,
+                  fontSize: theme.fs(11),
                   color: textColor,
                 ),
               ),
@@ -94,7 +109,7 @@ class PdfCustomerBuilder {
             PdfTextUtils.directionalText(
               address,
               font: regular,
-              fontSize: 11,
+              fontSize: theme.fs(11),
               color: textColor,
             ),
           ],

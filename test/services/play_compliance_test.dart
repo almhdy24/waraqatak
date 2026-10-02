@@ -205,16 +205,55 @@ void main() {
       }
     });
 
-    test('support channel is email-only — no whatsapp / phone / url', () {
-      // AppConstants intentionally exposes one outbound channel for user
-      // contact: a plain email address. Any url-scheme or phone-number
-      // constant would mean the app is leaking an acquisition path.
+    test('support email is a plain address', () {
       expect(AppConstants.supportEmail, contains('@'));
       expect(AppConstants.supportEmail.toLowerCase().contains('http'),
           isFalse);
-      expect(AppConstants.supportEmail.contains('wa.me'), isFalse);
       expect(AppConstants.supportEmail.contains('+'), isFalse);
     });
+
+    test('support links are exactly the allowlisted channels', () {
+      // Mirrors SUPPORT_URL_RE in tool/check_play_compliance.sh. These are
+      // help/contact channels shown on the About screen only.
+      expect(AppConstants.whatsappUrl, 'https://wa.me/249993452125');
+      expect(AppConstants.facebookPageUrl,
+          'https://www.facebook.com/profile.php?id=61593843478292');
+      expect(AppConstants.websiteUrl, 'https://almhdy24.com');
+      expect(AppConstants.playStoreUrl,
+          'https://play.google.com/store/apps/details?id=com.elmahdi.waraqatak');
+    });
+  });
+
+  group('Support copy never mentions keys, prices or purchasing', () {
+    for (final l in [ar, en]) {
+      final support = [
+        l.supportAndContact,
+        l.whatsappSupport,
+        l.whatsappSupportDesc,
+        l.supportWhatsAppGreeting,
+        l.facebookPage,
+        l.facebookPageDesc,
+        l.developerWebsite,
+        l.getHelp,
+        l.shareAppMessage,
+      ];
+      test('${l.langCode}: support strings are neutral', () {
+        const forbidden = [
+          'key', 'activation', 'pro', 'price', 'buy', 'purchase',
+          'subscribe', 'pay',
+          'مفتاح', 'تفعيل', 'سعر', 'شراء', 'اشتر', 'اشتراك', 'ادفع', 'دفع',
+        ];
+        for (final text in support) {
+          final lower = text.toLowerCase();
+          for (final term in forbidden) {
+            expect(RegExp('\\b$term\\b').hasMatch(lower) ||
+                    (term.codeUnitAt(0) > 127 && lower.contains(term)),
+                isFalse,
+                reason: '"$term" found in support copy: $text');
+          }
+        }
+      });
+    }
   });
 
   group('Open-source licenses copy exists', () {

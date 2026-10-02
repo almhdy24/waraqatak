@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
+import '../core/theme_mode_scope.dart';
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/backup_service.dart';
 import '../services/license_service.dart';
-import '../utils/print_settings.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
 import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
+import 'pdf_customize_screen.dart';
+import '../widgets/responsive.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,19 +22,12 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  PaperSize _paperSize = PaperSize.a4;
   EntitlementState? _entitlement;
 
   @override
   void initState() {
     super.initState();
-    _loadPaperSize();
     _loadEntitlement();
-  }
-
-  Future<void> _loadPaperSize() async {
-    final size = await PrintSettings.getDefaultSize();
-    if (mounted) setState(() => _paperSize = size);
   }
 
   Future<void> _loadEntitlement() async {
@@ -60,13 +55,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final provider = LanguageProvider.of(context);
+    final themeScope = ThemeModeScope.of(context);
+    final cs = Theme.of(context).colorScheme;
+    Widget section(String title) => Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 20, 20, 6),
+          child: Text(
+            title,
+            style: TextStyle(
+              color: cs.primary,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        );
 
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.settings),
         centerTitle: true,
       ),
-      body: ListView(
+      body: ResponsiveCenter(child: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
           // ── Activation ──────────────────────────────────────────────────
           ListTile(
@@ -82,10 +91,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _loadEntitlement();
             },
           ),
-          const Divider(),
+          section(l10n.settingsSectionBusiness),
           ListTile(
             leading: const Icon(Icons.business),
             title: Text(l10n.businessData),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
@@ -95,6 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.account_balance_outlined),
             title: Text(l10n.financialSettings),
             subtitle: Text(l10n.financialSettingsDesc),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -105,11 +116,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             leading: const Icon(Icons.payment_outlined),
             title: Text(l10n.paymentMethods),
             subtitle: Text(l10n.configurePaymentMethods),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()),
             ),
           ),
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf_outlined),
+            title: Text(l10n.pdfCustomize),
+            subtitle: Text(l10n.pdfCustomizeDesc),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PdfCustomizeScreen()),
+            ),
+          ),
+
+          section(l10n.settingsSectionAppearance),
           ListTile(
             leading: const Icon(Icons.language),
             title: Text(l10n.languageLabel),
@@ -124,8 +148,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
-          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.dark_mode_outlined),
+            title: Text(l10n.themeModeLabel),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                    value: ThemeMode.light,
+                    icon: const Icon(Icons.light_mode_outlined),
+                    label: Text(l10n.themeLight)),
+                ButtonSegment(
+                    value: ThemeMode.dark,
+                    icon: const Icon(Icons.dark_mode_outlined),
+                    label: Text(l10n.themeDark)),
+                ButtonSegment(
+                    value: ThemeMode.system,
+                    icon: const Icon(Icons.brightness_auto_outlined),
+                    label: Text(l10n.themeSystem)),
+              ],
+              selected: {themeScope?.themeMode ?? ThemeMode.light},
+              onSelectionChanged: (s) =>
+                  themeScope?.onChangeThemeMode(s.first),
+            ),
+          ),
 
+          section(l10n.settingsSectionData),
           // Backup & Restore section
           ListTile(
             leading: const Icon(Icons.save_outlined),
@@ -183,7 +234,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onPressed: () => Navigator.pop(context, true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Colors.white,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                       ),
                       child: Text(l10n.restore),
                     ),
@@ -210,31 +261,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
           ),
-          const Divider(),
 
-          // Print settings
-          ListTile(
-            leading: const Icon(Icons.print_outlined),
-            title: Text(l10n.printSettings),
-          ),
-          ListTile(
-            leading: const SizedBox(width: 24),
-            title: Text(l10n.defaultPaperSize),
-            trailing: DropdownButton<PaperSize>(
-              value: _paperSize,
-              items: PaperSize.values.map((size) => DropdownMenuItem(
-                value: size,
-                child: Text(PrintSettings.labelFor(size, l10n)),
-              )).toList(),
-              onChanged: (v) async {
-                if (v == null) return;
-                await PrintSettings.setDefaultSize(v);
-                if (mounted) setState(() => _paperSize = v);
-              },
-            ),
-          ),
-          const Divider(),
-
+          section(l10n.settingsSectionSupport),
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
             title: Text(l10n.privacyPolicy),
@@ -245,13 +273,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.info_outline),
             title: Text(l10n.about),
+            subtitle: Text(l10n.aboutSubtitle),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const AboutScreen()),
             ),
           ),
         ],
-      ),
+      )),
     );
   }
 }

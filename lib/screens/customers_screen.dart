@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import 'contact_form_screen.dart';
 import 'customer_detail_screen.dart';
+import '../widgets/responsive.dart';
 
 class CustomersScreen extends StatefulWidget {
   final int refreshToken;
@@ -161,7 +162,7 @@ class _CustomersScreenState extends State<CustomersScreen>
           ],
         ),
       ),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
@@ -221,7 +222,7 @@ class _CustomersScreenState extends State<CustomersScreen>
             ),
           ),
         ],
-      ),
+      )),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'fab_customers',
         onPressed: () => _openForm(),

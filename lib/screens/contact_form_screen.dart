@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
+import '../widgets/responsive.dart';
 
 class ContactFormScreen extends StatefulWidget {
   final Contact? contact;
@@ -92,7 +93,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
         title: Text(isEdit ? l10n.edit : (l10n.customer)),
         centerTitle: true,
       ),
-      body: Form(
+      body: ResponsiveCenter(child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
@@ -181,20 +182,20 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
                 child: _saving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 24,
                         height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary),
                       )
                     : Text(l10n.save),
               ),
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

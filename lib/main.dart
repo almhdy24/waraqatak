@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'core/theme_mode_scope.dart';
 import 'database/database_helper.dart';
 import 'localization/app_localizations.dart';
 import 'screens/splash_screen.dart';
@@ -29,17 +30,11 @@ Future<void> main() async {
     };
 
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarDividerColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ));
     await DatabaseHelper.instance.database;
     final prefs = await SharedPreferences.getInstance();
     final lang = prefs.getString('language') ?? 'ar';
-    runApp(WarqatekApp(initialLanguage: lang));
+    final themeMode = ThemeModeScope.decode(prefs.getString('theme_mode'));
+    runApp(WarqatekApp(initialLanguage: lang, initialThemeMode: themeMode));
   }, (error, stack) {
     developer.log('Uncaught zone error', error: error, stackTrace: stack);
   });
@@ -47,7 +42,12 @@ Future<void> main() async {
 
 class WarqatekApp extends StatefulWidget {
   final String initialLanguage;
-  const WarqatekApp({super.key, required this.initialLanguage});
+  final ThemeMode initialThemeMode;
+  const WarqatekApp({
+    super.key,
+    required this.initialLanguage,
+    this.initialThemeMode = ThemeMode.light,
+  });
 
   @override
   State<WarqatekApp> createState() => _WarqatekAppState();
@@ -55,11 +55,19 @@ class WarqatekApp extends StatefulWidget {
 
 class _WarqatekAppState extends State<WarqatekApp> {
   late String _langCode;
+  late ThemeMode _themeMode;
 
   @override
   void initState() {
     super.initState();
     _langCode = widget.initialLanguage;
+    _themeMode = widget.initialThemeMode;
+  }
+
+  Future<void> changeThemeMode(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', ThemeModeScope.encode(mode));
+    setState(() => _themeMode = mode);
   }
 
   Future<void> changeLanguage(String lang) async {
@@ -73,18 +81,54 @@ class _WarqatekAppState extends State<WarqatekApp> {
     return LanguageProvider(
       langCode: _langCode,
       onChangeLanguage: changeLanguage,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'ورقتك',
-        theme: AppTheme.lightTheme,
-        locale: Locale(_langCode),
-        supportedLocales: const [Locale('ar'), Locale('en')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: const SplashScreen(),
+      child: ThemeModeScope(
+        themeMode: _themeMode,
+        onChangeThemeMode: changeThemeMode,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'ورقتك',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: _themeMode,
+          locale: Locale(_langCode),
+          supportedLocales: const [Locale('ar'), Locale('en')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          builder: (context, child) => _SystemInsets(child: child!),
+          home: const SplashScreen(),
+        ),
+      ),
+    );
+  }
+}
+
+/// Keeps every route clear of the system navigation bar and of display
+/// cutouts in landscape (Android 15+ always draws edge-to-edge).
+///
+/// App bars still extend under the status bar; the bottom inset is painted
+/// with the surface color so it blends with the navigation bar.
+class _SystemInsets extends StatelessWidget {
+  final Widget child;
+  const _SystemInsets({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          .copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+      ),
+      child: ColoredBox(
+        color: theme.colorScheme.surface,
+        child: SafeArea(top: false, child: child),
       ),
     );
   }

@@ -5,6 +5,7 @@ import '../models/entitlement.dart';
 import '../services/license_service.dart';
 import 'activation_screen.dart';
 import 'transparency_screen.dart';
+import '../widgets/responsive.dart';
 
 /// Settings → License.
 ///
@@ -122,7 +123,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
         title: Text(l10n.licenseScreenTitle),
         centerTitle: true,
       ),
-      body: _state == null
+      body: ResponsiveCenter(child: _state == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -224,7 +225,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
                   ),
                 ],
               ],
-            ),
+            )),
     );
   }
 

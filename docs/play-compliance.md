@@ -130,6 +130,26 @@ Dart tree:
    The About screen is deliberately excluded from this pass; it is a
    company-info page that may list generic contact details.
 
+3. **URL allowlist** and 4. **leak scan** on reviewer-visible files
+   (`app_constants.dart`, About, License, Transparency, Activation).
+
+### Support surface (About screen)
+
+The About screen and `AppConstants` are the *support surface*: they may
+link to help/contact channels — email, WhatsApp
+(`https://wa.me/249993452125`), the Facebook page, the developer website
+and the app's own Play listing (rate / share). These URLs are allowlisted
+by `SUPPORT_URL_RE` and only accepted in those two files. Rules:
+
+- Support copy describes help and contact only. It must never mention
+  activation keys, Pro, prices, buying or paying; a unit test checks the
+  support strings in both languages.
+- Price/pricing-page tokens (`pricing`, `pro.html`, `+<digits>`) stay
+  forbidden on the support surface.
+- The Pro-gating screens (locked feature, activation, upgrade sheet,
+  License, Transparency) keep the full ban on WhatsApp / Facebook /
+  website wording.
+
 The script runs as the first step in each GitHub Actions workflow
 (`ci.yml`, `build-debug.yml`, `release.yml`) before analyze and tests. A
 unit test (`test/services/play_compliance_test.dart`) mirrors both passes

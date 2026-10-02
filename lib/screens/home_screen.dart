@@ -20,6 +20,7 @@ import 'purchase_screen.dart';
 import 'quotation_screen.dart';
 import 'reports_screen.dart';
 import 'voucher_screen.dart';
+import '../widgets/responsive.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -192,7 +193,7 @@ class HomeScreenState extends State<HomeScreen> {
 
     if (_error != null) {
       return Scaffold(
-        body: Center(
+        body: ResponsiveCenter(child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -201,14 +202,14 @@ class HomeScreenState extends State<HomeScreen> {
               FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
             ],
           ),
-        ),
+        )),
       );
     }
 
     if (_business == null) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.appTitle), centerTitle: true),
-        body: Center(
+        body: ResponsiveCenter(child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -230,7 +231,7 @@ class HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-        ),
+        )),
       );
     }
 
@@ -258,7 +259,7 @@ class HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
+      body: ResponsiveCenter(child: RefreshIndicator(
         onRefresh: _load,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -280,7 +281,7 @@ class HomeScreenState extends State<HomeScreen> {
                       style: const TextStyle(fontSize: 16)),
                   style: FilledButton.styleFrom(
                       backgroundColor: primaryColor,
-                      foregroundColor: Colors.white),
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary),
                 ),
               ),
               const SizedBox(height: 8),
@@ -406,7 +407,7 @@ class HomeScreenState extends State<HomeScreen> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -470,7 +471,7 @@ class HomeScreenState extends State<HomeScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
-                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                     ),
                     child: ListTile(
                       leading: Icon(_iconForType(doc.type), color: primaryColor),
@@ -495,7 +496,7 @@ class HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 
@@ -628,7 +629,7 @@ class HomeScreenState extends State<HomeScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE5E7EB)),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -641,7 +642,7 @@ class HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(title,
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                      style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       overflow: TextOverflow.ellipsis),
                 ),
               ],
@@ -651,7 +652,7 @@ class HomeScreenState extends State<HomeScreen> {
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: color == Colors.grey ? const Color(0xFF202124) : color)),
+                    color: color == Colors.grey ? Theme.of(context).colorScheme.onSurface : color)),
             if (subtitle != null)
               Text(subtitle,
                   style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF))),

@@ -5,6 +5,7 @@ import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../services/inventory_service.dart';
 import 'barcode_scanner_screen.dart';
+import '../widgets/responsive.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -397,7 +398,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
@@ -464,7 +465,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
           Expanded(child: _buildList(context, l10n, cs)),
         ],
-      ),
+      )),
     );
   }
 
