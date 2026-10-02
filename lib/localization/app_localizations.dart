@@ -745,6 +745,7 @@ class AppLocalizations {
   String get pdfCustomize        => _t('تخصيص المستندات (PDF)', 'Document design (PDF)');
   String get pdfCustomizeDesc    => _t('الألوان والقالب والشعار والحقول', 'Colors, template, logo and fields');
   String get pdfPreview          => _t('معاينة', 'Preview');
+  String get pdfOptions          => _t('الخيارات', 'Options');
   String get pdfTemplate         => _t('القالب', 'Template');
   String get pdfTemplateClassic  => _t('كلاسيكي', 'Classic');
   String get pdfTemplateModern   => _t('عصري', 'Modern');

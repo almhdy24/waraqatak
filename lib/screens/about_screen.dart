@@ -203,20 +203,23 @@ class _Hero extends StatelessWidget {
           Semantics(
             label: l10n.appLogoLabel,
             image: true,
+            // The logo carries its own rounded brand background.
             child: Container(
-              width: 84,
-              height: 84,
-              padding: const EdgeInsets.all(16),
+              width: 88,
+              height: 88,
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
+                color: Colors.white.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              child: SvgPicture.asset(
-                'assets/logo.svg',
-                colorFilter:
-                    const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-              ),
+              child: SvgPicture.asset('assets/logo.svg'),
             ),
           ),
           const SizedBox(height: 14),
@@ -405,12 +408,8 @@ class _LinkTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5),
       ),
-      trailing: Icon(
-        Directionality.of(context) == TextDirection.rtl
-            ? Icons.chevron_left_rounded
-            : Icons.chevron_right_rounded,
-        color: cs.onSurfaceVariant,
-      ),
+      // chevron_right is mirrored automatically in RTL.
+      trailing: Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
     );
   }
 }

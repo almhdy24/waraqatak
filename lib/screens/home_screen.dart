@@ -557,6 +557,14 @@ class HomeScreenState extends State<HomeScreen> {
 
     if (message == null) return null;
 
+    // Pastel banners are for light mode; in dark mode tint the surface
+    // with the same hue and lighten the text instead.
+    if (Theme.of(context).brightness == Brightness.dark) {
+      bgColor = Color.alphaBlend(
+          textColor.withValues(alpha: 0.22), Theme.of(context).colorScheme.surface);
+      textColor = Color.lerp(textColor, Colors.white, 0.6)!;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

@@ -812,10 +812,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                   ),
                 ),
               ),
+              // chevron_right is mirrored automatically in RTL.
               Icon(
-                Directionality.of(context).index == 0
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
+                Icons.chevron_right_rounded,
                 color: colors.onSurfaceVariant,
                 size: 20,
               ),

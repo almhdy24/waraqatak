@@ -177,7 +177,7 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
               child: Column(
                 children: [
                   TabBar(tabs: [
-                    Tab(icon: const Icon(Icons.tune), text: l10n.pdfCustomize),
+                    Tab(icon: const Icon(Icons.tune), text: l10n.pdfOptions),
                     Tab(
                         icon: const Icon(Icons.visibility_outlined),
                         text: l10n.pdfPreview),

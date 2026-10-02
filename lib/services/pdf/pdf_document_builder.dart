@@ -13,6 +13,7 @@ import '../../utils/currency_utils.dart';
 import '../../utils/pdf_settings.dart';
 import '../../utils/print_settings.dart';
 import 'pdf_customer_builder.dart';
+import 'pdf_fonts.dart';
 import 'pdf_header_builder.dart';
 import 'pdf_items_table_builder.dart';
 import 'pdf_theme.dart';
@@ -34,8 +35,8 @@ class PdfDocumentBuilder {
     // Load fonts once regardless of paper size
     final regularFontData = await rootBundle.load('assets/fonts/Tajawal-Regular.ttf');
     final boldFontData = await rootBundle.load('assets/fonts/Tajawal-Bold.ttf');
-    final regular = pw.Font.ttf(regularFontData);
-    final bold = pw.Font.ttf(boldFontData);
+    final regular = ArabicTtfFont(regularFontData);
+    final bold = ArabicTtfFont(boldFontData);
 
     pw.MemoryImage? logoImage;
     if (business.logoPath != null && business.logoPath!.isNotEmpty) {
@@ -114,7 +115,7 @@ class PdfDocumentBuilder {
         pageFormat: pageFormat,
         margin: pw.EdgeInsets.all(margin),
         textDirection: textDir,
-        theme: pw.ThemeData.withFont(base: regular, bold: bold),
+        theme: _pageTheme(regular, bold, rtl: isArabic),
         header: (context) => context.pageNumber == 1
             ? PdfHeaderBuilder.build(
                 business: business,
@@ -141,8 +142,10 @@ class PdfDocumentBuilder {
           // Document title
           pw.Center(
             child: pw.Directionality(
-              textDirection:
-                  isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr,
+              // A custom title may be Arabic inside an English document.
+              textDirection: PdfTextUtils.hasArabic(documentTypeLabel)
+                  ? pw.TextDirection.rtl
+                  : textDir,
               child: pw.Text(
                 documentTypeLabel,
                 style: pw.TextStyle(
@@ -296,6 +299,23 @@ class PdfDocumentBuilder {
     return pdf.save();
   }
 
+  /// Base text style for every document.
+  ///
+  /// Works around a `pdf` package bug: when it mirrors words on RTL lines it
+  /// uses each word's ink width instead of its advance width, so letters
+  /// whose tail extends past the glyph box (final/isolated ر، ا…) eat the
+  /// gap to the next word ("متجرالنيل"). Wider spaces keep Arabic words
+  /// visibly separated. LTR documents are unaffected and keep normal spacing.
+  static pw.ThemeData _pageTheme(pw.Font regular, pw.Font bold,
+      {required bool rtl}) {
+    final base = pw.ThemeData.withFont(base: regular, bold: bold);
+    if (!rtl) return base;
+    return base.copyWith(
+      defaultTextStyle: base.defaultTextStyle
+          .copyWith(wordSpacing: PdfTextUtils.rtlWordSpacing),
+    );
+  }
+
   static pw.Widget _buildFooter({
     required pw.Context context,
     required PdfTheme theme,
@@ -316,6 +336,7 @@ class PdfDocumentBuilder {
           child: pw.Text(text, style: style, textAlign: pw.TextAlign.center),
         );
     return pw.Container(
+      width: double.infinity,
       margin: const pw.EdgeInsets.only(top: 10),
       padding: const pw.EdgeInsets.only(top: 6),
       decoration: pw.BoxDecoration(
@@ -467,9 +488,11 @@ class PdfDocumentBuilder {
       );
     }
 
+    // A drawn rule: Tajawal has no box-drawing glyphs (a run of '─' printed
+    // as placeholder boxes).
     pw.Widget divider() => pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 4),
-          child: pw.Text('─' * 32, style: pw.TextStyle(font: regular, fontSize: 8, color: theme.borderColor)),
+          padding: const pw.EdgeInsets.symmetric(vertical: 5),
+          child: pw.Container(height: 0.8, color: PdfColors.grey600),
         );
 
     final widgets = <pw.Widget>[];
@@ -558,6 +581,9 @@ class PdfDocumentBuilder {
 
     pdf.addPage(pw.Page(
       pageFormat: PrintSettings.pageFormatFor(PaperSize.thermal80mm),
+      // RTL so label/amount rows read right-to-left on Arabic receipts.
+      textDirection: textDir,
+      theme: _pageTheme(regular, bold, rtl: isArabic),
       build: (ctx) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: widgets,
