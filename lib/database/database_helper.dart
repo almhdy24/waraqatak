@@ -751,7 +751,13 @@ class DatabaseHelper {
   }
 
   // ========== Documents ==========
-  Future<int> insertDocumentWithItems(Document doc, List<DocumentItem> items, {Contact? contact}) async {
+  /// Inserts [doc] with its [items] (stock and stock movements included).
+  ///
+  /// [payNowMethod]: for issued invoices only, records a full payment with
+  /// this method (linked receipt + payment row) in the same transaction, so a
+  /// quick sale is never left as an unpaid invoice if anything fails.
+  Future<int> insertDocumentWithItems(Document doc, List<DocumentItem> items,
+      {Contact? contact, String? payNowMethod}) async {
     final db = await database;
     return db.transaction((txn) async {
       int? contactId = doc.contactId;
@@ -820,7 +826,7 @@ class DatabaseHelper {
 
         if (doc.type == 'invoice' && !isDraft) {
           await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = "product"',
+            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = \'product\'',
             [item.quantity, item.productId],
           );
           final pRows = await txn.query('products', columns: ['type'], where: 'id = ?', whereArgs: [item.productId]);
@@ -829,13 +835,24 @@ class DatabaseHelper {
           }
         } else if (doc.type == 'purchase' && !isDraft) {
           await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = "product"',
+            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = \'product\'',
             [item.quantity, item.productId],
           );
           final pRows = await txn.query('products', columns: ['type'], where: 'id = ?', whereArgs: [item.productId]);
           if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
             await _insertStockMovement(txn, productId: item.productId!, type: StockMovement.typePurchase, quantity: item.quantity, referenceDocumentId: docId);
           }
+        }
+      }
+
+      if (payNowMethod != null) {
+        if (doc.type != 'invoice' || isDraft || doc.paid != 0) {
+          throw ArgumentError(
+              'payNowMethod requires an issued, unpaid invoice');
+        }
+        if (doc.total > 0) {
+          await _recordPaymentTxn(txn,
+              documentId: docId, amount: doc.total, paymentMethod: payNowMethod);
         }
       }
 
@@ -918,13 +935,13 @@ class DatabaseHelper {
         if (item.productId == null || item.quantity <= 0) continue;
 
         if (doc.type == 'invoice' && !newIsDraft) {
-          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = "product"', [item.quantity, item.productId]);
+          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = \'product\'', [item.quantity, item.productId]);
           final pRows = await txn.query('products', columns: ['type'], where: 'id = ?', whereArgs: [item.productId]);
           if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
             await _insertStockMovement(txn, productId: item.productId!, type: StockMovement.typeSale, quantity: -item.quantity, referenceDocumentId: doc.id);
           }
         } else if (doc.type == 'purchase' && !newIsDraft) {
-          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = "product"', [item.quantity, item.productId]);
+          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = \'product\'', [item.quantity, item.productId]);
           final pRows = await txn.query('products', columns: ['type'], where: 'id = ?', whereArgs: [item.productId]);
           if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
             await _insertStockMovement(txn, productId: item.productId!, type: StockMovement.typePurchase, quantity: item.quantity, referenceDocumentId: doc.id);
@@ -1134,70 +1151,86 @@ class DatabaseHelper {
     String? notes,
   }) async {
     final db = await database;
-    final receiptId = await db.transaction((txn) async {
-      final docRows = await txn.query('documents', where: 'id = ?', whereArgs: [documentId]);
-      if (docRows.isEmpty) throw StateError('Document not found');
-      final doc = Document.fromMap(docRows.first);
-
-      if (doc.type != 'invoice' && doc.type != 'purchase') throw StateError('Payment recording is only supported for invoices and purchases');
-      if (doc.status == DocumentStatus.cancelled) throw StateError('Cannot record payment on a cancelled document');
-      if (doc.status == DocumentStatus.draft) throw StateError('Cannot record payment on a draft document');
-      if (doc.status == DocumentStatus.paid) throw StateError('Document is already fully paid');
-      if (amount <= 0) throw ArgumentError('Payment amount must be greater than zero');
-      if (amount > doc.remaining) throw ArgumentError('Payment cannot exceed remaining amount');
-
-      // Create the linked voucher document (payment_receipt for invoices, expense_voucher for purchases)
-      final linkedType = doc.type == 'purchase' ? 'expense_voucher' : 'payment_receipt';
-      final linkedNumber = await getNextDocumentNumber(txn, linkedType);
-      final now = DateTime.now();
-      final receiptId = await txn.insert('documents', {
-        'type': linkedType,
-        'document_number': linkedNumber,
-        'date': now.toIso8601String(),
-        'contact_id': doc.contactId,
-        'recipient_name': doc.recipientName,
-        'recipient_phone': doc.recipientPhone,
-        'subtotal': amount,
-        'discount': 0.0,
-        'tax_rate': 0.0,
-        'tax_amount': 0.0,
-        'total': amount,
-        'paid': amount,
-        'remaining': 0.0,
-        'payment_method': paymentMethod,
-        'valid_until': null,
-        'notes': doc.documentNumber,
-        'related_document_id': documentId,
-        'status': DocumentStatus.issued,
-        'currency_code': doc.currencyCode,
-      });
-
-      // Record the payment row linked to the receipt
-      await txn.insert('document_payments', {
-        'document_id': documentId,
-        'amount': amount,
-        'payment_method': paymentMethod,
-        'date': now.toIso8601String(),
-        'notes': notes,
-        'receipt_document_id': receiptId,
-      });
-
-      // Update invoice totals
-      final newPaid      = doc.paid + amount;
-      final newRemaining = (doc.total - newPaid).clamp(0.0, double.infinity);
-      final newStatus    = DocumentStatus.fromPayment(newPaid, doc.total);
-
-      await txn.update('documents', {
-        'paid': newPaid,
-        'remaining': newRemaining,
-        'status': newStatus,
-      }, where: 'id = ?', whereArgs: [documentId]);
-
-      return receiptId;
-    });
+    final receiptId = await db.transaction((txn) => _recordPaymentTxn(
+          txn,
+          documentId: documentId,
+          amount: amount,
+          paymentMethod: paymentMethod,
+          notes: notes,
+        ));
     await logAuditEvent('payment_recorded',
         entityType: 'document', entityId: documentId,
         details: 'amount=$amount method=$paymentMethod');
+    return receiptId;
+  }
+
+  /// Records a payment against an invoice/purchase inside [txn]: creates the
+  /// linked receipt/voucher, the payment row, and updates paid/remaining/status.
+  Future<int> _recordPaymentTxn(
+    Transaction txn, {
+    required int documentId,
+    required double amount,
+    String? paymentMethod,
+    String? notes,
+  }) async {
+    final docRows = await txn.query('documents', where: 'id = ?', whereArgs: [documentId]);
+    if (docRows.isEmpty) throw StateError('Document not found');
+    final doc = Document.fromMap(docRows.first);
+
+    if (doc.type != 'invoice' && doc.type != 'purchase') throw StateError('Payment recording is only supported for invoices and purchases');
+    if (doc.status == DocumentStatus.cancelled) throw StateError('Cannot record payment on a cancelled document');
+    if (doc.status == DocumentStatus.draft) throw StateError('Cannot record payment on a draft document');
+    if (doc.status == DocumentStatus.paid) throw StateError('Document is already fully paid');
+    if (amount <= 0) throw ArgumentError('Payment amount must be greater than zero');
+    if (amount > doc.remaining) throw ArgumentError('Payment cannot exceed remaining amount');
+
+    // Create the linked voucher document (payment_receipt for invoices, expense_voucher for purchases)
+    final linkedType = doc.type == 'purchase' ? 'expense_voucher' : 'payment_receipt';
+    final linkedNumber = await getNextDocumentNumber(txn, linkedType);
+    final now = DateTime.now();
+    final receiptId = await txn.insert('documents', {
+      'type': linkedType,
+      'document_number': linkedNumber,
+      'date': now.toIso8601String(),
+      'contact_id': doc.contactId,
+      'recipient_name': doc.recipientName,
+      'recipient_phone': doc.recipientPhone,
+      'subtotal': amount,
+      'discount': 0.0,
+      'tax_rate': 0.0,
+      'tax_amount': 0.0,
+      'total': amount,
+      'paid': amount,
+      'remaining': 0.0,
+      'payment_method': paymentMethod,
+      'valid_until': null,
+      'notes': doc.documentNumber,
+      'related_document_id': documentId,
+      'status': DocumentStatus.issued,
+      'currency_code': doc.currencyCode,
+    });
+
+    // Record the payment row linked to the receipt
+    await txn.insert('document_payments', {
+      'document_id': documentId,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      'date': now.toIso8601String(),
+      'notes': notes,
+      'receipt_document_id': receiptId,
+    });
+
+    // Update invoice totals
+    final newPaid      = doc.paid + amount;
+    final newRemaining = (doc.total - newPaid).clamp(0.0, double.infinity);
+    final newStatus    = DocumentStatus.fromPayment(newPaid, doc.total);
+
+    await txn.update('documents', {
+      'paid': newPaid,
+      'remaining': newRemaining,
+      'status': newStatus,
+    }, where: 'id = ?', whereArgs: [documentId]);
+
     return receiptId;
   }
 
@@ -1327,7 +1360,7 @@ class DatabaseHelper {
           final productId = item['product_id'] as int?;
           final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
           if (productId == null || qty <= 0) continue;
-          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = "product"', [qty, productId]);
+          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = \'product\'', [qty, productId]);
           final pRows = await txn.query('products', columns: ['type'], where: 'id = ?', whereArgs: [productId]);
           if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
             await _insertStockMovement(txn, productId: productId, type: StockMovement.typeSale, quantity: -qty, referenceDocumentId: id);
@@ -1338,7 +1371,7 @@ class DatabaseHelper {
           final productId = item['product_id'] as int?;
           final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
           if (productId == null || qty <= 0) continue;
-          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = "product"', [qty, productId]);
+          await txn.rawUpdate('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = \'product\'', [qty, productId]);
           final pRows = await txn.query('products', columns: ['type'], where: 'id = ?', whereArgs: [productId]);
           if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
             await _insertStockMovement(txn, productId: productId, type: StockMovement.typePurchase, quantity: qty, referenceDocumentId: id);

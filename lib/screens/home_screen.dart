@@ -15,6 +15,7 @@ import 'business_setup_screen.dart';
 import 'custom_document_screen.dart';
 import 'document_detail_screen.dart';
 import 'invoice_screen.dart';
+import 'quick_sale_screen.dart';
 import 'inventory_screen.dart';
 import 'purchase_screen.dart';
 import 'quotation_screen.dart';
@@ -274,14 +275,30 @@ class HomeScreenState extends State<HomeScreen> {
               // Quick actions
               SizedBox(
                 height: 52,
-                child: FilledButton.icon(
-                  onPressed: () => _openScreen(const InvoiceScreen()),
-                  icon: const Icon(Icons.receipt_long),
-                  label: Text(l10n.createInvoice,
-                      style: const TextStyle(fontSize: 16)),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _openScreen(const QuickSaleScreen()),
+                        icon: const Icon(Icons.point_of_sale),
+                        label: Text(l10n.posQuickSale,
+                            style: const TextStyle(fontSize: 16)),
+                        style: FilledButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onPrimary),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: () => _openScreen(const InvoiceScreen()),
+                        icon: const Icon(Icons.receipt_long),
+                        label: Text(l10n.createInvoice,
+                            style: const TextStyle(fontSize: 16)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),

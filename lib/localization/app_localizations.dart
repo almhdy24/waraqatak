@@ -713,6 +713,30 @@ class AppLocalizations {
   String get freeDataAlwaysAvailable => _t('بياناتك ومستنداتك محفوظة دائماً حتى في الوضع المجاني.', 'Your data and documents are always available, even in Free mode.');
   String get freeModeBannerMsg       => _t('الوضع المجاني نشط — الفواتير والعملاء والمنتجات متاحة دائماً.', 'Free mode active — invoices, customers, and products are always available.');
 
+  // ========== QUICK SALE (POS) ==========
+  String get posQuickSale          => _t('بيع سريع', 'Quick sale');
+  String get posQuickSaleDesc      => _t('بيع بالمسح أو اللمس مع إيصال فوري', 'Tap or scan to sell with an instant receipt');
+  String get posSearchHint         => _t('ابحث بالاسم أو الكود أو الباركود', 'Search by name, code or barcode');
+  String get posViewCart           => _t('السلة', 'Cart');
+  String get posCartEmpty          => _t('السلة فارغة. اضغط على منتج لإضافته.', 'Cart is empty. Tap a product to add it.');
+  String get posAmountReceived     => _t('المبلغ المستلم', 'Amount received');
+  String get posChange             => _t('الباقي للعميل', 'Change');
+  String get posCompleteSale       => _t('إتمام البيع', 'Complete sale');
+  String get posSaleCompleted      => _t('تم البيع بنجاح', 'Sale completed');
+  String get posPrintReceipt       => _t('طباعة إيصال', 'Print receipt');
+  String get posShare              => _t('مشاركة', 'Share');
+  String get posViewInvoice        => _t('عرض الفاتورة', 'View invoice');
+  String get posNewSale            => _t('بيع جديد', 'New sale');
+  String get posClearCart          => _t('تفريغ السلة', 'Clear cart');
+  String get posClearCartConfirm   => _t('هل تريد حذف كل المنتجات من السلة؟', 'Remove all items from the cart?');
+  String get posProductNotFound    => _t('لم يتم العثور على منتج مطابق', 'No matching product');
+  String get posService            => _t('خدمة', 'Service');
+  String get posReceivedLessThanTotal => _t('المبلغ المستلم أقل من الإجمالي', 'Amount received is less than the total');
+  String get posSetupBusinessFirst => _t('أكمل بيانات النشاط التجاري أولاً من الإعدادات', 'Complete your business profile in Settings first');
+  String posNotEnoughStock(String name) => _t('الكمية المتوفرة من "$name" لا تكفي', 'Not enough stock for "$name"');
+  String posItemsCount(String n)   => _t('$n صنف', '$n items');
+  String posInStock(String n)      => _t('متوفر: $n', 'In stock: $n');
+
   // ========== ABOUT & SUPPORT ==========
   String get supportAndContact      => _t('الدعم والتواصل', 'Support & contact');
   String get whatsappSupport        => _t('واتساب', 'WhatsApp');
