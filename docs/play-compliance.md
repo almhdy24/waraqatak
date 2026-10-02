@@ -166,8 +166,9 @@ bash tool/check_play_compliance.sh
 
 Carried over from `docs/pre-release-audit.md`:
 
-- `compileSdk = 36`, `targetSdk = 36`, `minSdk = 23` (explicit — no
-  `flutter.*` indirection).
+- `compileSdk = 36`, `targetSdk = 36`, `minSdk = flutter.minSdkVersion`
+  (API 24 on Flutter 3.41, which rewrites any lower hard-coded value at
+  build time; the release supports Android 7.0+).
 - `AndroidManifest`: `android:allowBackup="false"`,
   `android:fullBackupContent="false"`, `android:extractNativeLibs="false"`,
   explicit `INTERNET` permission (activation call still goes to the
