@@ -32,8 +32,13 @@ class LicenseService {
   static const _kOrderRef      = 'wq_order_ref';
   static const _kIdempotency   = 'wq_idem_key';
   static const _kRejectNote    = 'wq_rejection_note';
+  static const _kActivationTok = 'wq_activation_token';
+  static const _kLastVerified  = 'wq_license_verified_at';
 
   static const int _trialDays = 14;
+
+  /// How often a stored license is re-checked against the server.
+  static const Duration revalidationInterval = Duration(hours: 24);
 
   /// In-memory cache so entitlement is only computed once per session.
   EntitlementState? _cached;
@@ -171,15 +176,81 @@ class LicenseService {
     required String licenseKey,
     required DateTime? expiresAt,
     required bool isActive,
+    String? activationToken,
   }) async {
     await _store.write(key: _kLicenseKey, value: licenseKey);
     await _store.write(
         key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '');
     await _store.write(
         key: _kLicenseStatus, value: isActive ? 'active' : 'revoked');
+    if (activationToken != null) {
+      await _store.write(key: _kActivationTok, value: activationToken);
+      await _store.write(
+          key: _kLastVerified, value: DateTime.now().toIso8601String());
+    }
     // Clear pending order now that a license is stored.
     await _store.delete(key: _kOrderRef);
     await _store.delete(key: _kRejectNote);
+    invalidateCache();
+  }
+
+  /// Stored expiry for [licenseKey], or null when unknown / not stored.
+  ///
+  /// Used when re-entering a key so a known expiry is never replaced with
+  /// "no expiry".
+  Future<DateTime?> storedExpiryFor(String licenseKey) async {
+    final stored = await _store.read(key: _kLicenseKey);
+    if (stored != licenseKey) return null;
+    final s = await _store.read(key: _kLicenseExpiry);
+    return (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
+  }
+
+  // ── Server Revalidation ────────────────────────────────────────────────────
+
+  /// True when a license is stored, still locally active, and has not been
+  /// confirmed by the server within [revalidationInterval].
+  Future<bool> needsRevalidation() async {
+    final key = await _store.read(key: _kLicenseKey);
+    if (key == null || key.isEmpty) return false;
+    if (await _store.read(key: _kLicenseStatus) == 'revoked') return false;
+    final s = await _store.read(key: _kLastVerified);
+    final last = (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
+    if (last == null) return true;
+    final age = DateTime.now().difference(last);
+    // A negative age means the clock moved back; re-check to be safe.
+    return age.isNegative || age > revalidationInterval;
+  }
+
+  /// Server confirmed the stored license is still valid on this device.
+  ///
+  /// A locally passed expiry is cleared, since the server (e.g. after a
+  /// renewal of the same key) is the source of truth.
+  Future<void> markLicenseVerified(String activationToken) async {
+    final now = DateTime.now();
+    await _store.write(key: _kActivationTok, value: activationToken);
+    await _store.write(key: _kLastVerified, value: now.toIso8601String());
+    final s = await _store.read(key: _kLicenseExpiry);
+    final known = (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
+    if (known != null && known.isBefore(now)) {
+      await _store.write(key: _kLicenseExpiry, value: '');
+      invalidateCache();
+    }
+  }
+
+  /// Server reported the stored license as revoked or invalid.
+  Future<void> markLicenseRevoked() async {
+    await _store.write(key: _kLicenseStatus, value: 'revoked');
+    invalidateCache();
+  }
+
+  /// Server reported the stored license as expired.
+  Future<void> markLicenseExpired() async {
+    final s = await _store.read(key: _kLicenseExpiry);
+    final known = (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
+    final now = DateTime.now();
+    if (known == null || known.isAfter(now)) {
+      await _store.write(key: _kLicenseExpiry, value: now.toIso8601String());
+    }
     invalidateCache();
   }
 

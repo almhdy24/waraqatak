@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
+import 'package:flutter/foundation.dart';
 
 import 'license_service.dart';
 
@@ -94,6 +95,7 @@ class SubscriptionService {
       licenseKey: license.licenseKey,
       expiresAt: license.expiresAt,
       isActive: license.status == LicenseStatus.active,
+      activationToken: result.activationToken,
     );
 
     return result;
@@ -111,15 +113,72 @@ class SubscriptionService {
 
   /// Activate a license by key only — used when the user manually enters their
   /// key after formatting their phone or reinstalling the app.
+  ///
+  /// The activation response carries no expiry, so a previously stored expiry
+  /// for the same key is kept. Server-side expiry or revocation is picked up by
+  /// [revalidateStoredLicense].
   static Future<void> activateByKey(String licenseKey, String deviceId) async {
-    await _sdk.public.activateLicense(
+    final result = await _sdk.public.activateLicense(
       ActivateLicenseRequest(licenseKey: licenseKey, machineId: deviceId),
     );
     await LicenseService.instance.storeLicense(
       licenseKey: licenseKey,
-      expiresAt: null,
+      expiresAt: await LicenseService.instance.storedExpiryFor(licenseKey),
       isActive: true,
+      activationToken: result.activationToken,
     );
+  }
+
+  /// Re-checks the stored license with the server, at most once per
+  /// [LicenseService.revalidationInterval].
+  ///
+  /// Offline-first: network errors, rate limits and unexpected responses keep
+  /// the current local state. Only a definitive server answer (403 revoked /
+  /// expired, 404 unknown key) downgrades the license. Never throws.
+  static Future<void> revalidateStoredLicense() async {
+    try {
+      final service = LicenseService.instance;
+      if (!await service.needsRevalidation()) return;
+      final key = await service.licenseKey;
+      if (key == null || key.isEmpty) return;
+      final deviceId = await service.getOrCreateDeviceId();
+
+      try {
+        final result = await _sdk.public.activateLicense(
+          ActivateLicenseRequest(licenseKey: key, machineId: deviceId),
+        );
+        await service.markLicenseVerified(result.activationToken);
+      } catch (e) {
+        switch (classifyRevalidationError(e)) {
+          case LicenseRevalidationOutcome.revoked:
+            await service.markLicenseRevoked();
+          case LicenseRevalidationOutcome.expired:
+            await service.markLicenseExpired();
+          case LicenseRevalidationOutcome.keep:
+            break;
+        }
+      }
+    } catch (e) {
+      debugPrint('License revalidation skipped: $e');
+    }
+  }
+
+  /// Maps an activation error during revalidation to the action to take.
+  @visibleForTesting
+  static LicenseRevalidationOutcome classifyRevalidationError(Object e) {
+    if (e is ElmahdiPayNotFoundException) {
+      return LicenseRevalidationOutcome.revoked;
+    }
+    if (e is ElmahdiPayForbiddenException) {
+      // Device-limit responses are not a verdict on the license itself.
+      if (e.maxDevices != null || e.activeDevices != null) {
+        return LicenseRevalidationOutcome.keep;
+      }
+      return e.message.toLowerCase().contains('expir')
+          ? LicenseRevalidationOutcome.expired
+          : LicenseRevalidationOutcome.revoked;
+    }
+    return LicenseRevalidationOutcome.keep;
   }
 
   static void close() {
@@ -127,3 +186,6 @@ class SubscriptionService {
     _client = null;
   }
 }
+
+/// Result of re-checking a stored license with the server.
+enum LicenseRevalidationOutcome { keep, revoked, expired }

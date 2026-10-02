@@ -81,6 +81,9 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          # Test APK only: fall back to debug signing if the keystore secret is
+          # absent. release.yml (Play uploads) stays strict.
+          ALLOW_DEBUG_SIGNING: 'true'
         run: flutter build apk --release
 
       - name: Upload APK artifact

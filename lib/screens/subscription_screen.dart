@@ -577,6 +577,12 @@ class _KeyEntrySheetState extends State<_KeyEntrySheet> {
         _loading = false;
         _error = widget.l10n.invalidLicenseKey;
       });
+    } on ElmahdiPayNotFoundException {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = widget.l10n.invalidLicenseKey;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
