@@ -72,6 +72,7 @@ ACQUISITION_PATTERN='contact us|contacting us|through our website|on whatsapp|wa
 ACQUISITION_SCAN=(
   "lib/screens/locked_feature_screen.dart"
   "lib/screens/activation_screen.dart"
+  "lib/screens/license_screen.dart"
   "lib/widgets/pro_upgrade_sheet.dart"
   "lib/localization/app_localizations.dart"
 )
@@ -122,7 +123,23 @@ for target in "${ACQUISITION_SCAN[@]}"; do
       -e 'get proFeaturesActivation ' \
       -e 'get getActivationKeyInfo ' \
       -e 'get invalidOrExpiredKey ' \
-      -e 'get deviceAlreadyActivated ' \
+      -e 'get activationTooManyAttempts ' \
+      -e 'get activationServerUnreachable ' \
+      -e 'get licenseScreenTitle ' \
+      -e 'get licenseStatusLabel ' \
+      -e 'get licenseTypeLabel ' \
+      -e 'get licenseExpiryLabel ' \
+      -e 'get licenseTypeTrial ' \
+      -e 'get licenseTypeActivated ' \
+      -e 'get licenseNoExpiryDate ' \
+      -e 'get licenseOnExpiryTitle ' \
+      -e 'get licenseOnExpiryBody ' \
+      -e 'get enterOrChangeKey ' \
+      -e 'get removeKeyFromDevice ' \
+      -e 'get removeKeyConfirmTitle ' \
+      -e 'get removeKeyConfirmBody ' \
+      -e 'get removeKeyConfirmAction ' \
+      -e 'get keyRemovedSnack ' \
       -e 'get enterActivationKey ' \
       -e 'get enterActivationKeyAction ' \
       -e 'get activationKeyHint ' \

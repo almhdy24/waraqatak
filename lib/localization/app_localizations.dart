@@ -615,10 +615,6 @@ class AppLocalizations {
         'مفتاح تفعيل غير صالح أو منتهي الصلاحية.',
         'Invalid or expired activation key.',
       );
-  String get deviceAlreadyActivated   => _t(
-        'هذا المفتاح مُستخدم على جهاز آخر.',
-        'This key is already in use on another device.',
-      );
   String get activationTooManyAttempts => _t(
         'محاولات كثيرة. يرجى المحاولة لاحقاً.',
         'Too many attempts. Please try again later.',
@@ -627,6 +623,37 @@ class AppLocalizations {
         'تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً.',
         'Could not reach the server. Please try again later.',
       );
+
+  // ── License screen (Settings → License) ───────────────────────────────────
+  String get licenseScreenTitle   => _t('التفعيل والترخيص',    'License');
+  String get licenseStatusLabel   => _t('الحالة',               'Status');
+  String get licenseTypeLabel     => _t('النوع',                'Type');
+  String get licenseExpiryLabel   => _t('تاريخ الانتهاء',       'Expiry');
+  String get licenseTypeTrial     => _t('تجربة مجانية',         'Free trial');
+  String get licenseTypeActivated => _t('مُفعَّل بمفتاح',       'Activated with a key');
+  String get licenseNoExpiryDate  => _t('بدون تاريخ انتهاء',     'No expiry date');
+  String get licenseOnExpiryTitle => _t(
+        'ماذا يحدث عند انتهاء الصلاحية؟',
+        'What happens when it expires?',
+      );
+  String get licenseOnExpiryBody  => _t(
+        'عند انتهاء التجربة أو التفعيل، تظل بياناتك ومستنداتك متاحة في الوضع المجاني، ويحتاج استخدام الميزات الاحترافية إلى مفتاح تفعيل جديد.',
+        'When your trial or license ends, your data and documents remain available in Free mode. Pro features require a new activation key.',
+      );
+  String get enterOrChangeKey     =>
+      _t('إدخال أو تغيير مفتاح التفعيل', 'Enter or change activation key');
+  String get removeKeyFromDevice  =>
+      _t('إزالة المفتاح من هذا الجهاز', 'Remove key from this device');
+  String get removeKeyConfirmTitle =>
+      _t('إزالة المفتاح؟', 'Remove key?');
+  String get removeKeyConfirmBody => _t(
+        'ستتم إزالة مفتاح التفعيل من هذا الجهاز فقط. لن يُلغى المفتاح على الخادم، ويمكنك إدخاله مجدداً في أي وقت.',
+        'The activation key will be removed from this device only. The key is not revoked on the server, and you can enter it again at any time.',
+      );
+  String get removeKeyConfirmAction =>
+      _t('إزالة', 'Remove');
+  String get keyRemovedSnack =>
+      _t('تمت إزالة المفتاح من هذا الجهاز.', 'Key removed from this device.');
 
   // ========== FREE / PRO GATING ==========
   String get proBadgeLabel           => _t('احترافي',                                   'Pro');

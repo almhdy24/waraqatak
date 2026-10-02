@@ -161,6 +161,20 @@ class LicenseService {
 
   Future<String?> get licenseKey => _store.read(key: _kLicenseKey);
 
+  /// Deletes the stored license from this device.
+  ///
+  /// Clears `wq_license_key`, `wq_license_expiry`, and `wq_license_status`
+  /// so entitlement falls back to the trial path (or expired-trial path
+  /// if the 14-day window has elapsed). The device identifier and trial
+  /// start markers are intentionally **not** touched — removing the key
+  /// is not meant to grant a fresh trial.
+  Future<void> clearLicense() async {
+    await _store.delete(key: _kLicenseKey);
+    await _store.delete(key: _kLicenseExpiry);
+    await _store.delete(key: _kLicenseStatus);
+    invalidateCache();
+  }
+
   // ── UUID v4 ────────────────────────────────────────────────────────────────
 
   String _generateUuidV4() {

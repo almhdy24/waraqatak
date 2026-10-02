@@ -7,8 +7,8 @@ import '../services/license_service.dart';
 import '../utils/print_settings.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
-import 'activation_screen.dart';
 import 'business_setup_screen.dart';
+import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
 
@@ -71,13 +71,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Activation ──────────────────────────────────────────────────
           ListTile(
             leading: const Icon(Icons.workspace_premium_outlined),
-            title: Text(l10n.activation),
+            title: Text(l10n.licenseScreenTitle),
             subtitle: Text(_entitlementLabel(l10n)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ActivationScreen()),
+                MaterialPageRoute(builder: (_) => const LicenseScreen()),
               );
               _loadEntitlement();
             },

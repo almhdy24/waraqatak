@@ -70,24 +70,34 @@ This branch brings Waraqatak into that model.
 
 ### Mandated approved copy (Arabic / English)
 
-Four strings, defined in `lib/localization/app_localizations.dart`, are the
-only Pro-gating messages shown to the user. All are deliberately neutral —
-they describe *what* an activation key does, never *where* or *how* to get
-one:
+Five strings, defined in `lib/localization/app_localizations.dart`, are
+the only Pro-gating messages shown to the user. All are deliberately
+neutral — they describe *what* an activation key does, never *where* or
+*how* to get one:
 
 | Key | Arabic | English |
 |---|---|---|
 | `proFeaturesActivation` | تُفعَّل الميزات الاحترافية بمفتاح تفعيل. | Pro features are unlocked with an activation key. |
 | `getActivationKeyInfo` | أدخل مفتاح التفعيل لإلغاء قفل الميزات الاحترافية. | Enter your activation key to unlock Pro features. |
 | `invalidOrExpiredKey` | مفتاح تفعيل غير صالح أو منتهي الصلاحية. | Invalid or expired activation key. |
-| `deviceAlreadyActivated` | هذا المفتاح مُستخدم على جهاز آخر. | This key is already in use on another device. |
+| `activationTooManyAttempts` | محاولات كثيرة. يرجى المحاولة لاحقاً. | Too many attempts. Please try again later. |
+| `activationServerUnreachable` | تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً. | Could not reach the server. Please try again later. |
+
+The server returns no device-count detail to the UI: all 4xx rejections
+that are not 429 collapse into one `invalidOrExpiredKey` outcome so no
+response path can enumerate which specific check rejected the key.
+Transport failures (network, timeout, 5xx) map to
+`activationServerUnreachable` so a valid key is never maligned by a
+transient server-side problem. The former `deviceAlreadyActivated`
+string was retired to keep the UI from distinguishing between "wrong
+key" and "already activated elsewhere".
 
 No URLs, phone numbers, prices, currencies, or "contact us / website /
 WhatsApp" wording appears anywhere in the Pro-gating UI.
 
 ## Server contract
 
-Endpoint: `POST https://api.almhdy24.com/pay/licenses/activate`
+Endpoint: `POST https://api.almhdy24.com/api/v1/pay/licenses/activate`
 Request body (the **only** fields sent):
 
 ```json

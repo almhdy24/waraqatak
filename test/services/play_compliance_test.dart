@@ -31,7 +31,8 @@ void main() {
         l.activationSuccessTitle,
         l.activationSuccessBody,
         l.invalidOrExpiredKey,
-        l.deviceAlreadyActivated,
+        l.activationTooManyAttempts,
+        l.activationServerUnreachable,
         l.proBadgeLabel,
         l.proIncludesPurchases,
         l.proIncludesInventory,
@@ -140,10 +141,22 @@ void main() {
       expect(ar.invalidOrExpiredKey.contains('تواصل'), isFalse);
     });
 
-    test('deviceAlreadyActivated is a neutral failure message', () {
-      expect(en.deviceAlreadyActivated.toLowerCase().contains('contact'),
+    test('activationTooManyAttempts is a neutral retry message', () {
+      expect(en.activationTooManyAttempts.toLowerCase().contains('contact'),
           isFalse);
-      expect(ar.deviceAlreadyActivated.contains('تواصل'), isFalse);
+      expect(en.activationTooManyAttempts.toLowerCase().contains('buy'),
+          isFalse);
+      expect(ar.activationTooManyAttempts.contains('تواصل'), isFalse);
+      expect(ar.activationTooManyAttempts.contains('شراء'), isFalse);
+    });
+
+    test('activationServerUnreachable never shown as "invalid key"', () {
+      expect(en.activationServerUnreachable.toLowerCase().contains('invalid'),
+          isFalse);
+      expect(en.activationServerUnreachable.toLowerCase().contains('contact'),
+          isFalse);
+      expect(ar.activationServerUnreachable.contains('غير صالح'), isFalse);
+      expect(ar.activationServerUnreachable.contains('تواصل'), isFalse);
     });
   });
 
