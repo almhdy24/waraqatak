@@ -109,9 +109,13 @@ class _ActivationScreenState extends State<ActivationScreen> {
           TextField(
             controller: _ctrl,
             autofocus: true,
-            textCapitalization: TextCapitalization.characters,
+            // Keys are case-sensitive base64url segments joined by '.', so
+            // no auto-capitalization, autocorrect or suggestions.
+            keyboardType: TextInputType.visiblePassword,
+            autocorrect: false,
+            enableSuggestions: false,
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9\-]')),
+              FilteringTextInputFormatter.allow(ActivationService.keyCharacter),
             ],
             decoration: InputDecoration(
               labelText: l10n.enterActivationKey,

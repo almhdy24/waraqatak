@@ -606,7 +606,7 @@ class AppLocalizations {
 
   // ── Activation key entry ───────────────────────────────────────────────────
   String get enterActivationKey       => _t('أدخل مفتاح التفعيل',                      'Enter activation key');
-  String get activationKeyHint        => _t('مثال: XXXX-XXXX-XXXX',                     'e.g. XXXX-XXXX-XXXX');
+  String get activationKeyHint        => _t('الصق مفتاح التفعيل هنا',                   'Paste your activation key here');
   String get activate                 => _t('تفعيل',                                    'Activate');
   // Approved copy (mandated):
   String get proFeaturesActivation    => _t(

@@ -1,6 +1,7 @@
 import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/foundation.dart';
 
+import 'license_key.dart';
 import 'license_service.dart';
 
 /// Deterministic result of an activation attempt.
@@ -36,6 +37,9 @@ enum ActivationOutcome {
 class ActivationService {
   ActivationService._();
 
+  /// App slug the licensing server issues Waraqatak keys under.
+  static const String appSlug = 'com.elmahdi.waraqatak';
+
   /// HTTPS base URL for the licensing server.
   static const String _serverUrl = 'https://api.almhdy24.com';
 
@@ -65,6 +69,10 @@ class ActivationService {
     _client?.close();
     _client = null;
   }
+
+  /// Characters a license key may contain: the server issues keys as
+  /// `base64url(payload).base64url(signature)`.
+  static final RegExp keyCharacter = RegExp(r'[A-Za-z0-9_.\-]');
 
   /// Normalize a pasted key.
   ///
@@ -98,8 +106,11 @@ class ActivationService {
   ///
   /// Returns one of [ActivationOutcome]. On [ActivationOutcome.success] the
   /// license key is persisted via [LicenseService.storeLicense] with
-  /// `expiresAt: null` and `isActive: true`. For every other outcome
-  /// nothing is written to storage.
+  /// `isActive: true` and the expiry embedded in the key (null for lifetime
+  /// keys). For every other outcome nothing is written to storage.
+  ///
+  /// Signed keys issued for another app, or already expired, are rejected
+  /// as [ActivationOutcome.invalid] without contacting the server.
   ///
   /// No automatic retries. Caller is responsible for re-invoking after a
   /// user-visible retry.
@@ -109,6 +120,12 @@ class ActivationService {
   ) async {
     final key = normalizeKey(rawKey);
     if (key.isEmpty) {
+      return ActivationOutcome.invalid;
+    }
+
+    final claims = LicenseKeyClaims.tryParse(key);
+    if (claims != null &&
+        (claims.appSlug != appSlug || claims.isExpiredAt(DateTime.now()))) {
       return ActivationOutcome.invalid;
     }
 
@@ -137,7 +154,7 @@ class ActivationService {
 
     await LicenseService.instance.storeLicense(
       licenseKey: key,
-      expiresAt: null,
+      expiresAt: claims?.expiresAt,
       isActive: true,
     );
     return ActivationOutcome.success;
