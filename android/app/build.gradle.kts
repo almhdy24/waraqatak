@@ -20,7 +20,9 @@ android {
 
     defaultConfig {
         applicationId = "com.elmahdi.waraqatak"
-        minSdk = 23
+        // Flutter 3.41 supports API 24+ and rewrites lower values at build
+        // time, so the effective minimum is Android 7.0 (API 24).
+        minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName

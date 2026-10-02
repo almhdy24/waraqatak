@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../localization/app_localizations.dart';
 import '../services/activation_service.dart';
 import '../services/license_service.dart';
+import '../widgets/responsive.dart';
 
 /// Screen for entering an activation key.
 ///
@@ -76,11 +77,11 @@ class _ActivationScreenState extends State<ActivationScreen> {
         title: Text(l10n.activation),
         centerTitle: true,
       ),
-      body: SafeArea(
+      body: ResponsiveCenter(child: SafeArea(
         child: _success
             ? _buildSuccess(l10n, cs)
             : _buildForm(l10n, cs),
-      ),
+      )),
     );
   }
 

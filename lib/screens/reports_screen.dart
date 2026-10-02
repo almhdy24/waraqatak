@@ -4,6 +4,7 @@ import '../models/entitlement.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
+import 'reports/accounting_screen.dart';
 import 'reports/customer_report_screen.dart';
 import 'reports/inventory_report_screen.dart';
 import 'reports/payments_report_screen.dart';
@@ -12,6 +13,7 @@ import 'reports/purchases_report_screen.dart';
 import 'reports/sales_report_screen.dart';
 import 'reports/supplier_report_screen.dart';
 import 'activation_screen.dart';
+import '../widgets/responsive.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -57,6 +59,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     final reports = [
+      _ReportEntry(
+        icon: Icons.account_balance_outlined,
+        color: primaryColor,
+        title: l10n.accounting,
+        screen: const AccountingScreen(),
+        proFeature: Feature.advancedReports,
+      ),
       _ReportEntry(
         icon: Icons.trending_up_rounded,
         color: Colors.green,
@@ -107,7 +116,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.reports), centerTitle: true),
-      body: ListView.separated(
+      body: ResponsiveCenter(child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: reports.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -119,7 +128,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
             ),
             child: ListTile(
               leading: CircleAvatar(
@@ -146,7 +155,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ),
           );
         },
-      ),
+      )),
     );
   }
 }

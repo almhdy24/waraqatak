@@ -4,6 +4,7 @@ import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/product.dart';
 import '../inventory_screen.dart';
+import '../../widgets/responsive.dart';
 
 class InventoryReportScreen extends StatefulWidget {
   const InventoryReportScreen({super.key});
@@ -70,7 +71,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           if (_products != null && _products!.isNotEmpty)
             Padding(
@@ -88,7 +89,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
             ),
           Expanded(child: _buildList(context, l10n)),
         ],
-      ),
+      )),
     );
   }
 
@@ -155,7 +156,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: ListTile(
             title: Row(children: [

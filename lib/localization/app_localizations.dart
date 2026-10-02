@@ -713,5 +713,148 @@ class AppLocalizations {
   String get freeDataAlwaysAvailable => _t('بياناتك ومستنداتك محفوظة دائماً حتى في الوضع المجاني.', 'Your data and documents are always available, even in Free mode.');
   String get freeModeBannerMsg       => _t('الوضع المجاني نشط — الفواتير والعملاء والمنتجات متاحة دائماً.', 'Free mode active — invoices, customers, and products are always available.');
 
+  // ========== QUICK SALE (POS) ==========
+  String get posQuickSale          => _t('بيع سريع', 'Quick sale');
+  String get posQuickSaleDesc      => _t('بيع بالمسح أو اللمس مع إيصال فوري', 'Tap or scan to sell with an instant receipt');
+  String get posSearchHint         => _t('ابحث بالاسم أو الكود أو الباركود', 'Search by name, code or barcode');
+  String get posViewCart           => _t('السلة', 'Cart');
+  String get posCartEmpty          => _t('السلة فارغة. اضغط على منتج لإضافته.', 'Cart is empty. Tap a product to add it.');
+  String get posAmountReceived     => _t('المبلغ المستلم', 'Amount received');
+  String get posChange             => _t('الباقي للعميل', 'Change');
+  String get posCompleteSale       => _t('إتمام البيع', 'Complete sale');
+  String get posSaleCompleted      => _t('تم البيع بنجاح', 'Sale completed');
+  String get posPrintReceipt       => _t('طباعة إيصال', 'Print receipt');
+  String get posShare              => _t('مشاركة', 'Share');
+  String get posViewInvoice        => _t('عرض الفاتورة', 'View invoice');
+  String get posNewSale            => _t('بيع جديد', 'New sale');
+  String get posClearCart          => _t('تفريغ السلة', 'Clear cart');
+  String get posClearCartConfirm   => _t('هل تريد حذف كل المنتجات من السلة؟', 'Remove all items from the cart?');
+  String get posProductNotFound    => _t('لم يتم العثور على منتج مطابق', 'No matching product');
+  String get posService            => _t('خدمة', 'Service');
+  String get posReceivedLessThanTotal => _t('المبلغ المستلم أقل من الإجمالي', 'Amount received is less than the total');
+  String get posSetupBusinessFirst => _t('أكمل بيانات النشاط التجاري أولاً من الإعدادات', 'Complete your business profile in Settings first');
+  String posNotEnoughStock(String name) => _t('الكمية المتوفرة من "$name" لا تكفي', 'Not enough stock for "$name"');
+  String posItemsCount(String n)   => _t('$n صنف', '$n items');
+  String posInStock(String n)      => _t('متوفر: $n', 'In stock: $n');
+
+  // ========== ABOUT & SUPPORT ==========
+  String get supportAndContact      => _t('الدعم والتواصل', 'Support & contact');
+  String get whatsappSupport        => _t('واتساب', 'WhatsApp');
+  String get whatsappSupportDesc    => _t('للمساعدة الفنية والاستفسارات', 'Technical help and questions');
+  String get supportWhatsAppGreeting => _t('مرحباً، أحتاج مساعدة في تطبيق ورقتك', 'Hello, I need help with Waraqatak');
+  String get facebookPage           => _t('صفحتنا على فيسبوك', 'Our Facebook page');
+  String get facebookPageDesc       => _t('الأخبار والتحديثات والنصائح', 'News, updates and tips');
+  String get developerWebsite       => _t('موقع المطوّر', 'Developer website');
+  String get whatYouCanDo           => _t('ماذا يمكنك أن تفعل', 'What you can do');
+  String get legalAndPrivacy        => _t('الخصوصية والشروط', 'Privacy & terms');
+  String get rateApp                => _t('قيّم التطبيق', 'Rate app');
+  String get shareApp               => _t('شارك التطبيق', 'Share app');
+  String get getHelp                => _t('مساعدة', 'Get help');
+  String get shareAppMessage        => _t('جرّب تطبيق ورقتك لإنشاء الفواتير والمستندات بسهولة:', 'Try Waraqatak to create invoices and business documents easily:');
+
+  // ========== SETTINGS SECTIONS & APPEARANCE ==========
+  String get settingsSectionBusiness   => _t('النشاط التجاري', 'Business');
+  String get settingsSectionAppearance => _t('المظهر واللغة', 'Appearance & language');
+  String get settingsSectionData       => _t('البيانات والنسخ الاحتياطي', 'Data & backup');
+  String get settingsSectionSupport    => _t('الدعم والمعلومات', 'Support & info');
+  String get themeModeLabel            => _t('المظهر', 'Theme');
+  String get themeLight                => _t('فاتح', 'Light');
+  String get themeDark                 => _t('داكن', 'Dark');
+  String get themeSystem               => _t('تلقائي', 'System');
+  String get aboutSubtitle             => _t('الدعم والتواصل والإصدار', 'Support, contact and version');
+
+  // ========== PDF CUSTOMIZATION ==========
+  String get pdfSignature        => _t('التوقيع', 'Signature');
+  String get pdfStamp            => _t('الختم', 'Stamp');
+  String get pdfCustomize        => _t('تخصيص المستندات (PDF)', 'Document design (PDF)');
+  String get pdfCustomizeDesc    => _t('الألوان والقالب والشعار والحقول', 'Colors, template, logo and fields');
+  String get pdfPreview          => _t('معاينة', 'Preview');
+  String get pdfOptions          => _t('الخيارات', 'Options');
+  String get pdfTemplate         => _t('القالب', 'Template');
+  String get pdfTemplateClassic  => _t('كلاسيكي', 'Classic');
+  String get pdfTemplateModern   => _t('عصري', 'Modern');
+  String get pdfTemplateMinimal  => _t('بسيط', 'Minimal');
+  String get pdfAccentColor      => _t('اللون الرئيسي', 'Accent color');
+  String get pdfLogo             => _t('الشعار', 'Logo');
+  String get pdfLogoCircle       => _t('دائري', 'Circle');
+  String get pdfLogoRounded      => _t('مربع', 'Square');
+  String get pdfLogoHidden       => _t('إخفاء', 'Hidden');
+  String get pdfTextSize         => _t('حجم الخط', 'Text size');
+  String get pdfTextSmall        => _t('صغير', 'Small');
+  String get pdfTextNormal       => _t('متوسط', 'Normal');
+  String get pdfTextLarge        => _t('كبير', 'Large');
+  String get pdfFields           => _t('محتوى المستند', 'Document content');
+  String get pdfShowBusinessContact => _t('بيانات التواصل للنشاط', 'Business contact details');
+  String get pdfShowTaxId        => _t('الرقم الضريبي', 'Tax ID');
+  String get pdfShowCustomer     => _t('بيانات العميل', 'Customer details');
+  String get pdfShowNotes        => _t('الملاحظات', 'Notes');
+  String get pdfShowPaymentSummary => _t('المدفوع والمتبقي (الفواتير)', 'Paid and remaining (invoices)');
+  String get pdfShowSignature    => _t('خانة التوقيع والختم', 'Signature and stamp area');
+  String get pdfShowPageNumbers  => _t('أرقام الصفحات', 'Page numbers');
+  String get pdfZebraRows        => _t('تظليل صفوف الجدول بالتناوب', 'Striped table rows');
+  String get pdfFooterText       => _t('نص التذييل', 'Footer text');
+  String get pdfFooterTextHint   => _t('مثال: شكراً لتعاملكم معنا', 'e.g. Thank you for your business');
+  String get pdfResetDefaults    => _t('استعادة الإعدادات الافتراضية', 'Reset to defaults');
+  String get pdfSampleItem1      => _t('خدمة تصميم', 'Design service');
+  String get pdfSampleItem2      => _t('منتج تجريبي', 'Sample product');
+  String get pdfSampleCustomer   => _t('عميل تجريبي', 'Sample customer');
+  String get pdfSampleNotes      => _t('هذه معاينة للتصميم فقط.', 'This is a design preview only.');
+
+  // ========== ACCOUNTING ==========
+  String get accounting            => _t('المحاسبة والقوائم المالية', 'Accounting & statements');
+  String get incomeStatement       => _t('قائمة الدخل', 'Income statement');
+  String get balanceSheet          => _t('الميزانية العمومية', 'Balance sheet');
+  String get trialBalance          => _t('ميزان المراجعة', 'Trial balance');
+  String get chartOfAccounts       => _t('الحسابات', 'Accounts');
+  String get accountStatement      => _t('كشف حساب (دفتر الأستاذ)', 'Account ledger');
+  String get journalEntry          => _t('قيد يومية', 'Journal entry');
+  String get debit                 => _t('مدين', 'Debit');
+  String get credit                => _t('دائن', 'Credit');
+  String get accountBalance        => _t('الرصيد', 'Balance');
+  String get accountCode           => _t('الرمز', 'Code');
+  String get accountColumn         => _t('الحساب', 'Account');
+  String get openingBalance        => _t('الرصيد الافتتاحي', 'Opening balance');
+  String get closingBalance        => _t('الرصيد الختامي', 'Closing balance');
+  String get revenueSection        => _t('الإيرادات', 'Revenue');
+  String get grossProfit           => _t('مجمل الربح', 'Gross profit');
+  String get expensesSection       => _t('المصروفات', 'Expenses');
+  String get netProfit             => _t('صافي الربح', 'Net profit');
+  String get netLoss               => _t('صافي الخسارة', 'Net loss');
+  String get assetsSection         => _t('الأصول', 'Assets');
+  String get liabilitiesSection    => _t('الالتزامات', 'Liabilities');
+  String get equitySection         => _t('حقوق الملكية', 'Equity');
+  String get retainedEarnings      => _t('الأرباح المحتجزة', 'Retained earnings');
+  String get totalAssets           => _t('إجمالي الأصول', 'Total assets');
+  String get totalLiabilitiesEquity => _t('إجمالي الالتزامات وحقوق الملكية', 'Total liabilities & equity');
+  String get balancedLabel         => _t('متوازن', 'Balanced');
+  String get notBalancedLabel      => _t('غير متوازن', 'Not balanced');
+  String get noEntriesYet          => _t('لا توجد قيود بعد', 'No entries yet');
+  String asOfDate(String d)        => _t('كما في $d', 'As of $d');
+  String get accountingNote        => _t(
+      'تُنشأ القيود تلقائياً بنظام القيد المزدوج من مستنداتك، ولا تُرحَّل المسودات والمستندات الملغاة. يُقيَّم المخزون بطريقة المتوسط المرجح.',
+      'Double-entry records are created automatically from your documents; drafts and cancelled documents are not posted. Stock is valued at weighted-average cost.');
+  String get entryInvoicePayment   => _t('تحصيل فاتورة', 'Invoice payment');
+  String get entryPurchasePayment  => _t('سداد أمر شراء', 'Purchase order payment');
+  String get entryCostOfSales      => _t('تكلفة المبيعات', 'Cost of sales');
+  String get entryOpeningStock     => _t('مخزون افتتاحي', 'Opening stock');
+  String get entryStockAdjustment  => _t('تسوية مخزون', 'Stock adjustment');
+
+  String accountName(String code) => switch (code) {
+        '1110' => _t('الصندوق (النقدية)', 'Cash on hand'),
+        '1120' => _t('البنوك والمحافظ الإلكترونية', 'Bank & e-wallets'),
+        '1130' => _t('العملاء (ذمم مدينة)', 'Accounts receivable'),
+        '1140' => _t('المخزون', 'Inventory'),
+        '1150' => _t('ضريبة مستردة (مدخلات)', 'Tax receivable (input)'),
+        '2110' => _t('الموردون (ذمم دائنة)', 'Accounts payable'),
+        '2120' => _t('ضريبة مستحقة (مخرجات)', 'Tax payable (output)'),
+        '3100' => _t('رأس المال / أرصدة افتتاحية', 'Opening balance equity'),
+        '4100' => _t('إيرادات المبيعات', 'Sales revenue'),
+        '4900' => _t('إيرادات أخرى', 'Other income'),
+        '5100' => _t('تكلفة البضاعة المباعة', 'Cost of goods sold'),
+        '5200' => _t('عجز وتسويات المخزون', 'Inventory adjustments'),
+        '6100' => _t('المصروفات التشغيلية', 'Operating expenses'),
+        _ => code,
+      };
+
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 }

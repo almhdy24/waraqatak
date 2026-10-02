@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../customer_detail_screen.dart';
+import '../../widgets/responsive.dart';
 
 class SupplierReportScreen extends StatefulWidget {
   const SupplierReportScreen({super.key});
@@ -43,7 +44,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.supplierReport), centerTitle: true),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           if (_rows != null && _rows!.isNotEmpty)
             Padding(
@@ -71,7 +72,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
             ),
           Expanded(child: _buildList(context, l10n)),
         ],
-      ),
+      )),
     );
   }
 
@@ -110,7 +111,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: ListTile(
             title: Row(children: [

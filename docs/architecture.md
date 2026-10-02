@@ -14,6 +14,7 @@ Waraqatak (ورقتك) is an offline-first Flutter application for creating and 
 - `lib/screens/` — application screens
 - `lib/services/` — application services
 - `lib/services/pdf/` — PDF builders and PDF utilities
+- `lib/services/accounting/` — derived double-entry ledger and financial statements (read-only)
 - `lib/widgets/` — reusable widgets
 - `lib/localization/` — localization
 - `lib/utils/` — utilities

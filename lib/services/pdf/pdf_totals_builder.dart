@@ -1,29 +1,44 @@
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../localization/app_localizations.dart';
 import '../../models/document.dart';
+import '../../utils/pdf_settings.dart';
+import 'pdf_theme.dart';
 
 class PdfTotalsBuilder {
+  static final _money = NumberFormat('#,##0.00');
+
   static pw.Widget build({
     required Document doc,
     required String currency,
     required AppLocalizations l10n,
     required pw.Font bold,
     required pw.Font regular,
-    required PdfColor textColor,
-    required PdfColor primaryColor,
+    required PdfTheme theme,
     required bool isArabic,
   }) {
     final labelDirection =
         isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+    final textColor = theme.textColor;
+    final primaryColor = theme.primaryColor;
+    final fontSize = theme.fs(11);
+    final minimal = theme.style.template == PdfTemplate.minimal;
 
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: const PdfColor.fromInt(0xFFF8F7F3),
-        border: pw.Border.all(color: const PdfColor.fromInt(0xFFE5E7EB)),
-      ),
+      decoration: minimal
+          ? pw.BoxDecoration(
+              border: pw.Border(
+                top: pw.BorderSide(color: theme.primaryColor, width: 1.2),
+              ),
+            )
+          : pw.BoxDecoration(
+              color: theme.lightBg,
+              border: pw.Border.all(color: theme.borderColor),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+            ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
@@ -34,6 +49,7 @@ class PdfTotalsBuilder {
             font: regular,
             color: textColor,
             labelDirection: labelDirection,
+            fontSize: fontSize,
           ),
           if (doc.discount > 0)
             _row(
@@ -43,6 +59,7 @@ class PdfTotalsBuilder {
               font: regular,
               color: textColor,
               labelDirection: labelDirection,
+              fontSize: fontSize,
             ),
           if (doc.taxAmount > 0)
             _row(
@@ -54,8 +71,9 @@ class PdfTotalsBuilder {
               font: regular,
               color: textColor,
               labelDirection: labelDirection,
+              fontSize: fontSize,
             ),
-          pw.Divider(),
+          pw.Divider(color: theme.borderColor),
           _row(
             label: l10n.total,
             value: doc.total,
@@ -64,8 +82,9 @@ class PdfTotalsBuilder {
             color: primaryColor,
             bold: true,
             labelDirection: labelDirection,
+            fontSize: fontSize,
           ),
-          if (doc.type == 'invoice') ...[
+          if (doc.type == 'invoice' && theme.style.showPaymentSummary) ...[
             _row(
               label: l10n.paid,
               value: doc.paid,
@@ -73,15 +92,17 @@ class PdfTotalsBuilder {
               font: regular,
               color: textColor,
               labelDirection: labelDirection,
+              fontSize: fontSize,
             ),
             _row(
               label: l10n.remaining,
               value: doc.remaining,
               currency: currency,
               font: bold,
-              color: const PdfColor.fromInt(0xFFD64545),
+              color: theme.dangerColor,
               bold: true,
               labelDirection: labelDirection,
+              fontSize: fontSize,
             ),
           ],
         ],
@@ -96,6 +117,7 @@ class PdfTotalsBuilder {
     required pw.Font font,
     required PdfColor color,
     required pw.TextDirection labelDirection,
+    required double fontSize,
     bool bold = false,
   }) {
     return pw.Padding(
@@ -109,6 +131,7 @@ class PdfTotalsBuilder {
               label,
               style: pw.TextStyle(
                 font: font,
+                fontSize: bold ? fontSize * 1.1 : fontSize,
                 fontWeight:
                     bold ? pw.FontWeight.bold : pw.FontWeight.normal,
                 color: color,
@@ -116,9 +139,10 @@ class PdfTotalsBuilder {
             ),
           ),
           pw.Text(
-            '${value.toStringAsFixed(2)} $currency',
+            '${_money.format(value)} $currency',
             style: pw.TextStyle(
               font: font,
+              fontSize: bold ? fontSize * 1.1 : fontSize,
               fontWeight:
                   bold ? pw.FontWeight.bold : pw.FontWeight.normal,
               color: color,

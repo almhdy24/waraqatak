@@ -10,8 +10,10 @@ import '../../models/contact.dart';
 import '../../models/document.dart';
 import '../../models/document_item.dart';
 import '../../utils/currency_utils.dart';
+import '../../utils/pdf_settings.dart';
 import '../../utils/print_settings.dart';
 import 'pdf_customer_builder.dart';
+import 'pdf_fonts.dart';
 import 'pdf_header_builder.dart';
 import 'pdf_items_table_builder.dart';
 import 'pdf_theme.dart';
@@ -27,12 +29,14 @@ class PdfDocumentBuilder {
     required AppLocalizations l10n,
     Document? relatedDocument,
     PaperSize paperSize = PaperSize.a4,
+    PdfStyleSettings style = const PdfStyleSettings(),
   }) async {
+    final theme = PdfTheme.fromSettings(style);
     // Load fonts once regardless of paper size
     final regularFontData = await rootBundle.load('assets/fonts/Tajawal-Regular.ttf');
     final boldFontData = await rootBundle.load('assets/fonts/Tajawal-Bold.ttf');
-    final regular = pw.Font.ttf(regularFontData);
-    final bold = pw.Font.ttf(boldFontData);
+    final regular = ArabicTtfFont(regularFontData);
+    final bold = ArabicTtfFont(boldFontData);
 
     pw.MemoryImage? logoImage;
     if (business.logoPath != null && business.logoPath!.isNotEmpty) {
@@ -56,6 +60,7 @@ class PdfDocumentBuilder {
         regular: regular,
         bold: bold,
         logoImage: logoImage,
+        theme: theme,
       );
     }
 
@@ -70,6 +75,7 @@ class PdfDocumentBuilder {
       bold: bold,
       logoImage: logoImage,
       paperSize: paperSize,
+      theme: theme,
     );
   }
 
@@ -84,45 +90,67 @@ class PdfDocumentBuilder {
     required pw.Font bold,
     pw.MemoryImage? logoImage,
     PaperSize paperSize = PaperSize.a4,
+    required PdfTheme theme,
   }) async {
     final pdf = pw.Document();
-    final theme = PdfTheme.defaultTheme();
+    final style = theme.style;
     final pageFormat = PrintSettings.pageFormatFor(paperSize);
     final margin = paperSize == PaperSize.a5 ? 16.0 : theme.margin;
 
     final isArabic = l10n.langCode == 'ar';
-    final documentTypeLabel = _documentTypeLabel(doc.type, l10n);
+    final textDir = isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+    final customTitle = business.invoiceTitle?.trim() ?? '';
+    final documentTypeLabel = doc.type == 'invoice' && customTitle.isNotEmpty
+        ? customTitle
+        : _documentTypeLabel(doc.type, l10n);
     final currency = doc.currencyCode;
+    final legalFooter = business.legalFooter?.trim() ?? '';
+    final footerText = style.footerText.trim();
+    final hasFooter = legalFooter.isNotEmpty ||
+        footerText.isNotEmpty ||
+        style.showPageNumbers;
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: pageFormat,
         margin: pw.EdgeInsets.all(margin),
-        textDirection:
-            isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr,
-        header: (context) => PdfHeaderBuilder.build(
-          business: business,
-          regular: regular,
-          bold: bold,
-          primaryColor: theme.primaryColor,
-          textColor: theme.textColor,
-          logoImage: logoImage,
-          isArabic: isArabic,
-        ),
-        footer: null,
+        textDirection: textDir,
+        theme: _pageTheme(regular, bold, rtl: isArabic),
+        header: (context) => context.pageNumber == 1
+            ? PdfHeaderBuilder.build(
+                business: business,
+                regular: regular,
+                bold: bold,
+                theme: theme,
+                logoImage: logoImage,
+                isArabic: isArabic,
+              )
+            : pw.SizedBox(),
+        footer: hasFooter
+            ? (context) => _buildFooter(
+                  context: context,
+                  theme: theme,
+                  regular: regular,
+                  textDir: textDir,
+                  legalFooter: legalFooter,
+                  footerText: footerText,
+                )
+            : null,
         build: (context) => [
           pw.SizedBox(height: 12),
 
           // Document title
           pw.Center(
             child: pw.Directionality(
-              textDirection:
-                  isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr,
+              // A custom title may be Arabic inside an English document.
+              textDirection: PdfTextUtils.hasArabic(documentTypeLabel)
+                  ? pw.TextDirection.rtl
+                  : textDir,
               child: pw.Text(
                 documentTypeLabel,
                 style: pw.TextStyle(
                   font: bold,
-                  fontSize: 24,
+                  fontSize: theme.fs(22),
                   color: theme.primaryColor,
                 ),
               ),
@@ -192,18 +220,20 @@ class PdfDocumentBuilder {
           pw.SizedBox(height: 12),
 
           // Customer
-          if (contact != null || doc.recipientName != null)
+          if (style.showCustomer &&
+              (contact != null || doc.recipientName != null))
             PdfCustomerBuilder.build(
               contact: contact,
               doc: doc,
               l10n: l10n,
               bold: bold,
               regular: regular,
-              textColor: theme.textColor,
+              theme: theme,
               isArabic: isArabic,
             ),
 
-          pw.Divider(color: theme.primaryColor, thickness: 1),
+          if (style.template != PdfTemplate.minimal)
+            pw.Divider(color: theme.primaryColor, thickness: 1),
           pw.SizedBox(height: 12),
 
           // Items
@@ -213,10 +243,7 @@ class PdfDocumentBuilder {
               l10n: l10n,
               bold: bold,
               regular: regular,
-              textColor: theme.textColor,
-              borderColor: theme.borderColor,
-              primaryColor: theme.primaryColor,
-              lightBg: theme.lightBg,
+              theme: theme,
               isArabic: isArabic,
             ),
             pw.SizedBox(height: 16),
@@ -229,14 +256,13 @@ class PdfDocumentBuilder {
             l10n: l10n,
             bold: bold,
             regular: regular,
-            textColor: theme.textColor,
-            primaryColor: theme.primaryColor,
+            theme: theme,
             isArabic: isArabic,
           ),
           pw.SizedBox(height: 16),
 
           // Notes
-          if (doc.notes != null && doc.notes!.isNotEmpty) ...[
+          if (style.showNotes && doc.notes != null && doc.notes!.isNotEmpty) ...[
             pw.Directionality(
               textDirection:
                   isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr,
@@ -252,8 +278,18 @@ class PdfDocumentBuilder {
             PdfTextUtils.directionalText(
               doc.notes!,
               font: regular,
-              fontSize: 12,
+              fontSize: theme.fs(11),
               color: theme.textColor,
+            ),
+          ],
+
+          if (style.showSignature) ...[
+            pw.SizedBox(height: 36),
+            _buildSignatures(
+              l10n: l10n,
+              theme: theme,
+              regular: regular,
+              textDir: textDir,
             ),
           ],
         ],
@@ -261,6 +297,103 @@ class PdfDocumentBuilder {
     );
 
     return pdf.save();
+  }
+
+  /// Base text style for every document.
+  ///
+  /// Works around a `pdf` package bug: when it mirrors words on RTL lines it
+  /// uses each word's ink width instead of its advance width, so letters
+  /// whose tail extends past the glyph box (final/isolated ر، ا…) eat the
+  /// gap to the next word ("متجرالنيل"). Wider spaces keep Arabic words
+  /// visibly separated. LTR documents are unaffected and keep normal spacing.
+  static pw.ThemeData _pageTheme(pw.Font regular, pw.Font bold,
+      {required bool rtl}) {
+    final base = pw.ThemeData.withFont(base: regular, bold: bold);
+    if (!rtl) return base;
+    return base.copyWith(
+      defaultTextStyle: base.defaultTextStyle
+          .copyWith(wordSpacing: PdfTextUtils.rtlWordSpacing),
+    );
+  }
+
+  static pw.Widget _buildFooter({
+    required pw.Context context,
+    required PdfTheme theme,
+    required pw.Font regular,
+    required pw.TextDirection textDir,
+    required String legalFooter,
+    required String footerText,
+  }) {
+    final style = pw.TextStyle(
+      font: regular,
+      fontSize: theme.fs(8.5),
+      color: theme.mutedTextColor,
+    );
+    pw.Widget line(String text) => pw.Directionality(
+          textDirection: text.isEmpty
+              ? textDir
+              : PdfTextUtils.detectDirection(text),
+          child: pw.Text(text, style: style, textAlign: pw.TextAlign.center),
+        );
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(top: 10),
+      padding: const pw.EdgeInsets.only(top: 6),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          top: pw.BorderSide(color: theme.borderColor, width: 0.6),
+        ),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          if (footerText.isNotEmpty) line(footerText),
+          if (legalFooter.isNotEmpty) line(legalFooter),
+          if (theme.style.showPageNumbers && context.pagesCount > 1)
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 2),
+              child: pw.Text(
+                '${context.pageNumber} / ${context.pagesCount}',
+                style: style,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildSignatures({
+    required AppLocalizations l10n,
+    required PdfTheme theme,
+    required pw.Font regular,
+    required pw.TextDirection textDir,
+  }) {
+    pw.Widget box(String label) => pw.Expanded(
+          child: pw.Column(
+            children: [
+              pw.Container(
+                height: 0.8,
+                margin: const pw.EdgeInsets.symmetric(horizontal: 18),
+                color: theme.textColor,
+              ),
+              pw.SizedBox(height: 4),
+              pw.Directionality(
+                textDirection: textDir,
+                child: pw.Text(
+                  label,
+                  style: pw.TextStyle(
+                    font: regular,
+                    fontSize: theme.fs(10),
+                    color: theme.mutedTextColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+    return pw.Row(
+      children: [box(l10n.pdfSignature), box(l10n.pdfStamp)],
+    );
   }
 
   static pw.Widget _buildInfoRow({
@@ -336,9 +469,9 @@ class PdfDocumentBuilder {
     required pw.Font regular,
     required pw.Font bold,
     pw.MemoryImage? logoImage,
+    required PdfTheme theme,
   }) async {
     final pdf = pw.Document();
-    final theme = PdfTheme.defaultTheme();
     final isArabic = l10n.langCode == 'ar';
     final textDir = isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
     final numFmt = NumberFormat('#,##0.00');
@@ -355,9 +488,11 @@ class PdfDocumentBuilder {
       );
     }
 
+    // A drawn rule: Tajawal has no box-drawing glyphs (a run of '─' printed
+    // as placeholder boxes).
     pw.Widget divider() => pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 4),
-          child: pw.Text('─' * 32, style: pw.TextStyle(font: regular, fontSize: 8, color: theme.borderColor)),
+          padding: const pw.EdgeInsets.symmetric(vertical: 5),
+          child: pw.Container(height: 0.8, color: PdfColors.grey600),
         );
 
     final widgets = <pw.Widget>[];
@@ -426,16 +561,29 @@ class PdfDocumentBuilder {
     if (doc.remaining > 0) totRow(l10n.remaining, doc.remaining);
 
     // Notes
-    if (doc.notes != null && doc.notes!.isNotEmpty) {
+    if (theme.style.showNotes && doc.notes != null && doc.notes!.isNotEmpty) {
       widgets.add(divider());
       widgets.add(pw.Directionality(textDirection: textDir,
           child: pw.Text('${l10n.notes}: ${doc.notes!}',
               style: pw.TextStyle(font: regular, fontSize: smallSize, color: theme.textColor))));
     }
+    final thermalFooter = [
+      theme.style.footerText.trim(),
+      business.legalFooter?.trim() ?? '',
+    ].where((t) => t.isNotEmpty);
+    if (thermalFooter.isNotEmpty) {
+      widgets.add(divider());
+      for (final t in thermalFooter) {
+        widgets.add(pw.Center(child: txt(t, size: smallSize, align: pw.TextAlign.center)));
+      }
+    }
     widgets.add(pw.SizedBox(height: 8));
 
     pdf.addPage(pw.Page(
       pageFormat: PrintSettings.pageFormatFor(PaperSize.thermal80mm),
+      // RTL so label/amount rows read right-to-left on Arabic receipts.
+      textDirection: textDir,
+      theme: _pageTheme(regular, bold, rtl: isArabic),
       build: (ctx) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: widgets,

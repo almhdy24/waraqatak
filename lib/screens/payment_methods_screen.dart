@@ -3,6 +3,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
+import '../widgets/responsive.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
   const PaymentMethodsScreen({super.key});
@@ -192,7 +193,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         tooltip: l10n.addPaymentMethod,
         child: const Icon(Icons.add),
       ),
-      body: ListView(
+      body: ResponsiveCenter(child: ListView(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -231,7 +232,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               )),
           const SizedBox(height: 80),
         ],
-      ),
+      )),
     );
   }
 }

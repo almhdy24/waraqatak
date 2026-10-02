@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/tax_profile.dart';
 import 'tax_profiles_screen.dart';
+import '../widgets/responsive.dart';
 
 class FinancialSettingsScreen extends StatefulWidget {
   const FinancialSettingsScreen({super.key});
@@ -161,7 +162,7 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
                 ),
         ],
       ),
-      body: ListView(
+      body: ResponsiveCenter(child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // ── Legal Identity ──
@@ -232,7 +233,7 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
               hint: l10n.legalFooterDesc, maxLines: 3),
           const SizedBox(height: 32),
         ],
-      ),
+      )),
     );
   }
 

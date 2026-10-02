@@ -17,7 +17,10 @@ class ReportDateFilter extends StatelessWidget {
       (DateRangePreset.thisMonth, l10n.thisMonth),
     ];
 
-    return Padding(
+    // Scrolls when the chips are wider than the screen (long labels,
+    // narrow phones).
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Row(
         children: [

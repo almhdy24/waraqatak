@@ -8,6 +8,7 @@ import '../services/document_service.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
+import '../widgets/responsive.dart';
 
 class InvoiceScreen extends StatefulWidget {
   final Contact? preselectedContact;
@@ -253,7 +254,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.invoice), centerTitle: true),
-      body: Form(
+      body: ResponsiveCenter(child: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -323,8 +324,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               height: 52,
               child: FilledButton(
                 onPressed: _saving ? null : () => _save(),
-                style: FilledButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Colors.white),
-                child: _saving ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(l10n.save),
+                style: FilledButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Theme.of(context).colorScheme.onPrimary),
+                child: _saving ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary)) : Text(l10n.save),
               ),
             ),
             const SizedBox(height: 8),
@@ -334,7 +335,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

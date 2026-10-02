@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
 import 'activation_screen.dart';
 import 'transparency_screen.dart';
+import '../widgets/responsive.dart';
 
 /// Neutral locked screen shown when a Pro feature is accessed without an
 /// active trial or valid activation. Contains only approved copy — no
@@ -20,7 +21,7 @@ class LockedFeatureScreen extends StatelessWidget {
         title: Text(l10n.proFeatureTitle),
         centerTitle: true,
       ),
-      body: SafeArea(
+      body: ResponsiveCenter(child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -107,7 +108,7 @@ class LockedFeatureScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
+      )),
     );
   }
 }

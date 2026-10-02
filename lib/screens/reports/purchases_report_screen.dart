@@ -7,6 +7,7 @@ import '../../models/document.dart';
 import '../../models/document_status.dart';
 import '../document_detail_screen.dart';
 import 'report_date_filter.dart';
+import '../../widgets/responsive.dart';
 
 class PurchasesReportScreen extends StatefulWidget {
   const PurchasesReportScreen({super.key});
@@ -57,7 +58,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.purchasesReport), centerTitle: true),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           ReportDateFilter(
             range: _range,
@@ -91,7 +92,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
           ],
           Expanded(child: _buildList(context, l10n)),
         ],
-      ),
+      )),
     );
   }
 
@@ -146,7 +147,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: ListTile(
             title: Row(children: [

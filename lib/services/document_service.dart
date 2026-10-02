@@ -42,8 +42,17 @@ class DocumentService {
     DateTime? validUntil,
     String? paymentMethod,
     bool isDraft = false,
+    String? payNowMethod,
   }) async {
     _validateBusiness(business);
+    if (payNowMethod != null) {
+      // Quick sale: the invoice is settled in full, in the same transaction,
+      // through the regular payment path (linked receipt + payment row).
+      if (type != 'invoice' || isDraft || paid != 0) {
+        throw ArgumentError('payNowMethod requires a new, non-draft invoice');
+      }
+      _validatePaymentMethod(payNowMethod);
+    }
     _validateTaxRate(business.taxRate);
     final documentDate = date ?? DateTime.now();
 
@@ -173,7 +182,8 @@ class DocumentService {
     )).toList();
 
     final db = DatabaseHelper.instance;
-    return db.insertDocumentWithItems(document, documentItems, contact: contact);
+    return db.insertDocumentWithItems(document, documentItems,
+        contact: contact, payNowMethod: payNowMethod);
   }
 
   /// Updates an existing document.
@@ -193,8 +203,17 @@ class DocumentService {
     DateTime? validUntil,
     String? paymentMethod,
     bool isDraft = false,
+    String? payNowMethod,
   }) async {
     _validateBusiness(business);
+    if (payNowMethod != null) {
+      // Quick sale: the invoice is settled in full, in the same transaction,
+      // through the regular payment path (linked receipt + payment row).
+      if (type != 'invoice' || isDraft || paid != 0) {
+        throw ArgumentError('payNowMethod requires a new, non-draft invoice');
+      }
+      _validatePaymentMethod(payNowMethod);
+    }
     _validateTaxRate(business.taxRate);
     final db = DatabaseHelper.instance;
     final existing = await db.getDocumentById(documentId);

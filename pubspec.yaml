@@ -4,7 +4,7 @@ description: Waraqatak - invoices and business documents.
 
 publish_to: 'none'
 
-version: 1.0.0+3
+version: 1.1.0+4
 
 environment:
   sdk: '>=3.11.0 <4.0.0'
@@ -68,6 +68,8 @@ dev_dependencies:
   # can import `package:http/testing.dart` (MockClient) without pulling in a
   # new runtime dependency.
   http: ^1.2.0
+  # Test-only: runs database tests against a real SQLite on the host.
+  sqflite_common_ffi: ^2.4.0+3
 
 flutter:
   uses-material-design: true

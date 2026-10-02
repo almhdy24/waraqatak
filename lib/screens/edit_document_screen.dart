@@ -10,6 +10,7 @@ import '../models/payment_method.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
+import '../widgets/responsive.dart';
 
 class EditDocumentScreen extends StatefulWidget {
   final int documentId;
@@ -286,7 +287,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         title: Text('${l10n.edit} - ${_document!.documentNumber}'),
         centerTitle: true,
       ),
-      body: Form(
+      body: ResponsiveCenter(child: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -539,16 +540,16 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                 onPressed: _saving ? null : _save,
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
-                  foregroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
                 child: _saving
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
                     : Text(l10n.save),
               ),
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 
@@ -560,15 +561,15 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         if (selected) setState(() => _paymentMethod = value);
       },
       selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       labelStyle: TextStyle(
-        color: _paymentMethod == value ? Theme.of(context).colorScheme.primary : Colors.black87,
+        color: _paymentMethod == value ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface,
         fontWeight: FontWeight.w600,
       ),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: _paymentMethod == value ? Theme.of(context).colorScheme.primary : Colors.grey.shade300,
+          color: _paymentMethod == value ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant,
         ),
       ),
     );

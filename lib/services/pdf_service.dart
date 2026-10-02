@@ -6,6 +6,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
+import '../utils/pdf_settings.dart';
 import '../utils/print_settings.dart';
 import 'pdf/pdf_document_builder.dart';
 
@@ -18,8 +19,10 @@ class PdfService {
     required AppLocalizations l10n,
     Document? relatedDocument,
     PaperSize? paperSize,
+    PdfStyleSettings? style,
   }) async {
     final size = paperSize ?? await PrintSettings.getDefaultSize();
+    final pdfStyle = style ?? await PdfSettings.load();
     return PdfDocumentBuilder.build(
       doc: doc,
       business: business,
@@ -28,6 +31,7 @@ class PdfService {
       l10n: l10n,
       relatedDocument: relatedDocument,
       paperSize: size,
+      style: pdfStyle,
     );
   }
 

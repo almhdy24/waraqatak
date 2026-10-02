@@ -6,6 +6,7 @@ import '../models/document.dart';
 import '../models/document_status.dart';
 import '../widgets/status_badge.dart';
 import 'document_detail_screen.dart';
+import '../widgets/responsive.dart';
 
 class DocumentsScreen extends StatefulWidget {
   final int refreshToken;
@@ -65,7 +66,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.documents), centerTitle: true),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -99,7 +100,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           ),
           Expanded(child: _buildList(l10n)),
         ],
-      ),
+      )),
     );
   }
 
@@ -167,7 +168,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),

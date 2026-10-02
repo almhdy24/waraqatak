@@ -4,6 +4,7 @@ import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/date_range_filter.dart';
 import 'report_date_filter.dart';
+import '../../widgets/responsive.dart';
 
 class ProductReportScreen extends StatefulWidget {
   const ProductReportScreen({super.key});
@@ -49,7 +50,7 @@ class _ProductReportScreenState extends State<ProductReportScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.productReport), centerTitle: true),
-      body: Column(
+      body: ResponsiveCenter(child: Column(
         children: [
           ReportDateFilter(
             range: _range,
@@ -64,7 +65,7 @@ class _ProductReportScreenState extends State<ProductReportScreen> {
             ),
           Expanded(child: _buildList(context, l10n)),
         ],
-      ),
+      )),
     );
   }
 
@@ -123,7 +124,7 @@ class _ProductReportScreenState extends State<ProductReportScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: Color(0xFFE5E7EB)),
+            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
+import '../widgets/responsive.dart';
 import 'customers_screen.dart';
 import 'documents_screen.dart';
 import 'home_screen.dart';
@@ -26,41 +27,88 @@ class _MainShellState extends State<MainShell> {
     _homeKey = GlobalKey<HomeScreenState>();
   }
 
+  void _select(int i) {
+    setState(() => _index = i);
+    switch (i) {
+      case 0:
+        _homeKey.currentState?.reload();
+      case 1:
+        _documentsRefreshToken++;
+      case 2:
+        _customersRefreshToken++;
+      case 3:
+        _productsRefreshToken++;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final destinations = [
+      (Icons.home_outlined, Icons.home, l10n.home),
+      (Icons.description_outlined, Icons.description, l10n.documents),
+      (Icons.people_outline, Icons.people, l10n.customers),
+      (Icons.inventory_2_outlined, Icons.inventory_2, l10n.products),
+      (Icons.settings_outlined, Icons.settings, l10n.settings),
+    ];
+    final pages = IndexedStack(
+      index: _index,
+      children: [
+        HomeScreen(key: _homeKey),
+        DocumentsScreen(refreshToken: _documentsRefreshToken),
+        CustomersScreen(refreshToken: _customersRefreshToken),
+        ProductsScreen(refreshToken: _productsRefreshToken),
+        const SettingsScreen(),
+      ],
+    );
+
+    // Tablets, foldables and landscape phones: side navigation rail.
+    if (Breakpoints.useRail(context)) {
+      final extended =
+          MediaQuery.sizeOf(context).width >= Breakpoints.extendedRail;
+      return Scaffold(
+        body: Row(
+          children: [
+            SafeArea(
+              right: false,
+              left: false,
+              child: NavigationRail(
+                selectedIndex: _index,
+                onDestinationSelected: _select,
+                extended: extended,
+                labelType: extended
+                    ? NavigationRailLabelType.none
+                    : NavigationRailLabelType.all,
+                groupAlignment: -0.85,
+                destinations: [
+                  for (final d in destinations)
+                    NavigationRailDestination(
+                      icon: Icon(d.$1),
+                      selectedIcon: Icon(d.$2),
+                      label: Text(d.$3),
+                    ),
+                ],
+              ),
+            ),
+            const VerticalDivider(width: 1, thickness: 1),
+            Expanded(child: pages),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: [
-          HomeScreen(key: _homeKey),
-          DocumentsScreen(refreshToken: _documentsRefreshToken),
-          CustomersScreen(refreshToken: _customersRefreshToken),
-          ProductsScreen(refreshToken: _productsRefreshToken),
-          const SettingsScreen(),
-        ],
-      ),
+      body: pages,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) {
-          setState(() => _index = i);
-          switch (i) {
-            case 0:
-              _homeKey.currentState?.reload();
-            case 1:
-              _documentsRefreshToken++;
-            case 2:
-              _customersRefreshToken++;
-            case 3:
-              _productsRefreshToken++;
-          }
-        },
+        onDestinationSelected: _select,
         destinations: [
-          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: l10n.home),
-          NavigationDestination(icon: const Icon(Icons.description_outlined), selectedIcon: const Icon(Icons.description), label: l10n.documents),
-          NavigationDestination(icon: const Icon(Icons.people_outline), selectedIcon: const Icon(Icons.people), label: l10n.customers),
-          NavigationDestination(icon: const Icon(Icons.inventory_2_outlined), selectedIcon: const Icon(Icons.inventory_2), label: l10n.products),
-          NavigationDestination(icon: const Icon(Icons.settings_outlined), selectedIcon: const Icon(Icons.settings), label: l10n.settings),
+          for (final d in destinations)
+            NavigationDestination(
+              icon: Icon(d.$1),
+              selectedIcon: Icon(d.$2),
+              label: d.$3,
+            ),
         ],
       ),
     );
