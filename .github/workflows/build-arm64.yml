@@ -68,6 +68,10 @@ jobs:
           fi
 
       - name: Build release APK (arm64-v8a)
+        env:
+          # Test APK: allow the debug-key fallback above (Play uploads use
+          # release.yml, which stays strict).
+          ALLOW_DEBUG_SIGNING: 'true'
         run: flutter build apk --release --split-per-abi --target-platform android-arm64
 
       - name: Upload arm64 APK artifact
