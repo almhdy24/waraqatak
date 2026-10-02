@@ -8,9 +8,9 @@ import '../services/license_service.dart';
 
 /// Screen for entering an activation key.
 ///
-/// There is no pricing, ordering, or payment in the app. The user obtains an
-/// activation key outside the app (website or WhatsApp) and enters it here.
-/// On success, Pro features are unlocked.
+/// There is no pricing, ordering, or payment in the app. The user enters a
+/// previously obtained activation key here; on success, Pro features are
+/// unlocked. The app itself does not describe where or how to obtain the key.
 class ActivationScreen extends StatefulWidget {
   const ActivationScreen({super.key});
 

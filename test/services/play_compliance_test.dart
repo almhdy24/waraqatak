@@ -1,8 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/localization/app_localizations.dart';
 
-/// Guards that user-facing Pro / activation copy never leaks in-app purchase,
-/// subscription-plan, or pricing language. Mirrors the CI shell script so a
+/// Guards that user-facing Pro / activation copy never leaks:
+///   (a) in-app purchase, subscription-plan, or pricing language, OR
+///   (b) wording that tells the user where / how to obtain an activation
+///       key (website, WhatsApp, phone number, "contact us", URLs).
+///
+/// Mirrors the two-pass CI shell guard (`tool/check_play_compliance.sh`) so a
 /// regression is caught in-tree before it ever reaches a reviewer.
 ///
 /// NOTE: Merchant-facing invoicing strings (recordPayment, paymentHistory,
@@ -20,8 +24,14 @@ void main() {
         l.proFeatureTitle,
         l.proFeaturesActivation,
         l.getActivationKeyInfo,
+        l.enterActivationKey,
         l.enterActivationKeyAction,
+        l.activationKeyHint,
+        l.activate,
+        l.activationSuccessTitle,
+        l.activationSuccessBody,
         l.invalidOrExpiredKey,
+        l.deviceAlreadyActivated,
         l.proBadgeLabel,
         l.proIncludesPurchases,
         l.proIncludesInventory,
@@ -39,6 +49,16 @@ void main() {
   // Arabic forbidden terms.
   const forbiddenAr = [
     'اشتر', 'اشتراك شهري', 'سعر الاشتراك', 'ادفع الآن', 'إتمام الشراء',
+  ];
+
+  // Acquisition-copy forbidden terms. The app must not tell the user where
+  // or how to obtain an activation key — no URL, phone number, website,
+  // WhatsApp, or "contact us" wording in any Pro-gating string.
+  const forbiddenAcquisitionEn = [
+    'website', 'whatsapp', 'contact us', 'contacting us', 'wa.me', 'http',
+  ];
+  const forbiddenAcquisitionAr = [
+    'موقعنا', 'واتساب', 'تواصل معنا', 'التواصل معنا', 'راسلنا', 'اتصل بنا',
   ];
 
   group('Play compliance — gating copy (English)', () {
@@ -63,6 +83,30 @@ void main() {
     }
   });
 
+  group('Play compliance — acquisition copy (English)', () {
+    for (final term in forbiddenAcquisitionEn) {
+      test('"$term" is absent from every gating string', () {
+        for (final s in gatingStrings(en)) {
+          expect(s.toLowerCase().contains(term), isFalse,
+              reason:
+                  '"$term" directs the user outside the app in: $s');
+        }
+      });
+    }
+  });
+
+  group('Play compliance — acquisition copy (Arabic)', () {
+    for (final term in forbiddenAcquisitionAr) {
+      test('"$term" is absent from every gating string', () {
+        for (final s in gatingStrings(ar)) {
+          expect(s.contains(term), isFalse,
+              reason:
+                  '"$term" directs the user outside the app in: $s');
+        }
+      });
+    }
+  });
+
   group('Mandated approved copy exists verbatim', () {
     test('AR: proFeaturesActivation matches policy-approved wording', () {
       expect(ar.proFeaturesActivation,
@@ -74,22 +118,32 @@ void main() {
           'Pro features are unlocked with an activation key.');
     });
 
-    test('AR: getActivationKeyInfo directs user outside the app', () {
-      // Must mention the website / WhatsApp acquisition path, with no price.
-      expect(ar.getActivationKeyInfo, contains('موقعنا'));
-      expect(ar.getActivationKeyInfo, contains('واتساب'));
+    test('AR: getActivationKeyInfo is neutral and self-contained', () {
+      expect(ar.getActivationKeyInfo,
+          'أدخل مفتاح التفعيل لإلغاء قفل الميزات الاحترافية.');
     });
 
-    test('EN: getActivationKeyInfo directs user outside the app', () {
-      expect(en.getActivationKeyInfo.toLowerCase(), contains('website'));
-      expect(en.getActivationKeyInfo.toLowerCase(), contains('whatsapp'));
+    test('EN: getActivationKeyInfo is neutral and self-contained', () {
+      expect(en.getActivationKeyInfo,
+          'Enter your activation key to unlock Pro features.');
     });
 
     test('invalidOrExpiredKey is a neutral failure message', () {
-      // Must not suggest buying a new one — only "get a new one".
+      // Must not suggest buying a new one — and must not direct the user
+      // outside the app to obtain a replacement.
       expect(ar.invalidOrExpiredKey.contains('شراء'), isFalse);
       expect(en.invalidOrExpiredKey.toLowerCase().contains('buy'), isFalse);
-      expect(en.invalidOrExpiredKey.toLowerCase().contains('purchase'), isFalse);
+      expect(en.invalidOrExpiredKey.toLowerCase().contains('purchase'),
+          isFalse);
+      expect(en.invalidOrExpiredKey.toLowerCase().contains('contact'),
+          isFalse);
+      expect(ar.invalidOrExpiredKey.contains('تواصل'), isFalse);
+    });
+
+    test('deviceAlreadyActivated is a neutral failure message', () {
+      expect(en.deviceAlreadyActivated.toLowerCase().contains('contact'),
+          isFalse);
+      expect(ar.deviceAlreadyActivated.contains('تواصل'), isFalse);
     });
   });
 

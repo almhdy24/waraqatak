@@ -591,7 +591,6 @@ class AppLocalizations {
   String get trialFreeDays             => _t('١٤ يوماً مجاناً — بدون قيود',           '14 days free — no limits');
   // Actions
   String get tryAgain                  => _t('إعادة المحاولة',                         'Try Again');
-  String get contactUs                 => _t('تواصل معنا',                             'Contact Us');
   String get continueUsingApp          => _t('الدخول إلى ورقتك',                       'Enter Waraqatak');
   String get activating                => _t('جارٍ التفعيل…',                          'Activating…');
   String get activationSuccessTitle    => _t('تم التفعيل!',                            'Activated!');
@@ -609,16 +608,16 @@ class AppLocalizations {
         'Pro features are unlocked with an activation key.',
       );
   String get getActivationKeyInfo     => _t(
-        'يمكنك الحصول على مفتاح التفعيل من خلال موقعنا الإلكتروني أو بالتواصل معنا عبر واتساب.',
-        'You can get an activation key through our website or by contacting us on WhatsApp.',
+        'أدخل مفتاح التفعيل لإلغاء قفل الميزات الاحترافية.',
+        'Enter your activation key to unlock Pro features.',
       );
   String get invalidOrExpiredKey      => _t(
-        'مفتاح تفعيل غير صالح أو منتهي الصلاحية. يرجى التحقق من المفتاح أو التواصل معنا للحصول على مفتاح جديد.',
-        'Invalid or expired activation key. Please check the key or contact us to get a new one.',
+        'مفتاح تفعيل غير صالح أو منتهي الصلاحية.',
+        'Invalid or expired activation key.',
       );
   String get deviceAlreadyActivated   => _t(
-        'هذا المفتاح مُستخدم على جهاز آخر. يرجى التواصل معنا لإعادة تعيينه.',
-        'This key is already in use on another device. Please contact us to reset it.',
+        'هذا المفتاح مُستخدم على جهاز آخر.',
+        'This key is already in use on another device.',
       );
 
   // ========== FREE / PRO GATING ==========

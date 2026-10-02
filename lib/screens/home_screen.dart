@@ -550,7 +550,7 @@ class HomeScreenState extends State<HomeScreen> {
         bgColor = Colors.orange.shade50;
         textColor = Colors.orange.shade800;
         isWarning = true;
-        actionLabel = l10n.contactUs;
+        actionLabel = l10n.enterActivationKeyAction;
         onAction = _openActivationScreen;
     }
 

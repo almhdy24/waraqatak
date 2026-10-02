@@ -4,10 +4,10 @@ import 'license_service.dart';
 
 /// Thin wrapper around the Elmahdi Pay SDK used only for key activation.
 ///
-/// Nothing is bought, priced, or paid for inside the app. The user obtains an
-/// activation key outside the app (website or WhatsApp) and enters it here to
-/// unlock Pro features. The only data sent to the server is the activation
-/// key and the per-install device identifier.
+/// Nothing is bought, priced, or paid for inside the app. The user enters a
+/// previously obtained activation key here to unlock Pro features. The only
+/// data sent to the server is the activation key and the per-install device
+/// identifier.
 class ActivationService {
   ActivationService._();
 

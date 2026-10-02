@@ -21,9 +21,11 @@ This branch brings Waraqatak into that model.
 
 - Nothing can be bought, priced, or paid for inside the app.
 - Pro features (purchases, inventory, advanced reports) are unlocked by
-  entering an **activation key** obtained **outside the app** — through the
-  developer's website or WhatsApp. The app provides neither a URL nor a
-  phone number.
+  entering an **activation key** obtained **outside the app**. The app
+  itself does not describe *where* or *how* to obtain that key — no URLs,
+  phone numbers, website / WhatsApp hints, or "contact us" copy appear on
+  the locked-feature screen, the activation screen, the Pro upgrade sheet,
+  or any license error state.
 - The merchant's own invoicing feature (how a business owner records that
   **their own customers** paid them for goods or services the merchant
   sells) is unchanged. That is the merchant's bookkeeping — it is not an
@@ -68,16 +70,20 @@ This branch brings Waraqatak into that model.
 
 ### Mandated approved copy (Arabic / English)
 
-Three strings, defined in `lib/localization/app_localizations.dart`, are the
-only Pro-gating messages shown to the user:
+Four strings, defined in `lib/localization/app_localizations.dart`, are the
+only Pro-gating messages shown to the user. All are deliberately neutral —
+they describe *what* an activation key does, never *where* or *how* to get
+one:
 
 | Key | Arabic | English |
 |---|---|---|
 | `proFeaturesActivation` | تُفعَّل الميزات الاحترافية بمفتاح تفعيل. | Pro features are unlocked with an activation key. |
-| `getActivationKeyInfo` | يمكنك الحصول على مفتاح التفعيل من خلال موقعنا الإلكتروني أو بالتواصل معنا عبر واتساب. | You can get an activation key through our website or by contacting us on WhatsApp. |
-| `invalidOrExpiredKey` | مفتاح تفعيل غير صالح أو منتهي الصلاحية. يرجى التحقق من المفتاح أو التواصل معنا للحصول على مفتاح جديد. | Invalid or expired activation key. Please check the key or contact us to get a new one. |
+| `getActivationKeyInfo` | أدخل مفتاح التفعيل لإلغاء قفل الميزات الاحترافية. | Enter your activation key to unlock Pro features. |
+| `invalidOrExpiredKey` | مفتاح تفعيل غير صالح أو منتهي الصلاحية. | Invalid or expired activation key. |
+| `deviceAlreadyActivated` | هذا المفتاح مُستخدم على جهاز آخر. | This key is already in use on another device. |
 
-No URLs, phone numbers, prices, or currencies appear in-app.
+No URLs, phone numbers, prices, currencies, or "contact us / website /
+WhatsApp" wording appears anywhere in the Pro-gating UI.
 
 ## Server contract
 
@@ -96,18 +102,28 @@ encrypted via `EncryptedSharedPreferences` (Android Keystore, API 23+).
 
 ## CI compliance guard
 
-`tool/check_play_compliance.sh` greps the Dart tree for identifiers and
-strings that would imply in-app purchases (English + Arabic). The script
-exempts a short whitelist of merchant-invoicing files
-(`payment_methods_screen.dart`, `document_payment.dart`, the payments
-report, the DB helper, localization) because those describe how a merchant
-records payments **against their own invoices** — bookkeeping, not an
-in-app purchase.
+`tool/check_play_compliance.sh` runs two independent passes against the
+Dart tree:
+
+1. **Purchase vocabulary.** Greps for identifiers and strings that would
+   imply in-app purchases (English + Arabic: `buy pro`, `subscribe`,
+   `اشتراك شهري`, etc.). A short whitelist of merchant-invoicing files
+   (`payment_methods_screen.dart`, `document_payment.dart`, the payments
+   report, the DB helper, localization) is exempted because those describe
+   how a merchant records payments **against their own invoices** —
+   bookkeeping, not an in-app purchase.
+2. **Acquisition copy.** Scans the Pro-gating screens (locked feature,
+   activation, Pro upgrade sheet) and the activation getters inside
+   `app_localizations.dart` for any wording that would tell the user
+   *where* or *how* to obtain a key — `contact us`, `through our website`,
+   `on WhatsApp`, `wa.me`, URLs, `تواصل معنا`, `موقعنا`, `واتساب`, etc.
+   The About screen is deliberately excluded from this pass; it is a
+   company-info page that may list generic contact details.
 
 The script runs as the first step in each GitHub Actions workflow
 (`ci.yml`, `build-debug.yml`, `release.yml`) before analyze and tests. A
-unit test (`test/services/play_compliance_test.dart`) duplicates the string
-checks against the AppLocalizations instance so a regression also fails
+unit test (`test/services/play_compliance_test.dart`) mirrors both passes
+against the `AppLocalizations` instance so a regression also fails
 `flutter test`.
 
 Run locally:
