@@ -64,6 +64,11 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
 
+  # Direct dev-only pin for the already-transitive `http` package, so tests
+  # can import `package:http/testing.dart` (MockClient) without pulling in a
+  # new runtime dependency.
+  http: ^1.2.0
+
 flutter:
   uses-material-design: true
 

@@ -619,6 +619,14 @@ class AppLocalizations {
         'هذا المفتاح مُستخدم على جهاز آخر.',
         'This key is already in use on another device.',
       );
+  String get activationTooManyAttempts => _t(
+        'محاولات كثيرة. يرجى المحاولة لاحقاً.',
+        'Too many attempts. Please try again later.',
+      );
+  String get activationServerUnreachable => _t(
+        'تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً.',
+        'Could not reach the server. Please try again later.',
+      );
 
   // ========== FREE / PRO GATING ==========
   String get proBadgeLabel           => _t('احترافي',                                   'Pro');

@@ -1,4 +1,3 @@
-import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -31,34 +30,31 @@ class _ActivationScreenState extends State<ActivationScreen> {
   }
 
   Future<void> _activate() async {
-    final key = _ctrl.text.trim();
-    if (key.isEmpty) return;
+    final key = _ctrl.text;
+    if (ActivationService.normalizeKey(key).isEmpty) return;
 
     setState(() {
       _loading = true;
       _error = null;
     });
 
-    try {
-      final deviceId = await LicenseService.instance.getOrCreateDeviceId();
-      await ActivationService.activate(key, deviceId);
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _success = true;
-      });
-    } on ElmahdiPayNotFoundException {
-      _showError(AppLocalizations.of(context).invalidOrExpiredKey);
-    } on ElmahdiPayForbiddenException {
-      _showError(AppLocalizations.of(context).invalidOrExpiredKey);
-    } on ElmahdiPayValidationException {
-      _showError(AppLocalizations.of(context).invalidOrExpiredKey);
-    } on ElmahdiPayAlreadyActivatedException {
-      _showError(AppLocalizations.of(context).deviceAlreadyActivated);
-    } on ElmahdiPayNetworkException {
-      _showError(AppLocalizations.of(context).networkError);
-    } catch (_) {
-      _showError(AppLocalizations.of(context).invalidOrExpiredKey);
+    final deviceId = await LicenseService.instance.getOrCreateDeviceId();
+    final outcome = await ActivationService.activate(key, deviceId);
+    if (!mounted) return;
+
+    final l10n = AppLocalizations.of(context);
+    switch (outcome) {
+      case ActivationOutcome.success:
+        setState(() {
+          _loading = false;
+          _success = true;
+        });
+      case ActivationOutcome.invalid:
+        _showError(l10n.invalidOrExpiredKey);
+      case ActivationOutcome.tooManyAttempts:
+        _showError(l10n.activationTooManyAttempts);
+      case ActivationOutcome.serverUnreachable:
+        _showError(l10n.activationServerUnreachable);
     }
   }
 
