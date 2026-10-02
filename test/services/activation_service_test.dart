@@ -279,6 +279,25 @@ void main() {
 
   // ── direct unit tests on the normalizer ─────────────────────────────────
 
+  group('keyCharacter', () {
+    test('accepts every character of a server-issued key', () {
+      // Shape of a real key: base64url(payload) '.' base64url(signature).
+      const key = 'eyJsaWNlbnNlX2lkIjo0Mn0.Ab-_cD09xYz_-Q';
+      final filtered = key
+          .split('')
+          .where(ActivationService.keyCharacter.hasMatch)
+          .join();
+      expect(filtered, key);
+    });
+
+    test('rejects whitespace and other characters', () {
+      for (final c in [' ', '\n', '+', '/', '=', '@']) {
+        expect(ActivationService.keyCharacter.hasMatch(c), isFalse,
+            reason: 'character "$c"');
+      }
+    });
+  });
+
   group('normalizeKey', () {
     test('preserves dashes and casing', () {
       expect(ActivationService.normalizeKey('abc-DEF-123'), 'abc-DEF-123');

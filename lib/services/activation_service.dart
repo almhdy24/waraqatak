@@ -66,6 +66,10 @@ class ActivationService {
     _client = null;
   }
 
+  /// Characters a license key may contain: the server issues keys as
+  /// `base64url(payload).base64url(signature)`.
+  static final RegExp keyCharacter = RegExp(r'[A-Za-z0-9_.\-]');
+
   /// Normalize a pasted key.
   ///
   /// Clipboard paste on Android commonly injects:
