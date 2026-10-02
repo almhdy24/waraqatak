@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../localization/app_localizations.dart';
 import '../services/license_service.dart';
-import '../services/subscription_service.dart';
 import 'main_shell.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -22,10 +19,6 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _init() async {
-    // Background server re-check of a stored license (at most once a day).
-    // Never blocks startup; offline users keep their current state.
-    unawaited(SubscriptionService.revalidateStoredLicense());
-
     // Pre-warm the entitlement cache while the splash is visible.
     // HomeScreen reads the cache on load; no blocking gate here — the app
     // is never fully locked, only paid creation actions are gated.

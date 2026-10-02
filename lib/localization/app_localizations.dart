@@ -253,7 +253,6 @@ class AppLocalizations {
       _t('متابعة حالة المستندات', 'Document status tracking');
 
   // ========== CONTACT ==========
-  String get contactWhatsApp => _t('واتساب', 'WhatsApp');
   String get contactEmail => _t('البريد الإلكتروني', 'Email');
   String get contactMessage => _t(
         'السلام عليكم، أريد التواصل بخصوص تطبيق ورقتك.',
@@ -268,8 +267,43 @@ class AppLocalizations {
         'تعرف على كيفية تعامل ورقتك مع بياناتك وبيانات نشاطك التجاري.',
         'Learn how Waraqatak handles your data and business information.',
       );
+  String get termsOfUse => _t('شروط الاستخدام', 'Terms of Use');
+  String get termsDescription => _t(
+        'الشروط التي يحكم استخدامك لتطبيق ورقتك.',
+        'The terms that govern your use of Waraqatak.',
+      );
+  String get deleteAccountData =>
+      _t('حذف بيانات الحساب', 'Delete account data');
+  String get deleteAccountDataDescription => _t(
+        'إرشادات لحذف بياناتك من هذا الجهاز ومن خوادم المطور.',
+        'How to delete your data from this device and from the developer servers.',
+      );
+  String get appLogoLabel => _t('شعار ورقتك', 'Waraqatak logo');
 
-  String get facebook => _t('فيسبوك', 'Facebook');
+  // ========== OPEN-SOURCE LICENSES ==========
+  String get appName => _t('ورقتك', 'Waraqatak');
+  String get openSourceLicenses =>
+      _t('التراخيص المفتوحة المصدر', 'Open-source Licenses');
+  String get openSourceLicensesDescription => _t(
+        'استعرض تراخيص الحزم والخطوط المستخدمة في التطبيق.',
+        'View licenses for the packages and fonts used in this app.',
+      );
+  String get openSourceLicensesLegalese => _t(
+        'يستخدم هذا التطبيق مكتبات مفتوحة المصدر وخط Tajawal (رخصة SIL Open Font License 1.1).',
+        'This app uses open-source libraries and the Tajawal font (SIL Open Font License 1.1).',
+      );
+
+  // ========== BACKUP WARNING ==========
+  String get backupUnencryptedTitle =>
+      _t('نسخة احتياطية غير مشفرة', 'Unencrypted Backup');
+  String get backupUnencryptedWarning => _t(
+        'ملف النسخة الاحتياطية يحتوي على بياناتك بصيغة غير مشفرة. '
+            'احفظه في مكان آمن ولا تشاركه مع أي شخص لا تثق به.',
+        'The backup file contains your data in unencrypted form. '
+            'Keep it in a safe place and do not share it with anyone you do not trust.',
+      );
+  String get continueAction => _t('متابعة', 'Continue');
+
   String get fromYourPhone => _t('من هاتفك', 'From your phone');
   String get contact => _t('تواصل', 'Contact');
 
@@ -368,11 +402,7 @@ class AppLocalizations {
   String get servicesOnly => _t('الخدمات', 'Services');
 
   // ========== DEVELOPER ==========
-  String get developer => _t('المطور', 'Developer');
   String get madeBy => _t('تطوير', 'Made by');
-  String get visitWebsite => _t('الموقع الإلكتروني', 'Website');
-  String get viewOnGitHub => _t('GitHub', 'GitHub');
-  String get waraqatakProductPage => _t('صفحة المنتج', 'Product Page');
 
   // ========== PHASE 3.2 — PURCHASES ==========
   String get purchase          => _t('أمر شراء',        'Purchase Order');
@@ -551,89 +581,136 @@ class AppLocalizations {
   String get taxProfile          => _t('الملف الضريبي',            'Tax Profile');
   String get noTaxProfile        => _t('بدون ملف ضريبي',           'No Tax Profile');
 
-  // ========== PHASE 3.8 — SUBSCRIPTION ==========
-  String get subscription              => _t('الاشتراك',                               'Subscription');
+  // ========== ACTIVATION & ENTITLEMENT ==========
+  // Pro features are unlocked only by an activation key obtained outside the
+  // app. There is no in-app pricing, ordering, or payment.
+  String get activation                => _t('التفعيل',                                 'Activation');
   // Status labels
-  String get trialActiveStatus         => _t('تجربة مجانية نشطة',                     'Free Trial Active');
+  String get trialActiveStatus         => _t('تجربة مجانية نشطة',                      'Free Trial Active');
   String get trialExpiredStatus        => _t('انتهت التجربة',                          'Trial Expired');
-  String get licensedStatus            => _t('مرخّص',                                  'Licensed');
-  String get licenseExpiredStatus      => _t('انتهى الترخيص',                         'License Expired');
-  String get licenseRevokedStatus      => _t('تم إلغاء الترخيص',                      'License Revoked');
-  String get orderPendingStatus        => _t('الطلب قيد المراجعة',                    'Order Pending');
-  String get orderRejectedStatus       => _t('تم رفض الطلب',                          'Order Rejected');
-  String get deviceLimitStatus         => _t('تجاوزت حد الأجهزة',                    'Device Limit Reached');
+  String get activatedStatus           => _t('مُفعَّل',                                 'Activated');
+  String get licenseExpiredStatus      => _t('انتهى التفعيل',                          'Activation Expired');
+  String get licenseRevokedStatus      => _t('تم إلغاء التفعيل',                       'Activation Revoked');
+  String get deviceLimitStatus         => _t('تجاوزت حد الأجهزة',                      'Device Limit Reached');
   // Trial
-  String get daysLeftInTrial           => _t('يوم متبقٍ في التجربة',                  'day(s) left in trial');
-  String get trialFreeDays             => _t('١٤ يوماً مجاناً — بدون قيود',          '14 days free — no limits');
-  // Plans
-  String get choosePlan                => _t('اختر خطتك',                             'Choose Your Plan');
-  String get mostPopularBadge          => _t('الأكثر طلباً',                          'Most Popular');
-  String get saveBadge                 => _t('وفّر',                                  'Save');
-  String get perMonthSuffix            => _t('/ شهر',                                 '/ mo');
-  String get equivalentMonthly         => _t('ما يعادل',                              'Equiv.');
-  String get subscriptionRenewable     => _t('قابل للتجديد',                         'Renewable');
-  String get limitedPromoOffer         => _t('عرض ترويجي محدود',                      'Limited Promotional Offer');
+  String get daysLeftInTrial           => _t('يوم متبقٍ في التجربة',                   'day(s) left in trial');
+  String get trialFreeDays             => _t('١٤ يوماً مجاناً — بدون قيود',           '14 days free — no limits');
   // Actions
-  String get subscribeNow              => _t('اشترك الآن',                            'Subscribe Now');
-  String get renewNow                  => _t('جدّد الاشتراك',                         'Renew Now');
-  String get renewEarly                => _t('تجديد مبكر للاشتراك',                   'Renew Subscription Early');
-  String get licenseActiveDesc         => _t('اشتراكك نشط ومفعّل على هذا الجهاز.',   'Your subscription is active on this device.');
-  String get checkOrderStatus          => _t('فحص حالة الطلب',                       'Check Order Status');
-  String get submitOrder               => _t('إرسال الطلب',                           'Submit Order');
-  String get tryAgain                  => _t('إعادة المحاولة',                        'Try Again');
-  String get contactUs                 => _t('تواصل معنا',                            'Contact Us');
-  String get cancelAndResubmit         => _t('إلغاء وإعادة الاشتراك',                'Cancel & Re-subscribe');
-  String get continueUsingApp          => _t('الدخول إلى ورقاتك',                    'Enter Waraqatak');
-  String get activating                => _t('جارٍ التفعيل…',                        'Activating…');
-  // Paywall
-  String get trialExpiredHeadline      => _t('انتهت التجربة المجانية',                'Free Trial Ended');
-  String get trialExpiredBody          => _t('استمر في ورقاتك باشتراك يناسبك.',      'Continue with a plan that suits you.');
-  String get licenseExpiredHeadline    => _t('انتهى اشتراكك',                         'Subscription Ended');
-  String get licenseExpiredBody        => _t('جدّد اشتراكك للاستمرار.',              'Renew to continue using Waraqatak.');
-  String get dataAlwaysSafe            => _t('بياناتك محفوظة دائماً — حتى بعد انتهاء الاشتراك.', 'Your data is always safe — even after subscription ends.');
-  // Payment flow
-  String get choosePaymentMethod       => _t('طريقة الدفع',                           'Payment Method');
-  String get paymentInstructions       => _t('تعليمات الدفع',                         'Payment Instructions');
-  String get buyerNameLabel            => _t('اسمك الكامل',                           'Your Full Name');
-  String get buyerContactLabel         => _t('هاتف أو بريد إلكتروني',                'Phone or Email');
-  String get attachProof               => _t('إرفاق إيصال الدفع (اختياري)',          'Attach Payment Proof (optional)');
-  String get proofNoteLabel            => _t('ملاحظة (اختياري)',                      'Note (optional)');
-  String get orderSubmittedTitle       => _t('تم إرسال طلبك',                        'Order Submitted');
-  String get orderReferenceLabel       => _t('رقم الطلب',                             'Order Reference');
-  String get orderPendingBody          => _t('طلبك قيد مراجعة الإدارة. يمكنك فحص الحالة لاحقاً.', 'Your order is under admin review. Check status later.');
-  String get activationSuccessTitle    => _t('تم التفعيل!',                           'Activated!');
-  String get activationSuccessBody     => _t('ورقاتك نشطة الآن. استمتع باستخدامها.', 'Waraqatak is now active. Enjoy!');
-  String get licenseExpiresOn          => _t('ينتهي بتاريخ',                          'Expires on');
-  String get rejectionReason           => _t('سبب الرفض',                             'Rejection Reason');
-  String get noPaymentMethodsAvailable => _t('لا توجد طرق دفع متاحة حالياً',        'No payment methods available');
-  String get networkError              => _t('تعذّر الاتصال بالخادم',                 'Could not connect to server');
-  String get rateLimitError            => _t('الرجاء الانتظار قبل إعادة المحاولة',   'Please wait before retrying');
+  String get tryAgain                  => _t('إعادة المحاولة',                         'Try Again');
+  String get continueUsingApp          => _t('الدخول إلى ورقتك',                       'Enter Waraqatak');
+  String get activating                => _t('جارٍ التفعيل…',                          'Activating…');
+  String get activationSuccessTitle    => _t('تم التفعيل!',                            'Activated!');
+  String get activationSuccessBody     => _t('ورقتك نشطة الآن. استمتع باستخدامها.',   'Waraqatak is now active. Enjoy!');
+  String get licenseExpiresOn          => _t('ينتهي بتاريخ',                           'Expires on');
+  String get networkError              => _t('تعذّر الاتصال بالخادم',                  'Could not connect to server');
 
-  // ── License key restore ────────────────────────────────────────────────────
-  String get haveALicenseKey       => _t('هل لديك مفتاح ترخيص؟',                       'Have a license key?');
-  String get restoreLicense        => _t('استعادة الترخيص',                             'Restore License');
-  String get enterLicenseKey       => _t('أدخل مفتاح الترخيص',                          'Enter License Key');
-  String get licenseKeyHint        => _t('مثال: XXXX-XXXX-XXXX',                        'e.g. XXXX-XXXX-XXXX');
-  String get activate              => _t('تفعيل',                                        'Activate');
-  String get formattedPhoneNote    => _t('إذا غيّرت هاتفك أو أعدت تنسيقه، أدخل مفتاح الترخيص الخاص بك لاستعادة وصولك فوراً.', 'If you formatted your phone, enter your license key to instantly restore access.');
-  String get invalidLicenseKey     => _t('مفتاح الترخيص غير صحيح أو منتهي الصلاحية',  'Invalid or expired license key');
+  // ── Activation key entry ───────────────────────────────────────────────────
+  String get enterActivationKey       => _t('أدخل مفتاح التفعيل',                      'Enter activation key');
+  String get activationKeyHint        => _t('مثال: XXXX-XXXX-XXXX',                     'e.g. XXXX-XXXX-XXXX');
+  String get activate                 => _t('تفعيل',                                    'Activate');
+  // Approved copy (mandated):
+  String get proFeaturesActivation    => _t(
+        'تُفعَّل الميزات الاحترافية بمفتاح تفعيل.',
+        'Pro features are unlocked with an activation key.',
+      );
+  String get getActivationKeyInfo     => _t(
+        'أدخل مفتاح التفعيل لإلغاء قفل الميزات الاحترافية.',
+        'Enter your activation key to unlock Pro features.',
+      );
+  String get invalidOrExpiredKey      => _t(
+        'مفتاح تفعيل غير صالح أو منتهي الصلاحية.',
+        'Invalid or expired activation key.',
+      );
+  String get activationTooManyAttempts => _t(
+        'محاولات كثيرة. يرجى المحاولة لاحقاً.',
+        'Too many attempts. Please try again later.',
+      );
+  String get activationServerUnreachable => _t(
+        'تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً.',
+        'Could not reach the server. Please try again later.',
+      );
 
-  // ── Payment form help ──────────────────────────────────────────────────────
-  String get enterCorrectDataNote  => _t('أدخل بياناتك الصحيحة — سنتواصل معك إذا واجهنا أي مشكلة ونرسل لك مفتاح الترخيص.', 'Enter your correct details — we\'ll contact you if there\'s any issue and send your license key.');
-  String get buyerNameHelper       => _t('اسمك الكامل كما هو، حتى نتعرف على دفعتك',    'Your full name, so we can identify your payment');
-  String get buyerContactHelper    => _t('هاتفك أو بريدك — نتواصل بك إذا احتجنا لذلك',  'Your phone or email — we\'ll reach you if needed');
+  // ── License screen (Settings → License) ───────────────────────────────────
+  String get licenseScreenTitle   => _t('التفعيل والترخيص',    'License');
+  String get licenseStatusLabel   => _t('الحالة',               'Status');
+  String get licenseTypeLabel     => _t('النوع',                'Type');
+  String get licenseExpiryLabel   => _t('تاريخ الانتهاء',       'Expiry');
+  String get licenseTypeTrial     => _t('تجربة مجانية',         'Free trial');
+  String get licenseTypeActivated => _t('مُفعَّل بمفتاح',       'Activated with a key');
+  String get licenseNoExpiryDate  => _t('بدون تاريخ انتهاء',     'No expiry date');
+  String get licenseOnExpiryTitle => _t(
+        'ماذا يحدث عند انتهاء الصلاحية؟',
+        'What happens when it expires?',
+      );
+  String get licenseOnExpiryBody  => _t(
+        'عند انتهاء التجربة أو التفعيل، تظل بياناتك ومستنداتك متاحة في الوضع المجاني، ويحتاج استخدام الميزات الاحترافية إلى مفتاح تفعيل جديد.',
+        'When your trial or license ends, your data and documents remain available in Free mode. Pro features require a new activation key.',
+      );
+  String get enterOrChangeKey     =>
+      _t('إدخال أو تغيير مفتاح التفعيل', 'Enter or change activation key');
+  String get removeKeyFromDevice  =>
+      _t('إزالة المفتاح من هذا الجهاز', 'Remove key from this device');
+  String get removeKeyConfirmTitle =>
+      _t('إزالة المفتاح؟', 'Remove key?');
+  String get removeKeyConfirmBody => _t(
+        'ستتم إزالة مفتاح التفعيل من هذا الجهاز فقط. لن يُلغى المفتاح على الخادم، ويمكنك إدخاله مجدداً في أي وقت.',
+        'The activation key will be removed from this device only. The key is not revoked on the server, and you can enter it again at any time.',
+      );
+  String get removeKeyConfirmAction =>
+      _t('إزالة', 'Remove');
+  String get keyRemovedSnack =>
+      _t('تمت إزالة المفتاح من هذا الجهاز.', 'Key removed from this device.');
+
+  // ── Transparency screen (free vs Pro) ─────────────────────────────────────
+  String get transparencyTitle =>
+      _t('ما المتاح مجاناً وما يتطلب التفعيل', 'What is free and what requires activation');
+  String get transparencyIntro => _t(
+        'كل ما يلي يعمل دون إنترنت ودون أي عملية شراء داخل التطبيق. تحتاج ميزات محددة إلى مفتاح تفعيل.',
+        'Everything below works offline with no in-app purchase. A few specific features require an activation key.',
+      );
+  String get transparencyFreeHeader =>
+      _t('متاحة دائماً', 'Always available');
+  String get transparencyProHeader =>
+      _t('تتطلب مفتاح تفعيل', 'Require an activation key');
+  String get seeFreeVsPro =>
+      _t('ما المتاح مجاناً؟', 'See what is free vs Pro');
+
+  // Feature labels — reused by the transparency screen. Mapped from the
+  // `Feature` enum in `lib/services/feature_access.dart`.
+  String get featureInvoices        =>
+      _t('الفواتير وعروض الأسعار والمستندات', 'Invoices, quotations, and documents');
+  String get featureQuotations      =>
+      _t('عروض الأسعار', 'Quotations');
+  String get featureVouchers        =>
+      _t('سندات القبض والصرف', 'Receipt and expense vouchers');
+  String get featureCustomDocuments =>
+      _t('المستندات المخصصة', 'Custom documents');
+  String get featureCustomers       =>
+      _t('العملاء وأرصدتهم', 'Customers and balances');
+  String get featureProducts        =>
+      _t('المنتجات والأسعار', 'Products and prices');
+  String get featureBarcode         =>
+      _t('ماسح الباركود', 'Barcode scanner');
+  String get featureBasicReports    =>
+      _t('التقارير الأساسية', 'Basic reports');
+  String get featureBackupRestore   =>
+      _t('النسخ الاحتياطي والاستعادة', 'Backup and restore');
+  String get featurePurchases       =>
+      _t('أوامر الشراء والموردون', 'Purchase orders and suppliers');
+  String get featureInventory       =>
+      _t('إدارة المخزون المتقدمة', 'Advanced inventory management');
+  String get featureAdvancedReports =>
+      _t('التقارير التفصيلية الكاملة', 'Full detailed reports');
 
   // ========== FREE / PRO GATING ==========
   String get proBadgeLabel           => _t('احترافي',                                   'Pro');
   String get proFeatureTitle         => _t('ميزة احترافية',                             'Pro Feature');
-  String get proFeatureUnlockBody    => _t('هذه الميزة متاحة في خطة الاشتراك الاحترافي. بياناتك ومستنداتك الأساسية متاحة دائماً في الوضع المجاني.', 'This feature is available with a Pro subscription. Your data and core documents are always available in Free mode.');
   String get proIncludesPurchases    => _t('أوامر الشراء والموردون',                   'Purchases & Suppliers');
   String get proIncludesInventory    => _t('إدارة المخزون المتقدمة',                   'Advanced Inventory Management');
   String get proIncludesReports      => _t('التقارير التفصيلية الكاملة',               'Full Detailed Reports');
   String get proAdvancedReports      => _t('التقارير الاحترافية',                      'Advanced Reports');
-  String get proUpgradeAction        => _t('عرض خطط الاشتراك',                         'View Plans');
+  String get enterActivationKeyAction => _t('إدخال مفتاح التفعيل',                     'Enter activation key');
   String get freeDataAlwaysAvailable => _t('بياناتك ومستنداتك محفوظة دائماً حتى في الوضع المجاني.', 'Your data and documents are always available, even in Free mode.');
-  String get manualRenewalNote       => _t('التجديد يدوي — لن يُحصل منك شيء تلقائياً.', 'Renewal is manual — you won\'t be charged automatically.');
   String get freeModeBannerMsg       => _t('الوضع المجاني نشط — الفواتير والعملاء والمنتجات متاحة دائماً.', 'Free mode active — invoices, customers, and products are always available.');
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;

@@ -29,16 +29,8 @@ class LicenseService {
   static const _kLicenseKey    = 'wq_license_key';
   static const _kLicenseExpiry = 'wq_license_expiry';
   static const _kLicenseStatus = 'wq_license_status';
-  static const _kOrderRef      = 'wq_order_ref';
-  static const _kIdempotency   = 'wq_idem_key';
-  static const _kRejectNote    = 'wq_rejection_note';
-  static const _kActivationTok = 'wq_activation_token';
-  static const _kLastVerified  = 'wq_license_verified_at';
 
   static const int _trialDays = 14;
-
-  /// How often a stored license is re-checked against the server.
-  static const Duration revalidationInterval = Duration(hours: 24);
 
   /// In-memory cache so entitlement is only computed once per session.
   EntitlementState? _cached;
@@ -70,45 +62,15 @@ class LicenseService {
 
     await _updateLastLaunch(now);
 
-    // ── Order state (separate from subscription entitlement) ─────────────────
-    //
-    // A pending or rejected order is informational only — it does NOT block
-    // the user from using the app. The underlying trial/license status
-    // determines that independently.
-    final orderRef = await _store.read(key: _kOrderRef);
-    final orderRef0 = (orderRef != null && orderRef.isNotEmpty) ? orderRef : null;
-    PendingOrderStatus orderStatus = PendingOrderStatus.none;
-    String? rejectNote;
-    if (orderRef0 != null) {
-      final raw = await _store.read(key: _kRejectNote);
-      rejectNote = (raw != null && raw.isNotEmpty) ? raw : null;
-      orderStatus = rejectNote != null
-          ? PendingOrderStatus.rejected
-          : PendingOrderStatus.pending;
-    }
-
-    // Helper: attach order state to any result without repeating fields.
-    EntitlementState withOrder(
-      EntitlementStatus s, {
-      int trialDays = 0,
-      DateTime? expiry,
-    }) =>
-        EntitlementState(
-          status: s,
-          deviceId: deviceId,
-          trialDaysRemaining: trialDays,
-          licenseExpiresAt: expiry,
-          orderStatus: orderStatus,
-          orderReference: orderRef0,
-          rejectionNote: rejectNote,
-        );
-
     // ── License ───────────────────────────────────────────────────────────────
     final licenseKey = await _store.read(key: _kLicenseKey);
     if (licenseKey != null && licenseKey.isNotEmpty) {
       final statusStr = await _store.read(key: _kLicenseStatus);
       if (statusStr == 'revoked') {
-        return withOrder(EntitlementStatus.licenseRevoked);
+        return EntitlementState(
+          status: EntitlementStatus.licenseRevoked,
+          deviceId: deviceId,
+        );
       }
 
       final expiryStr = await _store.read(key: _kLicenseExpiry);
@@ -117,9 +79,17 @@ class LicenseService {
           : null;
 
       if (expiry != null && expiry.isBefore(now)) {
-        return withOrder(EntitlementStatus.licenseExpired, expiry: expiry);
+        return EntitlementState(
+          status: EntitlementStatus.licenseExpired,
+          deviceId: deviceId,
+          licenseExpiresAt: expiry,
+        );
       }
-      return withOrder(EntitlementStatus.licensed, expiry: expiry);
+      return EntitlementState(
+        status: EntitlementStatus.licensed,
+        deviceId: deviceId,
+        licenseExpiresAt: expiry,
+      );
     }
 
     // ── Trial ─────────────────────────────────────────────────────────────────
@@ -128,11 +98,15 @@ class LicenseService {
         trialStart.add(const Duration(days: _trialDays)).difference(now);
 
     if (remaining.isNegative) {
-      return withOrder(EntitlementStatus.trialExpired);
+      return EntitlementState(
+        status: EntitlementStatus.trialExpired,
+        deviceId: deviceId,
+      );
     }
-    return withOrder(
-      EntitlementStatus.trialActive,
-      trialDays: remaining.inDays + 1,
+    return EntitlementState(
+      status: EntitlementStatus.trialActive,
+      deviceId: deviceId,
+      trialDaysRemaining: remaining.inDays + 1,
     );
   }
 
@@ -176,115 +150,30 @@ class LicenseService {
     required String licenseKey,
     required DateTime? expiresAt,
     required bool isActive,
-    String? activationToken,
   }) async {
     await _store.write(key: _kLicenseKey, value: licenseKey);
     await _store.write(
         key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '');
     await _store.write(
         key: _kLicenseStatus, value: isActive ? 'active' : 'revoked');
-    if (activationToken != null) {
-      await _store.write(key: _kActivationTok, value: activationToken);
-      await _store.write(
-          key: _kLastVerified, value: DateTime.now().toIso8601String());
-    }
-    // Clear pending order now that a license is stored.
-    await _store.delete(key: _kOrderRef);
-    await _store.delete(key: _kRejectNote);
-    invalidateCache();
-  }
-
-  /// Stored expiry for [licenseKey], or null when unknown / not stored.
-  ///
-  /// Used when re-entering a key so a known expiry is never replaced with
-  /// "no expiry".
-  Future<DateTime?> storedExpiryFor(String licenseKey) async {
-    final stored = await _store.read(key: _kLicenseKey);
-    if (stored != licenseKey) return null;
-    final s = await _store.read(key: _kLicenseExpiry);
-    return (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
-  }
-
-  // ── Server Revalidation ────────────────────────────────────────────────────
-
-  /// True when a license is stored, still locally active, and has not been
-  /// confirmed by the server within [revalidationInterval].
-  Future<bool> needsRevalidation() async {
-    final key = await _store.read(key: _kLicenseKey);
-    if (key == null || key.isEmpty) return false;
-    if (await _store.read(key: _kLicenseStatus) == 'revoked') return false;
-    final s = await _store.read(key: _kLastVerified);
-    final last = (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
-    if (last == null) return true;
-    final age = DateTime.now().difference(last);
-    // A negative age means the clock moved back; re-check to be safe.
-    return age.isNegative || age > revalidationInterval;
-  }
-
-  /// Server confirmed the stored license is still valid on this device.
-  ///
-  /// A locally passed expiry is cleared, since the server (e.g. after a
-  /// renewal of the same key) is the source of truth.
-  Future<void> markLicenseVerified(String activationToken) async {
-    final now = DateTime.now();
-    await _store.write(key: _kActivationTok, value: activationToken);
-    await _store.write(key: _kLastVerified, value: now.toIso8601String());
-    final s = await _store.read(key: _kLicenseExpiry);
-    final known = (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
-    if (known != null && known.isBefore(now)) {
-      await _store.write(key: _kLicenseExpiry, value: '');
-      invalidateCache();
-    }
-  }
-
-  /// Server reported the stored license as revoked or invalid.
-  Future<void> markLicenseRevoked() async {
-    await _store.write(key: _kLicenseStatus, value: 'revoked');
-    invalidateCache();
-  }
-
-  /// Server reported the stored license as expired.
-  Future<void> markLicenseExpired() async {
-    final s = await _store.read(key: _kLicenseExpiry);
-    final known = (s != null && s.isNotEmpty) ? DateTime.tryParse(s) : null;
-    final now = DateTime.now();
-    if (known == null || known.isAfter(now)) {
-      await _store.write(key: _kLicenseExpiry, value: now.toIso8601String());
-    }
     invalidateCache();
   }
 
   Future<String?> get licenseKey => _store.read(key: _kLicenseKey);
 
-  // ── Order State ────────────────────────────────────────────────────────────
-
-  Future<void> setOrderPending(String reference) async {
-    await _store.write(key: _kOrderRef, value: reference);
-    await _store.delete(key: _kRejectNote);
+  /// Deletes the stored license from this device.
+  ///
+  /// Clears `wq_license_key`, `wq_license_expiry`, and `wq_license_status`
+  /// so entitlement falls back to the trial path (or expired-trial path
+  /// if the 14-day window has elapsed). The device identifier and trial
+  /// start markers are intentionally **not** touched — removing the key
+  /// is not meant to grant a fresh trial.
+  Future<void> clearLicense() async {
+    await _store.delete(key: _kLicenseKey);
+    await _store.delete(key: _kLicenseExpiry);
+    await _store.delete(key: _kLicenseStatus);
     invalidateCache();
   }
-
-  Future<void> setOrderRejected(String reference, String? note) async {
-    await _store.write(key: _kOrderRef, value: reference);
-    await _store.write(key: _kRejectNote, value: note ?? '');
-    invalidateCache();
-  }
-
-  Future<void> clearOrder() async {
-    await _store.delete(key: _kOrderRef);
-    await _store.delete(key: _kRejectNote);
-    await _store.delete(key: _kIdempotency);
-    invalidateCache();
-  }
-
-  Future<String?> get pendingOrderRef => _store.read(key: _kOrderRef);
-
-  // ── Idempotency Key ────────────────────────────────────────────────────────
-
-  Future<String?> getSavedIdempotencyKey() => _store.read(key: _kIdempotency);
-
-  Future<void> saveIdempotencyKey(String key) =>
-      _store.write(key: _kIdempotency, value: key);
 
   // ── UUID v4 ────────────────────────────────────────────────────────────────
 

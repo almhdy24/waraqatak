@@ -11,7 +11,7 @@ import 'reports/product_report_screen.dart';
 import 'reports/purchases_report_screen.dart';
 import 'reports/sales_report_screen.dart';
 import 'reports/supplier_report_screen.dart';
-import 'subscription_screen.dart';
+import 'activation_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -39,7 +39,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final result = await ProUpgradeSheet.show(context, feature: feature);
       if (result == true && mounted) {
         await Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+            context, MaterialPageRoute(builder: (_) => const ActivationScreen()));
         if (!mounted) return;
         LicenseService.instance.invalidateCache();
         final e = await LicenseService.instance.checkEntitlement(force: true);

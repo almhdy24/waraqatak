@@ -20,13 +20,22 @@ enum Feature {
 class FeatureAccess {
   FeatureAccess._();
 
-  static const _proFeatures = {
+  /// Single source of truth: features that require an active trial or a
+  /// stored activation key. The transparency screen, the paywall, the
+  /// locked-feature flow, and `docs/free-vs-pro.md` all derive from this
+  /// set — do not maintain a parallel list anywhere else.
+  static const Set<Feature> proFeatures = {
     Feature.purchases,
     Feature.inventory,
     Feature.advancedReports,
   };
 
-  static bool isPro(Feature f) => _proFeatures.contains(f);
+  /// Complement of [proFeatures]: features that are always available,
+  /// including after a trial expires or a license is revoked.
+  static final Set<Feature> freeFeatures =
+      Feature.values.toSet().difference(proFeatures);
+
+  static bool isPro(Feature f) => proFeatures.contains(f);
 
   // Null entitlement means still loading — allow Pro to avoid blocking on startup.
   static bool canAccess(Feature f, EntitlementState? entitlement) {
