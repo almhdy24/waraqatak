@@ -112,7 +112,10 @@ class ActivationService {
   /// Success requires both a 2xx answer from the server and a key whose
   /// payload parses. Keys that do not parse, were issued for another app, or
   /// are already expired are rejected as [ActivationOutcome.invalid] without
-  /// contacting the server.
+  /// contacting the server. So is a key whose `license_type` is not
+  /// `lifetime` but whose `expires_at` is missing, null, unparseable or in
+  /// the past: this guards against a server issuance mistake granting
+  /// unlimited access. Legacy keys without a `license_type` still activate.
   ///
   /// No automatic retries. Caller is responsible for re-invoking after a
   /// user-visible retry.
@@ -129,8 +132,7 @@ class ActivationService {
     // before the server is contacted so it cannot use up a device slot.
     final claims = LicenseKeyClaims.tryParse(key);
     if (claims == null ||
-        claims.appSlug != appSlug ||
-        claims.isExpiredAt(DateTime.now())) {
+        !claims.allowsActivation(DateTime.now(), expectedAppSlug: appSlug)) {
       return ActivationOutcome.invalid;
     }
 
