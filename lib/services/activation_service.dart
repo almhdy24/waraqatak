@@ -164,8 +164,9 @@ class ActivationService {
 
     await LicenseService.instance.storeLicense(
       licenseKey: key,
-      expiresAt: claims?.expiresAt,
+      expiresAt: claims.expiresAt,
       isActive: true,
+      licenseType: claims.licenseType,
     );
     return ActivationOutcome.success;
   }
