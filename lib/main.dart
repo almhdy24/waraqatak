@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme_mode_scope.dart';
 import 'database/database_helper.dart';
 import 'localization/app_localizations.dart';
+import 'services/license_service.dart';
 import 'screens/splash_screen.dart';
 import 'theme.dart';
 
@@ -53,7 +54,8 @@ class WarqatekApp extends StatefulWidget {
   State<WarqatekApp> createState() => _WarqatekAppState();
 }
 
-class _WarqatekAppState extends State<WarqatekApp> {
+class _WarqatekAppState extends State<WarqatekApp>
+    with WidgetsBindingObserver {
   late String _langCode;
   late ThemeMode _themeMode;
 
@@ -62,6 +64,26 @@ class _WarqatekAppState extends State<WarqatekApp> {
     super.initState();
     _langCode = widget.initialLanguage;
     _themeMode = widget.initialThemeMode;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Re-evaluates the entitlement when the app returns to the foreground, so
+  /// an expiry that passed while it was in the background takes effect.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _recheckLicense();
+  }
+
+  Future<void> _recheckLicense() async {
+    try {
+      await LicenseService.instance.checkEntitlement(force: true);
+    } catch (_) {}
   }
 
   Future<void> changeThemeMode(ThemeMode mode) async {

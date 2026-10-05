@@ -30,7 +30,7 @@ class HomeScreen extends StatefulWidget {
   HomeScreenState createState() => HomeScreenState();
 }
 
-class HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Business? _business;
   List<Document> _recentDocuments = [];
   Map<String, dynamic> _dashboardData = {};
@@ -45,7 +45,30 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshEntitlement();
+  }
+
+  /// Re-evaluates the entitlement (not the cached one) and shows it.
+  Future<EntitlementState?> _refreshEntitlement() async {
+    try {
+      final e = await LicenseService.instance.checkEntitlement(force: true);
+      if (mounted) setState(() => _entitlement = e);
+      return e;
+    } catch (_) {
+      return _entitlement;
+    }
   }
 
   void reload() => _load();
@@ -106,7 +129,11 @@ class HomeScreenState extends State<HomeScreen> {
   /// then routes to activation screen if the user chooses to enter a key.
   Future<void> _openProGated(
       Feature feature, Future<void> Function() open) async {
-    if (FeatureAccess.canAccess(feature, _entitlement)) {
+    // Never trust the entitlement cached when the screen loaded: it may have
+    // expired since.
+    final entitlement = await _refreshEntitlement();
+    if (!mounted) return;
+    if (FeatureAccess.canAccess(feature, entitlement)) {
       await open();
       return;
     }
