@@ -9,12 +9,7 @@ import 'package:warqatek/services/activation_service.dart';
 import 'package:warqatek/services/license_key.dart';
 import 'package:warqatek/services/license_service.dart';
 
-/// Builds a key in the server's `base64url(payload).base64url(signature)`
-/// format. The signature is a placeholder: only the server verifies it.
-String makeKey(Map<String, dynamic> payload) {
-  String b64(List<int> bytes) => base64Url.encode(bytes).replaceAll('=', '');
-  return '${b64(utf8.encode(jsonEncode(payload)))}.${b64([1, 2, 3, 250])}';
-}
+import 'test_keys.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
