@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/models/entitlement.dart';
+import 'package:warqatek/services/license_service.dart';
+
+import 'test_keys.dart';
 
 void main() {
   // ── EntitlementState.isSubscriptionActive ────────────────────────────────
@@ -74,59 +77,70 @@ void main() {
     });
   });
 
-  // ── Clock-rollback detection arithmetic ──────────────────────────────────
+  // ── Trial clock-rollback (real service, injected clock) ──────────────────
 
-  group('Clock-rollback detection', () {
-    // Mirrors the logic in LicenseService._updateLastLaunch:
-    //   rollback = last.difference(now)   // positive when clock went back
-    //   if rollback > 2 minutes: advance trialStart by rollback delta
+  group('LicenseService trial clock-rollback', () {
+    late FakeLicenseStorage storage;
+    late DateTime now;
+    late LicenseService service;
 
-    DateTime applyRollback(DateTime trialStart, DateTime last, DateTime now) {
-      final rollback = last.difference(now);
-      if (rollback > const Duration(minutes: 2)) {
-        return trialStart.add(rollback);
-      }
-      return trialStart;
+    setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      storage = FakeLicenseStorage();
+      now = DateTime.utc(2025, 1, 1);
+      service = LicenseService.forTesting(storage: storage, clock: () => now);
+    });
+
+    DateTime trialStart() => DateTime.parse(storage.data['wq_trial_start']!);
+
+    Future<void> tick(DateTime at) async {
+      now = at;
+      await service.checkEntitlement(force: true);
     }
 
-    test('1-hour rollback advances trial start by 1 hour', () {
-      final trialStart = DateTime(2025, 1, 1, 0, 0, 0);
-      final last = DateTime(2025, 1, 5, 12, 0, 0);
-      final now = DateTime(2025, 1, 5, 11, 0, 0); // 1h rewind
-      final adjusted = applyRollback(trialStart, last, now);
-      expect(adjusted, DateTime(2025, 1, 1, 1, 0, 0));
+    // Starts the trial on Jan 1 and records [last] as the last launch.
+    Future<void> launchedAt(DateTime last) async {
+      await tick(DateTime.utc(2025, 1, 1));
+      await tick(last);
+    }
+
+    test('first run starts the trial', () async {
+      final s = await service.checkEntitlement(force: true);
+      expect(s.status, EntitlementStatus.trialActive);
+      expect(trialStart(), DateTime.utc(2025, 1, 1));
     });
 
-    test('1-minute rollback within tolerance is ignored', () {
-      final trialStart = DateTime(2025, 1, 1, 0, 0, 0);
-      final last = DateTime(2025, 1, 5, 12, 0, 0);
-      final now = DateTime(2025, 1, 5, 11, 59, 0); // 1 min rewind
-      final adjusted = applyRollback(trialStart, last, now);
-      expect(adjusted, trialStart); // unchanged
+    // The next two tests record the current behaviour of the trial guard:
+    // a rollback beyond the tolerance moves wq_trial_start by the delta.
+    test('1-hour rollback moves trial start by 1 hour', () async {
+      await launchedAt(DateTime.utc(2025, 1, 5, 12));
+      await tick(DateTime.utc(2025, 1, 5, 11));
+      expect(trialStart(), DateTime.utc(2025, 1, 1, 1));
     });
 
-    test('exactly 2-minute rollback is ignored (threshold is strictly greater)', () {
-      final trialStart = DateTime(2025, 1, 1, 0, 0, 0);
-      final last = DateTime(2025, 1, 5, 12, 0, 0);
-      final now = DateTime(2025, 1, 5, 11, 58, 0); // exactly 2 min
-      final adjusted = applyRollback(trialStart, last, now);
-      expect(adjusted, trialStart); // unchanged
+    test('multi-day rollback moves trial start by the same amount', () async {
+      await launchedAt(DateTime.utc(2025, 1, 10));
+      await tick(DateTime.utc(2025, 1, 7));
+      expect(trialStart(), DateTime.utc(2025, 1, 4));
     });
 
-    test('clock forward does not affect trial start', () {
-      final trialStart = DateTime(2025, 1, 1, 0, 0, 0);
-      final last = DateTime(2025, 1, 5, 12, 0, 0);
-      final now = DateTime(2025, 1, 5, 14, 0, 0); // forward
-      final adjusted = applyRollback(trialStart, last, now);
-      expect(adjusted, trialStart); // unchanged
+    test('1-minute rollback within tolerance is ignored', () async {
+      await launchedAt(DateTime.utc(2025, 1, 5, 12));
+      await tick(DateTime.utc(2025, 1, 5, 11, 59));
+      expect(trialStart(), DateTime.utc(2025, 1, 1));
     });
 
-    test('multi-day rollback advances trial by same amount', () {
-      final trialStart = DateTime(2025, 1, 1);
-      final last = DateTime(2025, 1, 10);
-      final now = DateTime(2025, 1, 7); // 3-day rewind
-      final adjusted = applyRollback(trialStart, last, now);
-      expect(adjusted, DateTime(2025, 1, 4));
+    test('exactly 2-minute rollback is ignored (threshold is strict)',
+        () async {
+      await launchedAt(DateTime.utc(2025, 1, 5, 12));
+      await tick(DateTime.utc(2025, 1, 5, 11, 58));
+      expect(trialStart(), DateTime.utc(2025, 1, 1));
+    });
+
+    test('clock forward does not affect trial start', () async {
+      await launchedAt(DateTime.utc(2025, 1, 5, 12));
+      await tick(DateTime.utc(2025, 1, 5, 14));
+      expect(trialStart(), DateTime.utc(2025, 1, 1));
     });
   });
 
