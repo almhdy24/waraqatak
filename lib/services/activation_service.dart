@@ -109,8 +109,13 @@ class ActivationService {
   /// `isActive: true` and the expiry embedded in the key (null for lifetime
   /// keys). For every other outcome nothing is written to storage.
   ///
-  /// Signed keys issued for another app, or already expired, are rejected
-  /// as [ActivationOutcome.invalid] without contacting the server.
+  /// Success requires both a 2xx answer from the server and a key whose
+  /// payload parses. Keys that do not parse, were issued for another app, or
+  /// are already expired are rejected as [ActivationOutcome.invalid] without
+  /// contacting the server. So is a key whose `license_type` is not
+  /// `lifetime` but whose `expires_at` is missing, null, unparseable or in
+  /// the past: this guards against a server issuance mistake granting
+  /// unlimited access. Legacy keys without a `license_type` still activate.
   ///
   /// No automatic retries. Caller is responsible for re-invoking after a
   /// user-visible retry.
@@ -123,9 +128,11 @@ class ActivationService {
       return ActivationOutcome.invalid;
     }
 
+    // A key whose payload cannot be parsed is never stored, and is rejected
+    // before the server is contacted so it cannot use up a device slot.
     final claims = LicenseKeyClaims.tryParse(key);
-    if (claims != null &&
-        (claims.appSlug != appSlug || claims.isExpiredAt(DateTime.now()))) {
+    if (claims == null ||
+        !claims.allowsActivation(DateTime.now(), expectedAppSlug: appSlug)) {
       return ActivationOutcome.invalid;
     }
 
@@ -145,17 +152,21 @@ class ActivationService {
       // collapse into "invalid". The server's own message is deliberately
       // not surfaced to the user.
       return ActivationOutcome.invalid;
+    } on TypeError {
+      // The server answered 2xx but the body lacked the expected fields.
+      // The activation succeeded on the server; no response field is used.
+    } on FormatException {
+      // Same as above for a body that could not be decoded.
     } catch (_) {
-      // Server returned 2xx but the body shape was unexpected or non-JSON.
-      // Spec: never crash on malformed JSON. The activation succeeded on
-      // the server; we don't rely on any field in the response body.
-      // Fall through to the success path.
+      // Anything else is not a confirmed 2xx answer: store nothing.
+      return ActivationOutcome.serverUnreachable;
     }
 
     await LicenseService.instance.storeLicense(
       licenseKey: key,
-      expiresAt: claims?.expiresAt,
+      expiresAt: claims.expiresAt,
       isActive: true,
+      licenseType: claims.licenseType,
     );
     return ActivationOutcome.success;
   }

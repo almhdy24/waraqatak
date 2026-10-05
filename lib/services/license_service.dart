@@ -1,10 +1,40 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/entitlement.dart';
 import 'license_key.dart';
+
+/// Key/value storage used by [LicenseService]. Production uses
+/// [SecureLicenseStorage]; tests inject an in-memory fake.
+abstract class LicenseStorage {
+  Future<String?> read({required String key});
+  Future<void> write({required String key, required String value});
+  Future<void> delete({required String key});
+}
+
+/// Android Keystore-backed storage (EncryptedSharedPreferences).
+class SecureLicenseStorage implements LicenseStorage {
+  const SecureLicenseStorage();
+
+  // v11 uses RSA-OAEP + AES-GCM via Android Keystore by default (API 23+).
+  // resetOnError: false — don't silently wipe data on Keystore errors.
+  static const _store = FlutterSecureStorage(
+    aOptions: AndroidOptions(resetOnError: false),
+  );
+
+  @override
+  Future<String?> read({required String key}) => _store.read(key: key);
+
+  @override
+  Future<void> write({required String key, required String value}) =>
+      _store.write(key: key, value: value);
+
+  @override
+  Future<void> delete({required String key}) => _store.delete(key: key);
+}
 
 /// Manages device identity, trial tracking, and license persistence.
 ///
@@ -15,14 +45,20 @@ import 'license_key.dart';
 /// uninstall. A new install gets a fresh 14-day trial. This is the strongest
 /// practical Android-supported persistence without requiring a backend account.
 class LicenseService {
-  LicenseService._();
-  static final instance = LicenseService._();
+  LicenseService._(this._store, this._clock);
+  static final instance =
+      LicenseService._(const SecureLicenseStorage(), DateTime.now);
 
-  // v11 uses RSA-OAEP + AES-GCM via Android Keystore by default (API 23+).
-  // resetOnError: false — don't silently wipe data on Keystore errors.
-  static const _store = FlutterSecureStorage(
-    aOptions: AndroidOptions(resetOnError: false),
-  );
+  /// A service with its own storage and clock. Tests only.
+  @visibleForTesting
+  factory LicenseService.forTesting({
+    required LicenseStorage storage,
+    required DateTime Function() clock,
+  }) =>
+      LicenseService._(storage, clock);
+
+  final LicenseStorage _store;
+  final DateTime Function() _clock;
 
   // Storage keys
   static const _kDeviceId      = 'wq_device_id';
@@ -31,6 +67,8 @@ class LicenseService {
   static const _kLicenseKey    = 'wq_license_key';
   static const _kLicenseExpiry = 'wq_license_expiry';
   static const _kLicenseStatus = 'wq_license_status';
+  static const _kLicenseType   = 'wq_license_type';
+  static const _kLastSeen      = 'wq_last_seen';
 
   static const int _trialDays = 14;
 
@@ -89,7 +127,7 @@ class LicenseService {
 
   Future<EntitlementState> _compute() async {
     final deviceId = await getOrCreateDeviceId();
-    final now = DateTime.now();
+    final now = _clock();
 
     await _updateLastLaunch(now);
 
@@ -104,14 +142,34 @@ class LicenseService {
         );
       }
 
-      final expiryStr = await _store.read(key: _kLicenseExpiry);
-      // Licenses stored before expiries were recorded fall back to the
-      // expiry signed into the key itself.
-      final expiry = (expiryStr != null && expiryStr.isNotEmpty)
-          ? DateTime.tryParse(expiryStr)
-          : LicenseKeyClaims.tryParse(licenseKey)?.expiresAt;
+      // License expiry is compared against a clock that never runs backwards.
+      final effectiveNow = await _effectiveNow(now);
 
-      if (expiry != null && expiry.isBefore(now)) {
+      final expiryStr = await _store.read(key: _kLicenseExpiry);
+      final storedType = await _store.read(key: _kLicenseType);
+      DateTime? expiry;
+      var usable = true;
+      if (expiryStr != null && expiryStr.isNotEmpty) {
+        expiry = DateTime.tryParse(expiryStr);
+        // A stored expiry that cannot be read must never mean "unlimited".
+        if (expiry == null) usable = false;
+      } else {
+        // Licenses stored before expiries were recorded fall back to the
+        // expiry signed into the key itself.
+        final claims = LicenseKeyClaims.tryParse(licenseKey);
+        expiry = claims?.expiresAt;
+        if (claims != null && claims.malformed) usable = false;
+      }
+
+      // No expiry is only valid for a lifetime license. Installs activated
+      // before the license type was stored have no type and keep the earlier
+      // behaviour (no expiry = lifetime) so existing users are not locked.
+      final typeAllowsNoExpiry = storedType == null ||
+          storedType.isEmpty ||
+          storedType == LicenseKeyClaims.lifetimeType;
+      if (usable && expiry == null && !typeAllowsNoExpiry) usable = false;
+
+      if (!usable || (expiry != null && expiry.isBefore(effectiveNow))) {
         return EntitlementState(
           status: EntitlementStatus.licenseExpired,
           deviceId: deviceId,
@@ -152,6 +210,19 @@ class LicenseService {
     return now;
   }
 
+  /// `max(wall clock, last time seen)`. The last-seen time is persisted and
+  /// only ever moves forward, so setting the device clock back does not
+  /// bring an expired license back.
+  Future<DateTime> _effectiveNow(DateTime now) async {
+    final s = await _store.read(key: _kLastSeen);
+    final seen = (s == null || s.isEmpty) ? null : DateTime.tryParse(s);
+    if (seen == null || now.isAfter(seen)) {
+      await _store.write(key: _kLastSeen, value: now.toUtc().toIso8601String());
+      return now;
+    }
+    return seen;
+  }
+
   /// Clock-rollback protection: if current time is significantly behind the
   /// last recorded launch time, advance the trial start by the rollback delta
   /// so the user cannot gain extra trial days by rewinding the device clock.
@@ -183,8 +254,10 @@ class LicenseService {
     required String licenseKey,
     required DateTime? expiresAt,
     required bool isActive,
+    String? licenseType,
   }) async {
     await _store.write(key: _kLicenseKey, value: licenseKey);
+    await _store.write(key: _kLicenseType, value: licenseType ?? '');
     await _store.write(
         key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '');
     await _store.write(
@@ -196,15 +269,17 @@ class LicenseService {
 
   /// Deletes the stored license from this device.
   ///
-  /// Clears `wq_license_key`, `wq_license_expiry`, and `wq_license_status`
-  /// so entitlement falls back to the trial path (or expired-trial path
+  /// Clears `wq_license_key`, `wq_license_expiry`, `wq_license_status` and
+  /// `wq_license_type` so entitlement falls back to the trial path (or expired-trial path
   /// if the 14-day window has elapsed). The device identifier and trial
   /// start markers are intentionally **not** touched — removing the key
-  /// is not meant to grant a fresh trial.
+  /// is not meant to grant a fresh trial. The last-seen time is kept too,
+  /// so removing a key cannot be used to rewind the clock guard.
   Future<void> clearLicense() async {
     await _store.delete(key: _kLicenseKey);
     await _store.delete(key: _kLicenseExpiry);
     await _store.delete(key: _kLicenseStatus);
+    await _store.delete(key: _kLicenseType);
     invalidateCache();
   }
 

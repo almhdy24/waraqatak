@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:warqatek/services/activation_service.dart';
 
+import 'test_keys.dart';
+
 /// MockClient-backed unit tests for [ActivationService].
 ///
 /// These tests assert the on-the-wire contract (URL, method, headers, exact
@@ -18,6 +20,7 @@ void main() {
   const expectedUrl =
       'https://api.almhdy24.com/api/v1/pay/licenses/activate';
   const deviceId = '00000000-0000-4000-8000-000000000000';
+  final validKey = legacyLifetimeKey();
 
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -61,7 +64,7 @@ void main() {
       ),
     );
 
-    final outcome = await ActivationService.activate('ABCD-1234', deviceId);
+    final outcome = await ActivationService.activate(validKey, deviceId);
     expect(outcome, ActivationOutcome.success);
     expect(captured, isNotNull);
     expect(captured!.method, 'POST');
@@ -73,7 +76,7 @@ void main() {
 
     final body = jsonDecode(captured!.body) as Map<String, dynamic>;
     expect(body.keys.toSet(), {'license_key', 'machine_id'});
-    expect(body['license_key'], 'ABCD-1234');
+    expect(body['license_key'], validKey);
     expect(body['machine_id'], deviceId);
   });
 
@@ -91,7 +94,7 @@ void main() {
         httpClient: mock,
       ),
     );
-    expect(await ActivationService.activate('K', deviceId),
+    expect(await ActivationService.activate(validKey, deviceId),
         ActivationOutcome.success);
   });
 
@@ -107,7 +110,7 @@ void main() {
         httpClient: mock,
       ),
     );
-    expect(await ActivationService.activate('K', deviceId),
+    expect(await ActivationService.activate(validKey, deviceId),
         ActivationOutcome.success);
   });
 
@@ -123,7 +126,7 @@ void main() {
         httpClient: mock,
       ),
     );
-    expect(await ActivationService.activate('K', deviceId),
+    expect(await ActivationService.activate(validKey, deviceId),
         ActivationOutcome.success);
   });
 
@@ -140,7 +143,7 @@ void main() {
           httpClient: mock,
         ),
       );
-      expect(await ActivationService.activate('K', deviceId),
+      expect(await ActivationService.activate(validKey, deviceId),
           ActivationOutcome.invalid);
     });
   }
@@ -157,7 +160,7 @@ void main() {
         httpClient: mock,
       ),
     );
-    expect(await ActivationService.activate('K', deviceId),
+    expect(await ActivationService.activate(validKey, deviceId),
         ActivationOutcome.tooManyAttempts);
   });
 
@@ -174,7 +177,7 @@ void main() {
           httpClient: mock,
         ),
       );
-      expect(await ActivationService.activate('K', deviceId),
+      expect(await ActivationService.activate(validKey, deviceId),
           ActivationOutcome.serverUnreachable);
     });
   }
@@ -187,7 +190,7 @@ void main() {
         httpClient: mock,
       ),
     );
-    expect(await ActivationService.activate('K', deviceId),
+    expect(await ActivationService.activate(validKey, deviceId),
         ActivationOutcome.serverUnreachable);
   });
 
@@ -206,7 +209,7 @@ void main() {
         httpClient: mock,
       ),
     );
-    expect(await ActivationService.activate('K', deviceId),
+    expect(await ActivationService.activate(validKey, deviceId),
         ActivationOutcome.serverUnreachable);
   });
 
@@ -228,7 +231,7 @@ void main() {
         httpClient: mock,
       ),
     );
-    await ActivationService.activate('K', deviceId);
+    await ActivationService.activate(validKey, deviceId);
     expect(count, 1);
   });
 
@@ -255,6 +258,25 @@ void main() {
     expect(hits, 0);
   });
 
+  for (final bad in ['ABCD-1234', 'not.base64!', 'e30.sig', 'W10.sig']) {
+    test('unparseable key "$bad" is invalid without hitting the network',
+        () async {
+      var hits = 0;
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: MockClient((_) async {
+            hits++;
+            return http.Response('{}', 200);
+          }),
+        ),
+      );
+      expect(await ActivationService.activate(bad, deviceId),
+          ActivationOutcome.invalid);
+      expect(hits, 0);
+    });
+  }
+
   test('whitespace and zero-width chars are stripped before send', () async {
     http.Request? captured;
     final mock = MockClient((req) async {
@@ -271,10 +293,12 @@ void main() {
         httpClient: mock,
       ),
     );
-    const noisy = '  AB\u200BCD-\n12\u200C34\uFEFF  ';
+    final noisy = '  ${validKey.substring(0, 5)}\u200B'
+        '${validKey.substring(5, 10)}\n'
+        '${validKey.substring(10)}\uFEFF  ';
     await ActivationService.activate(noisy, deviceId);
     final body = jsonDecode(captured!.body) as Map<String, dynamic>;
-    expect(body['license_key'], 'ABCD-1234');
+    expect(body['license_key'], validKey);
   });
 
   // ── direct unit tests on the normalizer ─────────────────────────────────

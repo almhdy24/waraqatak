@@ -36,6 +36,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _openReport(_ReportEntry entry) async {
     final feature = entry.proFeature;
+    if (feature != null) {
+      // Re-evaluate on every open so a running session cannot outlive expiry.
+      try {
+        final fresh = await LicenseService.instance.checkEntitlement(force: true);
+        if (mounted) setState(() => _entitlement = fresh);
+      } catch (_) {}
+    }
     if (feature != null && !FeatureAccess.canAccess(feature, _entitlement)) {
       if (!mounted) return;
       final result = await ProUpgradeSheet.show(context, feature: feature);
