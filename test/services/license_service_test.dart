@@ -127,7 +127,7 @@ void main() {
 
     test('locks even for a lifetime type', () async {
       await store(type: 'lifetime');
-      storage.data['wq_license_expiry'] = '2026-13-45';
+      storage.data['wq_license_expiry'] = '31/12/2026';
       expect((await evaluateAt(now)).status, EntitlementStatus.licenseExpired);
     });
 
