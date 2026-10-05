@@ -167,3 +167,35 @@ malformed body) are well covered in `test/services/activation_service_test.dart`
    malformed expiry.
 6. **Cache means a running session survives expiry** until a forced check
    (`license_service.dart:82-86`).
+
+## Fixed in 1.1.1
+
+Branch `fix/license-hardening-1.1.1`. Build `1.1.1+5` (previous release
+`1.1.0+4`). Tests were written but **not run locally** (Flutter is not
+available in Termux); they run in CI.
+
+| Finding | Change | Where |
+|---|---|---|
+| 1. Malformed stored expiry meant unlimited Pro | A stored expiry that does not parse now means expired. | `license_service.dart` `_compute` |
+| 2. License expiry not clock-hardened | Expiry is compared with `max(clock, wq_last_seen)`; `wq_last_seen` is persisted and only moves forward. The clock and storage are injectable. | `license_service.dart` `_effectiveNow`, `forTesting` |
+| 4. Broad `catch (_)` counted any error as success | Success needs a 2xx answer and a parseable key payload. Unparseable keys are rejected before any request. Unexpected exceptions return `serverUnreachable`. | `activation_service.dart` |
+| Issuance mistake protection (new) | A non-lifetime `license_type` without a usable future `expires_at` is refused. The type is stored at activation, and a missing expiry is accepted only for `lifetime`. | `license_key.dart`, `activation_service.dart`, `license_service.dart` |
+| 6. Session survived expiry | Entitlement is re-evaluated on resume and whenever a Pro-gated screen is opened. | `main.dart`, `home_screen.dart`, `reports_screen.dart` |
+| 5. No `_compute` tests | New `license_service_test.dart` plus guard cases in `license_key_test.dart`. The trial rollback test now calls the service. | `test/services/` |
+
+Not changed, by design or scope:
+
+- **Finding 3** (no revocation path, no server re-contact) is unchanged. The
+  RSA scheme, key format and Elmahdi Pay were out of scope.
+- The key signature is still verified only by the server.
+- **Installs from before 1.1.1** have no stored license type and keep the
+  earlier behaviour (no expiry = lifetime) so paying users are not locked.
+  Re-activating them with a new key stores the type.
+- **Forward clock jump.** A device clock set far ahead keeps Pro locked
+  until real time catches up, because `wq_last_seen` cannot go back.
+  Free features and data are unaffected.
+- **Observation, not fixed (trial).** `_updateLastLaunch` advances the trial
+  start by the rollback delta (`license_service.dart`, `_updateLastLaunch`).
+  A later start means a later trial end, so a rewound clock appears to
+  *extend* the trial rather than shorten it. The test now documents the
+  existing behaviour; this should be reviewed separately.

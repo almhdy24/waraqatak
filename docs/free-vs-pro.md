@@ -56,19 +56,52 @@ Require an active trial or a stored activation key.
 | `licenseExpired`     | Treated as `trialExpired` locally — no server push   |
 | `licenseRevoked`     | Treated as `trialExpired` locally — no server push   |
 
-Revocation and expiry are decided locally from three secure-storage keys
-(`wq_license_key`, `wq_license_status`, `wq_license_expiry`). The app does
-not re-contact `api.almhdy24.com` after a successful activation, so a
-server-side revocation takes effect only when the user next re-attempts
-activation.
+Revocation and expiry are decided locally from secure-storage keys
+(`wq_license_key`, `wq_license_status`, `wq_license_expiry`,
+`wq_license_type`, `wq_last_seen`). The app does not re-contact
+`api.almhdy24.com` after a successful activation, so a server-side
+revocation takes effect only when the user next re-attempts activation.
 
 The expiry comes from the signed key itself: keys are
 `base64url(payload).base64url(signature)` and the payload carries
-`app_slug` and `expires_at` (null for lifetime). Before contacting the
-server the app rejects keys whose `app_slug` is not `com.elmahdi.waraqatak`
-or whose `expires_at` has passed, and on success it stores `expires_at` so
-time-limited keys expire on the device. The signature is verified only by
-the server.
+`app_slug`, `expires_at` (null for lifetime) and, on newer keys,
+`license_type`. The signature is verified only by the server.
+
+### Activation guard (1.1.1)
+
+Before the server is contacted, and before anything is stored, activation
+returns the generic invalid outcome when:
+
+- the payload does not parse, or `expires_at` / `license_type` is present
+  but unusable (for example an unparseable date);
+- `app_slug` is not `com.elmahdi.waraqatak`, or `expires_at` has passed;
+- `license_type` is anything other than `lifetime` and `expires_at` is
+  missing, null, unparseable or in the past. This protects users and the
+  publisher from a server issuance mistake that would otherwise grant
+  unlimited access. Legacy keys without a `license_type` still activate.
+
+Activation succeeds only when the server answered 2xx and the key payload
+parsed. Network errors, timeouts and any unexpected exception return
+`serverUnreachable` and store nothing.
+
+### Expiry evaluation (1.1.1)
+
+- License expiry is compared against `max(device clock, wq_last_seen)`.
+  `wq_last_seen` is persisted in secure storage and only moves forward, so
+  rewinding the device clock does not bring an expired license back.
+  The trade-off: if the device clock is set far into the future while the
+  app runs, Pro stays locked until real time catches up. Free features and
+  all data are unaffected.
+- A stored expiry that cannot be parsed counts as expired (Pro locked), not
+  unlimited.
+- The license type is stored at activation. A missing expiry is accepted
+  only for a stored type of `lifetime`.
+- Installs that activated before 1.1.1 have no stored type. They keep the
+  earlier behaviour (no expiry = lifetime), so existing users are not
+  locked out.
+- The entitlement is re-evaluated when the app returns to the foreground
+  and every time a Pro-gated screen is opened, so a running session cannot
+  outlive expiry beyond the next navigation.
 
 ## Non-features (deliberate omissions)
 
