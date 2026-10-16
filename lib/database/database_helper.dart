@@ -933,29 +933,45 @@ class DatabaseHelper {
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
 
-      // Payment receipts: reverse the linked invoice payment before deleting
-      if (doc.type == 'payment_receipt' && doc.relatedDocumentId != null) {
+      // Payment receipts: remove the linked payment row(s) from the parent
+      // invoice and recalculate its paid/status.
+      // For all other document types: just null out any stray receipt references
+      // so the receipt_document_id FK (which has no cascade) never blocks deletion.
+      if (doc.type == 'payment_receipt') {
         await txn.delete('document_payments',
             where: 'receipt_document_id = ?', whereArgs: [id]);
-        final invoiceRows = await txn.query('documents',
-            where: 'id = ?', whereArgs: [doc.relatedDocumentId]);
-        if (invoiceRows.isNotEmpty) {
-          final invoice = Document.fromMap(invoiceRows.first);
-          if (invoice.status != DocumentStatus.cancelled) {
-            final sumRows = await txn.rawQuery(
-              'SELECT COALESCE(SUM(amount), 0) AS total FROM document_payments WHERE document_id = ?',
-              [doc.relatedDocumentId],
-            );
-            final newPaid = (sumRows.first['total'] as num?)?.toDouble() ?? 0;
-            final newRemaining = (invoice.total - newPaid).clamp(0.0, double.infinity);
-            final newStatus = DocumentStatus.fromPayment(newPaid, invoice.total);
-            await txn.update('documents', {
-              'paid': newPaid,
-              'remaining': newRemaining,
-              'status': newStatus,
-            }, where: 'id = ?', whereArgs: [doc.relatedDocumentId]);
+        if (doc.relatedDocumentId != null) {
+          final invoiceRows = await txn.query('documents',
+              where: 'id = ?', whereArgs: [doc.relatedDocumentId]);
+          if (invoiceRows.isNotEmpty) {
+            final invoice = Document.fromMap(invoiceRows.first);
+            if (invoice.status != DocumentStatus.cancelled) {
+              final sumRows = await txn.rawQuery(
+                'SELECT COALESCE(SUM(amount), 0) AS total FROM document_payments WHERE document_id = ?',
+                [doc.relatedDocumentId],
+              );
+              final newPaid =
+                  (sumRows.first['total'] as num?)?.toDouble() ?? 0;
+              final newRemaining =
+                  (invoice.total - newPaid).clamp(0.0, double.infinity);
+              final newStatus =
+                  DocumentStatus.fromPayment(newPaid, invoice.total);
+              await txn.update(
+                'documents',
+                {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
+                where: 'id = ?',
+                whereArgs: [doc.relatedDocumentId],
+              );
+            }
           }
         }
+      } else {
+        // Non-receipt document may still be referenced by a payment row's
+        // receipt_document_id (no ON DELETE cascade on that column).
+        await txn.rawUpdate(
+          'UPDATE document_payments SET receipt_document_id = NULL WHERE receipt_document_id = ?',
+          [id],
+        );
       }
 
       // Stock reversion for non-draft, non-cancelled invoices and purchases
