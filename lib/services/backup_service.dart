@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -97,6 +98,13 @@ class BackupService {
       throw Exception('Invalid backup file');
     }
 
+    return restoreFromJsonMap(jsonMap);
+  }
+
+  /// Restores database content from parsed backup JSON.
+  /// Used by [restoreBackup] and tests.
+  @visibleForTesting
+  static Future<bool> restoreFromJsonMap(Map<String, dynamic> jsonMap) async {
     _validateBackup(jsonMap);
 
     final data = jsonMap['data'] as Map<String, dynamic>;
@@ -105,6 +113,7 @@ class BackupService {
     await db.transaction((txn) async {
       await txn.delete('document_payments');
       await txn.delete('document_items');
+      await txn.delete('stock_movements');
       await txn.delete('documents');
       await txn.delete('contacts');
       await txn.delete('products');
@@ -153,7 +162,6 @@ class BackupService {
       }
       // stock_movements is optional (absent in backups created before Phase 3.4)
       if (data.containsKey('stock_movements') && data['stock_movements'] is List) {
-        await txn.delete('stock_movements');
         for (final row in _convertRows(data['stock_movements'])) {
           await txn.insert('stock_movements', row);
         }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
+import '../services/activation_service.dart';
 import '../services/license_service.dart';
 import 'activation_screen.dart';
 import 'transparency_screen.dart';
@@ -63,10 +64,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
     final s = _state;
     if (s == null) return '';
     return switch (s.status) {
-      EntitlementStatus.trialActive  => l10n.licenseTypeTrial,
-      EntitlementStatus.trialExpired => l10n.licenseTypeTrial,
-      EntitlementStatus.licensed       => l10n.licenseTypeActivated,
-      EntitlementStatus.licenseExpired => l10n.licenseTypeActivated,
+      EntitlementStatus.trialActive    => l10n.licenseTypeTrial,
+      EntitlementStatus.trialExpired   => l10n.licenseTypeTrial,
+      EntitlementStatus.licensed       => s.licenseExpiresAt == null
+          ? l10n.licenseTypePerpetual
+          : l10n.licenseTypeTimed,
+      EntitlementStatus.licenseExpired => l10n.licenseTypeTimed,
       EntitlementStatus.licenseRevoked => l10n.licenseTypeActivated,
     };
   }
@@ -104,6 +107,11 @@ class _LicenseScreenState extends State<LicenseScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _busy = true);
+    final key = await LicenseService.instance.licenseKey;
+    if (key != null && key.isNotEmpty) {
+      final deviceId = await LicenseService.instance.getOrCreateDeviceId();
+      await ActivationService.deactivate(key, deviceId);
+    }
     await LicenseService.instance.clearLicense();
     await _reload();
     if (!mounted) return;

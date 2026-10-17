@@ -31,4 +31,24 @@ class PublicApi {
         await _http.post('/pay/licenses/activate', body: request.toJson());
     return ActivateLicenseResult.fromJson(json);
   }
+
+  /// Deactivates [DeactivateLicenseRequest.licenseKey] on this device.
+  ///
+  /// Releases an activation slot on the licensing server.
+  Future<DeactivateLicenseResult> deactivateLicense(
+    DeactivateLicenseRequest request,
+  ) async {
+    final json =
+        await _http.post('/pay/licenses/deactivate', body: request.toJson());
+    return DeactivateLicenseResult.fromJson(json);
+  }
+
+  /// Verifies an activation token or license key online with the licensing server.
+  Future<VerifyLicenseResult> verifyLicense(
+    VerifyLicenseRequest request,
+  ) async {
+    final json =
+        await _http.post('/pay/licenses/verify', body: request.toJson());
+    return VerifyLicenseResult.fromJson(json);
+  }
 }

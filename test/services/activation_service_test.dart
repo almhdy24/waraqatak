@@ -338,6 +338,127 @@ void main() {
       );
     });
   });
+
+  // ── Short-key activation & deactivation ───────────────────────────────────
+
+  group('Short-key activation', () {
+    test('valid short key activates successfully and sends normalized code',
+        () async {
+      http.Request? captured;
+      final mock = MockClient((req) async {
+        captured = req;
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'token': 'tok_short_rsa',
+            'license': {
+              'product': 'waraqatak',
+              'type': 'perpetual',
+              'issued_at': '2026-01-01 00:00:00',
+              'expires_at': null,
+              'max_devices': 1,
+            },
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: mock,
+        ),
+      );
+
+      final outcome =
+          await ActivationService.activate(validFormattedShortKey(), deviceId);
+      expect(outcome, ActivationOutcome.success);
+      expect(captured, isNotNull);
+      final body = jsonDecode(captured!.body) as Map<String, dynamic>;
+      expect(body['license_key'], validShortKey());
+      expect(body['machine_id'], deviceId);
+    });
+
+    test('short key with bad checksum is rejected locally without hitting network',
+        () async {
+      var hits = 0;
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: MockClient((_) async {
+            hits++;
+            return http.Response('{}', 200);
+          }),
+        ),
+      );
+
+      // 'ABCDEFGHJKM0' has incorrect checksum ('5' is expected)
+      final outcome =
+          await ActivationService.activate('ABCD-EFGH-JKM0', deviceId);
+      expect(outcome, ActivationOutcome.invalid);
+      expect(hits, 0);
+    });
+
+    test('short key with 200 OK but unparseable body does not activate',
+        () async {
+      final mock = MockClient((_) async => http.Response('not-json', 200));
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: mock,
+        ),
+      );
+
+      final outcome =
+          await ActivationService.activate(validFormattedShortKey(), deviceId);
+      expect(outcome, ActivationOutcome.serverUnreachable);
+    });
+
+    test('deactivate sends request and returns true on success', () async {
+      http.Request? captured;
+      final mock = MockClient((req) async {
+        captured = req;
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'code': 'deactivated',
+            'active_devices': 0,
+            'max_devices': 1,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: mock,
+        ),
+      );
+
+      final ok = await ActivationService.deactivate(
+          validFormattedShortKey(), deviceId);
+      expect(ok, isTrue);
+      expect(captured, isNotNull);
+      expect(captured!.url.path, '/api/v1/pay/licenses/deactivate');
+      final body = jsonDecode(captured!.body) as Map<String, dynamic>;
+      expect(body['license_key'], validShortKey());
+      expect(body['machine_id'], deviceId);
+    });
+
+    test('deactivate catches network failures and returns false', () async {
+      final mock = MockClient((_) async => throw const SocketExceptionLike());
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: mock,
+        ),
+      );
+
+      final ok = await ActivationService.deactivate(validKey, deviceId);
+      expect(ok, isFalse);
+    });
+  });
 }
 
 /// A plain Dart exception that stands in for `dart:io`'s `SocketException`.

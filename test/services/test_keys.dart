@@ -17,6 +17,12 @@ String legacyLifetimeKey() => makeKey({
       'expires_at': null,
     });
 
+/// A valid 12-char Crockford Base32 key (checksum verified).
+String validShortKey() => 'ABCDEFGHJKM5';
+
+/// A formatted valid short key: ABCD-EFGH-JKM5.
+String validFormattedShortKey() => 'ABCD-EFGH-JKM5';
+
 /// In-memory [LicenseStorage] for tests. [data] can be read and edited
 /// directly to simulate stored or corrupted values.
 class FakeLicenseStorage implements LicenseStorage {

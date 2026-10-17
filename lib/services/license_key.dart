@@ -12,6 +12,9 @@ class LicenseKeyClaims {
   /// `license_type` value of a key that never expires.
   static const String lifetimeType = 'lifetime';
 
+  /// Modern perpetual license type from api.almhdy24.com.
+  static const String perpetualType = 'perpetual';
+
   final String? appSlug;
   final DateTime? expiresAt;
 
@@ -64,7 +67,10 @@ class LicenseKeyClaims {
   /// unlimited access, so such keys are refused. Legacy keys without a
   /// `license_type` are not affected.
   bool get limitedWithoutExpiry =>
-      licenseType != null && licenseType != lifetimeType && expiresAt == null;
+      licenseType != null &&
+      licenseType != lifetimeType &&
+      licenseType != perpetualType &&
+      expiresAt == null;
 
   /// Whether this key may be activated at [now] for [expectedAppSlug].
   bool allowsActivation(DateTime now, {required String expectedAppSlug}) =>
@@ -72,4 +78,58 @@ class LicenseKeyClaims {
       appSlug == expectedAppSlug &&
       !isExpiredAt(now) &&
       !limitedWithoutExpiry;
+}
+
+/// Crockford Base32 short activation key (12 characters, XXXX-XXXX-XXXX).
+///
+/// Format: 11 random Crockford Base32 characters + 1 modulo-32 checksum character.
+/// Normalization: uppercase, strip whitespace/hyphens, map O->0, I->1, L->1.
+class ShortLicenseKey {
+  ShortLicenseKey._();
+
+  static const String alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  static const int keyLength = 12;
+
+  /// Normalizes a user-supplied key:
+  /// - Uppercased
+  /// - Whitespace, newlines, and hyphens removed
+  /// - Common optical confusions mapped: O->0, I->1, L->1
+  ///
+  /// Returns empty string if the result does not contain exactly 12 Crockford symbols.
+  static String normalize(String input) {
+    var s = input.toUpperCase().replaceAll(RegExp(r'[\s\-]'), '');
+    s = s.replaceAll('O', '0').replaceAll('I', '1').replaceAll('L', '1');
+    if (s.length != keyLength) return '';
+    for (var i = 0; i < s.length; i++) {
+      if (!alphabet.contains(s[i])) return '';
+    }
+    return s;
+  }
+
+  /// Verifies the checksum (character 12 equals the sum of positional values
+  /// of the first 11 characters modulo 32).
+  static bool verifyChecksum(String normalized) {
+    if (normalized.length != keyLength) return false;
+    var sum = 0;
+    for (var i = 0; i < keyLength - 1; i++) {
+      final pos = alphabet.indexOf(normalized[i]);
+      if (pos < 0) return false;
+      sum += pos;
+    }
+    final expected = alphabet[sum % 32];
+    return normalized[keyLength - 1] == expected;
+  }
+
+  /// Formats a 12-char normalized key into XXXX-XXXX-XXXX display format.
+  static String format(String normalized) {
+    if (normalized.length != keyLength) return normalized;
+    return '${normalized.substring(0, 4)}-${normalized.substring(4, 8)}-${normalized.substring(8, 12)}';
+  }
+
+  /// Checks if [key] looks like a short key (no dot separator, normalized length is 12).
+  static bool isShortKey(String key) {
+    if (key.contains('.')) return false;
+    final norm = normalize(key);
+    return norm.length == keyLength;
+  }
 }

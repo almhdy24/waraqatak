@@ -606,7 +606,7 @@ class AppLocalizations {
 
   // ── Activation key entry ───────────────────────────────────────────────────
   String get enterActivationKey       => _t('أدخل مفتاح التفعيل',                      'Enter activation key');
-  String get activationKeyHint        => _t('الصق مفتاح التفعيل هنا',                   'Paste your activation key here');
+  String get activationKeyHint        => _t('XXXX-XXXX-XXXX أو مفتاح طويل',             'XXXX-XXXX-XXXX or long key');
   String get activate                 => _t('تفعيل',                                    'Activate');
   // Approved copy (mandated):
   String get proFeaturesActivation    => _t(
@@ -637,14 +637,16 @@ class AppLocalizations {
   String get licenseExpiryLabel   => _t('تاريخ الانتهاء',       'Expiry');
   String get licenseTypeTrial     => _t('تجربة مجانية',         'Free trial');
   String get licenseTypeActivated => _t('مُفعَّل بمفتاح',       'Activated with a key');
+  String get licenseTypePerpetual => _t('مُفعَّل (دائم)',        'Activated (Perpetual)');
+  String get licenseTypeTimed     => _t('مُفعَّل (مؤقت)',        'Activated (Timed)');
   String get licenseNoExpiryDate  => _t('بدون تاريخ انتهاء',     'No expiry date');
   String get licenseOnExpiryTitle => _t(
         'ماذا يحدث عند انتهاء الصلاحية؟',
         'What happens when it expires?',
       );
   String get licenseOnExpiryBody  => _t(
-        'عند انتهاء التجربة أو التفعيل، تظل بياناتك ومستنداتك متاحة في الوضع المجاني، ويحتاج استخدام الميزات الاحترافية إلى مفتاح تفعيل جديد.',
-        'When your trial or license ends, your data and documents remain available in Free mode. Pro features require a new activation key.',
+        'عند انتهاء التجربة أو التفعيل، تظل بياناتك ومستنداتك متاحة في الوضع المجاني، ويحتاج استخدام الميزات الاحترافية إلى مفتاح تفعيل جديد. ولا تمنح إزالة المفتاح فترة تجريبية جديدة.',
+        'When your trial or activation ends, your data and documents remain available in Free mode. Pro features require a new activation key. Removing a key does not grant a new trial.',
       );
   String get enterOrChangeKey     =>
       _t('إدخال أو تغيير مفتاح التفعيل', 'Enter or change activation key');
@@ -653,8 +655,8 @@ class AppLocalizations {
   String get removeKeyConfirmTitle =>
       _t('إزالة المفتاح؟', 'Remove key?');
   String get removeKeyConfirmBody => _t(
-        'ستتم إزالة مفتاح التفعيل من هذا الجهاز فقط. لن يُلغى المفتاح على الخادم، ويمكنك إدخاله مجدداً في أي وقت.',
-        'The activation key will be removed from this device only. The key is not revoked on the server, and you can enter it again at any time.',
+        'ستتم إزالة مفتاح التفعيل من هذا الجهاز وإلغاء ربطه بالخادم. لن يُلغى المفتاح نهائياً ويمكنك إدخاله مجدداً، وإذا كانت التجربة المجانية لا تزال سارية فستعود إليها.',
+        'The activation key will be unlinked and removed from this device only. The key is not cancelled and you can enter it again. If your free trial is still valid, you will return to it.',
       );
   String get removeKeyConfirmAction =>
       _t('إزالة', 'Remove');

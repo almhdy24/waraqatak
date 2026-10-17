@@ -10,6 +10,10 @@ import 'contact_form_screen.dart';
 import 'document_detail_screen.dart';
 import 'invoice_screen.dart';
 import 'purchase_screen.dart';
+import 'activation_screen.dart';
+import '../services/feature_access.dart';
+import '../services/license_service.dart';
+import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import '../widgets/status_badge.dart';
 
@@ -74,6 +78,46 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (result == true && mounted) {
       _load();
       Navigator.pop(context, true);
+    }
+  }
+
+  Future<void> _createDocument() async {
+    if (_isSupplier) {
+      final entitlement =
+          await LicenseService.instance.checkEntitlement(force: true);
+      if (!mounted) return;
+      if (!FeatureAccess.canAccess(Feature.purchases, entitlement)) {
+        final result = await ProUpgradeSheet.show(
+          context,
+          feature: Feature.purchases,
+        );
+        if (result == true && mounted) {
+          await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(builder: (_) => const ActivationScreen()),
+          );
+          if (!mounted) return;
+          LicenseService.instance.invalidateCache();
+        }
+        return;
+      }
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PurchaseScreen(preselectedContact: widget.contact),
+        ),
+      );
+    } else {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => InvoiceScreen(preselectedContact: widget.contact),
+        ),
+      );
+    }
+    if (mounted) {
+      _load();
     }
   }
 
@@ -311,14 +355,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         SizedBox(
           height: 50,
           child: FilledButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => _isSupplier
-                    ? PurchaseScreen(preselectedContact: widget.contact)
-                    : InvoiceScreen(preselectedContact: widget.contact),
-              ),
-            ).then((_) => _load()),
+            onPressed: _createDocument,
             icon: Icon(_isSupplier
                 ? Icons.shopping_cart_outlined
                 : Icons.receipt_long),

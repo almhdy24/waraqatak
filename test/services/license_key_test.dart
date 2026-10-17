@@ -183,6 +183,12 @@ void main() {
         expect(requests, 1);
       });
 
+      test('perpetual key with no expiry activates', () async {
+        expect(await activateWith({'license_type': 'perpetual'}),
+            ActivationOutcome.success);
+        expect(requests, 1);
+      });
+
       test('legacy key without license_type and no expiry still activates',
           () async {
         expect(await activateWith({'expires_at': null}),
@@ -201,6 +207,41 @@ void main() {
             ActivationOutcome.invalid);
         expect(requests, 0);
       });
+    });
+  });
+
+  // ── ShortLicenseKey unit tests ─────────────────────────────────────────────
+
+  group('ShortLicenseKey', () {
+    test('normalize maps O->0, I->1, L->1 and strips dashes and spaces', () {
+      expect(ShortLicenseKey.normalize('abcd-efgh-jkm5'), 'ABCDEFGHJKM5');
+      expect(ShortLicenseKey.normalize('O123-I567-L9AB'), '0123156719AB');
+      expect(ShortLicenseKey.normalize('  ABCD EFGH JKM5 \n'), 'ABCDEFGHJKM5');
+    });
+
+    test('normalize returns empty string on invalid length or invalid characters', () {
+      expect(ShortLicenseKey.normalize('ABCD-123'), '');
+      expect(ShortLicenseKey.normalize('ABCDEFGHJKM5EXTRA'), '');
+      // 'U' is not in Crockford alphabet
+      expect(ShortLicenseKey.normalize('ABCDEFGHJKMU'), '');
+    });
+
+    test('verifyChecksum correctly validates checksum character', () {
+      expect(ShortLicenseKey.verifyChecksum('ABCDEFGHJKM5'), isTrue);
+      expect(ShortLicenseKey.verifyChecksum('ABCDEFGHJKM0'), isFalse);
+      expect(ShortLicenseKey.verifyChecksum('SHORT'), isFalse);
+    });
+
+    test('format produces XXXX-XXXX-XXXX shape', () {
+      expect(ShortLicenseKey.format('ABCDEFGHJKM5'), 'ABCD-EFGH-JKM5');
+    });
+
+    test('isShortKey identifies short keys and rejects long/dotted keys', () {
+      expect(ShortLicenseKey.isShortKey('ABCD-EFGH-JKM5'), isTrue);
+      expect(ShortLicenseKey.isShortKey('ABCDEFGHJKM5'), isTrue);
+      expect(ShortLicenseKey.isShortKey('abcd-efgh-jkm5'), isTrue);
+      expect(ShortLicenseKey.isShortKey('payload.signature'), isFalse);
+      expect(ShortLicenseKey.isShortKey('too-short'), isFalse);
     });
   });
 }

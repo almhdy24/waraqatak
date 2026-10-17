@@ -67,8 +67,9 @@ class LicenseService {
   static const _kLicenseKey    = 'wq_license_key';
   static const _kLicenseExpiry = 'wq_license_expiry';
   static const _kLicenseStatus = 'wq_license_status';
-  static const _kLicenseType   = 'wq_license_type';
-  static const _kLastSeen      = 'wq_last_seen';
+  static const _kLicenseType      = 'wq_license_type';
+  static const _kLastSeen         = 'wq_last_seen';
+  static const _kActivationToken  = 'wq_activation_token';
 
   static const int _trialDays = 14;
 
@@ -161,12 +162,13 @@ class LicenseService {
         if (claims != null && claims.malformed) usable = false;
       }
 
-      // No expiry is only valid for a lifetime license. Installs activated
+      // No expiry is only valid for a lifetime or perpetual license. Installs activated
       // before the license type was stored have no type and keep the earlier
       // behaviour (no expiry = lifetime) so existing users are not locked.
       final typeAllowsNoExpiry = storedType == null ||
           storedType.isEmpty ||
-          storedType == LicenseKeyClaims.lifetimeType;
+          storedType == LicenseKeyClaims.lifetimeType ||
+          storedType.toLowerCase() == LicenseKeyClaims.perpetualType;
       if (usable && expiry == null && !typeAllowsNoExpiry) usable = false;
 
       if (!usable || (expiry != null && expiry.isBefore(effectiveNow))) {
@@ -185,8 +187,9 @@ class LicenseService {
 
     // ── Trial ─────────────────────────────────────────────────────────────────
     final trialStart = await _getOrInitTrialStart(now);
+    final effective = await _effectiveNow(now);
     final remaining =
-        trialStart.add(const Duration(days: _trialDays)).difference(now);
+        trialStart.add(const Duration(days: _trialDays)).difference(effective);
 
     if (remaining.isNegative) {
       return EntitlementState(
@@ -205,9 +208,28 @@ class LicenseService {
 
   Future<DateTime> _getOrInitTrialStart(DateTime now) async {
     final s = await _store.read(key: _kTrialStart);
-    if (s != null && s.isNotEmpty) return DateTime.parse(s);
-    await _store.write(key: _kTrialStart, value: now.toIso8601String());
-    return now;
+    if (s != null && s.isNotEmpty) {
+      final dt = DateTime.tryParse(s);
+      if (dt != null) return dt;
+    }
+
+    // If trial start was not recorded (e.g. key was activated on first run
+    // or legacy install), derive start from historical evidence if available
+    // to prevent granting a fresh trial upon license removal.
+    DateTime start = now;
+    final seenStr = await _store.read(key: _kLastSeen);
+    final launchStr = await _store.read(key: _kLastLaunch);
+    final seen = seenStr != null ? DateTime.tryParse(seenStr) : null;
+    if (seen != null && seen.isBefore(start)) {
+      start = seen;
+    }
+    final launch = launchStr != null ? DateTime.tryParse(launchStr) : null;
+    if (launch != null && launch.isBefore(start)) {
+      start = launch;
+    }
+
+    await _store.write(key: _kTrialStart, value: start.toIso8601String());
+    return start;
   }
 
   /// `max(wall clock, last time seen)`. The last-seen time is persisted and
@@ -255,13 +277,20 @@ class LicenseService {
     required DateTime? expiresAt,
     required bool isActive,
     String? licenseType,
+    String? activationToken,
   }) async {
+    // Seed trial start if not already set, binding trial lifetime from
+    // the installation / activation time.
+    await _getOrInitTrialStart(_clock());
     await _store.write(key: _kLicenseKey, value: licenseKey);
     await _store.write(key: _kLicenseType, value: licenseType ?? '');
     await _store.write(
         key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '');
     await _store.write(
         key: _kLicenseStatus, value: isActive ? 'active' : 'revoked');
+    if (activationToken != null) {
+      await _store.write(key: _kActivationToken, value: activationToken);
+    }
     invalidateCache();
   }
 
@@ -269,17 +298,19 @@ class LicenseService {
 
   /// Deletes the stored license from this device.
   ///
-  /// Clears `wq_license_key`, `wq_license_expiry`, `wq_license_status` and
-  /// `wq_license_type` so entitlement falls back to the trial path (or expired-trial path
-  /// if the 14-day window has elapsed). The device identifier and trial
-  /// start markers are intentionally **not** touched — removing the key
-  /// is not meant to grant a fresh trial. The last-seen time is kept too,
-  /// so removing a key cannot be used to rewind the clock guard.
+  /// Clears `wq_license_key`, `wq_license_expiry`, `wq_license_status`,
+  /// `wq_license_type`, and `wq_activation_token` so entitlement falls back to
+  /// the trial path (or expired-trial path if the 14-day window has elapsed).
+  /// The device identifier and trial start markers are intentionally **not**
+  /// touched — removing the key is not meant to grant a fresh trial. The
+  /// last-seen time is kept too, so removing a key cannot be used to rewind
+  /// the clock guard.
   Future<void> clearLicense() async {
     await _store.delete(key: _kLicenseKey);
     await _store.delete(key: _kLicenseExpiry);
     await _store.delete(key: _kLicenseStatus);
     await _store.delete(key: _kLicenseType);
+    await _store.delete(key: _kActivationToken);
     invalidateCache();
   }
 

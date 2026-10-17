@@ -37,9 +37,9 @@ class FeatureAccess {
 
   static bool isPro(Feature f) => proFeatures.contains(f);
 
-  // Null entitlement means still loading — allow Pro to avoid blocking on startup.
+  // Null entitlement means unavailable or still loading — fail closed for Pro.
   static bool canAccess(Feature f, EntitlementState? entitlement) {
     if (!isPro(f)) return true;
-    return entitlement?.isSubscriptionActive ?? true;
+    return entitlement?.isSubscriptionActive ?? false;
   }
 }

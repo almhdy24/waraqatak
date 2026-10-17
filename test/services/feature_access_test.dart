@@ -108,13 +108,63 @@ void main() {
       expect(FeatureAccess.canAccess(Feature.inventory, s), isFalse);
     });
 
-    test('allowed with null entitlement (still loading)', () {
-      // Null means entitlement not yet loaded — default to allow to avoid
-      // false blocks at startup before the cache is warm.
-      expect(FeatureAccess.canAccess(Feature.purchases, null), isTrue);
-      expect(FeatureAccess.canAccess(Feature.inventory, null), isTrue);
-      expect(FeatureAccess.canAccess(Feature.advancedReports, null), isTrue);
+    test('blocked with null entitlement (fail closed)', () {
+      // Null means entitlement not available or still loading — fail closed for Pro.
+      expect(FeatureAccess.canAccess(Feature.purchases, null), isFalse);
+      expect(FeatureAccess.canAccess(Feature.inventory, null), isFalse);
+      expect(FeatureAccess.canAccess(Feature.advancedReports, null), isFalse);
     });
   });
 
+  // ── Screen action feature gating regressions ──────────────────────────────
+
+  group('Screen action feature gating', () {
+    test('supplier purchase action is gated by Feature.purchases', () {
+      final licensed = EntitlementState(
+          status: EntitlementStatus.licensed, deviceId: 'd');
+      final trial = EntitlementState(
+          status: EntitlementStatus.trialActive,
+          deviceId: 'd',
+          trialDaysRemaining: 5);
+      expect(FeatureAccess.canAccess(Feature.purchases, licensed), isTrue);
+      expect(FeatureAccess.canAccess(Feature.purchases, trial), isTrue);
+
+      final expired = EntitlementState(
+          status: EntitlementStatus.trialExpired, deviceId: 'd');
+      final revoked = EntitlementState(
+          status: EntitlementStatus.licenseRevoked, deviceId: 'd');
+      expect(FeatureAccess.canAccess(Feature.purchases, expired), isFalse);
+      expect(FeatureAccess.canAccess(Feature.purchases, revoked), isFalse);
+      expect(FeatureAccess.canAccess(Feature.purchases, null), isFalse);
+    });
+
+    test('products warehouse action is gated by Feature.inventory', () {
+      final licensed = EntitlementState(
+          status: EntitlementStatus.licensed, deviceId: 'd');
+      final trial = EntitlementState(
+          status: EntitlementStatus.trialActive,
+          deviceId: 'd',
+          trialDaysRemaining: 5);
+      expect(FeatureAccess.canAccess(Feature.inventory, licensed), isTrue);
+      expect(FeatureAccess.canAccess(Feature.inventory, trial), isTrue);
+
+      final expired = EntitlementState(
+          status: EntitlementStatus.trialExpired, deviceId: 'd');
+      final revoked = EntitlementState(
+          status: EntitlementStatus.licenseRevoked, deviceId: 'd');
+      expect(FeatureAccess.canAccess(Feature.inventory, expired), isFalse);
+      expect(FeatureAccess.canAccess(Feature.inventory, revoked), isFalse);
+      expect(FeatureAccess.canAccess(Feature.inventory, null), isFalse);
+    });
+
+    test('regular customer invoice action uses Feature.invoices (always free)', () {
+      final expired = EntitlementState(
+          status: EntitlementStatus.trialExpired, deviceId: 'd');
+      final revoked = EntitlementState(
+          status: EntitlementStatus.licenseRevoked, deviceId: 'd');
+      expect(FeatureAccess.canAccess(Feature.invoices, expired), isTrue);
+      expect(FeatureAccess.canAccess(Feature.invoices, revoked), isTrue);
+      expect(FeatureAccess.canAccess(Feature.invoices, null), isTrue);
+    });
+  });
 }

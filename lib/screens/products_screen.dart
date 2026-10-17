@@ -6,6 +6,10 @@ import '../models/product.dart';
 import '../services/product_service.dart';
 import 'inventory_screen.dart';
 import 'product_form_screen.dart';
+import 'activation_screen.dart';
+import '../services/feature_access.dart';
+import '../services/license_service.dart';
+import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -151,6 +155,35 @@ class _ProductsScreenState extends State<ProductsScreen> {
         MaterialPageRoute(builder: (_) => ProductFormScreen(product: product)),
       ).then((_) => _load());
 
+  Future<void> _openInventory() async {
+    final entitlement =
+        await LicenseService.instance.checkEntitlement(force: true);
+    if (!mounted) return;
+    if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
+      final result = await ProUpgradeSheet.show(
+        context,
+        feature: Feature.inventory,
+      );
+      if (result == true && mounted) {
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
+        if (!mounted) return;
+        LicenseService.instance.invalidateCache();
+      }
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const InventoryScreen()),
+    );
+    if (mounted) {
+      _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -164,10 +197,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           IconButton(
             icon: const Icon(Icons.warehouse_outlined),
             tooltip: l10n.inventory,
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const InventoryScreen()),
-            ).then((_) => _load()),
+            onPressed: _openInventory,
           ),
         ],
       ),

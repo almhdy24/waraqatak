@@ -85,6 +85,13 @@ void main() {
       expect(s.licenseExpiresAt, isNull);
     });
 
+    test('perpetual type with no expiry stays licensed', () async {
+      await store(type: 'perpetual');
+      final s = await evaluateAt(DateTime.utc(2030, 1, 1));
+      expect(s.status, EntitlementStatus.licensed);
+      expect(s.licenseExpiresAt, isNull);
+    });
+
     test('limited type with no expiry is expired', () async {
       await store(type: 'monthly');
       expect((await evaluateAt(now)).status, EntitlementStatus.licenseExpired);
@@ -190,6 +197,131 @@ void main() {
       );
       expect((await evaluateAt(now)).status,
           EntitlementStatus.licenseRevoked);
+    });
+  });
+
+  // ── Trial Persistence After License Removal ───────────────────────────────
+
+  group('Trial persistence after license removal', () {
+    test('first-time launch initializes trial with 14 days', () async {
+      final s = await service.checkEntitlement(force: true);
+      expect(s.status, EntitlementStatus.trialActive);
+      expect(s.trialDaysRemaining, 14);
+      expect(storage.data['wq_trial_start'], isNotNull);
+    });
+
+    test('activating a license while trial is valid grants licensed status',
+        () async {
+      // Day 1: trial active
+      await evaluateAt(DateTime.utc(2026, 5, 1));
+      // Day 3: activate license
+      await service.storeLicense(
+        licenseKey: validFormattedShortKey(),
+        expiresAt: null,
+        isActive: true,
+        licenseType: 'perpetual',
+      );
+      final s = await evaluateAt(DateTime.utc(2026, 5, 3));
+      expect(s.status, EntitlementStatus.licensed);
+    });
+
+    test('removing a key before trial expiry restores remaining trial days',
+        () async {
+      // Day 0: start trial on May 1
+      await evaluateAt(DateTime.utc(2026, 5, 1));
+      // Day 2: activate license
+      await service.storeLicense(
+        licenseKey: validFormattedShortKey(),
+        expiresAt: null,
+        isActive: true,
+        licenseType: 'perpetual',
+      );
+      expect((await evaluateAt(DateTime.utc(2026, 5, 3))).status,
+          EntitlementStatus.licensed);
+
+      // Day 5: user removes license. Trial started on May 1, ends May 15.
+      // Remaining at May 5: May 15 - May 5 = 10 days left (inDays + 1 = 11).
+      now = DateTime.utc(2026, 5, 5);
+      await service.clearLicense();
+      final s = await service.checkEntitlement(force: true);
+      expect(s.status, EntitlementStatus.trialActive);
+      expect(s.trialDaysRemaining, 11);
+    });
+
+    test('removing a key after trial expiry returns trialExpired (no fresh trial)',
+        () async {
+      // Day 0: start trial on May 1
+      await evaluateAt(DateTime.utc(2026, 5, 1));
+      // Day 2: activate license
+      await service.storeLicense(
+        licenseKey: validFormattedShortKey(),
+        expiresAt: null,
+        isActive: true,
+        licenseType: 'perpetual',
+      );
+
+      // Day 25: trial window elapsed. User removes license.
+      now = DateTime.utc(2026, 5, 26);
+      await service.clearLicense();
+      final s = await service.checkEntitlement(force: true);
+      expect(s.status, EntitlementStatus.trialExpired);
+      expect(s.isSubscriptionActive, isFalse);
+    });
+
+    test('activating after trial expired and then removing key stays expired',
+        () async {
+      // Day 0: start trial on May 1
+      await evaluateAt(DateTime.utc(2026, 5, 1));
+      // Day 16: trial expired
+      expect((await evaluateAt(DateTime.utc(2026, 5, 17))).status,
+          EntitlementStatus.trialExpired);
+
+      // User activates timed key
+      await service.storeLicense(
+        licenseKey: 'timed-key',
+        expiresAt: DateTime.utc(2026, 6, 1),
+        isActive: true,
+        licenseType: 'monthly',
+      );
+      expect((await evaluateAt(DateTime.utc(2026, 5, 17))).status,
+          EntitlementStatus.licensed);
+
+      // User removes key
+      await service.clearLicense();
+      final s = await evaluateAt(DateTime.utc(2026, 5, 18));
+      expect(s.status, EntitlementStatus.trialExpired);
+    });
+
+    test('legacy install without wq_trial_start does not grant fresh trial upon removal',
+        () async {
+      // Suppose an install has a license and last_seen recorded 60 days ago,
+      // but no wq_trial_start.
+      storage.data['wq_license_key'] = 'legacy-key';
+      storage.data['wq_license_type'] = 'lifetime';
+      storage.data['wq_license_status'] = 'active';
+      storage.data['wq_last_seen'] = DateTime.utc(2026, 1, 1).toIso8601String();
+
+      // Today is May 1 (120 days later)
+      now = DateTime.utc(2026, 5, 1);
+      await service.clearLicense();
+      final s = await service.checkEntitlement(force: true);
+      // Historical last_seen is recognized so trial is expired, not granted fresh.
+      expect(s.status, EntitlementStatus.trialExpired);
+    });
+
+    test('app restarts preserve original trial start timestamp', () async {
+      final initialNow = DateTime.utc(2026, 5, 1, 10);
+      await evaluateAt(initialNow);
+      final originalStart = storage.data['wq_trial_start'];
+
+      // Simulate app restart by creating a new service instance sharing same storage
+      final newService = LicenseService.forTesting(
+        storage: storage,
+        clock: () => DateTime.utc(2026, 5, 4, 10),
+      );
+      final s = await newService.checkEntitlement(force: true);
+      expect(s.status, EntitlementStatus.trialActive);
+      expect(storage.data['wq_trial_start'], originalStart);
     });
   });
 }

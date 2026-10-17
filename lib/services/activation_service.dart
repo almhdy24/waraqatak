@@ -104,18 +104,19 @@ class ActivationService {
 
   /// Activate [rawKey] on this device.
   ///
+  /// Supports both short (12-char Crockford Base32) and legacy (signed_long)
+  /// keys.
+  ///
   /// Returns one of [ActivationOutcome]. On [ActivationOutcome.success] the
   /// license key is persisted via [LicenseService.storeLicense] with
-  /// `isActive: true` and the expiry embedded in the key (null for lifetime
-  /// keys). For every other outcome nothing is written to storage.
+  /// `isActive: true` and the expiry embedded in the key or returned by
+  /// the server (null for perpetual / lifetime keys). For every other outcome
+  /// nothing is written to storage.
   ///
-  /// Success requires both a 2xx answer from the server and a key whose
-  /// payload parses. Keys that do not parse, were issued for another app, or
+  /// Success requires both a 2xx answer from the server and a valid key format.
+  /// Keys that do not parse, fail checksum, were issued for another app, or
   /// are already expired are rejected as [ActivationOutcome.invalid] without
-  /// contacting the server. So is a key whose `license_type` is not
-  /// `lifetime` but whose `expires_at` is missing, null, unparseable or in
-  /// the past: this guards against a server issuance mistake granting
-  /// unlimited access. Legacy keys without a `license_type` still activate.
+  /// contacting the server.
   ///
   /// No automatic retries. Caller is responsible for re-invoking after a
   /// user-visible retry.
@@ -128,17 +129,31 @@ class ActivationService {
       return ActivationOutcome.invalid;
     }
 
-    // A key whose payload cannot be parsed is never stored, and is rejected
-    // before the server is contacted so it cannot use up a device slot.
-    final claims = LicenseKeyClaims.tryParse(key);
-    if (claims == null ||
-        !claims.allowsActivation(DateTime.now(), expectedAppSlug: appSlug)) {
-      return ActivationOutcome.invalid;
+    final bool isShort = ShortLicenseKey.isShortKey(key);
+    final String serverKey;
+    final LicenseKeyClaims? claims;
+
+    if (isShort) {
+      final normKey = ShortLicenseKey.normalize(key);
+      if (!ShortLicenseKey.verifyChecksum(normKey)) {
+        return ActivationOutcome.invalid;
+      }
+      serverKey = normKey;
+      claims = null;
+    } else {
+      // Long key path: payload must parse and be valid for this app.
+      claims = LicenseKeyClaims.tryParse(key);
+      if (claims == null ||
+          !claims.allowsActivation(DateTime.now(), expectedAppSlug: appSlug)) {
+        return ActivationOutcome.invalid;
+      }
+      serverKey = key;
     }
 
+    ActivateLicenseResult? result;
     try {
-      await _sdk.public.activateLicense(
-        ActivateLicenseRequest(licenseKey: key, machineId: deviceId),
+      result = await _sdk.public.activateLicense(
+        ActivateLicenseRequest(licenseKey: serverKey, machineId: deviceId),
       );
     } on ElmahdiPayRateLimitException {
       return ActivationOutcome.tooManyAttempts;
@@ -148,27 +163,67 @@ class ActivationService {
       // 5xx is a server-side problem, not a key problem — treat as
       // unreachable so the UI doesn't incorrectly declare the key invalid.
       if (e.statusCode >= 500) return ActivationOutcome.serverUnreachable;
-      // 401 (new hardened API), 403, 404, 409, 422 and any other 4xx all
+      // 401 (hardened API), 403, 404, 409, 422 and any other 4xx all
       // collapse into "invalid". The server's own message is deliberately
       // not surfaced to the user.
       return ActivationOutcome.invalid;
     } on TypeError {
-      // The server answered 2xx but the body lacked the expected fields.
-      // The activation succeeded on the server; no response field is used.
+      // The server answered 2xx but the body lacked expected fields.
     } on FormatException {
-      // Same as above for a body that could not be decoded.
+      // Body could not be decoded.
     } catch (_) {
       // Anything else is not a confirmed 2xx answer: store nothing.
       return ActivationOutcome.serverUnreachable;
     }
 
+    final DateTime? expiresAt;
+    final String? licenseType;
+
+    if (isShort) {
+      if (result == null ||
+          (result.license == null && result.effectiveToken.isEmpty)) {
+        return ActivationOutcome.serverUnreachable;
+      }
+      final lic = result.license;
+      expiresAt = lic?.expiresAt;
+      licenseType = lic?.type ?? LicenseKeyClaims.perpetualType;
+    } else {
+      expiresAt = claims!.expiresAt;
+      licenseType = claims.licenseType ?? LicenseKeyClaims.lifetimeType;
+    }
+
     await LicenseService.instance.storeLicense(
-      licenseKey: key,
-      expiresAt: claims.expiresAt,
+      licenseKey: isShort ? ShortLicenseKey.format(serverKey) : serverKey,
+      expiresAt: expiresAt,
       isActive: true,
-      licenseType: claims.licenseType,
+      licenseType: licenseType,
+      activationToken: result?.effectiveToken,
     );
     return ActivationOutcome.success;
+  }
+
+  /// Deactivates [rawKey] on the server for this device (best-effort).
+  ///
+  /// Releasing device slot on the licensing server allows the license to be
+  /// activated on another device. Offline removal still completes locally
+  /// even if this call fails.
+  static Future<bool> deactivate(String rawKey, String deviceId) async {
+    final key = normalizeKey(rawKey);
+    if (key.isEmpty) return false;
+    final serverKey =
+        ShortLicenseKey.isShortKey(key) ? ShortLicenseKey.normalize(key) : key;
+    try {
+      await _sdk.public.deactivateLicense(
+        DeactivateLicenseRequest(
+          licenseKey: serverKey,
+          machineId: deviceId,
+          reason: 'user_removed',
+        ),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static void close() {

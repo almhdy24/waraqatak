@@ -52,6 +52,31 @@ void main() {
       expect(result.activationToken, 'SIGNED');
     });
 
+    test('returns token and license metadata for short key on 200', () async {
+      final client = _client(MockClient((_) async => _json(
+            {
+              'success': true,
+              'token': 'SHORT_TOKEN',
+              'license': {
+                'product': 'waraqatak',
+                'type': 'perpetual',
+                'issued_at': '2026-01-01 00:00:00',
+                'expires_at': null,
+                'max_devices': 2,
+              },
+            },
+            status: 200,
+          )));
+      final result = await client.public.activateLicense(request);
+      expect(result.token, 'SHORT_TOKEN');
+      expect(result.effectiveToken, 'SHORT_TOKEN');
+      expect(result.license, isNotNull);
+      expect(result.license!.product, 'waraqatak');
+      expect(result.license!.type, 'perpetual');
+      expect(result.license!.expiresAt, isNull);
+      expect(result.license!.maxDevices, 2);
+    });
+
     test('throws ElmahdiPayForbiddenException on 403', () {
       final client = _client(MockClient((_) async =>
           _json({'success': false, 'message': 'Revoked'}, status: 403)));
@@ -98,6 +123,58 @@ void main() {
         () => client.public.activateLicense(request),
         throwsA(isA<ElmahdiPayNetworkException>()),
       );
+    });
+  });
+
+  group('deactivateLicense', () {
+    const deactRequest = DeactivateLicenseRequest(
+      licenseKey: 'KEY-123',
+      machineId: 'machine-abc',
+      reason: 'user_removed',
+    );
+
+    test('sends POST /pay/licenses/deactivate and parses response', () async {
+      String? path;
+      final client = _client(MockClient((req) async {
+        path = req.url.path;
+        return _json({
+          'success': true,
+          'message': 'Device deactivated',
+          'code': 'deactivated',
+          'active_devices': 0,
+          'max_devices': 1,
+        });
+      }));
+      final res = await client.public.deactivateLicense(deactRequest);
+      expect(path, '/pay/licenses/deactivate');
+      expect(res.success, isTrue);
+      expect(res.code, 'deactivated');
+      expect(res.activeDevices, 0);
+      expect(res.maxDevices, 1);
+    });
+  });
+
+  group('verifyLicense', () {
+    const verifyRequest = VerifyLicenseRequest(
+      tokenOrKey: 'KEY-OR-TOKEN',
+      machineId: 'machine-abc',
+    );
+
+    test('sends POST /pay/licenses/verify and parses response', () async {
+      String? path;
+      final client = _client(MockClient((req) async {
+        path = req.url.path;
+        return _json({
+          'success': true,
+          'valid': true,
+          'data': {'status': 'active'},
+        });
+      }));
+      final res = await client.public.verifyLicense(verifyRequest);
+      expect(path, '/pay/licenses/verify');
+      expect(res.success, isTrue);
+      expect(res.valid, isTrue);
+      expect(res.data?['status'], 'active');
     });
   });
 }
