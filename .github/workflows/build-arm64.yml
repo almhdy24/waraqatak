@@ -5,7 +5,12 @@ name: Build Release APK (arm64)
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -91,3 +96,4 @@ jobs:
           TAG="preview-arm64"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Waraqatak arm64-v8a Preview" --notes "Latest automated arm64-v8a APK build." --prerelease
           gh release upload "$TAG" build/app/outputs/flutter-apk/app-arm64-v8a-release.apk --clobber
+          gh release edit "$TAG" --notes "Built from commit ${GITHUB_SHA:0:7} on $(date -u '+%Y-%m-%d %H:%M UTC')"

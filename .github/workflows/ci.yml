@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -106,3 +110,4 @@ jobs:
           TAG="preview"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Waraqatak Preview" --notes "Latest automated APK build." --prerelease
           gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk --clobber
+          gh release edit "$TAG" --notes "Built from commit ${GITHUB_SHA:0:7} on $(date -u '+%Y-%m-%d %H:%M UTC')"
