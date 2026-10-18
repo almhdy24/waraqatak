@@ -6,6 +6,23 @@ class InventoryService {
   static Future<List<StockMovement>> getMovements(int productId) =>
       DatabaseHelper.instance.getStockMovements(productId);
 
+  static Future<List<StockMovement>> getAllMovements({
+    int? productId,
+    String? type,
+    DateTime? fromDate,
+    DateTime? toDate,
+    int limit = 100,
+    int offset = 0,
+  }) =>
+      DatabaseHelper.instance.getAllStockMovements(
+        productId: productId,
+        type: type,
+        fromDate: fromDate,
+        toDate: toDate,
+        limit: limit,
+        offset: offset,
+      );
+
   static Future<void> adjust({
     required int productId,
     required double delta,

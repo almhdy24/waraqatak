@@ -213,7 +213,7 @@ class AppOpsService {
       final payload = <String, dynamic>{
         'product': appSlug,
         'machine_id': machineId,
-        'app_version': '1.1.1',
+        'app_version': '1.1.2',
         'client_reported_status': clientStatus,
       };
 

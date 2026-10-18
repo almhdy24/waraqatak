@@ -14,6 +14,8 @@ import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../services/pos_cart.dart';
 import '../services/product_service.dart';
+import '../utils/error_utils.dart';
+import '../utils/format_utils.dart';
 import '../utils/print_settings.dart';
 import 'barcode_scanner_screen.dart';
 import 'document_detail_screen.dart';
@@ -217,16 +219,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       await _load(); // stock changed
     } catch (e) {
       if (!mounted) return;
-      _toast('${l10n.operationFailed}: ${_friendlyError(e, l10n)}');
+      _toast(ErrorUtils.toFriendlyMessage(e, l10n));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  String _friendlyError(Object e, AppLocalizations l10n) {
-    final s = e.toString();
-    if (s.contains('Insufficient stock')) return l10n.outOfStock;
-    return s.replaceFirst(RegExp(r'^(Bad state|Invalid argument\(s\)): '), '');
   }
 
   Future<void> _showDone(int docId, {required double total, required double change}) async {
@@ -659,7 +655,7 @@ class _ProductTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        NumberFormat('#,##0.##').format(inCart),
+                        FormatUtils.formatQuantity(inCart),
                         style: TextStyle(
                             color: cs.onPrimary, fontSize: 12, fontWeight: FontWeight.bold),
                       ),
@@ -675,7 +671,7 @@ class _ProductTile extends StatelessWidget {
                     ? l10n.posService
                     : soldOut
                         ? l10n.outOfStock
-                        : l10n.posInStock(NumberFormat('#,##0.##').format(available)),
+                        : l10n.posInStock(FormatUtils.formatQuantity(available)),
                 style: TextStyle(
                   fontSize: 11.5,
                   color: soldOut ? cs.error : cs.onSurfaceVariant,

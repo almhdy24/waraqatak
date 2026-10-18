@@ -15,12 +15,15 @@ import '../models/document_status.dart';
 import '../models/tax_profile.dart';
 import '../models/app_notification.dart';
 import '../models/diagnostic_report.dart';
+import '../models/stocktake.dart';
+import '../services/inventory_costing_service.dart';
+import '../utils/format_utils.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 13;
+  static const int dbVersion = 16;
 
   static Database? _database;
 
@@ -218,13 +221,17 @@ class DatabaseHelper {
         is_taxable INTEGER DEFAULT 1,
         is_active INTEGER DEFAULT 1,
         notes TEXT,
+        category TEXT,
         tax_profile_id INTEGER,
+        average_cost REAL,
+        cost_status TEXT DEFAULT 'unknown',
         created_at TEXT,
         updated_at TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_products_name ON products(name)');
     await db.execute('CREATE INDEX idx_products_barcode ON products(barcode)');
+    await db.execute('CREATE INDEX idx_products_category ON products(category)');
 
     await db.execute('''
       CREATE TABLE stock_movements (
@@ -235,12 +242,19 @@ class DatabaseHelper {
         reference_document_id INTEGER,
         date TEXT NOT NULL,
         notes TEXT,
+        unit_cost REAL,
+        total_cost REAL,
+        cost_status TEXT DEFAULT 'unknown',
+        provenance TEXT,
         FOREIGN KEY (product_id) REFERENCES products(id),
         FOREIGN KEY (reference_document_id) REFERENCES documents(id) ON DELETE SET NULL
       )
     ''');
     await db.execute(
       'CREATE INDEX idx_stock_movements_product ON stock_movements(product_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_stock_movements_cost ON stock_movements(cost_status)',
     );
 
     await db.execute('''
@@ -281,6 +295,8 @@ class DatabaseHelper {
         total REAL NOT NULL,
         taxable INTEGER DEFAULT 1,
         tax_rate REAL,
+        unit_cost REAL,
+        total_cost REAL,
         FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
@@ -362,6 +378,55 @@ class DatabaseHelper {
     );
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_diag_created ON diagnostic_reports(created_at)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS stocktake_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_number TEXT UNIQUE NOT NULL,
+        status TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        notes TEXT,
+        category_filter TEXT,
+        total_items INTEGER DEFAULT 0,
+        matched_items INTEGER DEFAULT 0,
+        discrepant_items INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_stocktake_sessions_status ON stocktake_sessions(status)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS stocktake_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        baseline_quantity REAL NOT NULL,
+        counted_quantity REAL,
+        reconciled_system_quantity REAL,
+        variance REAL,
+        unit_cost REAL,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        FOREIGN KEY (session_id) REFERENCES stocktake_sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_stocktake_items_session ON stocktake_items(session_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_stocktake_items_product ON stocktake_items(product_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
     );
   }
 
@@ -701,6 +766,207 @@ class DatabaseHelper {
         'CREATE INDEX IF NOT EXISTS idx_diag_created ON diagnostic_reports(created_at)',
       );
     }
+
+    if (oldVersion < 14) {
+      if (!await columnExists('products', 'category')) {
+        await db.execute('ALTER TABLE products ADD COLUMN category TEXT');
+      }
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)',
+      );
+    }
+
+    if (oldVersion < 15) {
+      if (!await columnExists('products', 'average_cost')) {
+        await db.execute('ALTER TABLE products ADD COLUMN average_cost REAL');
+      }
+      if (!await columnExists('products', 'cost_status')) {
+        await db.execute(
+          "ALTER TABLE products ADD COLUMN cost_status TEXT DEFAULT 'unknown'",
+        );
+      }
+      if (!await columnExists('stock_movements', 'unit_cost')) {
+        await db.execute('ALTER TABLE stock_movements ADD COLUMN unit_cost REAL');
+      }
+      if (!await columnExists('stock_movements', 'total_cost')) {
+        await db.execute('ALTER TABLE stock_movements ADD COLUMN total_cost REAL');
+      }
+      if (!await columnExists('stock_movements', 'cost_status')) {
+        await db.execute(
+          "ALTER TABLE stock_movements ADD COLUMN cost_status TEXT DEFAULT 'unknown'",
+        );
+      }
+      if (!await columnExists('stock_movements', 'provenance')) {
+        await db.execute('ALTER TABLE stock_movements ADD COLUMN provenance TEXT');
+      }
+      if (!await columnExists('document_items', 'unit_cost')) {
+        await db.execute('ALTER TABLE document_items ADD COLUMN unit_cost REAL');
+      }
+      if (!await columnExists('document_items', 'total_cost')) {
+        await db.execute('ALTER TABLE document_items ADD COLUMN total_cost REAL');
+      }
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_stock_movements_cost ON stock_movements(cost_status)',
+      );
+
+      await _migrateLegacyCosting(db);
+    }
+
+    if (oldVersion < 16) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS stocktake_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_number TEXT UNIQUE NOT NULL,
+          status TEXT NOT NULL,
+          started_at TEXT NOT NULL,
+          completed_at TEXT,
+          notes TEXT,
+          category_filter TEXT,
+          total_items INTEGER DEFAULT 0,
+          matched_items INTEGER DEFAULT 0,
+          discrepant_items INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_stocktake_sessions_status ON stocktake_sessions(status)',
+      );
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS stocktake_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id INTEGER NOT NULL,
+          product_id INTEGER NOT NULL,
+          baseline_quantity REAL NOT NULL,
+          counted_quantity REAL,
+          reconciled_system_quantity REAL,
+          variance REAL,
+          unit_cost REAL,
+          notes TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          FOREIGN KEY (session_id) REFERENCES stocktake_sessions(id) ON DELETE CASCADE,
+          FOREIGN KEY (product_id) REFERENCES products(id)
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_stocktake_items_session ON stocktake_items(session_id)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_stocktake_items_product ON stocktake_items(product_id)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
+      );
+    }
+  }
+
+  Future<void> _migrateLegacyCosting(DatabaseExecutor db) async {
+    // 1. Reconstruct purchase movements from linked purchase document items
+    final purchaseMovements = await db.rawQuery('''
+      SELECT sm.id AS movement_id, sm.product_id, sm.quantity, sm.reference_document_id,
+             di.price AS item_price
+      FROM stock_movements sm
+      INNER JOIN documents d ON d.id = sm.reference_document_id AND d.type = 'purchase'
+      INNER JOIN document_items di ON di.document_id = d.id AND di.product_id = sm.product_id
+      WHERE sm.type = 'purchase' AND sm.reference_document_id IS NOT NULL
+    ''');
+
+    for (final pm in purchaseMovements) {
+      final mid = pm['movement_id'] as int;
+      final price = (pm['item_price'] as num?)?.toDouble() ?? 0.0;
+      final qty = (pm['quantity'] as num?)?.toDouble() ?? 0.0;
+      if (price > 0) {
+        await db.update(
+          'stock_movements',
+          {
+            'unit_cost': price,
+            'total_cost': qty * price,
+            'cost_status': StockMovement.costStatusReconstructed,
+            'provenance': 'purchase_document_item',
+          },
+          where: 'id = ?',
+          whereArgs: [mid],
+        );
+      }
+    }
+
+    // 2. Reconstruct purchase document_items cost fields
+    await db.rawUpdate('''
+      UPDATE document_items
+      SET unit_cost = price, total_cost = quantity * price
+      WHERE document_id IN (SELECT id FROM documents WHERE type = 'purchase')
+    ''');
+
+    // 3. Mark opening movements without cost basis as unknown
+    await db.rawUpdate('''
+      UPDATE stock_movements
+      SET cost_status = '${StockMovement.costStatusUnknown}', provenance = 'legacy_opening'
+      WHERE type = '${StockMovement.typeOpening}' AND (cost_status = 'unknown' OR cost_status IS NULL)
+    ''');
+
+    // 4. Mark legacy sale movements as unknown
+    await db.rawUpdate('''
+      UPDATE stock_movements
+      SET cost_status = '${StockMovement.costStatusUnknown}', provenance = 'legacy_sale'
+      WHERE type = '${StockMovement.typeSale}' AND (cost_status = 'unknown' OR cost_status IS NULL)
+    ''');
+
+    // 5. Products: if a product only has reconstructed purchases and no unknown movements,
+    // and stock > 0, calculate its current average cost. Otherwise, leave as unknown.
+    final products = await db.query('products', columns: ['id', 'stock_quantity']);
+    for (final p in products) {
+      final pid = p['id'] as int;
+      final stock = (p['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+      if (stock <= 0) continue;
+
+      final unknownCount = Sqflite.firstIntValue(await db.rawQuery('''
+        SELECT COUNT(*) FROM stock_movements
+        WHERE product_id = ? AND (cost_status = '${StockMovement.costStatusUnknown}' OR cost_status IS NULL)
+      ''', [pid])) ?? 0;
+
+      if (unknownCount == 0) {
+        final movements = await db.rawQuery('''
+          SELECT type, quantity, unit_cost FROM stock_movements
+          WHERE product_id = ?
+          ORDER BY date ASC, id ASC
+        ''', [pid]);
+
+        double runningStock = 0;
+        double? runningAvg;
+        for (final m in movements) {
+          final mType = m['type'] as String;
+          final mQty = (m['quantity'] as num).toDouble();
+          final mCost = (m['unit_cost'] as num?)?.toDouble();
+          if (mType == StockMovement.typePurchase && mCost != null) {
+            runningAvg = InventoryCostingService.calculateNewWeightedAverage(
+              currentStock: runningStock,
+              currentAvgCost: runningAvg,
+              incomingQty: mQty,
+              incomingUnitCost: mCost,
+            );
+            runningStock += mQty;
+          } else if (mType == StockMovement.typeSale) {
+            runningStock += mQty;
+          }
+        }
+
+        if (runningAvg != null && runningAvg > 0) {
+          await db.update(
+            'products',
+            {
+              'average_cost': runningAvg,
+              'cost_status': Product.costStatusKnown,
+            },
+            where: 'id = ?',
+            whereArgs: [pid],
+          );
+        }
+      }
+    }
   }
 
   // ========== Business ==========
@@ -825,16 +1091,27 @@ class DatabaseHelper {
     return Contact.fromMap(maps.first);
   }
 
-  Future<double> getContactOutstanding(int contactId, String docType) async {
+  Future<double> getContactOutstanding(
+    int contactId,
+    String docType, {
+    String? currencyCode,
+  }) async {
     final db = await database;
+    final where = StringBuffer(
+      "contact_id = ? AND type = ? AND status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')",
+    );
+    final args = <Object?>[contactId, docType];
+    if (currencyCode != null) {
+      where.write(' AND currency_code = ?');
+      args.add(currencyCode);
+    }
     final rows = await db.rawQuery(
       '''
       SELECT COALESCE(SUM(remaining), 0) AS outstanding
       FROM documents
-      WHERE contact_id = ? AND type = ?
-        AND status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+      WHERE $where
     ''',
-      [contactId, docType],
+      args,
     );
     return (rows.first['outstanding'] as num?)?.toDouble() ?? 0;
   }
@@ -843,16 +1120,29 @@ class DatabaseHelper {
   Future<int> insertProduct(Product p) async {
     final db = await database;
     return db.transaction((txn) async {
-      final id = await txn.insert('products', p.toMap());
+      final hasKnownCost = p.isProduct && p.stockQuantity > 0 && p.purchasePrice > 0;
+      final avgCost = hasKnownCost ? p.purchasePrice : null;
+      final costStatus = hasKnownCost
+          ? Product.costStatusKnown
+          : Product.costStatusUnknown;
+
+      final pMap = p.toMap();
+      pMap['average_cost'] = avgCost;
+      pMap['cost_status'] = costStatus;
+
+      final id = await txn.insert('products', pMap);
       if (p.isProduct && p.stockQuantity > 0) {
-        await txn.insert('stock_movements', {
-          'product_id': id,
-          'type': StockMovement.typeOpening,
-          'quantity': p.stockQuantity,
-          'reference_document_id': null,
-          'date': (p.createdAt ?? DateTime.now()).toIso8601String(),
-          'notes': null,
-        });
+        await _insertStockMovement(
+          txn,
+          productId: id,
+          type: StockMovement.typeOpening,
+          quantity: p.stockQuantity,
+          unitCost: avgCost,
+          totalCost: hasKnownCost ? p.stockQuantity * p.purchasePrice : null,
+          costStatus: costStatus,
+          provenance: 'opening_stock',
+          date: p.createdAt ?? DateTime.now(),
+        );
       }
       return id;
     });
@@ -860,12 +1150,53 @@ class DatabaseHelper {
 
   Future<int> updateProduct(Product p) async {
     final db = await database;
-    return db.update('products', p.toMap(), where: 'id = ?', whereArgs: [p.id]);
+    return db.transaction((txn) async {
+      final existingRows = await txn.query(
+        'products',
+        columns: ['stock_quantity', 'type'],
+        where: 'id = ?',
+        whereArgs: [p.id],
+      );
+      if (existingRows.isNotEmpty) {
+        final existingStock =
+            (existingRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+        final existingType =
+            existingRows.first['type'] as String? ?? 'product';
+        if (existingType == 'product' &&
+            p.type == 'service' &&
+            existingStock > 0) {
+          throw StateError(
+            'Cannot convert product with active stock ($existingStock) to service',
+          );
+        }
+      }
+      final map = p.toMap();
+      // Prevent direct modification of stock_quantity through product metadata update
+      map.remove('stock_quantity');
+      return txn.update('products', map, where: 'id = ?', whereArgs: [p.id]);
+    });
   }
 
   Future<int> deleteProduct(int id) async {
     final db = await database;
-    return db.delete('products', where: 'id = ?', whereArgs: [id]);
+    return db.transaction((txn) async {
+      final refRows = await txn.query(
+        'document_items',
+        columns: ['id'],
+        where: 'product_id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      if (refRows.isNotEmpty) {
+        throw StateError('Cannot delete product referenced in documents');
+      }
+      await txn.delete(
+        'stock_movements',
+        where: 'product_id = ?',
+        whereArgs: [id],
+      );
+      return txn.delete('products', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<bool> isProductReferenced(int id) async {
@@ -880,7 +1211,11 @@ class DatabaseHelper {
     return rows.isNotEmpty;
   }
 
-  Future<List<Product>> getAllProducts({String? type, bool? activeOnly}) async {
+  Future<List<Product>> getAllProducts({
+    String? type,
+    bool? activeOnly,
+    String? category,
+  }) async {
     final db = await database;
     final conditions = <String>[];
     final args = <Object?>[];
@@ -890,6 +1225,10 @@ class DatabaseHelper {
     }
     if (activeOnly == true) {
       conditions.add('is_active = 1');
+    }
+    if (category != null && category.trim().isNotEmpty) {
+      conditions.add('category = ?');
+      args.add(category.trim());
     }
     final where = conditions.isEmpty ? null : conditions.join(' AND ');
     final maps = await db.query(
@@ -901,26 +1240,44 @@ class DatabaseHelper {
     return maps.map((e) => Product.fromMap(e)).toList();
   }
 
-  Future<List<Product>> searchProducts(String query) async {
+  Future<List<Product>> searchProducts(
+    String query, {
+    int? limit,
+    String? category,
+  }) async {
     final db = await database;
+    final conditions = <String>['(name LIKE ? OR code LIKE ? OR barcode LIKE ?)'];
+    final args = <Object?>['%$query%', '%$query%', '%$query%'];
+    if (category != null && category.trim().isNotEmpty) {
+      conditions.add('category = ?');
+      args.add(category.trim());
+    }
     final maps = await db.query(
       'products',
-      where: 'name LIKE ? OR code LIKE ? OR barcode LIKE ?',
-      whereArgs: ['%$query%', '%$query%', '%$query%'],
+      where: conditions.join(' AND '),
+      whereArgs: args,
       orderBy: 'name',
-      limit: 10,
+      limit: limit,
     );
     return maps.map((e) => Product.fromMap(e)).toList();
   }
 
-  Future<List<Product>> searchActiveProducts(String query) async {
+  Future<List<String>> getProductCategories() async {
+    final db = await database;
+    final results = await db.rawQuery(
+      'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND TRIM(category) != "" ORDER BY category',
+    );
+    return results.map((r) => r['category'] as String).toList();
+  }
+
+  Future<List<Product>> searchActiveProducts(String query, {int limit = 10}) async {
     final db = await database;
     final maps = await db.query(
       'products',
       where: '(name LIKE ? OR code LIKE ? OR barcode LIKE ?) AND is_active = 1',
       whereArgs: ['%$query%', '%$query%', '%$query%'],
       orderBy: 'name',
-      limit: 10,
+      limit: limit,
     );
     return maps.map((e) => Product.fromMap(e)).toList();
   }
@@ -980,14 +1337,23 @@ class DatabaseHelper {
     required double quantity,
     int? referenceDocumentId,
     String? notes,
+    double? unitCost,
+    double? totalCost,
+    String costStatus = StockMovement.costStatusUnknown,
+    String? provenance,
+    DateTime? date,
   }) async {
     await txn.insert('stock_movements', {
       'product_id': productId,
       'type': type,
       'quantity': quantity,
       'reference_document_id': referenceDocumentId,
-      'date': DateTime.now().toIso8601String(),
+      'date': (date ?? DateTime.now()).toIso8601String(),
       'notes': notes,
+      'unit_cost': unitCost,
+      'total_cost': totalCost,
+      'cost_status': costStatus,
+      'provenance': provenance,
     });
   }
 
@@ -1002,6 +1368,53 @@ class DatabaseHelper {
     return maps.map(StockMovement.fromMap).toList();
   }
 
+  Future<List<StockMovement>> getAllStockMovements({
+    int? productId,
+    String? type,
+    DateTime? fromDate,
+    DateTime? toDate,
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final db = await database;
+    final conditions = <String>[];
+    final args = <Object?>[];
+
+    if (productId != null) {
+      conditions.add('sm.product_id = ?');
+      args.add(productId);
+    }
+    if (type != null && type.isNotEmpty && type != 'all') {
+      conditions.add('sm.type = ?');
+      args.add(type);
+    }
+    if (fromDate != null) {
+      conditions.add('sm.date >= ?');
+      args.add(fromDate.toIso8601String());
+    }
+    if (toDate != null) {
+      conditions.add('sm.date <= ?');
+      args.add(toDate.toIso8601String());
+    }
+
+    final whereClause =
+        conditions.isNotEmpty ? 'WHERE ${conditions.join(' AND ')}' : '';
+
+    final sql = '''
+      SELECT sm.*, p.name AS product_name, p.unit AS product_unit
+      FROM stock_movements sm
+      LEFT JOIN products p ON sm.product_id = p.id
+      $whereClause
+      ORDER BY sm.date DESC, sm.id DESC
+      LIMIT ? OFFSET ?
+    ''';
+    args.add(limit);
+    args.add(offset);
+
+    final maps = await db.rawQuery(sql, args);
+    return maps.map(StockMovement.fromMap).toList();
+  }
+
   Future<void> adjustStock({
     required int productId,
     required double delta, // positive = add, negative = remove
@@ -1009,15 +1422,10 @@ class DatabaseHelper {
   }) async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.rawUpdate(
-        'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-        [delta, productId],
-      );
-      await _insertStockMovement(
+      await InventoryCostingService.onStockAdjusted(
         txn,
         productId: productId,
-        type: StockMovement.typeAdjustment,
-        quantity: delta,
+        delta: delta,
         notes: notes,
       );
     });
@@ -1027,6 +1435,22 @@ class DatabaseHelper {
       entityId: productId,
       details: 'delta=$delta${notes != null ? " reason=$notes" : ""}',
     );
+  }
+
+  Future<void> reconcileProductCost({
+    required int productId,
+    required double newUnitCost,
+    String? notes,
+  }) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await InventoryCostingService.reconcileProductCost(
+        txn,
+        productId: productId,
+        newUnitCost: newUnitCost,
+        notes: notes,
+      );
+    });
   }
 
   // ========== Documents ==========
@@ -1040,6 +1464,7 @@ class DatabaseHelper {
     List<DocumentItem> items, {
     Contact? contact,
     String? payNowMethod,
+    bool strictStock = true,
   }) async {
     final db = await database;
     return db.transaction((txn) async {
@@ -1075,7 +1500,7 @@ class DatabaseHelper {
       final isDraft = doc.status == DocumentStatus.draft;
 
       // Pre-check stock availability for non-draft invoices
-      if (doc.type == 'invoice' && !isDraft) {
+      if (doc.type == 'invoice' && !isDraft && strictStock) {
         for (final item in items) {
           if (item.productId == null || item.quantity <= 0) continue;
           final pRows = await txn.query(
@@ -1091,7 +1516,7 @@ class DatabaseHelper {
             if (stock < item.quantity) {
               final name = pRows.first['name'] as String? ?? '';
               throw StateError(
-                'Insufficient stock for "$name": available ${stock.toStringAsFixed(2)}, required ${item.quantity.toStringAsFixed(2)}',
+                'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(item.quantity)}',
               );
             }
           }
@@ -1099,6 +1524,121 @@ class DatabaseHelper {
       }
 
       for (final item in items) {
+        double? itemUnitCost;
+        double? itemTotalCost;
+
+        if (item.productId != null && item.quantity > 0) {
+          if (doc.type == 'invoice' && !isDraft) {
+            final pRows = await txn.query(
+              'products',
+              columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
+              where: 'id = ?',
+              whereArgs: [item.productId],
+            );
+            if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
+              final currentStock =
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+              final avgCost = (pRows.first['average_cost'] as num?)?.toDouble();
+              final costStatus =
+                  pRows.first['cost_status'] as String? ?? Product.costStatusUnknown;
+              final isCostKnown =
+                  costStatus == Product.costStatusKnown && avgCost != null;
+
+              final double deductQty;
+              if (strictStock) {
+                deductQty = item.quantity;
+              } else {
+                deductQty = currentStock > 0
+                    ? (currentStock >= item.quantity ? item.quantity : currentStock)
+                    : 0.0;
+              }
+              if (deductQty > 0) {
+                itemUnitCost = isCostKnown ? avgCost : null;
+                itemTotalCost = isCostKnown ? deductQty * avgCost : null;
+                final itemCostStatus = isCostKnown
+                    ? StockMovement.costStatusKnown
+                    : StockMovement.costStatusUnknown;
+
+                await txn.rawUpdate(
+                  'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                  [deductQty, item.productId],
+                );
+                await _insertStockMovement(
+                  txn,
+                  productId: item.productId!,
+                  type: StockMovement.typeSale,
+                  quantity: -deductQty,
+                  unitCost: itemUnitCost,
+                  totalCost: itemTotalCost,
+                  costStatus: itemCostStatus,
+                  provenance: 'sales_invoice',
+                  referenceDocumentId: docId,
+                  date: doc.date,
+                );
+              }
+            }
+          } else if (doc.type == 'purchase' && !isDraft) {
+            final pRows = await txn.query(
+              'products',
+              columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
+              where: 'id = ?',
+              whereArgs: [item.productId],
+            );
+            if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
+              final currentStock =
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+              final currentAvg =
+                  (pRows.first['average_cost'] as num?)?.toDouble();
+              final priorCostStatus =
+                  pRows.first['cost_status'] as String? ?? Product.costStatusUnknown;
+
+              final incomingQty = item.quantity;
+              final incomingUnitCost = item.price;
+              itemUnitCost = incomingUnitCost;
+              itemTotalCost = incomingQty * incomingUnitCost;
+
+              final double newAvgCost;
+              final String newCostStatus;
+              if (priorCostStatus == Product.costStatusKnown || currentStock <= 0) {
+                newAvgCost = InventoryCostingService.calculateNewWeightedAverage(
+                  currentStock: currentStock,
+                  currentAvgCost: currentAvg,
+                  incomingQty: incomingQty,
+                  incomingUnitCost: incomingUnitCost,
+                );
+                newCostStatus = Product.costStatusKnown;
+              } else {
+                newAvgCost = incomingUnitCost;
+                newCostStatus = Product.costStatusUnknown;
+              }
+
+              await txn.update(
+                'products',
+                {
+                  'stock_quantity': currentStock + incomingQty,
+                  'average_cost': newAvgCost,
+                  'cost_status': newCostStatus,
+                },
+                where: 'id = ?',
+                whereArgs: [item.productId],
+              );
+
+              await _insertStockMovement(
+                txn,
+                productId: item.productId!,
+                type: StockMovement.typePurchase,
+                quantity: incomingQty,
+                unitCost: incomingUnitCost,
+                totalCost: itemTotalCost,
+                costStatus: StockMovement.costStatusKnown,
+                provenance: 'purchase_document',
+                referenceDocumentId: docId,
+                date: doc.date,
+              );
+            }
+          }
+        }
+
         await txn.insert('document_items', {
           'document_id': docId,
           'product_id': item.productId,
@@ -1108,51 +1648,9 @@ class DatabaseHelper {
           'total': item.total,
           'taxable': item.taxable ? 1 : 0,
           'tax_rate': item.taxRate,
+          'unit_cost': itemUnitCost,
+          'total_cost': itemTotalCost,
         });
-
-        if (item.productId == null || item.quantity <= 0) continue;
-
-        if (doc.type == 'invoice' && !isDraft) {
-          await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = \'product\'',
-            [item.quantity, item.productId],
-          );
-          final pRows = await txn.query(
-            'products',
-            columns: ['type'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
-            await _insertStockMovement(
-              txn,
-              productId: item.productId!,
-              type: StockMovement.typeSale,
-              quantity: -item.quantity,
-              referenceDocumentId: docId,
-            );
-          }
-        } else if (doc.type == 'purchase' && !isDraft) {
-          await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = \'product\'',
-            [item.quantity, item.productId],
-          );
-          final pRows = await txn.query(
-            'products',
-            columns: ['type'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
-            await _insertStockMovement(
-              txn,
-              productId: item.productId!,
-              type: StockMovement.typePurchase,
-              quantity: item.quantity,
-              referenceDocumentId: docId,
-            );
-          }
-        }
       }
 
       if (payNowMethod != null) {
@@ -1179,6 +1677,7 @@ class DatabaseHelper {
     Document doc,
     List<DocumentItem> newItems, {
     Contact? contact,
+    bool strictStock = true,
   }) async {
     final db = await database;
     await db.transaction((txn) async {
@@ -1204,44 +1703,190 @@ class DatabaseHelper {
       final oldStatus =
           existingRows.first['status'] as String? ?? DocumentStatus.issued;
 
+      final newIsDraft = doc.status == DocumentStatus.draft;
+
       final affectsStock =
           (oldType == 'invoice' || oldType == 'purchase') &&
           oldStatus != DocumentStatus.draft &&
           oldStatus != DocumentStatus.cancelled;
       if (affectsStock) {
-        for (final old in oldItems) {
-          final productId = old['product_id'] as int?;
-          final qty = (old['quantity'] as num?)?.toDouble() ?? 0;
-          if (productId == null || qty <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['type'],
-            where: 'id = ?',
-            whereArgs: [productId],
+        if (oldType == 'invoice') {
+          final oldMovements = await txn.query(
+            'stock_movements',
+            where: 'reference_document_id = ? AND type = ?',
+            whereArgs: [doc.id, StockMovement.typeSale],
           );
-          if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
-          if (oldType == 'invoice') {
-            await txn.rawUpdate(
-              'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-              [qty, productId],
+          if (oldMovements.isNotEmpty) {
+            for (final m in oldMovements) {
+              final productId = m['product_id'] as int;
+              final mQty = (m['quantity'] as num).toDouble();
+              final revertQty = -mQty;
+              if (revertQty > 0) {
+                final unitCost = (m['unit_cost'] as num?)?.toDouble();
+                final totalCost = (m['total_cost'] as num?)?.toDouble();
+                final costStatus = m['cost_status'] as String? ??
+                    StockMovement.costStatusUnknown;
+
+                await txn.rawUpdate(
+                  'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                  [revertQty, productId],
+                );
+                await _insertStockMovement(
+                  txn,
+                  productId: productId,
+                  type: StockMovement.typeCancellation,
+                  quantity: revertQty,
+                  unitCost: unitCost,
+                  totalCost: totalCost,
+                  costStatus: costStatus,
+                  provenance: 'sale_reversal',
+                  referenceDocumentId: doc.id,
+                );
+              }
+            }
+          } else {
+            for (final old in oldItems) {
+              final productId = old['product_id'] as int?;
+              final qty = (old['quantity'] as num?)?.toDouble() ?? 0;
+              if (productId == null || qty <= 0) continue;
+              final pRows = await txn.query(
+                'products',
+                columns: ['type'],
+                where: 'id = ?',
+                whereArgs: [productId],
+              );
+              if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                [qty, productId],
+              );
+              await _insertStockMovement(
+                txn,
+                productId: productId,
+                type: StockMovement.typeCancellation,
+                quantity: qty,
+                provenance: 'sale_reversal',
+                referenceDocumentId: doc.id,
+              );
+            }
+          }
+        } else if (oldType == 'purchase') {
+          // Pre-check: if reducing purchased quantity for any product, verify that
+          // the product currently has sufficient stock and that the stock was not
+          // already sold or consumed.
+          final oldProductQuantities = <int, double>{};
+          for (final old in oldItems) {
+            final pid = old['product_id'] as int?;
+            final qty = (old['quantity'] as num?)?.toDouble() ?? 0;
+            if (pid != null && qty > 0) {
+              oldProductQuantities[pid] =
+                  (oldProductQuantities[pid] ?? 0.0) + qty;
+            }
+          }
+
+          final newProductQuantities = <int, double>{};
+          if (doc.type == 'purchase' && !newIsDraft) {
+            for (final newItem in newItems) {
+              final pid = newItem.productId;
+              final qty = newItem.quantity;
+              if (pid != null && qty > 0) {
+                newProductQuantities[pid] =
+                    (newProductQuantities[pid] ?? 0.0) + qty;
+              }
+            }
+          }
+
+          for (final entry in oldProductQuantities.entries) {
+            final pid = entry.key;
+            final oldQty = entry.value;
+            final newQty = newProductQuantities[pid] ?? 0.0;
+            if (oldQty > newQty) {
+              final netReduction = oldQty - newQty;
+              final pRows = await txn.query(
+                'products',
+                columns: ['name', 'type', 'stock_quantity'],
+                where: 'id = ?',
+                whereArgs: [pid],
+              );
+              if (pRows.isNotEmpty &&
+                  (pRows.first['type'] as String? ?? 'product') == 'product') {
+                final stock =
+                    (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+                if (stock < netReduction) {
+                  final name = pRows.first['name'] as String? ?? '';
+                  throw StateError(
+                    'Insufficient stock to edit purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required reduction ${FormatUtils.formatQuantity(netReduction)}',
+                  );
+                }
+              }
+            }
+          }
+
+          for (final old in oldItems) {
+            final productId = old['product_id'] as int?;
+            final qty = (old['quantity'] as num?)?.toDouble() ?? 0;
+            if (productId == null || qty <= 0) continue;
+            final pRows = await txn.query(
+              'products',
+              columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
+              where: 'id = ?',
+              whereArgs: [productId],
             );
-            await _insertStockMovement(
-              txn,
-              productId: productId,
-              type: StockMovement.typeCancellation,
-              quantity: qty,
-              referenceDocumentId: doc.id,
+            if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
+
+            final origMovements = await txn.query(
+              'stock_movements',
+              where: 'reference_document_id = ? AND product_id = ? AND type = ?',
+              whereArgs: [doc.id, productId, StockMovement.typePurchase],
             );
-          } else if (oldType == 'purchase') {
-            await txn.rawUpdate(
-              'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-              [qty, productId],
+            final origUnitCost = origMovements.isNotEmpty
+                ? (origMovements.first['unit_cost'] as num?)?.toDouble()
+                : (old['price'] as num?)?.toDouble();
+            final origCostStatus = origMovements.isNotEmpty
+                ? (origMovements.first['cost_status'] as String? ??
+                    StockMovement.costStatusKnown)
+                : StockMovement.costStatusKnown;
+
+            final currentStock =
+                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+            final currentAvg =
+                (pRows.first['average_cost'] as num?)?.toDouble();
+            final newStock = currentStock - qty;
+
+            double? newAvgCost = currentAvg;
+            String newCostStatus = pRows.first['cost_status'] as String? ??
+                Product.costStatusUnknown;
+            if (newStock <= 0) {
+              newAvgCost = null;
+              newCostStatus = Product.costStatusUnknown;
+            } else if (currentAvg != null && origUnitCost != null) {
+              final prevVal = currentStock * currentAvg;
+              final removedVal = qty * origUnitCost;
+              final remainVal =
+                  (prevVal - removedVal).clamp(0.0, double.infinity);
+              newAvgCost = remainVal / newStock;
+            }
+
+            await txn.update(
+              'products',
+              {
+                'stock_quantity': newStock,
+                'average_cost': newAvgCost,
+                'cost_status': newCostStatus,
+              },
+              where: 'id = ?',
+              whereArgs: [productId],
             );
+
             await _insertStockMovement(
               txn,
               productId: productId,
               type: StockMovement.typeCancellation,
               quantity: -qty,
+              unitCost: origUnitCost,
+              totalCost: origUnitCost != null ? -qty * origUnitCost : null,
+              costStatus: origCostStatus,
+              provenance: 'purchase_reversal',
               referenceDocumentId: doc.id,
             );
           }
@@ -1280,9 +1925,147 @@ class DatabaseHelper {
         where: 'document_id = ?',
         whereArgs: [doc.id],
       );
-      final newIsDraft = doc.status == DocumentStatus.draft;
+
+      // Pre-check stock availability for non-draft invoices
+      if (doc.type == 'invoice' && !newIsDraft && strictStock) {
+        for (final item in newItems) {
+          if (item.productId == null || item.quantity <= 0) continue;
+          final pRows = await txn.query(
+            'products',
+            columns: ['name', 'type', 'stock_quantity'],
+            where: 'id = ?',
+            whereArgs: [item.productId],
+          );
+          if (pRows.isNotEmpty &&
+              (pRows.first['type'] as String? ?? 'product') == 'product') {
+            final stock =
+                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+            if (stock < item.quantity) {
+              final name = pRows.first['name'] as String? ?? '';
+              throw StateError(
+                'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(item.quantity)}',
+              );
+            }
+          }
+        }
+      }
 
       for (final item in newItems) {
+        double? itemUnitCost;
+        double? itemTotalCost;
+
+        if (item.productId != null && item.quantity > 0) {
+          if (doc.type == 'invoice' && !newIsDraft) {
+            final pRows = await txn.query(
+              'products',
+              columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
+              where: 'id = ?',
+              whereArgs: [item.productId],
+            );
+            if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
+              final currentStock =
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+              final avgCost = (pRows.first['average_cost'] as num?)?.toDouble();
+              final costStatus =
+                  pRows.first['cost_status'] as String? ?? Product.costStatusUnknown;
+              final isCostKnown =
+                  costStatus == Product.costStatusKnown && avgCost != null;
+
+              final double deductQty;
+              if (strictStock) {
+                deductQty = item.quantity;
+              } else {
+                deductQty = currentStock > 0
+                    ? (currentStock >= item.quantity ? item.quantity : currentStock)
+                    : 0.0;
+              }
+              if (deductQty > 0) {
+                itemUnitCost = isCostKnown ? avgCost : null;
+                itemTotalCost = isCostKnown ? deductQty * avgCost : null;
+                final itemCostStatus = isCostKnown
+                    ? StockMovement.costStatusKnown
+                    : StockMovement.costStatusUnknown;
+
+                await txn.rawUpdate(
+                  'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                  [deductQty, item.productId],
+                );
+                await _insertStockMovement(
+                  txn,
+                  productId: item.productId!,
+                  type: StockMovement.typeSale,
+                  quantity: -deductQty,
+                  unitCost: itemUnitCost,
+                  totalCost: itemTotalCost,
+                  costStatus: itemCostStatus,
+                  provenance: 'sales_invoice',
+                  referenceDocumentId: doc.id,
+                  date: doc.date,
+                );
+              }
+            }
+          } else if (doc.type == 'purchase' && !newIsDraft) {
+            final pRows = await txn.query(
+              'products',
+              columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
+              where: 'id = ?',
+              whereArgs: [item.productId],
+            );
+            if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
+              final currentStock =
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+              final currentAvg =
+                  (pRows.first['average_cost'] as num?)?.toDouble();
+              final priorCostStatus =
+                  pRows.first['cost_status'] as String? ?? Product.costStatusUnknown;
+
+              final incomingQty = item.quantity;
+              final incomingUnitCost = item.price;
+              itemUnitCost = incomingUnitCost;
+              itemTotalCost = incomingQty * incomingUnitCost;
+
+              final double newAvgCost;
+              final String newCostStatus;
+              if (priorCostStatus == Product.costStatusKnown || currentStock <= 0) {
+                newAvgCost = InventoryCostingService.calculateNewWeightedAverage(
+                  currentStock: currentStock,
+                  currentAvgCost: currentAvg,
+                  incomingQty: incomingQty,
+                  incomingUnitCost: incomingUnitCost,
+                );
+                newCostStatus = Product.costStatusKnown;
+              } else {
+                newAvgCost = incomingUnitCost;
+                newCostStatus = Product.costStatusUnknown;
+              }
+
+              await txn.update(
+                'products',
+                {
+                  'stock_quantity': currentStock + incomingQty,
+                  'average_cost': newAvgCost,
+                  'cost_status': newCostStatus,
+                },
+                where: 'id = ?',
+                whereArgs: [item.productId],
+              );
+
+              await _insertStockMovement(
+                txn,
+                productId: item.productId!,
+                type: StockMovement.typePurchase,
+                quantity: incomingQty,
+                unitCost: incomingUnitCost,
+                totalCost: itemTotalCost,
+                costStatus: StockMovement.costStatusKnown,
+                provenance: 'purchase_document',
+                referenceDocumentId: doc.id,
+                date: doc.date,
+              );
+            }
+          }
+        }
+
         await txn.insert('document_items', {
           'document_id': doc.id,
           'product_id': item.productId,
@@ -1292,51 +2075,9 @@ class DatabaseHelper {
           'total': item.total,
           'taxable': item.taxable ? 1 : 0,
           'tax_rate': item.taxRate,
+          'unit_cost': itemUnitCost,
+          'total_cost': itemTotalCost,
         });
-
-        if (item.productId == null || item.quantity <= 0) continue;
-
-        if (doc.type == 'invoice' && !newIsDraft) {
-          await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = \'product\'',
-            [item.quantity, item.productId],
-          );
-          final pRows = await txn.query(
-            'products',
-            columns: ['type'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
-            await _insertStockMovement(
-              txn,
-              productId: item.productId!,
-              type: StockMovement.typeSale,
-              quantity: -item.quantity,
-              referenceDocumentId: doc.id,
-            );
-          }
-        } else if (doc.type == 'purchase' && !newIsDraft) {
-          await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = \'product\'',
-            [item.quantity, item.productId],
-          );
-          final pRows = await txn.query(
-            'products',
-            columns: ['type'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
-            await _insertStockMovement(
-              txn,
-              productId: item.productId!,
-              type: StockMovement.typePurchase,
-              quantity: item.quantity,
-              referenceDocumentId: doc.id,
-            );
-          }
-        }
       }
     });
   }
@@ -1412,35 +2153,133 @@ class DatabaseHelper {
           doc.status != DocumentStatus.draft &&
           doc.status != DocumentStatus.cancelled;
       if (needsStockReversal) {
-        final items = await txn.query(
-          'document_items',
-          where: 'document_id = ?',
+        final movements = await txn.query(
+          'stock_movements',
+          where: 'reference_document_id = ?',
           whereArgs: [id],
         );
-        for (final item in items) {
-          final productId = item['product_id'] as int?;
-          final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-          if (productId == null || qty <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['type'],
-            where: 'id = ?',
-            whereArgs: [productId],
+        if (doc.type == 'purchase') {
+          final netPurchaseQtyByProduct = <int, double>{};
+          for (final m in movements) {
+            final productId = m['product_id'] as int;
+            final mType = m['type'] as String;
+            final mQty = (m['quantity'] as num).toDouble();
+            if (mType == StockMovement.typePurchase) {
+              netPurchaseQtyByProduct[productId] =
+                  (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
+            } else if (mType == StockMovement.typeCancellation && mQty < 0) {
+              netPurchaseQtyByProduct[productId] =
+                  (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
+            }
+          }
+          for (final entry in netPurchaseQtyByProduct.entries) {
+            final productId = entry.key;
+            final netQty = entry.value;
+            if (netQty <= 0) continue;
+            final pRows = await txn.query(
+              'products',
+              columns: ['name', 'type', 'stock_quantity'],
+              where: 'id = ?',
+              whereArgs: [productId],
+            );
+            if (pRows.isNotEmpty &&
+                (pRows.first['type'] as String? ?? 'product') == 'product') {
+              final stock =
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+              if (stock < netQty) {
+                final name = pRows.first['name'] as String? ?? '';
+                throw StateError(
+                  'Insufficient stock to reverse purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(netQty)}',
+                );
+              }
+            }
+          }
+        }
+        if (movements.isNotEmpty) {
+          for (final m in movements) {
+            final productId = m['product_id'] as int;
+            final mType = m['type'] as String;
+            final mQty = (m['quantity'] as num).toDouble();
+            if (mType == StockMovement.typeSale) {
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                [-mQty, productId],
+              );
+            } else if (mType == StockMovement.typePurchase) {
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                [mQty, productId],
+              );
+            } else if (mType == StockMovement.typeCancellation && doc.type == 'purchase') {
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                [mQty, productId],
+              );
+            }
+          }
+        } else {
+          final items = await txn.query(
+            'document_items',
+            where: 'document_id = ?',
+            whereArgs: [id],
           );
-          if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
-          if (doc.type == 'invoice') {
-            await txn.rawUpdate(
-              'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-              [qty, productId],
+          if (doc.type == 'purchase') {
+            for (final item in items) {
+              final productId = item['product_id'] as int?;
+              final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+              if (productId == null || qty <= 0) continue;
+              final pRows = await txn.query(
+                'products',
+                columns: ['name', 'type', 'stock_quantity'],
+                where: 'id = ?',
+                whereArgs: [productId],
+              );
+              if (pRows.isNotEmpty &&
+                  (pRows.first['type'] as String? ?? 'product') == 'product') {
+                final stock =
+                    (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+                if (stock < qty) {
+                  final name = pRows.first['name'] as String? ?? '';
+                  throw StateError(
+                    'Insufficient stock to reverse purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(qty)}',
+                  );
+                }
+              }
+            }
+          }
+          for (final item in items) {
+            final productId = item['product_id'] as int?;
+            final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+            if (productId == null || qty <= 0) continue;
+            final pRows = await txn.query(
+              'products',
+              columns: ['type'],
+              where: 'id = ?',
+              whereArgs: [productId],
             );
-          } else if (doc.type == 'purchase') {
-            await txn.rawUpdate(
-              'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-              [qty, productId],
-            );
+            if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
+            if (doc.type == 'invoice') {
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                [qty, productId],
+              );
+            } else if (doc.type == 'purchase') {
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                [qty, productId],
+              );
+            }
           }
         }
       }
+
+      // Remove only the stock movements belonging to this deleted document
+      // so no orphaned movements with reference_document_id = NULL remain.
+      await txn.delete(
+        'stock_movements',
+        where: 'reference_document_id = ?',
+        whereArgs: [id],
+      );
 
       // Nullify related_document_id on any documents that reference this one.
       // Without this, the FK constraint prevents deletion when other documents
@@ -1484,39 +2323,133 @@ class DatabaseHelper {
           where: 'document_id = ?',
           whereArgs: [id],
         );
+
+        // Guard against cancelling a purchase whose stock has already been consumed
+        if (doc.type == 'purchase') {
+          for (final item in items) {
+            final productId = item['product_id'] as int?;
+            final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+            if (productId == null || qty <= 0) continue;
+            final pRows = await txn.query(
+              'products',
+              columns: ['name', 'type', 'stock_quantity'],
+              where: 'id = ?',
+              whereArgs: [productId],
+            );
+            if (pRows.isNotEmpty &&
+                (pRows.first['type'] as String? ?? 'product') == 'product') {
+              final stock =
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+              if (stock < qty) {
+                final name = pRows.first['name'] as String? ?? '';
+                throw StateError(
+                  'Insufficient stock to cancel purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(qty)}',
+                );
+              }
+            }
+          }
+        }
+
         for (final item in items) {
           final productId = item['product_id'] as int?;
           final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
           if (productId == null || qty <= 0) continue;
           final pRows = await txn.query(
             'products',
-            columns: ['type'],
+            columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
             where: 'id = ?',
             whereArgs: [productId],
           );
           if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
           if (doc.type == 'invoice') {
-            await txn.rawUpdate(
-              'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-              [qty, productId],
+            final mRows = await txn.query(
+              'stock_movements',
+              where: 'reference_document_id = ? AND product_id = ? AND type = ?',
+              whereArgs: [id, productId, StockMovement.typeSale],
             );
-            await _insertStockMovement(
-              txn,
-              productId: productId,
-              type: StockMovement.typeCancellation,
-              quantity: qty,
-              referenceDocumentId: id,
-            );
+            final double revertQty;
+            double? unitCost;
+            double? totalCost;
+            String costStatus = StockMovement.costStatusUnknown;
+            if (mRows.isNotEmpty) {
+              revertQty = -(mRows.first['quantity'] as num).toDouble();
+              unitCost = (mRows.first['unit_cost'] as num?)?.toDouble();
+              totalCost = (mRows.first['total_cost'] as num?)?.toDouble();
+              costStatus = mRows.first['cost_status'] as String? ??
+                  StockMovement.costStatusUnknown;
+            } else {
+              revertQty = qty;
+            }
+            if (revertQty > 0) {
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                [revertQty, productId],
+              );
+              await _insertStockMovement(
+                txn,
+                productId: productId,
+                type: StockMovement.typeCancellation,
+                quantity: revertQty,
+                unitCost: unitCost,
+                totalCost: totalCost,
+                costStatus: costStatus,
+                provenance: 'sale_cancellation',
+                referenceDocumentId: id,
+              );
+            }
           } else if (doc.type == 'purchase') {
-            await txn.rawUpdate(
-              'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-              [qty, productId],
+            final mRows = await txn.query(
+              'stock_movements',
+              where: 'reference_document_id = ? AND product_id = ? AND type = ?',
+              whereArgs: [id, productId, StockMovement.typePurchase],
+            );
+            final unitCost = mRows.isNotEmpty
+                ? (mRows.first['unit_cost'] as num?)?.toDouble()
+                : (item['price'] as num?)?.toDouble();
+            final costStatus = mRows.isNotEmpty
+                ? (mRows.first['cost_status'] as String? ??
+                    StockMovement.costStatusKnown)
+                : StockMovement.costStatusKnown;
+
+            final currentStock =
+                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+            final currentAvg =
+                (pRows.first['average_cost'] as num?)?.toDouble();
+            final newStock = currentStock - qty;
+
+            double? newAvgCost = currentAvg;
+            String newCostStatus = pRows.first['cost_status'] as String? ??
+                Product.costStatusUnknown;
+            if (newStock <= 0) {
+              newAvgCost = null;
+              newCostStatus = Product.costStatusUnknown;
+            } else if (currentAvg != null && unitCost != null) {
+              final prevVal = currentStock * currentAvg;
+              final removedVal = qty * unitCost;
+              final remainVal =
+                  (prevVal - removedVal).clamp(0.0, double.infinity);
+              newAvgCost = remainVal / newStock;
+            }
+
+            await txn.update(
+              'products',
+              {
+                'stock_quantity': newStock,
+                'average_cost': newAvgCost,
+                'cost_status': newCostStatus,
+              },
+              where: 'id = ?',
+              whereArgs: [productId],
             );
             await _insertStockMovement(
               txn,
               productId: productId,
               type: StockMovement.typeCancellation,
               quantity: -qty,
+              unitCost: unitCost,
+              totalCost: unitCost != null ? -qty * unitCost : null,
+              costStatus: costStatus,
+              provenance: 'purchase_cancellation',
               referenceDocumentId: id,
             );
           }
@@ -1893,7 +2826,7 @@ class DatabaseHelper {
   }
 
   /// Promotes a draft document to issued, deducting stock for invoices.
-  Future<void> issueDocument(int id) async {
+  Future<void> issueDocument(int id, {bool strictStock = true}) async {
     final db = await database;
     await db.transaction((txn) async {
       final rows = await txn.query(
@@ -1915,25 +2848,27 @@ class DatabaseHelper {
       );
 
       if (doc.type == 'invoice') {
-        // Validate stock availability first
-        for (final item in items) {
-          final productId = item['product_id'] as int?;
-          final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-          if (productId == null || qty <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['name', 'type', 'stock_quantity'],
-            where: 'id = ?',
-            whereArgs: [productId],
-          );
-          if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
-            final stock =
-                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-            if (stock < qty) {
-              final name = pRows.first['name'] as String? ?? '';
-              throw StateError(
-                'Insufficient stock for "$name": available ${stock.toStringAsFixed(2)}, required ${qty.toStringAsFixed(2)}',
-              );
+        if (strictStock) {
+          // Validate stock availability first
+          for (final item in items) {
+            final productId = item['product_id'] as int?;
+            final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+            if (productId == null || qty <= 0) continue;
+            final pRows = await txn.query(
+              'products',
+              columns: ['name', 'type', 'stock_quantity'],
+              where: 'id = ?',
+              whereArgs: [productId],
+            );
+            if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
+              final stock =
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+              if (stock < qty) {
+                final name = pRows.first['name'] as String? ?? '';
+                throw StateError(
+                  'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(qty)}',
+                );
+              }
             }
           }
         }
@@ -1941,24 +2876,62 @@ class DatabaseHelper {
           final productId = item['product_id'] as int?;
           final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
           if (productId == null || qty <= 0) continue;
-          await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND type = \'product\'',
-            [qty, productId],
-          );
           final pRows = await txn.query(
             'products',
-            columns: ['type'],
+            columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
             where: 'id = ?',
             whereArgs: [productId],
           );
           if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
-            await _insertStockMovement(
-              txn,
-              productId: productId,
-              type: StockMovement.typeSale,
-              quantity: -qty,
-              referenceDocumentId: id,
-            );
+            final currentStock =
+                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+            final avgCost = (pRows.first['average_cost'] as num?)?.toDouble();
+            final costStatus =
+                pRows.first['cost_status'] as String? ?? Product.costStatusUnknown;
+            final isCostKnown =
+                costStatus == Product.costStatusKnown && avgCost != null;
+
+            final double deductQty;
+            if (strictStock) {
+              deductQty = qty;
+            } else {
+              deductQty = currentStock > 0
+                  ? (currentStock >= qty ? qty : currentStock)
+                  : 0.0;
+            }
+            if (deductQty > 0) {
+              final unitCost = isCostKnown ? avgCost : null;
+              final totalCost = isCostKnown ? deductQty * avgCost : null;
+              final itemCostStatus = isCostKnown
+                  ? StockMovement.costStatusKnown
+                  : StockMovement.costStatusUnknown;
+
+              await txn.rawUpdate(
+                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
+                [deductQty, productId],
+              );
+              await _insertStockMovement(
+                txn,
+                productId: productId,
+                type: StockMovement.typeSale,
+                quantity: -deductQty,
+                unitCost: unitCost,
+                totalCost: totalCost,
+                costStatus: itemCostStatus,
+                provenance: 'sales_invoice',
+                referenceDocumentId: id,
+                date: doc.date,
+              );
+              await txn.update(
+                'document_items',
+                {
+                  'unit_cost': unitCost,
+                  'total_cost': totalCost,
+                },
+                where: 'id = ?',
+                whereArgs: [item['id']],
+              );
+            }
           }
         }
       } else if (doc.type == 'purchase') {
@@ -1966,23 +2939,72 @@ class DatabaseHelper {
           final productId = item['product_id'] as int?;
           final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
           if (productId == null || qty <= 0) continue;
-          await txn.rawUpdate(
-            'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ? AND type = \'product\'',
-            [qty, productId],
-          );
           final pRows = await txn.query(
             'products',
-            columns: ['type'],
+            columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
             where: 'id = ?',
             whereArgs: [productId],
           );
           if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
+            final currentStock =
+                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+            final currentAvg =
+                (pRows.first['average_cost'] as num?)?.toDouble();
+            final priorCostStatus =
+                pRows.first['cost_status'] as String? ?? Product.costStatusUnknown;
+
+            final incomingQty = qty;
+            final incomingUnitCost =
+                (item['price'] as num?)?.toDouble() ?? 0.0;
+            final itemTotalCost = incomingQty * incomingUnitCost;
+
+            final double newAvgCost;
+            final String newCostStatus;
+            if (priorCostStatus == Product.costStatusKnown || currentStock <= 0) {
+              newAvgCost = InventoryCostingService.calculateNewWeightedAverage(
+                currentStock: currentStock,
+                currentAvgCost: currentAvg,
+                incomingQty: incomingQty,
+                incomingUnitCost: incomingUnitCost,
+              );
+              newCostStatus = Product.costStatusKnown;
+            } else {
+              newAvgCost = incomingUnitCost;
+              newCostStatus = Product.costStatusUnknown;
+            }
+
+            await txn.update(
+              'products',
+              {
+                'stock_quantity': currentStock + incomingQty,
+                'average_cost': newAvgCost,
+                'cost_status': newCostStatus,
+              },
+              where: 'id = ?',
+              whereArgs: [productId],
+            );
+
             await _insertStockMovement(
               txn,
               productId: productId,
               type: StockMovement.typePurchase,
-              quantity: qty,
+              quantity: incomingQty,
+              unitCost: incomingUnitCost,
+              totalCost: itemTotalCost,
+              costStatus: StockMovement.costStatusKnown,
+              provenance: 'purchase_document',
               referenceDocumentId: id,
+              date: doc.date,
+            );
+
+            await txn.update(
+              'document_items',
+              {
+                'unit_cost': incomingUnitCost,
+                'total_cost': itemTotalCost,
+              },
+              where: 'id = ?',
+              whereArgs: [item['id']],
             );
           }
         }
@@ -2341,10 +3363,13 @@ class DatabaseHelper {
       SELECT
         p.id, p.name, p.type AS product_type,
         p.stock_quantity, p.min_stock, p.purchase_price,
+        p.average_cost, p.cost_status,
         COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN di.quantity ELSE 0 END), 0) AS sales_qty,
         COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN di.total    ELSE 0 END), 0) AS sales_value,
         COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN di.quantity ELSE 0 END), 0) AS purchase_qty,
-        COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN di.total    ELSE 0 END), 0) AS purchase_value
+        COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN di.total    ELSE 0 END), 0) AS purchase_value,
+        COALESCE(SUM(CASE WHEN d.type = 'invoice' AND di.total_cost IS NOT NULL THEN di.total_cost ELSE 0 END), 0) AS cogs,
+        COUNT(CASE WHEN d.type = 'invoice' AND di.quantity > 0 AND di.total_cost IS NULL THEN 1 END) AS unknown_cost_count
       FROM products p
       LEFT JOIN document_items di ON di.product_id = p.id
       LEFT JOIN documents d ON d.id = di.document_id
@@ -2772,5 +3797,385 @@ class DatabaseHelper {
     );
     if (res.isEmpty) return 0;
     return (res.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  // ========== Stocktake & Audit Log (Phase 5) ==========
+
+  Future<StocktakeSession> createStocktakeSession({
+    String? categoryFilter,
+    String? notes,
+  }) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final now = DateTime.now();
+      final dateStr =
+          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+      final sessionCountRow = await txn.rawQuery(
+        "SELECT COUNT(*) as cnt FROM stocktake_sessions WHERE session_number LIKE 'ST-$dateStr-%'",
+      );
+      final seq = ((sessionCountRow.first['cnt'] as num?)?.toInt() ?? 0) + 1;
+      final sessionNumber = 'ST-$dateStr-${seq.toString().padLeft(3, '0')}';
+
+      // 1. Insert session
+      final sessionId = await txn.insert('stocktake_sessions', {
+        'session_number': sessionNumber,
+        'status': StocktakeSession.statusInProgress,
+        'started_at': now.toIso8601String(),
+        'notes': notes,
+        'category_filter': categoryFilter,
+        'total_items': 0,
+        'matched_items': 0,
+        'discrepant_items': 0,
+        'created_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      });
+
+      // 2. Query products for session
+      String where = "type = 'product' AND is_active = 1";
+      List<Object?> args = [];
+      if (categoryFilter != null && categoryFilter.isNotEmpty) {
+        where += ' AND category = ?';
+        args.add(categoryFilter);
+      }
+
+      final products = await txn.query(
+        'products',
+        where: where,
+        whereArgs: args.isEmpty ? null : args,
+        orderBy: 'name ASC',
+      );
+
+      // 3. Insert stocktake_items
+      final batch = txn.batch();
+      for (final p in products) {
+        batch.insert('stocktake_items', {
+          'session_id': sessionId,
+          'product_id': p['id'],
+          'baseline_quantity': (p['stock_quantity'] as num?)?.toDouble() ?? 0.0,
+          'counted_quantity': null,
+          'reconciled_system_quantity': null,
+          'variance': null,
+          'unit_cost': (p['average_cost'] as num?)?.toDouble(),
+          'notes': null,
+          'status': StocktakeItem.statusPending,
+        });
+      }
+      await batch.commit(noResult: true);
+
+      // 4. Update session total
+      await txn.update(
+        'stocktake_sessions',
+        {'total_items': products.length},
+        where: 'id = ?',
+        whereArgs: [sessionId],
+      );
+
+      // 5. Audit log
+      await txn.insert('audit_log', {
+        'action': 'stocktake_started',
+        'entity_type': 'stocktake_session',
+        'entity_id': sessionId,
+        'details': 'session="$sessionNumber" items=${products.length}${categoryFilter != null ? " category=$categoryFilter" : ""}',
+        'timestamp': now.toIso8601String(),
+      });
+
+      return StocktakeSession(
+        id: sessionId,
+        sessionNumber: sessionNumber,
+        status: StocktakeSession.statusInProgress,
+        startedAt: now,
+        notes: notes,
+        categoryFilter: categoryFilter,
+        totalItems: products.length,
+        createdAt: now,
+        updatedAt: now,
+      );
+    });
+  }
+
+  Future<StocktakeSession?> getStocktakeSession(int id) async {
+    final db = await database;
+    final rows = await db.query(
+      'stocktake_sessions',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return StocktakeSession.fromMap(rows.first);
+  }
+
+  Future<List<StocktakeSession>> getAllStocktakeSessions({int limit = 50}) async {
+    final db = await database;
+    final rows = await db.query(
+      'stocktake_sessions',
+      orderBy: 'started_at DESC',
+      limit: limit,
+    );
+    return rows.map((r) => StocktakeSession.fromMap(r)).toList();
+  }
+
+  Future<List<StocktakeItem>> getStocktakeItems(int sessionId) async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT si.*,
+             p.name AS product_name,
+             p.unit AS product_unit,
+             p.barcode AS product_barcode,
+             p.code AS product_code,
+             p.category AS product_category
+      FROM stocktake_items si
+      INNER JOIN products p ON p.id = si.product_id
+      WHERE si.session_id = ?
+      ORDER BY p.name ASC
+    ''', [sessionId]);
+    return rows.map((r) => StocktakeItem.fromMap(r)).toList();
+  }
+
+  Future<int> updateStocktakeItemCount(
+    int itemId,
+    double? countedQuantity, {
+    String? notes,
+  }) async {
+    final db = await database;
+    return db.update(
+      'stocktake_items',
+      {
+        'counted_quantity': countedQuantity,
+        'notes': notes,
+        'status': countedQuantity != null
+            ? StocktakeItem.statusCounted
+            : StocktakeItem.statusPending,
+      },
+      where: 'id = ?',
+      whereArgs: [itemId],
+    );
+  }
+
+  Future<Map<String, dynamic>> finalizeStocktakeSession(
+    int sessionId, {
+    String? notes,
+  }) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final sessionRow = await txn.query(
+        'stocktake_sessions',
+        where: 'id = ?',
+        whereArgs: [sessionId],
+        limit: 1,
+      );
+      if (sessionRow.isEmpty) {
+        throw StateError('Stocktake session not found');
+      }
+      final session = StocktakeSession.fromMap(sessionRow.first);
+      if (session.isCompleted) {
+        throw StateError('Stocktake session is already completed');
+      }
+      if (session.isCancelled) {
+        throw StateError('Stocktake session is cancelled');
+      }
+
+      final items = await txn.rawQuery('''
+        SELECT si.*, p.stock_quantity AS current_stock, p.average_cost, p.cost_status, p.name AS product_name
+        FROM stocktake_items si
+        INNER JOIN products p ON p.id = si.product_id
+        WHERE si.session_id = ?
+      ''', [sessionId]);
+
+      int matchedCount = 0;
+      int discrepantCount = 0;
+      int adjustedCount = 0;
+      final now = DateTime.now();
+
+      for (final row in items) {
+        final itemId = row['id'] as int;
+        final productId = row['product_id'] as int;
+        final counted = (row['counted_quantity'] as num?)?.toDouble();
+        final currentStock = (row['current_stock'] as num?)?.toDouble() ?? 0.0;
+        final avgCost = (row['average_cost'] as num?)?.toDouble();
+        final costStatus = (row['cost_status'] as String?) ?? 'unknown';
+
+        if (counted == null) {
+          // Uncounted item: do not alter stock
+          await txn.update(
+            'stocktake_items',
+            {
+              'reconciled_system_quantity': currentStock,
+              'status': StocktakeItem.statusSkipped,
+            },
+            where: 'id = ?',
+            whereArgs: [itemId],
+          );
+          continue;
+        }
+
+        final variance = counted - currentStock;
+        if (variance == 0) {
+          matchedCount++;
+          await txn.update(
+            'stocktake_items',
+            {
+              'reconciled_system_quantity': currentStock,
+              'variance': 0.0,
+              'status': StocktakeItem.statusMatched,
+            },
+            where: 'id = ?',
+            whereArgs: [itemId],
+          );
+        } else {
+          discrepantCount++;
+          adjustedCount++;
+
+          // 1. Atomically update product stock
+          await txn.update(
+            'products',
+            {
+              'stock_quantity': counted,
+              'updated_at': now.toIso8601String(),
+            },
+            where: 'id = ?',
+            whereArgs: [productId],
+          );
+
+          // 2. Insert stock movement
+          final totalCost = avgCost != null ? (variance.abs() * avgCost) : null;
+
+          await txn.insert('stock_movements', {
+            'product_id': productId,
+            'type': StockMovement.typeAdjustment,
+            'quantity': variance,
+            'unit_cost': avgCost,
+            'total_cost': totalCost,
+            'cost_status': costStatus,
+            'provenance': 'stocktake',
+            'date': now.toIso8601String(),
+            'notes': 'تسوية جرد المخزون: ${session.sessionNumber}',
+          });
+
+          // 3. Update stocktake item record
+          await txn.update(
+            'stocktake_items',
+            {
+              'reconciled_system_quantity': currentStock,
+              'variance': variance,
+              'unit_cost': avgCost,
+              'status': StocktakeItem.statusReconciled,
+            },
+            where: 'id = ?',
+            whereArgs: [itemId],
+          );
+        }
+      }
+
+      // Finalize session
+      await txn.update(
+        'stocktake_sessions',
+        {
+          'status': StocktakeSession.statusCompleted,
+          'completed_at': now.toIso8601String(),
+          'matched_items': matchedCount,
+          'discrepant_items': discrepantCount,
+          'notes': notes ?? session.notes,
+          'updated_at': now.toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [sessionId],
+      );
+
+      // Audit log
+      await txn.insert('audit_log', {
+        'action': 'stocktake_finalized',
+        'entity_type': 'stocktake_session',
+        'entity_id': sessionId,
+        'details':
+            'session="${session.sessionNumber}" matched=$matchedCount discrepant=$discrepantCount adjusted=$adjustedCount',
+        'timestamp': now.toIso8601String(),
+      });
+
+      return {
+        'matched': matchedCount,
+        'discrepant': discrepantCount,
+        'adjusted': adjustedCount,
+        'session_number': session.sessionNumber,
+      };
+    });
+  }
+
+  Future<void> cancelStocktakeSession(int sessionId) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final sessionRow = await txn.query(
+        'stocktake_sessions',
+        where: 'id = ?',
+        whereArgs: [sessionId],
+        limit: 1,
+      );
+      if (sessionRow.isEmpty) return;
+      final session = StocktakeSession.fromMap(sessionRow.first);
+      if (session.isCompleted) {
+        throw StateError('Cannot cancel completed stocktake session');
+      }
+
+      await txn.update(
+        'stocktake_sessions',
+        {
+          'status': StocktakeSession.statusCancelled,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [sessionId],
+      );
+
+      await txn.insert('audit_log', {
+        'action': 'stocktake_cancelled',
+        'entity_type': 'stocktake_session',
+        'entity_id': sessionId,
+        'details': 'session="${session.sessionNumber}"',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getAuditEvents({
+    String? action,
+    String? entityType,
+    int? entityId,
+    DateTime? from,
+    DateTime? to,
+    int limit = 200,
+  }) async {
+    final db = await database;
+    final conditions = <String>[];
+    final args = <Object?>[];
+
+    if (action != null && action.isNotEmpty && action != 'all') {
+      conditions.add('action = ?');
+      args.add(action);
+    }
+    if (entityType != null && entityType.isNotEmpty) {
+      conditions.add('entity_type = ?');
+      args.add(entityType);
+    }
+    if (entityId != null) {
+      conditions.add('entity_id = ?');
+      args.add(entityId);
+    }
+    if (from != null) {
+      conditions.add('timestamp >= ?');
+      args.add(from.toIso8601String());
+    }
+    if (to != null) {
+      conditions.add('timestamp <= ?');
+      args.add(to.toIso8601String());
+    }
+
+    final where = conditions.isEmpty ? null : conditions.join(' AND ');
+    return db.query(
+      'audit_log',
+      where: where,
+      whereArgs: args.isEmpty ? null : args,
+      orderBy: 'timestamp DESC',
+      limit: limit,
+    );
   }
 }

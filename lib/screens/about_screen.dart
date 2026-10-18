@@ -408,8 +408,12 @@ class _LinkTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5),
       ),
-      // chevron_right is mirrored automatically in RTL.
-      trailing: Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+      trailing: Icon(
+        AppLocalizations.of(context).isArabic
+            ? Icons.chevron_left_rounded
+            : Icons.chevron_right_rounded,
+        color: cs.onSurfaceVariant,
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
+import '../utils/error_utils.dart';
 import '../widgets/status_badge.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -110,9 +111,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(l10n.operationFailed),
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _load, child: Text(l10n.cancel)),
+            Text(
+              ErrorUtils.toFriendlyMessage(_error!, l10n),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
           ],
         ),
       );

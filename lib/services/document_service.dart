@@ -4,6 +4,8 @@ import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_status.dart';
+import 'feature_access.dart';
+import 'license_service.dart';
 
 class DocumentItemInput {
   final String description;
@@ -43,6 +45,7 @@ class DocumentService {
     String? paymentMethod,
     bool isDraft = false,
     String? payNowMethod,
+    bool? strictStock,
   }) async {
     _validateBusiness(business);
     if (payNowMethod != null) {
@@ -181,9 +184,22 @@ class DocumentService {
       taxRate: item.taxRate,
     )).toList();
 
+    final bool enforceStock;
+    if (strictStock != null) {
+      enforceStock = strictStock;
+    } else {
+      final entitlement = await LicenseService.instance.checkEntitlement();
+      enforceStock = FeatureAccess.canAccess(Feature.inventory, entitlement);
+    }
+
     final db = DatabaseHelper.instance;
-    return db.insertDocumentWithItems(document, documentItems,
-        contact: contact, payNowMethod: payNowMethod);
+    return db.insertDocumentWithItems(
+      document,
+      documentItems,
+      contact: contact,
+      payNowMethod: payNowMethod,
+      strictStock: enforceStock,
+    );
   }
 
   /// Updates an existing document.
@@ -204,6 +220,7 @@ class DocumentService {
     String? paymentMethod,
     bool isDraft = false,
     String? payNowMethod,
+    bool? strictStock,
   }) async {
     _validateBusiness(business);
     if (payNowMethod != null) {
@@ -353,7 +370,20 @@ class DocumentService {
       taxRate: item.taxRate,
     )).toList();
 
-    await db.updateDocumentWithItems(updatedDocument, documentItems, contact: contact);
+    final bool enforceStock;
+    if (strictStock != null) {
+      enforceStock = strictStock;
+    } else {
+      final entitlement = await LicenseService.instance.checkEntitlement();
+      enforceStock = FeatureAccess.canAccess(Feature.inventory, entitlement);
+    }
+
+    await db.updateDocumentWithItems(
+      updatedDocument,
+      documentItems,
+      contact: contact,
+      strictStock: enforceStock,
+    );
   }
 
   // ==================== Payment & Lifecycle ====================
@@ -391,8 +421,15 @@ class DocumentService {
   }
 
   /// Promotes a draft document to issued, deducting stock for invoices.
-  static Future<void> issueDocument(int documentId) async {
-    await DatabaseHelper.instance.issueDocument(documentId);
+  static Future<void> issueDocument(int documentId, {bool? strictStock}) async {
+    final bool enforceStock;
+    if (strictStock != null) {
+      enforceStock = strictStock;
+    } else {
+      final entitlement = await LicenseService.instance.checkEntitlement();
+      enforceStock = FeatureAccess.canAccess(Feature.inventory, entitlement);
+    }
+    await DatabaseHelper.instance.issueDocument(documentId, strictStock: enforceStock);
     await DatabaseHelper.instance.logAuditEvent('document_issued',
         entityType: 'document', entityId: documentId);
   }

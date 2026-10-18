@@ -12,9 +12,10 @@ class ReportDateFilter extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final presets = [
-      (DateRangePreset.today,     l10n.today),
-      (DateRangePreset.last7Days, l10n.last7Days),
-      (DateRangePreset.thisMonth, l10n.thisMonth),
+      (DateRangePreset.today,         l10n.today),
+      (DateRangePreset.last7Days,     l10n.last7Days),
+      (DateRangePreset.thisMonth,     l10n.thisMonth),
+      (DateRangePreset.previousMonth, l10n.previousMonth),
     ];
 
     // Scrolls when the chips are wider than the screen (long labels,
@@ -53,10 +54,11 @@ class ReportDateFilter extends StatelessWidget {
   }
 
   DateRangeFilter _filterFor(DateRangePreset preset) => switch (preset) {
-    DateRangePreset.today     => DateRangeFilter.today(),
-    DateRangePreset.last7Days => DateRangeFilter.last7Days(),
-    DateRangePreset.thisMonth => DateRangeFilter.thisMonth(),
-    DateRangePreset.custom    => range,
+    DateRangePreset.today         => DateRangeFilter.today(),
+    DateRangePreset.last7Days     => DateRangeFilter.last7Days(),
+    DateRangePreset.thisMonth     => DateRangeFilter.thisMonth(),
+    DateRangePreset.previousMonth => DateRangeFilter.previousMonth(),
+    DateRangePreset.custom        => range,
   };
 
   Future<void> _pickCustom(BuildContext context) async {

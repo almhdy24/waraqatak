@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../services/activation_service.dart';
 import '../services/license_service.dart';
+import '../utils/url_launcher_utils.dart';
 import '../widgets/responsive.dart';
 
 /// Screen for entering an activation key.
@@ -23,6 +25,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
   bool _loading = false;
   bool _success = false;
   String? _error;
+  ActivationOutcome? _lastOutcome;
 
   @override
   void dispose() {
@@ -37,6 +40,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _lastOutcome = null;
     });
 
     final deviceId = await LicenseService.instance.getOrCreateDeviceId();
@@ -44,6 +48,8 @@ class _ActivationScreenState extends State<ActivationScreen> {
     if (!mounted) return;
 
     final l10n = AppLocalizations.of(context);
+    setState(() => _lastOutcome = outcome);
+
     switch (outcome) {
       case ActivationOutcome.success:
         setState(() {
@@ -65,6 +71,24 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _loading = false;
       _error = message;
     });
+  }
+
+  Future<void> _launchWhatsApp(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final uri = Uri.parse(AppConstants.whatsappUrl).replace(
+      queryParameters: {'text': l10n.activationWhatsAppGreeting},
+    );
+    await UrlLauncherUtils.launchUri(context, uri);
+  }
+
+  Future<void> _launchEmail(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final uri = Uri(
+      scheme: 'mailto',
+      path: AppConstants.supportEmail,
+      queryParameters: {'subject': l10n.activationEmailSubject},
+    );
+    await UrlLauncherUtils.launchUri(context, uri);
   }
 
   @override
@@ -128,6 +152,33 @@ class _ActivationScreenState extends State<ActivationScreen> {
             ),
             onSubmitted: (_) => _activate(),
           ),
+          if (_lastOutcome != null && _error != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: cs.errorContainer.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: cs.error.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: cs.error),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _getTipForOutcome(_lastOutcome!, l10n),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: cs.onErrorContainer,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           SizedBox(
             height: 52,
@@ -147,6 +198,105 @@ class _ActivationScreenState extends State<ActivationScreen> {
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.bold)),
             ),
+          ),
+          const SizedBox(height: 32),
+          _buildSupportCard(context, l10n, cs),
+        ],
+      ),
+    );
+  }
+
+  String _getTipForOutcome(
+      ActivationOutcome outcome, AppLocalizations l10n) =>
+      switch (outcome) {
+        ActivationOutcome.invalid => l10n.activationTipKeyFormat,
+        ActivationOutcome.serverUnreachable => l10n.activationTipServer,
+        ActivationOutcome.tooManyAttempts => l10n.activationTipAttempts,
+        ActivationOutcome.success => '',
+      };
+
+  Widget _buildSupportCard(
+      BuildContext context, AppLocalizations l10n, ColorScheme cs) {
+    final hasWhatsApp = AppConstants.whatsappUrl.trim().isNotEmpty;
+    final hasEmail = AppConstants.supportEmail.trim().isNotEmpty;
+
+    if (!hasWhatsApp && !hasEmail) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.support_agent_rounded, size: 20, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.activationTroubleTitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.activationTroubleBody,
+            style: TextStyle(
+              fontSize: 13,
+              color: cs.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              if (hasWhatsApp)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _launchWhatsApp(context),
+                    icon: const Icon(Icons.chat_rounded,
+                        size: 18, color: Color(0xFF25D366)),
+                    label: Text(
+                      l10n.activationSupportWhatsApp,
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              if (hasWhatsApp && hasEmail) const SizedBox(width: 8),
+              if (hasEmail)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _launchEmail(context),
+                    icon: const Icon(Icons.mail_outline_rounded,
+                        size: 18, color: Color(0xFFEA4335)),
+                    label: Text(
+                      l10n.activationSupportEmail,
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ],
       ),

@@ -2,6 +2,9 @@ class Product {
   static const String typeProduct = 'product';
   static const String typeService = 'service';
 
+  static const String costStatusKnown = 'known';
+  static const String costStatusUnknown = 'unknown';
+
   final int? id;
   final String name;
   final String type;
@@ -15,12 +18,16 @@ class Product {
   final bool isTaxable;
   final bool isActive;
   final String? notes;
+  final String? category;
   final int? taxProfileId;
+  final double? averageCost;
+  final String costStatus;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   bool get isService => type == typeService;
   bool get isProduct => type == typeProduct;
+  bool get isCostKnown => costStatus == costStatusKnown && averageCost != null;
 
   const Product({
     this.id,
@@ -36,10 +43,56 @@ class Product {
     this.isTaxable = true,
     this.isActive = true,
     this.notes,
+    this.category,
     this.taxProfileId,
+    this.averageCost,
+    this.costStatus = costStatusUnknown,
     this.createdAt,
     this.updatedAt,
   });
+
+  Product copyWith({
+    int? id,
+    String? name,
+    String? type,
+    String? code,
+    String? barcode,
+    String? unit,
+    double? salePrice,
+    double? purchasePrice,
+    double? stockQuantity,
+    double? minStock,
+    bool? isTaxable,
+    bool? isActive,
+    String? notes,
+    String? category,
+    int? taxProfileId,
+    double? averageCost,
+    String? costStatus,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) =>
+      Product(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        type: type ?? this.type,
+        code: code ?? this.code,
+        barcode: barcode ?? this.barcode,
+        unit: unit ?? this.unit,
+        salePrice: salePrice ?? this.salePrice,
+        purchasePrice: purchasePrice ?? this.purchasePrice,
+        stockQuantity: stockQuantity ?? this.stockQuantity,
+        minStock: minStock ?? this.minStock,
+        isTaxable: isTaxable ?? this.isTaxable,
+        isActive: isActive ?? this.isActive,
+        notes: notes ?? this.notes,
+        category: category ?? this.category,
+        taxProfileId: taxProfileId ?? this.taxProfileId,
+        averageCost: averageCost ?? this.averageCost,
+        costStatus: costStatus ?? this.costStatus,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -55,7 +108,10 @@ class Product {
         'is_taxable': isTaxable ? 1 : 0,
         'is_active': isActive ? 1 : 0,
         'notes': notes,
+        'category': category,
         'tax_profile_id': taxProfileId,
+        'average_cost': averageCost,
+        'cost_status': costStatus,
         'created_at': createdAt?.toIso8601String(),
         'updated_at': updatedAt?.toIso8601String(),
       };
@@ -74,7 +130,10 @@ class Product {
         isTaxable: (map['is_taxable'] as int?) == 1,
         isActive: (map['is_active'] as int? ?? 1) == 1,
         notes: map['notes'] as String?,
+        category: map['category'] as String?,
         taxProfileId: map['tax_profile_id'] as int?,
+        averageCost: (map['average_cost'] as num?)?.toDouble(),
+        costStatus: map['cost_status'] as String? ?? costStatusUnknown,
         createdAt: map['created_at'] != null
             ? DateTime.tryParse(map['created_at'] as String)
             : null,

@@ -15,6 +15,10 @@ enum Feature {
   purchases,
   inventory,
   advancedReports,
+  stocktake,
+  bulkPriceUpdate,
+  csvImportExport,
+  inventoryAudit,
 }
 
 class FeatureAccess {
@@ -28,6 +32,10 @@ class FeatureAccess {
     Feature.purchases,
     Feature.inventory,
     Feature.advancedReports,
+    Feature.stocktake,
+    Feature.bulkPriceUpdate,
+    Feature.csvImportExport,
+    Feature.inventoryAudit,
   };
 
   /// Complement of [proFeatures]: features that are always available,

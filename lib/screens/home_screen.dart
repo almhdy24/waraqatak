@@ -576,8 +576,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 ),
                               ),
                             const SizedBox(width: 4),
-                            const Icon(
-                              Icons.chevron_right,
+                            Icon(
+                              l10n.isArabic
+                                  ? Icons.chevron_left
+                                  : Icons.chevron_right,
                               size: 18,
                               color: Colors.grey,
                             ),
@@ -769,24 +771,32 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           if (onAction != null && actionLabel != null) ...[
             const SizedBox(width: 4),
-            GestureDetector(
+            InkWell(
               onTap: onAction,
-              child: Text(
-                actionLabel,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: textColor,
-                  fontWeight: FontWeight.bold,
-                  decoration: TextDecoration.underline,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                child: Text(
+                  actionLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                    decoration: TextDecoration.underline,
+                  ),
                 ),
               ),
             ),
           ],
           if (dismissible) ...[
-            const SizedBox(width: 8),
-            GestureDetector(
+            const SizedBox(width: 4),
+            InkWell(
               onTap: () => setState(() => _freeModeBannerDismissed = true),
-              child: Icon(Icons.close, size: 16, color: textColor),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(Icons.close, size: 18, color: textColor),
+              ),
             ),
           ],
         ],
@@ -808,6 +818,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           DateRangePreset.today => DateRangeFilter.today(),
           DateRangePreset.last7Days => DateRangeFilter.last7Days(),
           DateRangePreset.thisMonth => DateRangeFilter.thisMonth(),
+          DateRangePreset.previousMonth => DateRangeFilter.previousMonth(),
           DateRangePreset.custom => _dateRange,
         };
         setState(() => _dateRange = newRange);

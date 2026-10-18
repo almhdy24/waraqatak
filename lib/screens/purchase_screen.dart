@@ -5,6 +5,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
+import '../utils/error_utils.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -186,8 +187,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         _descriptionControllers.length,
         (i) => DocumentItemInput(
           description: _descriptionControllers[i].text.trim(),
-          quantity: double.parse(_quantityControllers[i].text),
-          price: double.parse(_priceControllers[i].text),
+          quantity: double.tryParse(_quantityControllers[i].text) ?? 0,
+          price: double.tryParse(_priceControllers[i].text) ?? 0,
           taxable: _taxableList[i],
           productId: _productIds[i],
         ),
@@ -196,6 +197,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   Future<void> _save({bool isDraft = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_business == null) return;
+
+    if (_descriptionControllers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).pleaseAddItems)),
+      );
+      return;
+    }
 
     setState(() => _saving = true);
 
@@ -220,7 +228,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -274,7 +282,25 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
               icon: const Icon(Icons.add),
               label: Text(l10n.addItem),
             ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _discountController,
+              decoration: InputDecoration(labelText: l10n.discount),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
             const SizedBox(height: 12),
+            TextFormField(
+              controller: _paidController,
+              decoration: InputDecoration(labelText: l10n.paid),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _notesController,
+              decoration: InputDecoration(labelText: l10n.notes),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
             _TotalsCard(
               l10n: l10n,
               currencySymbol: _business?.currencySymbol ?? '',
@@ -286,32 +312,26 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
               paid: paid,
               remaining: remaining,
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _discountController,
-              decoration: InputDecoration(labelText: l10n.discount),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            TextFormField(
-              controller: _paidController,
-              decoration: InputDecoration(labelText: l10n.paid),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            TextFormField(
-              controller: _notesController,
-              decoration: InputDecoration(labelText: l10n.notes),
-              maxLines: 2,
-            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 52,
               child: FilledButton(
                 onPressed: _saving ? null : () => _save(),
-                style: FilledButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Theme.of(context).colorScheme.onPrimary),
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                ),
                 child: _saving
-                    ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
-                    : Text(l10n.save),
+                    ? SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      )
+                    : Text(l10n.savePurchase),
               ),
             ),
             const SizedBox(height: 8),

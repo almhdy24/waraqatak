@@ -60,7 +60,7 @@ class AppDiagnosticsService {
       final info = await PackageInfo.fromPlatform();
       _cachedAppVersion = '${info.version}+${info.buildNumber}';
     } catch (_) {
-      _cachedAppVersion = '1.1.1+5';
+      _cachedAppVersion = '1.1.2+6';
     }
 
     _installErrorHooks();

@@ -13,6 +13,8 @@ import 'purchase_screen.dart';
 import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../utils/error_utils.dart';
+import '../widgets/customer_statement_dialog.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import '../widgets/status_badge.dart';
@@ -121,6 +123,29 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     }
   }
 
+  Future<void> _openStatement() async {
+    final entitlement =
+        await LicenseService.instance.checkEntitlement(force: true);
+    if (!mounted) return;
+    if (!FeatureAccess.canAccess(Feature.advancedReports, entitlement)) {
+      final result = await ProUpgradeSheet.show(
+        context,
+        feature: Feature.advancedReports,
+      );
+      if (result == true && mounted) {
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
+        if (!mounted) return;
+        LicenseService.instance.invalidateCache();
+      }
+      return;
+    }
+    if (!mounted) return;
+    CustomerStatementDialog.show(context, contact: widget.contact);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -133,6 +158,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.assignment_outlined),
+            tooltip: _isSupplier ? l10n.supplierStatement : l10n.customerStatement,
+            onPressed: _openStatement,
+          ),
+          IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: l10n.edit,
             onPressed: _editContact,
@@ -140,7 +170,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ],
       ),
       body: ResponsiveCenter(child: _error != null
-          ? _ErrorView(message: l10n.operationFailed, onRetry: _load)
+          ? _ErrorView(
+              message: ErrorUtils.getFriendlyErrorMessage(_error!, l10n: l10n),
+              onRetry: _load,
+            )
           : _documents == null || _business == null
               ? const Center(child: CircularProgressIndicator())
               : _buildBody(context, l10n, cs, currency)),
@@ -178,8 +211,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 avatarColor.withValues(alpha: 0.9),
                 avatarColor.withValues(alpha: 0.6),
               ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              begin: AlignmentDirectional.topStart,
+              end: AlignmentDirectional.bottomEnd,
             ),
             borderRadius: BorderRadius.circular(20),
           ),
@@ -200,7 +233,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                       child: Text(
                         _initials(widget.contact.name),
                         style: const TextStyle(
-                          color: Colors.white,
+                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 26,
                         ),
@@ -208,9 +241,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     ),
                   ),
                   if (!widget.contact.active)
-                    Positioned(
+                    PositionedDirectional(
                       bottom: 0,
-                      right: 0,
+                      end: 0,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 5, vertical: 2),
@@ -364,6 +397,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 : l10n.createInvoice),
           ),
         ),
+        if (!_isSupplier) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _openStatement,
+              icon: const Icon(Icons.assignment_outlined),
+              label: Text(l10n.customerStatement),
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
 
         // ── Documents ─────────────────────────────────────────────────────
@@ -575,8 +619,13 @@ class _DocumentTile extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 4),
-              Icon(Icons.chevron_right,
-                  size: 18, color: Colors.grey.shade400),
+              Icon(
+                AppLocalizations.of(context).isArabic
+                    ? Icons.chevron_left
+                    : Icons.chevron_right,
+                size: 18,
+                color: Colors.grey.shade400,
+              ),
             ],
           ),
         ),

@@ -1,7 +1,7 @@
 import 'package:intl/intl.dart';
 import '../localization/app_localizations.dart';
 
-enum DateRangePreset { today, last7Days, thisMonth, custom }
+enum DateRangePreset { today, last7Days, thisMonth, previousMonth, custom }
 
 class DateRangeFilter {
   final DateRangePreset preset;
@@ -39,6 +39,18 @@ class DateRangeFilter {
     );
   }
 
+  factory DateRangeFilter.previousMonth() {
+    final now = DateTime.now();
+    // Dart DateTime handles year wrapping when month <= 0:
+    final firstDayPrev = DateTime(now.year, now.month - 1, 1);
+    final lastDayPrev = DateTime(now.year, now.month, 0, 23, 59, 59, 999);
+    return DateRangeFilter._(
+      preset: DateRangePreset.previousMonth,
+      from: firstDayPrev,
+      to: lastDayPrev,
+    );
+  }
+
   factory DateRangeFilter.custom(DateTime from, DateTime to) {
     return DateRangeFilter._(
       preset: DateRangePreset.custom,
@@ -52,6 +64,7 @@ class DateRangeFilter {
       DateRangePreset.today => l10n.today,
       DateRangePreset.last7Days => l10n.last7Days,
       DateRangePreset.thisMonth => l10n.thisMonth,
+      DateRangePreset.previousMonth => l10n.previousMonth,
       DateRangePreset.custom =>
         '${_fmt.format(from)} – ${_fmt.format(to)}',
     };

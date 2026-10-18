@@ -22,10 +22,10 @@ This branch brings Waraqatak into that model.
 - Nothing can be bought, priced, or paid for inside the app.
 - Pro features (purchases, inventory, advanced reports) are unlocked by
   entering an **activation key** obtained **outside the app**. The app
-  itself does not describe *where* or *how* to obtain that key — no URLs,
-  phone numbers, website / WhatsApp hints, or "contact us" copy appear on
-  the locked-feature screen, the activation screen, the Pro upgrade sheet,
-  or any license error state.
+  itself does not describe *where* or *how* to obtain that key — no pricing or
+  key acquisition hints appear on the locked-feature screen, the Pro upgrade sheet,
+  or license error states. The activation screen provides calm technical support
+  contact guidance solely to help users resolve troubleshooting or connection errors.
 - The merchant's own invoicing feature (how a business owner records that
   **their own customers** paid them for goods or services the merchant
   sells) is unchanged. That is the merchant's bookkeeping — it is not an

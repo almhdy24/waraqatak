@@ -1,71 +1,405 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/date_range_filter.dart';
-import 'report_date_filter.dart';
+import '../../services/business_reporting_service.dart';
+import '../../services/pdf/pdf_report_builder.dart';
+import '../../services/pdf_service.dart';
+import '../../utils/format_utils.dart';
 import '../../widgets/responsive.dart';
+import 'report_date_filter.dart';
 
 class ProductReportScreen extends StatefulWidget {
-  const ProductReportScreen({super.key});
+  final int initialTab;
+  const ProductReportScreen({super.key, this.initialTab = 0});
 
   @override
   State<ProductReportScreen> createState() => _ProductReportScreenState();
 }
 
-class _ProductReportScreenState extends State<ProductReportScreen> {
+class _ProductReportScreenState extends State<ProductReportScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   DateRangeFilter _range = DateRangeFilter.thisMonth();
-  List<Map<String, dynamic>>? _rows;
+  ProductPerformanceSummary? _summary;
+  List<String> _categories = [];
+  String? _selectedCategory;
+  String _sortBy = 'revenue'; // 'revenue', 'quantity', 'profit'
   String? _error;
+  bool _loading = true;
 
   static final _numFmt = NumberFormat('#,##0.##');
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTab,
+    );
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _load();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    setState(() { _rows = null; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final rows = await DatabaseHelper.instance.getProductReport(
-        from: _range.from,
-        to: _range.to,
-      );
+      final futures = await Future.wait([
+        DatabaseHelper.instance.getProductCategories(),
+        BusinessReportingService.instance.getProductPerformance(
+          from: _range.from,
+          to: _range.to,
+          category: _selectedCategory,
+          sortBy: _sortBy,
+        ),
+      ]);
       if (!mounted) return;
-      setState(() => _rows = rows);
+      setState(() {
+        _categories = futures[0] as List<String>;
+        _summary = futures[1] as ProductPerformanceSummary;
+        _loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _summary == null) return;
+
+    final summary = _summary!;
+    final tabIndex = _tabController.index;
+
+    String reportTitle;
+    List<PdfReportColumn> columns;
+    List<List<String>> rows;
+    List<String>? totalsRow;
+    String? warning;
+
+    if (tabIndex == 0) {
+      // Sales by Product
+      reportTitle = l10n.salesByProduct;
+      columns = [
+        PdfReportColumn(title: l10n.product, flex: 2.2),
+        PdfReportColumn(title: l10n.category, flex: 1.4),
+        PdfReportColumn(title: l10n.salesQty, flex: 1.2, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.transactionCount, flex: 1.0, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.salesValue, flex: 1.5, align: pw.TextAlign.right),
+      ];
+      rows = summary.items.map((i) {
+        return [
+          i.productName,
+          i.category ?? '—',
+          FormatUtils.formatQuantity(i.salesQty, unit: i.unit),
+          '${i.transactionCount}',
+          _numFmt.format(i.salesRevenue),
+        ];
+      }).toList();
+      totalsRow = [
+        l10n.total,
+        '',
+        '',
+        '',
+        _numFmt.format(summary.totalSalesRevenue),
+      ];
+    } else if (tabIndex == 1) {
+      // Profit by Product
+      reportTitle = l10n.profitByProduct;
+      columns = [
+        PdfReportColumn(title: l10n.product, flex: 2.2),
+        PdfReportColumn(title: l10n.salesValue, flex: 1.3, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.cogs, flex: 1.3, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.grossProfit, flex: 1.4, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.profitMargin, flex: 1.1, align: pw.TextAlign.right),
+      ];
+      rows = summary.items.map((i) {
+        final marginStr = i.isCostReliable && i.salesRevenue > 0
+            ? '${i.profitMargin.toStringAsFixed(1)}%'
+            : '--';
+        final profitStr = i.isCostReliable
+            ? _numFmt.format(i.grossProfit)
+            : '${_numFmt.format(i.grossProfit)}*';
+        return [
+          i.productName,
+          _numFmt.format(i.salesRevenue),
+          _numFmt.format(i.cogs),
+          profitStr,
+          marginStr,
+        ];
+      }).toList();
+      totalsRow = [
+        l10n.total,
+        _numFmt.format(summary.totalSalesRevenue),
+        _numFmt.format(summary.totalCogs),
+        _numFmt.format(summary.totalGrossProfit),
+        '',
+      ];
+      warning = l10n.grossProfitNotice;
+      if (summary.hasIncompleteCosts) {
+        warning = '$warning\n${l10n.unknownCostNotice} (${summary.unvaluedSalesCount} مبيعات)';
+      }
+    } else {
+      // Product Performance
+      reportTitle = l10n.productPerformance;
+      columns = [
+        PdfReportColumn(title: l10n.product, flex: 2.0),
+        PdfReportColumn(title: l10n.salesQty, flex: 1.1, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.salesValue, flex: 1.3, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.grossProfit, flex: 1.3, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.stockQuantity, flex: 1.1, align: pw.TextAlign.right),
+        PdfReportColumn(title: l10n.inventoryValuationAtCost, flex: 1.3, align: pw.TextAlign.right),
+      ];
+      rows = summary.items.map((i) {
+        final valStr = i.currentValuation != null ? _numFmt.format(i.currentValuation) : '—';
+        final profitStr = i.isCostReliable
+            ? _numFmt.format(i.grossProfit)
+            : '${_numFmt.format(i.grossProfit)}*';
+        return [
+          i.productName,
+          FormatUtils.formatQuantity(i.salesQty, unit: i.unit),
+          _numFmt.format(i.salesRevenue),
+          profitStr,
+          FormatUtils.formatQuantity(i.currentStock, unit: i.unit),
+          valStr,
+        ];
+      }).toList();
+      totalsRow = [
+        l10n.total,
+        '',
+        _numFmt.format(summary.totalSalesRevenue),
+        _numFmt.format(summary.totalGrossProfit),
+        '',
+        '',
+      ];
+      warning = l10n.grossProfitNotice;
+      if (summary.hasIncompleteCosts) {
+        warning = '$warning\n${l10n.unknownCostNotice}';
+      }
+    }
+
+    final data = PdfReportData(
+      title: reportTitle,
+      subtitle: _selectedCategory != null ? _selectedCategory! : l10n.allCategories,
+      dateRange: _range.label(l10n),
+      warningNotice: warning,
+      summaryCards: [
+        PdfReportSummaryCard(
+          label: l10n.totalSales,
+          value: _numFmt.format(summary.totalSalesRevenue),
+        ),
+        PdfReportSummaryCard(
+          label: l10n.cogs,
+          value: _numFmt.format(summary.totalCogs),
+        ),
+        PdfReportSummaryCard(
+          label: l10n.grossProfit,
+          value: _numFmt.format(summary.totalGrossProfit),
+        ),
+      ],
+      columns: columns,
+      rows: rows,
+      totalsRow: totalsRow,
+    );
+
+    try {
+      await PdfService.printOrShareReportPdf(
+        business: business,
+        l10n: l10n,
+        data: data,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
+    final summary = _summary;
 
-    final totalSalesValue = _rows?.fold(0.0,
-        (s, r) => s + (r['sales_value'] as num).toDouble()) ?? 0.0;
+    final totalSalesValue = summary?.totalSalesRevenue ?? 0.0;
+    final totalCogs = summary?.totalCogs ?? 0.0;
+    final totalProfit = summary?.totalGrossProfit ?? 0.0;
+    final hasUnknownCost = summary?.hasIncompleteCosts ?? false;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.productReport), centerTitle: true),
-      body: ResponsiveCenter(child: Column(
-        children: [
-          ReportDateFilter(
-            range: _range,
-            onChanged: (r) { setState(() => _range = r); _load(); },
+      appBar: AppBar(
+        title: Text(l10n.productReport),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: l10n.printOrShareReport,
+            onPressed: summary != null && summary.items.isNotEmpty ? _exportPdf : null,
           ),
-          if (_rows != null && _rows!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Row(children: [
-                _chip(l10n.totalSales, totalSalesValue, Colors.green),
-              ]),
-            ),
-          Expanded(child: _buildList(context, l10n)),
         ],
-      )),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: l10n.salesByProduct),
+            Tab(text: l10n.profitByProduct),
+            Tab(text: l10n.productPerformance),
+          ],
+        ),
+      ),
+      body: ResponsiveCenter(
+        child: Column(
+          children: [
+            // Date Filter
+            ReportDateFilter(
+              range: _range,
+              onChanged: (r) {
+                setState(() => _range = r);
+                _load();
+              },
+            ),
+
+            // Category Filter & Sort Bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+              child: Row(
+                children: [
+                  // Category Dropdown
+                  Expanded(
+                    flex: 3,
+                    child: Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          value: _selectedCategory,
+                          isExpanded: true,
+                          hint: Text(l10n.allCategories, style: const TextStyle(fontSize: 12)),
+                          items: [
+                            DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text(l10n.allCategories, style: const TextStyle(fontSize: 12)),
+                            ),
+                            ..._categories.map((c) => DropdownMenuItem<String?>(
+                                  value: c,
+                                  child: Text(c,
+                                      style: const TextStyle(fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
+                                )),
+                          ],
+                          onChanged: (val) {
+                            setState(() => _selectedCategory = val);
+                            _load();
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Sort By Dropdown
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _sortBy,
+                          isExpanded: true,
+                          items: [
+                            DropdownMenuItem(
+                              value: 'revenue',
+                              child: Text(l10n.sortByRevenue, style: const TextStyle(fontSize: 12)),
+                            ),
+                            DropdownMenuItem(
+                              value: 'quantity',
+                              child: Text(l10n.sortByQuantity, style: const TextStyle(fontSize: 12)),
+                            ),
+                            DropdownMenuItem(
+                              value: 'profit',
+                              child: Text(l10n.sortByProfit, style: const TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _sortBy = val);
+                              _load();
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Summary Chips
+            if (summary != null && summary.items.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                child: Row(
+                  children: [
+                    _chip(l10n.totalSales, totalSalesValue, Colors.green),
+                    const SizedBox(width: 8),
+                    _chip(l10n.cogs, totalCogs, Colors.blueGrey),
+                    const SizedBox(width: 8),
+                    _chip(l10n.grossProfit, totalProfit, Colors.teal),
+                  ],
+                ),
+              ),
+              if (hasUnknownCost)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 13, color: Colors.amber.shade800),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          l10n.costIncomplete,
+                          style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+
+            // Active Tab Content List
+            Expanded(child: _buildList(context, l10n)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -90,34 +424,38 @@ class _ProductReportScreenState extends State<ProductReportScreen> {
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(l10n.operationFailed),
-        FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-      ]));
-    }
-    if (_rows == null) return const Center(child: CircularProgressIndicator());
-    if (_rows!.isEmpty) {
-      return Center(child: Padding(
-        padding: const EdgeInsets.all(32),
+      return Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 12),
-          Text(l10n.noDataForPeriod, textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey)),
+          Text(l10n.operationFailed),
+          const SizedBox(height: 10),
+          FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
         ]),
-      ));
+      );
+    }
+    final items = _summary?.items ?? [];
+    if (items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            Text(l10n.noDataForPeriod,
+                textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+          ]),
+        ),
+      );
     }
 
+    final activeTab = _tabController.index;
+
     return ListView.builder(
-      itemCount: _rows!.length,
+      itemCount: items.length,
       padding: const EdgeInsets.only(top: 4, bottom: 16),
       itemBuilder: (ctx, i) {
-        final row = _rows![i];
-        final salesQty = (row['sales_qty'] as num).toDouble();
-        final salesValue = (row['sales_value'] as num).toDouble();
-        final purchaseQty = (row['purchase_qty'] as num).toDouble();
-        final stockQty = (row['stock_quantity'] as num).toDouble();
+        final item = items[i];
 
         return Card(
           elevation: 0,
@@ -127,24 +465,106 @@ class _ProductReportScreenState extends State<ProductReportScreen> {
             side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(children: [
-                  Expanded(child: Text(row['name'] as String,
-                      style: const TextStyle(fontWeight: FontWeight.bold))),
-                  Text('${l10n.stockStatus}: ${_numFmt.format(stockQty)}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                ]),
-                const SizedBox(height: 4),
-                Row(children: [
-                  _statCell(l10n.salesQty, _numFmt.format(salesQty), Colors.green),
-                  const SizedBox(width: 16),
-                  _statCell(l10n.salesValue, _numFmt.format(salesValue), Colors.green),
-                  const SizedBox(width: 16),
-                  _statCell(l10n.purchasedQty, _numFmt.format(purchaseQty), Colors.orange),
-                ]),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.productName,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          if (item.category != null && item.category!.isNotEmpty)
+                            Text(
+                              item.category!,
+                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (item.salesQty > 0 && !item.isCostReliable)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.amber.shade700, width: 0.5),
+                        ),
+                        child: Text(
+                          l10n.costIncomplete,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.amber.shade900,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    Text(
+                      '${l10n.stockStatus}: ${FormatUtils.formatQuantity(item.currentStock, unit: item.unit)}',
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+
+                // Metrics based on active tab
+                if (activeTab == 0) ...[
+                  // Sales by Product Tab
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
+                    children: [
+                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), Colors.green),
+                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), Colors.green),
+                      _statCell(l10n.transactionCount, '${item.transactionCount}', Colors.indigo),
+                    ],
+                  ),
+                ] else if (activeTab == 1) ...[
+                  // Profit by Product Tab
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
+                    children: [
+                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), Colors.green),
+                      _statCell(l10n.cogs, _numFmt.format(item.cogs), Colors.blueGrey),
+                      _statCell(
+                        l10n.grossProfit,
+                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '${_numFmt.format(item.grossProfit)}*',
+                        item.grossProfit >= 0 ? Colors.teal : Colors.red,
+                      ),
+                      _statCell(
+                        l10n.profitMargin,
+                        item.isCostReliable && item.salesRevenue > 0
+                            ? '${item.profitMargin.toStringAsFixed(1)}%'
+                            : '--',
+                        Colors.indigo,
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  // Product Performance Tab
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
+                    children: [
+                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), Colors.green),
+                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), Colors.green),
+                      _statCell(
+                        l10n.grossProfit,
+                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '${_numFmt.format(item.grossProfit)}*',
+                        item.grossProfit >= 0 ? Colors.teal : Colors.red,
+                      ),
+                      if (item.currentValuation != null)
+                        _statCell(l10n.inventoryValuationAtCost, _numFmt.format(item.currentValuation), Colors.teal),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

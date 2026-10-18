@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
+import '../utils/error_utils.dart';
 import '../widgets/responsive.dart';
 
 class ContactFormScreen extends StatefulWidget {
   final Contact? contact;
-  const ContactFormScreen({super.key, this.contact});
+  final String? initialType;
+  const ContactFormScreen({super.key, this.contact, this.initialType});
 
   @override
   State<ContactFormScreen> createState() => _ContactFormScreenState();
@@ -34,6 +36,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
       _notesController.text = widget.contact!.notes ?? '';
       _type = widget.contact!.type;
       _active = widget.contact!.active;
+    } else if (widget.initialType != null) {
+      _type = widget.initialType!;
     }
   }
 
@@ -75,7 +79,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -87,10 +91,14 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
     final l10n = AppLocalizations.of(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isEdit = widget.contact != null;
+    final isSupplier = _type == 'supplier';
+    final title = isEdit
+        ? (isSupplier ? l10n.editSupplier : l10n.editCustomer)
+        : (isSupplier ? l10n.addSupplier : l10n.addCustomer);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEdit ? l10n.edit : (l10n.customer)),
+        title: Text(title),
         centerTitle: true,
       ),
       body: ResponsiveCenter(child: Form(
@@ -108,7 +116,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                     TextFormField(
                       controller: _nameController,
                       decoration: InputDecoration(
-                        labelText: l10n.customer,
+                        labelText: isSupplier ? l10n.supplier : l10n.customer,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       validator: (v) => v == null || v.trim().isEmpty ? l10n.required : null,
@@ -190,7 +198,11 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary),
                       )
-                    : Text(l10n.save),
+                    : Text(
+                        isEdit
+                            ? l10n.saveChanges
+                            : (isSupplier ? l10n.saveSupplier : l10n.saveCustomer),
+                      ),
               ),
             ),
           ],

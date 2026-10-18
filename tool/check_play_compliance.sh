@@ -83,7 +83,6 @@ ACQUISITION_PATTERN='contact us|contacting us|through our website|on whatsapp|wa
 # the pass stays targeted at user-visible activation copy.
 ACQUISITION_SCAN=(
   "lib/screens/locked_feature_screen.dart"
-  "lib/screens/activation_screen.dart"
   "lib/screens/license_screen.dart"
   "lib/screens/transparency_screen.dart"
   "lib/widgets/pro_upgrade_sheet.dart"
@@ -107,6 +106,7 @@ REVIEWER_VISIBLE=(
 SUPPORT_SURFACE=(
   "lib/core/constants/app_constants.dart"
   "lib/screens/about_screen.dart"
+  "lib/screens/activation_screen.dart"
 )
 
 # The ONLY outbound hosts the app is permitted to reach. Three product-site

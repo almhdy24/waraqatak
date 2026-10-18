@@ -5,6 +5,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
+import '../utils/error_utils.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -199,8 +200,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         _descriptionControllers.length,
         (i) => DocumentItemInput(
           description: _descriptionControllers[i].text.trim(),
-          quantity: double.parse(_quantityControllers[i].text),
-          price: double.parse(_priceControllers[i].text),
+          quantity: double.tryParse(_quantityControllers[i].text) ?? 0,
+          price: double.tryParse(_priceControllers[i].text) ?? 0,
           taxable: _taxableList[i],
           productId: _productIds[i],
         ),
@@ -210,14 +211,34 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_business == null) return;
 
+    if (_descriptionControllers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).pleaseAddItems)),
+      );
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
+      final items = _buildItems();
+      final lowStockWarnings = <String>[];
+      if (!isDraft) {
+        for (final item in items) {
+          if (item.productId != null && item.quantity > 0) {
+            final p = await DatabaseHelper.instance.getProductById(item.productId!);
+            if (p != null && p.isProduct && p.stockQuantity < item.quantity) {
+              lowStockWarnings.add(p.name);
+            }
+          }
+        }
+      }
+
       final docId = await DocumentService.createDocument(
         type: 'invoice',
         business: _business!,
         contact: _selectedContact,
-        items: _buildItems(),
+        items: items,
         discount: _discount,
         paid: _paid,
         notes: _notesController.text,
@@ -226,6 +247,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       );
 
       if (!mounted) return;
+      if (lowStockWarnings.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context).lowStockAlert}: ${lowStockWarnings.join(", ")}',
+            ),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: docId)),
@@ -233,7 +265,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -290,7 +322,25 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               icon: const Icon(Icons.add),
               label: Text(l10n.addItem),
             ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _discountController,
+              decoration: InputDecoration(labelText: l10n.discount),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
             const SizedBox(height: 12),
+            TextFormField(
+              controller: _paidController,
+              decoration: InputDecoration(labelText: l10n.paid),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _notesController,
+              decoration: InputDecoration(labelText: l10n.notes),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
             _TotalsCard(
               l10n: l10n,
               currencySymbol: _business?.currencySymbol ?? '',
@@ -302,30 +352,26 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
               paid: paid,
               remaining: remaining,
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _discountController,
-              decoration: InputDecoration(labelText: l10n.discount),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            TextFormField(
-              controller: _paidController,
-              decoration: InputDecoration(labelText: l10n.paid),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            TextFormField(
-              controller: _notesController,
-              decoration: InputDecoration(labelText: l10n.notes),
-              maxLines: 2,
-            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 52,
               child: FilledButton(
                 onPressed: _saving ? null : () => _save(),
-                style: FilledButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Theme.of(context).colorScheme.onPrimary),
-                child: _saving ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary)) : Text(l10n.save),
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                ),
+                child: _saving
+                    ? SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      )
+                    : Text(l10n.saveInvoice),
               ),
             ),
             const SizedBox(height: 8),

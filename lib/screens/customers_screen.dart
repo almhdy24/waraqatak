@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
+import '../utils/error_utils.dart';
 import 'contact_form_screen.dart';
 import 'customer_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -111,7 +112,7 @@ class _CustomersScreenState extends State<CustomersScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.operationFailed}: $e')));
+          SnackBar(content: Text(ErrorUtils.toFriendlyMessage(e, l10n))));
     }
   }
 
@@ -128,7 +129,11 @@ class _CustomersScreenState extends State<CustomersScreen>
     await Navigator.push(
       context,
       MaterialPageRoute(
-          builder: (_) => ContactFormScreen(contact: contact)),
+        builder: (_) => ContactFormScreen(
+          contact: contact,
+          initialType: _filterType,
+        ),
+      ),
     );
     _load();
   }
@@ -227,7 +232,7 @@ class _CustomersScreenState extends State<CustomersScreen>
         heroTag: 'fab_customers',
         onPressed: () => _openForm(),
         icon: const Icon(Icons.person_add_outlined),
-        label: Text(_tabCtrl.index == 0 ? l10n.customer : l10n.supplier),
+        label: Text(_tabCtrl.index == 0 ? l10n.addCustomer : l10n.addSupplier),
       ),
     );
   }
@@ -238,7 +243,10 @@ class _CustomersScreenState extends State<CustomersScreen>
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
           const SizedBox(height: 12),
-          Text(l10n.operationFailed),
+          Text(
+            ErrorUtils.toFriendlyMessage(_error!, l10n),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 12),
           FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
         ]),
@@ -267,8 +275,8 @@ class _CustomersScreenState extends State<CustomersScreen>
           FilledButton.tonal(
             onPressed: () => _openForm(),
             child: Text(_filterType == 'supplier'
-                ? l10n.supplier
-                : l10n.customer),
+                ? l10n.addSupplierNew
+                : l10n.addCustomerNew),
           ),
         ]),
       );

@@ -1,91 +1,35 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../services/inventory_service.dart';
+import '../utils/error_utils.dart';
+import '../utils/format_utils.dart';
 import 'barcode_scanner_screen.dart';
+import 'stock_movements_screen.dart';
 import '../widgets/responsive.dart';
+import '../services/feature_access.dart';
+import '../services/license_service.dart';
+import '../widgets/pro_upgrade_sheet.dart';
+import 'activation_screen.dart';
+import 'audit_history_screen.dart';
+import 'stocktake/stocktake_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
 
-  @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
-}
-
-class _InventoryScreenState extends State<InventoryScreen> {
-  List<Product>? _products;
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-  String? _error;
-
-  static final _dateFmt = DateFormat('dd/MM/yyyy');
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _products = null;
-      _error = null;
-    });
-    try {
-      List<Product> products;
-      if (_query.isNotEmpty) {
-        final all = await DatabaseHelper.instance.searchProducts(_query);
-        products = all.where((p) => p.isProduct).toList();
-      } else {
-        products =
-            await DatabaseHelper.instance.getAllProducts(type: 'product');
-      }
-      if (!mounted) return;
-      setState(() => _products = products);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.toString());
-    }
-  }
-
-  Future<void> _scanBarcode() async {
-    final barcode = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
-    );
-    if (barcode == null || barcode.isEmpty || !mounted) return;
-
-    final results =
-        await DatabaseHelper.instance.searchActiveProducts(barcode);
-    final product =
-        results.where((p) => p.barcode == barcode).firstOrNull ??
-            (results.isNotEmpty ? results.first : null);
-
-    if (!mounted) return;
-    if (product == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppLocalizations.of(context).barcodeNotFound)));
-      return;
-    }
-    _searchCtrl.text = product.barcode ?? product.name;
-    setState(() {
-      _query = _searchCtrl.text;
-      _products = [product];
-    });
-  }
-
-  Future<void> _showAdjustDialog(Product product) async {
+  /// Opens the stock adjustment modal bottom sheet.
+  /// Returns true if an adjustment was successfully made.
+  static Future<bool> showAdjustDialog(
+      BuildContext context, Product product) async {
     final l10n = AppLocalizations.of(context);
     final deltaCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
+    bool adjusted = false;
+    bool isSaving = false;
+    String? validationError;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -134,13 +78,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       Expanded(
                         child: _QtyBox(
                           label: l10n.stockQuantity,
-                          value: product.stockQuantity.toStringAsFixed(0),
+                          value: FormatUtils.formatQuantity(
+                              product.stockQuantity,
+                              unit: product.unit),
                           color: Colors.grey,
                         ),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Icon(Icons.arrow_forward,
+                        child: Icon(
+                            l10n.isArabic
+                                ? Icons.arrow_back
+                                : Icons.arrow_forward,
                             color: delta != 0
                                 ? (isAdd ? Colors.green : Colors.red)
                                 : Colors.grey),
@@ -149,7 +98,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         child: _QtyBox(
                           label: l10n.newStockQuantity,
                           value: delta != 0
-                              ? newQty.toStringAsFixed(0)
+                              ? FormatUtils.formatQuantity(newQty,
+                                  unit: product.unit)
                               : '—',
                           color: delta != 0
                               ? (newQty >= 0 ? Colors.green : Colors.red)
@@ -178,43 +128,92 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     controller: notesCtrl,
                     decoration: InputDecoration(
                       labelText: l10n.adjustmentReason,
+                      hintText: l10n.adjustmentReasonRequired,
                       prefixIcon: const Icon(Icons.notes_outlined),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
+                    onChanged: (_) {
+                      if (validationError != null) setSheet(() => validationError = null);
+                    },
                   ),
+                  if (validationError != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(ctx).colorScheme.errorContainer.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, size: 16, color: Theme.of(ctx).colorScheme.error),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              validationError!,
+                              style: TextStyle(fontSize: 12, color: Theme.of(ctx).colorScheme.error),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: FilledButton(
-                      onPressed: () async {
-                        final d = double.tryParse(deltaCtrl.text);
-                        if (d == null || d == 0) return;
-                        Navigator.pop(ctx);
-                        try {
-                          await InventoryService.adjust(
-                            productId: product.id!,
-                            delta: d,
-                            notes: notesCtrl.text.trim().isEmpty
-                                ? null
-                                : notesCtrl.text.trim(),
-                          );
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text(l10n.operationSuccessful)));
-                          _load();
-                        } catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text(
-                                  '${l10n.operationFailed}: $e')));
-                        }
-                      },
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              final d = double.tryParse(deltaCtrl.text);
+                              final reason = notesCtrl.text.trim();
+                              if (d == null || d == 0) {
+                                setSheet(() => validationError = l10n.enterAdjustmentDelta);
+                                return;
+                              }
+                              if (product.stockQuantity + d < 0) {
+                                setSheet(() => validationError = l10n.stockCannotBeNegative);
+                                return;
+                              }
+                              if (reason.isEmpty) {
+                                setSheet(() => validationError = l10n.adjustmentReasonRequired);
+                                return;
+                              }
+                              setSheet(() {
+                                isSaving = true;
+                                validationError = null;
+                              });
+                              try {
+                                await InventoryService.adjust(
+                                  productId: product.id!,
+                                  delta: d,
+                                  notes: reason,
+                                );
+                                adjusted = true;
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(l10n.operationSuccessful)));
+                              } catch (e) {
+                                setSheet(() => isSaving = false);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                        ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n))));
+                              }
+                            },
                       style: FilledButton.styleFrom(
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12))),
-                      child: Text(l10n.save),
+                      child: isSaving
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(l10n.confirmStockAdjustment),
                     ),
                   ),
                 ],
@@ -224,9 +223,99 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ),
       ),
     );
+    return adjusted;
+  }
 
-    deltaCtrl.dispose();
-    notesCtrl.dispose();
+  @override
+  State<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends State<InventoryScreen> {
+  List<Product>? _products;
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  String _stockFilter = 'all';
+  String? _error;
+  Timer? _debounceTimer;
+  int _searchSession = 0;
+
+  static final _dateFmt = DateFormat('dd/MM/yyyy');
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String v) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _query = v.trim();
+      _load();
+    });
+  }
+
+  Future<void> _load() async {
+    final currentSession = ++_searchSession;
+    setState(() {
+      _products = null;
+      _error = null;
+    });
+    try {
+      List<Product> products;
+      if (_query.isNotEmpty) {
+        final all = await DatabaseHelper.instance.searchProducts(_query);
+        products = all.where((p) => p.isProduct).toList();
+      } else {
+        products =
+            await DatabaseHelper.instance.getAllProducts(type: 'product');
+      }
+      if (!mounted || currentSession != _searchSession) return;
+      setState(() => _products = products);
+    } catch (e) {
+      if (!mounted || currentSession != _searchSession) return;
+      setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _scanBarcode() async {
+    final barcode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (barcode == null || barcode.isEmpty || !mounted) return;
+
+    final results =
+        await DatabaseHelper.instance.searchActiveProducts(barcode);
+    final product =
+        results.where((p) => p.barcode == barcode).firstOrNull ??
+            (results.isNotEmpty ? results.first : null);
+
+    if (!mounted) return;
+    if (product == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context).barcodeNotFound)));
+      return;
+    }
+    _searchCtrl.text = product.barcode ?? product.name;
+    setState(() {
+      _query = _searchCtrl.text;
+      _products = [product];
+    });
+  }
+
+  Future<void> _showAdjustDialog(Product product) async {
+    final success = await InventoryScreen.showAdjustDialog(context, product);
+    if (success && mounted) {
+      _load();
+    }
   }
 
   Future<void> _showMovements(Product product) async {
@@ -266,11 +355,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
-                  Text(l10n.stockMovements,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(ctx).colorScheme.primary,
-                          fontWeight: FontWeight.w600)),
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new, size: 14),
+                    label: Text(l10n.viewFullHistory, style: const TextStyle(fontSize: 12)),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StockMovementsScreen(initialProduct: product),
+                        ),
+                      ).then((_) => _load());
+                    },
+                  ),
                 ],
               ),
             ),
@@ -336,7 +433,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                     CrossAxisAlignment.end,
                                 children: [
                                   Text(
-                                    '${isIn ? '+' : ''}${m.quantity.toStringAsFixed(0)}',
+                                    '${isIn ? '+' : (m.quantity < 0 ? '-' : '')}${FormatUtils.formatQuantity(m.quantity.abs(), unit: product.unit)}',
                                     style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 15,
@@ -372,6 +469,59 @@ class _InventoryScreenState extends State<InventoryScreen> {
         _ => type,
       };
 
+  Future<void> _openStocktake() async {
+    final entitlement =
+        await LicenseService.instance.checkEntitlement(force: true);
+    if (!mounted) return;
+    if (!FeatureAccess.canAccess(Feature.stocktake, entitlement)) {
+      final result = await ProUpgradeSheet.show(
+        context,
+        feature: Feature.stocktake,
+      );
+      if (result == true && mounted) {
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
+        if (!mounted) return;
+        LicenseService.instance.invalidateCache();
+      }
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StocktakeScreen()),
+    );
+    if (mounted) _load();
+  }
+
+  Future<void> _openAuditHistory() async {
+    final entitlement =
+        await LicenseService.instance.checkEntitlement(force: true);
+    if (!mounted) return;
+    if (!FeatureAccess.canAccess(Feature.inventoryAudit, entitlement)) {
+      final result = await ProUpgradeSheet.show(
+        context,
+        feature: Feature.inventoryAudit,
+      );
+      if (result == true && mounted) {
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
+        if (!mounted) return;
+        LicenseService.instance.invalidateCache();
+      }
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AuditHistoryScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -392,9 +542,45 @@ class _InventoryScreenState extends State<InventoryScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: l10n.allMovementsHistory,
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const StockMovementsScreen()),
+            ).then((_) => _load()),
+          ),
+          IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             tooltip: l10n.scanToLocate,
             onPressed: _scanBarcode,
+          ),
+          PopupMenuButton<String>(
+            onSelected: (val) {
+              if (val == 'stocktake') _openStocktake();
+              if (val == 'audit') _openAuditHistory();
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'stocktake',
+                child: Row(
+                  children: [
+                    const Icon(Icons.fact_check_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Text(l10n.stocktakeTitle),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'audit',
+                child: Row(
+                  children: [
+                    const Icon(Icons.history_edu_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Text(l10n.auditHistoryTitle),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -411,6 +597,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
+                          _debounceTimer?.cancel();
                           _searchCtrl.clear();
                           _query = '';
                           _load();
@@ -424,42 +611,51 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              onChanged: (v) {
-                _query = v;
-                _load();
-              },
+              onChanged: _onSearchChanged,
             ),
           ),
 
-          // Summary strip
+          // Summary strip with interactive filtering
           if (_products != null && _products!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Row(
-                children: [
-                  _SummaryChip(
-                    icon: Icons.inventory_2_outlined,
-                    label:
-                        '${_products!.length} ${l10n.trackedProducts}',
-                    color: cs.primary,
-                  ),
-                  if (lowCount > 0) ...[
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _SummaryChip(
+                      icon: Icons.inventory_2_outlined,
+                      label: '${_products!.length} ${l10n.all}',
+                      color: cs.primary,
+                      selected: _stockFilter == 'all',
+                      onTap: () => setState(() => _stockFilter = 'all'),
+                    ),
                     const SizedBox(width: 8),
                     _SummaryChip(
                       icon: Icons.warning_amber_rounded,
                       label: '$lowCount ${l10n.lowStock}',
                       color: Colors.orange,
+                      selected: _stockFilter == 'low',
+                      onTap: () => setState(() => _stockFilter = 'low'),
                     ),
-                  ],
-                  if (outCount > 0) ...[
                     const SizedBox(width: 8),
                     _SummaryChip(
                       icon: Icons.cancel_outlined,
                       label: '$outCount ${l10n.outOfStock}',
                       color: cs.error,
+                      selected: _stockFilter == 'out',
+                      onTap: () => setState(() => _stockFilter = 'out'),
+                    ),
+                    const SizedBox(width: 8),
+                    _SummaryChip(
+                      icon: Icons.check_circle_outline,
+                      label: '${_products!.length - lowCount - outCount} ${l10n.healthyStock}',
+                      color: Colors.green,
+                      selected: _stockFilter == 'healthy',
+                      onTap: () => setState(() => _stockFilter = 'healthy'),
                     ),
                   ],
-                ],
+                ),
               ),
             ),
 
@@ -490,7 +686,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final products = _products!;
+    List<Product> products = _products!;
+    if (_stockFilter == 'low') {
+      products = products
+          .where((p) =>
+              p.stockQuantity > 0 &&
+              p.minStock > 0 &&
+              p.stockQuantity <= p.minStock)
+          .toList();
+    } else if (_stockFilter == 'out') {
+      products = products.where((p) => p.stockQuantity <= 0).toList();
+    } else if (_stockFilter == 'healthy') {
+      products = products
+          .where((p) =>
+              p.stockQuantity > 0 &&
+              (p.minStock <= 0 || p.stockQuantity > p.minStock))
+          .toList();
+    }
     if (products.isEmpty) {
       return Center(
         child: Column(
@@ -602,7 +814,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         Row(
                           children: [
                             Text(
-                              p.stockQuantity.toStringAsFixed(0),
+                              FormatUtils.formatQuantity(p.stockQuantity,
+                                  unit: p.unit),
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -610,7 +823,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             ),
                             if (p.minStock > 0)
                               Text(
-                                ' / ${p.minStock.toStringAsFixed(0)}',
+                                ' / ${FormatUtils.formatQuantity(p.minStock)}',
                                 style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey.shade500),
@@ -665,27 +878,45 @@ class _SummaryChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _SummaryChip(
-      {required this.icon, required this.label, required this.color});
+  final bool selected;
+  final VoidCallback? onTap;
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.selected = false,
+    this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(label,
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: selected
+                ? color.withValues(alpha: 0.22)
+                : color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? color : color.withValues(alpha: 0.25),
+              width: selected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
               style: TextStyle(
-                  fontSize: 11,
-                  color: color,
-                  fontWeight: FontWeight.w600)),
-        ]),
+                fontSize: 11,
+                color: color,
+                fontWeight: selected ? FontWeight.bold : FontWeight.w600,
+              ),
+            ),
+          ]),
+        ),
       );
 }
 

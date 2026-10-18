@@ -14,6 +14,7 @@ import '../services/pdf_service.dart';
 import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
 import '../widgets/status_badge.dart';
+import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
 import '../widgets/responsive.dart';
 
@@ -604,22 +605,47 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             ),
           ],
 
-          // ── Customer card ────────────────────────────────
+          // ── Customer / Supplier card ────────────────────
           if (_contact != null || doc.recipientName != null) ...[
             const SizedBox(height: 10),
-            _card(Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.customerOrParty,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(_contact?.name ?? doc.recipientName ?? '',
-                    style: const TextStyle(fontSize: 15)),
-                if ((_contact?.phone ?? doc.recipientPhone) != null)
-                  _infoRow(l10n.phone, _contact?.phone ?? doc.recipientPhone!),
-                if (_contact?.address != null && _contact!.address!.isNotEmpty)
-                  _infoRow(l10n.address, _contact!.address!),
-              ],
+            _card(InkWell(
+              onTap: _contact != null
+                  ? () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CustomerDetailScreen(contact: _contact!),
+                        ),
+                      ).then((_) => _load())
+                  : null,
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          doc.type == 'purchase' ? l10n.supplier : l10n.customerOrParty,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      if (_contact != null)
+                        Icon(
+                          l10n.isArabic ? Icons.chevron_left : Icons.chevron_right,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(_contact?.name ?? doc.recipientName ?? '',
+                      style: const TextStyle(fontSize: 15)),
+                  if ((_contact?.phone ?? doc.recipientPhone) != null)
+                    _infoRow(l10n.phone, _contact?.phone ?? doc.recipientPhone!),
+                  if (_contact?.address != null && _contact!.address!.isNotEmpty)
+                    _infoRow(l10n.address, _contact!.address!),
+                ],
+              ),
             )),
           ],
 
@@ -812,9 +838,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                   ),
                 ),
               ),
-              // chevron_right is mirrored automatically in RTL.
               Icon(
-                Icons.chevron_right_rounded,
+                AppLocalizations.of(context).isArabic
+                    ? Icons.chevron_left_rounded
+                    : Icons.chevron_right_rounded,
                 color: colors.onSurfaceVariant,
                 size: 20,
               ),

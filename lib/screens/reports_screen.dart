@@ -12,8 +12,11 @@ import 'reports/product_report_screen.dart';
 import 'reports/purchases_report_screen.dart';
 import 'reports/sales_report_screen.dart';
 import 'reports/supplier_report_screen.dart';
+import 'stock_movements_screen.dart';
 import 'activation_screen.dart';
 import '../widgets/responsive.dart';
+import 'audit_history_screen.dart';
+import 'reports/advanced_inventory_analytics_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -65,112 +68,233 @@ class _ReportsScreenState extends State<ReportsScreen> {
     final l10n = AppLocalizations.of(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    final reports = [
-      _ReportEntry(
-        icon: Icons.account_balance_outlined,
-        color: primaryColor,
-        title: l10n.accounting,
-        screen: const AccountingScreen(),
-        proFeature: Feature.advancedReports,
+    final categories = [
+      _ReportCategory(
+        title: l10n.reportCatFinancial,
+        reports: [
+          _ReportEntry(
+            icon: Icons.account_balance_outlined,
+            color: primaryColor,
+            title: l10n.accounting,
+            subtitle: l10n.reportSubtitleAccounting,
+            screen: const AccountingScreen(),
+            proFeature: Feature.advancedReports,
+          ),
+        ],
       ),
-      _ReportEntry(
-        icon: Icons.trending_up_rounded,
-        color: Colors.green,
-        title: l10n.salesReport,
-        screen: const SalesReportScreen(),
+      _ReportCategory(
+        title: l10n.reportCatSalesPurchases,
+        reports: [
+          _ReportEntry(
+            icon: Icons.trending_up_rounded,
+            color: Colors.green,
+            title: l10n.salesReport,
+            subtitle: l10n.reportSubtitleSales,
+            screen: const SalesReportScreen(),
+          ),
+          _ReportEntry(
+            icon: Icons.shopping_cart_outlined,
+            color: Colors.orange,
+            title: l10n.purchasesReport,
+            subtitle: l10n.reportSubtitlePurchases,
+            screen: const PurchasesReportScreen(),
+            proFeature: Feature.advancedReports,
+          ),
+          _ReportEntry(
+            icon: Icons.payments_outlined,
+            color: Colors.teal,
+            title: l10n.paymentsReport,
+            subtitle: l10n.reportSubtitlePayments,
+            screen: const PaymentsReportScreen(),
+          ),
+          _ReportEntry(
+            icon: Icons.people_outlined,
+            color: Colors.blue,
+            title: l10n.customerReport,
+            subtitle: l10n.reportSubtitleCustomers,
+            screen: const CustomerReportScreen(),
+          ),
+          _ReportEntry(
+            icon: Icons.store_outlined,
+            color: Colors.deepPurple,
+            title: l10n.supplierReport,
+            subtitle: l10n.reportSubtitleSuppliers,
+            screen: const SupplierReportScreen(),
+            proFeature: Feature.advancedReports,
+          ),
+        ],
       ),
-      _ReportEntry(
-        icon: Icons.shopping_cart_outlined,
-        color: Colors.orange,
-        title: l10n.purchasesReport,
-        screen: const PurchasesReportScreen(),
-        proFeature: Feature.advancedReports,
+      _ReportCategory(
+        title: l10n.reportCatInventory,
+        reports: [
+          _ReportEntry(
+            icon: Icons.warehouse_outlined,
+            color: Colors.brown,
+            title: l10n.inventoryReport,
+            subtitle: l10n.reportSubtitleInventory,
+            screen: const InventoryReportScreen(),
+            proFeature: Feature.advancedReports,
+          ),
+          _ReportEntry(
+            icon: Icons.notification_important_outlined,
+            color: Colors.deepOrange,
+            title: l10n.lowStockReport,
+            subtitle: l10n.reportSubtitleLowStock,
+            screen: const InventoryReportScreen(initialFilter: 'low_stock'),
+            proFeature: Feature.advancedReports,
+          ),
+          _ReportEntry(
+            icon: Icons.history_outlined,
+            color: Colors.blueGrey,
+            title: l10n.stockMovementsReport,
+            subtitle: l10n.reportSubtitleMovements,
+            screen: const StockMovementsScreen(),
+            proFeature: Feature.advancedReports,
+          ),
+          _ReportEntry(
+            icon: Icons.inventory_2_outlined,
+            color: Colors.indigo,
+            title: l10n.productReport,
+            subtitle: l10n.reportSubtitleProducts,
+            screen: const ProductReportScreen(),
+            proFeature: Feature.advancedReports,
+          ),
+          _ReportEntry(
+            icon: Icons.analytics_outlined,
+            color: Colors.teal,
+            title: l10n.advancedInventoryAnalytics,
+            subtitle: l10n.reportSubtitleAdvancedAnalytics,
+            screen: const AdvancedInventoryAnalyticsScreen(),
+            proFeature: Feature.advancedReports,
+          ),
+        ],
       ),
-      _ReportEntry(
-        icon: Icons.payments_outlined,
-        color: Colors.teal,
-        title: l10n.paymentsReport,
-        screen: const PaymentsReportScreen(),
-      ),
-      _ReportEntry(
-        icon: Icons.people_outlined,
-        color: Colors.blue,
-        title: l10n.customerReport,
-        screen: const CustomerReportScreen(),
-      ),
-      _ReportEntry(
-        icon: Icons.store_outlined,
-        color: Colors.deepPurple,
-        title: l10n.supplierReport,
-        screen: const SupplierReportScreen(),
-        proFeature: Feature.advancedReports,
-      ),
-      _ReportEntry(
-        icon: Icons.warehouse_outlined,
-        color: Colors.brown,
-        title: l10n.inventoryReport,
-        screen: const InventoryReportScreen(),
-        proFeature: Feature.advancedReports,
-      ),
-      _ReportEntry(
-        icon: Icons.inventory_2_outlined,
-        color: Colors.indigo,
-        title: l10n.productReport,
-        screen: const ProductReportScreen(),
-        proFeature: Feature.advancedReports,
+      _ReportCategory(
+        title: l10n.reportCatAudit,
+        reports: [
+          _ReportEntry(
+            icon: Icons.history_edu_outlined,
+            color: Colors.blueGrey,
+            title: l10n.auditHistoryTitle,
+            subtitle: l10n.reportSubtitleAudit,
+            screen: const AuditHistoryScreen(),
+            proFeature: Feature.inventoryAudit,
+          ),
+        ],
       ),
     ];
 
+    final chevronIcon = Directionality.of(context) == TextDirection.rtl
+        ? Icons.chevron_left
+        : Icons.chevron_right;
+
     return Scaffold(
       appBar: AppBar(title: Text(l10n.reports), centerTitle: true),
-      body: ResponsiveCenter(child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: reports.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, index) {
-          final entry = reports[index];
-          final locked = entry.proFeature != null &&
-              !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
-          return Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-            ),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: entry.color.withValues(alpha: 0.12),
-                child: Icon(entry.icon, color: entry.color, size: 22),
-              ),
-              title: Text(entry.title,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (entry.proFeature != null) ...[
-                    const ProBadge(),
-                    const SizedBox(width: 8),
-                  ],
-                  Icon(
-                    locked ? Icons.lock_outline : Icons.chevron_right,
-                    color: locked ? Colors.grey : primaryColor,
-                    size: locked ? 18 : 24,
+      body: ResponsiveCenter(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          itemCount: categories.length,
+          itemBuilder: (context, catIndex) {
+            final cat = categories[catIndex];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: catIndex == 0 ? 8 : 20,
+                    bottom: 8,
+                    right: 4,
+                    left: 4,
                   ),
-                ],
-              ),
-              onTap: () => _openReport(entry),
-            ),
-          );
-        },
-      )),
+                  child: Text(
+                    cat.title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: primaryColor,
+                    ),
+                  ),
+                ),
+                ...cat.reports.map((entry) {
+                  final locked = entry.proFeature != null &&
+                      !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 4,
+                        ),
+                        leading: CircleAvatar(
+                          backgroundColor: entry.color.withValues(alpha: 0.12),
+                          child: Icon(entry.icon, color: entry.color, size: 22),
+                        ),
+                        title: Text(
+                          entry.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            entry.subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (entry.proFeature != null) ...[
+                              const ProBadge(),
+                              const SizedBox(width: 8),
+                            ],
+                            Icon(
+                              locked ? Icons.lock_outline : chevronIcon,
+                              color: locked ? Colors.grey : primaryColor,
+                              size: locked ? 18 : 24,
+                            ),
+                          ],
+                        ),
+                        onTap: () => _openReport(entry),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
+}
+
+class _ReportCategory {
+  final String title;
+  final List<_ReportEntry> reports;
+  const _ReportCategory({required this.title, required this.reports});
 }
 
 class _ReportEntry {
   final IconData icon;
   final Color color;
   final String title;
+  final String subtitle;
   final Widget screen;
   final Feature? proFeature;
 
@@ -178,6 +302,7 @@ class _ReportEntry {
     required this.icon,
     required this.color,
     required this.title,
+    required this.subtitle,
     required this.screen,
     this.proFeature,
   });

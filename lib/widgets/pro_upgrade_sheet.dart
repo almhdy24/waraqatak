@@ -154,6 +154,10 @@ class ProUpgradeSheet extends StatelessWidget {
       Feature.purchases => l10n.purchases,
       Feature.inventory => l10n.inventory,
       Feature.advancedReports => l10n.proAdvancedReports,
+      Feature.stocktake => l10n.featureStocktake,
+      Feature.bulkPriceUpdate => l10n.featureBulkPriceUpdate,
+      Feature.csvImportExport => l10n.featureCsvImportExport,
+      Feature.inventoryAudit => l10n.featureInventoryAudit,
       _ => l10n.proFeatureTitle,
     };
   }

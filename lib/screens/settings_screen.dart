@@ -78,6 +78,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
+    final chevronIcon = l10n.isArabic ? Icons.chevron_left : Icons.chevron_right;
+
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings), centerTitle: true),
       body: ResponsiveCenter(
@@ -89,7 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: const Icon(Icons.workspace_premium_outlined),
               title: Text(l10n.licenseScreenTitle),
               subtitle: Text(_entitlementLabel(l10n)),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Icon(chevronIcon),
               onTap: () async {
                 await Navigator.push(
                   context,
@@ -102,7 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ListTile(
               leading: const Icon(Icons.business),
               title: Text(l10n.businessData),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Icon(chevronIcon),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
@@ -112,7 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: const Icon(Icons.account_balance_outlined),
               title: Text(l10n.financialSettings),
               subtitle: Text(l10n.financialSettingsDesc),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Icon(chevronIcon),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -124,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: const Icon(Icons.payment_outlined),
               title: Text(l10n.paymentMethods),
               subtitle: Text(l10n.configurePaymentMethods),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Icon(chevronIcon),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()),
@@ -134,7 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: const Icon(Icons.picture_as_pdf_outlined),
               title: Text(l10n.pdfCustomize),
               subtitle: Text(l10n.pdfCustomizeDesc),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Icon(chevronIcon),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PdfCustomizeScreen()),
@@ -329,7 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: const Icon(Icons.info_outline),
               title: Text(l10n.about),
               subtitle: Text(l10n.aboutSubtitle),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: Icon(chevronIcon),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AboutScreen()),

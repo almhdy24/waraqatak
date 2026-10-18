@@ -3,9 +3,15 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../models/tax_profile.dart';
+import '../services/feature_access.dart';
+import '../services/license_service.dart';
 import '../services/product_service.dart';
-import 'barcode_scanner_screen.dart';
+import '../utils/error_utils.dart';
+import '../utils/format_utils.dart';
+import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
+import 'barcode_scanner_screen.dart';
+import 'inventory_screen.dart';
 
 class ProductFormScreen extends StatefulWidget {
   final Product? product;
@@ -28,6 +34,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _stockController = TextEditingController(text: '0');
   final _minStockController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
+  final _categoryController = TextEditingController();
 
   String _type = Product.typeProduct;
   bool _taxable = true;
@@ -35,6 +42,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   bool _saving = false;
   int? _taxProfileId;
   List<TaxProfile> _taxProfiles = [];
+  List<String> _existingCategories = [];
+  double _currentStock = 0;
 
   @override
   void initState() {
@@ -46,10 +55,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _codeController.text = p.code ?? '';
       _barcodeController.text = p.barcode ?? '';
       _unitController.text = p.unit ?? '';
+      _categoryController.text = p.category ?? '';
       _salePriceController.text = p.salePrice.toString();
       _purchasePriceController.text = p.purchasePrice.toString();
-      _stockController.text = p.stockQuantity.toString();
-      _minStockController.text = p.minStock.toString();
+      _currentStock = p.stockQuantity;
+      _stockController.text = FormatUtils.formatQuantity(p.stockQuantity);
+      _minStockController.text =
+          p.minStock > 0 ? FormatUtils.formatQuantity(p.minStock) : '0';
       _notesController.text = p.notes ?? '';
       _taxable = p.isTaxable;
       _isActive = p.isActive;
@@ -58,6 +70,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _barcodeController.text = widget.initialBarcode!;
     }
     _loadTaxProfiles();
+    _loadCategories();
   }
 
   Future<void> _loadTaxProfiles() async {
@@ -66,12 +79,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     if (mounted) setState(() => _taxProfiles = profiles);
   }
 
+  Future<void> _loadCategories() async {
+    final categories = await DatabaseHelper.instance.getProductCategories();
+    if (mounted) setState(() => _existingCategories = categories);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
     _codeController.dispose();
     _barcodeController.dispose();
     _unitController.dispose();
+    _categoryController.dispose();
     _salePriceController.dispose();
     _purchasePriceController.dispose();
     _stockController.dispose();
@@ -90,9 +109,45 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  Future<void> _handleStockAdjustment() async {
+    final entitlement = await LicenseService.instance.checkEntitlement();
+    if (!mounted) return;
+    if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
+      await ProUpgradeSheet.show(context, feature: Feature.inventory);
+      return;
+    }
+    final adjusted =
+        await InventoryScreen.showAdjustDialog(context, widget.product!);
+    if (adjusted && mounted) {
+      final updated =
+          await DatabaseHelper.instance.getProductById(widget.product!.id!);
+      if (updated != null && mounted) {
+        setState(() {
+          _currentStock = updated.stockQuantity;
+          _stockController.text =
+              FormatUtils.formatQuantity(updated.stockQuantity);
+        });
+      }
+    }
+  }
+
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+
+    final isNew = widget.product == null;
+    if (!isNew &&
+        widget.product!.isProduct &&
+        _type == Product.typeService &&
+        _currentStock > 0) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                AppLocalizations.of(context).cannotConvertStockedProductToService)),
+      );
+      return;
+    }
 
     final barcode = _barcodeController.text.trim().isEmpty
         ? null
@@ -121,15 +176,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       unit: _unitController.text.trim().isEmpty ? null : _unitController.text.trim(),
       salePrice: double.tryParse(_salePriceController.text) ?? 0,
       purchasePrice: double.tryParse(_purchasePriceController.text) ?? 0,
-      stockQuantity: _type == Product.typeService
-          ? 0
-          : (double.tryParse(_stockController.text) ?? 0),
+      stockQuantity: isNew
+          ? (_type == Product.typeService
+              ? 0
+              : (double.tryParse(_stockController.text) ?? 0))
+          : _currentStock,
       minStock: _type == Product.typeService
           ? 0
           : (double.tryParse(_minStockController.text) ?? 0),
       isTaxable: _taxable,
       isActive: _isActive,
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      category: _categoryController.text.trim().isEmpty ? null : _categoryController.text.trim(),
       taxProfileId: _taxProfileId,
       createdAt: widget.product?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
@@ -148,7 +206,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -221,7 +279,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${l10n.operationFailed}: $e')),
+          SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n))),
         );
       }
     }
@@ -280,7 +338,22 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         ),
                       ],
                       selected: {_type},
-                      onSelectionChanged: (s) => setState(() => _type = s.first),
+                      onSelectionChanged: (s) {
+                        final newType = s.first;
+                        if (!isNew &&
+                            widget.product!.isProduct &&
+                            newType == Product.typeService &&
+                            _currentStock > 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  l10n.cannotConvertStockedProductToService),
+                            ),
+                          );
+                          return;
+                        }
+                        setState(() => _type = newType);
+                      },
                     ),
                   ],
                 ),
@@ -335,6 +408,61 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    RawAutocomplete<String>(
+                      textEditingController: _categoryController,
+                      focusNode: FocusNode(),
+                      optionsBuilder: (textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return _existingCategories;
+                        }
+                        return _existingCategories.where(
+                          (c) => c.toLowerCase().contains(textEditingValue.text.toLowerCase()),
+                        );
+                      },
+                      onSelected: (selection) {
+                        _categoryController.text = selection;
+                      },
+                      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: InputDecoration(
+                            labelText: l10n.category,
+                            hintText: l10n.categoryHint,
+                            prefixIcon: const Icon(Icons.category_outlined),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        );
+                      },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        return Align(
+                          alignment: AlignmentDirectional.topStart,
+                          child: Material(
+                            elevation: 4.0,
+                            borderRadius: BorderRadius.circular(12),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                itemBuilder: (BuildContext context, int index) {
+                                  final option = options.elementAt(index);
+                                  return InkWell(
+                                    onTap: () => onSelected(option),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      child: Text(option),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -371,6 +499,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       decoration: InputDecoration(
                         labelText: l10n.purchasePrice,
                         prefixIcon: const Icon(Icons.money),
+                        helperText: l10n.purchasePriceCostHelp,
+                        helperMaxLines: 2,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -394,22 +524,41 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _stockController,
+                        readOnly: !isNew,
                         decoration: InputDecoration(
-                          labelText: l10n.stockQuantity,
+                          labelText: isNew
+                              ? l10n.openingStock
+                              : l10n.stockQuantity,
                           prefixIcon: const Icon(Icons.inventory_2_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          helperText: isNew
+                              ? l10n.openingStockHelp
+                              : l10n.stockCannotBeEditedDirectly,
+                          helperMaxLines: 2,
+                          suffixIcon: !isNew
+                              ? IconButton(
+                                  icon: const Icon(Icons.tune),
+                                  tooltip: l10n.stockAdjustment,
+                                  onPressed: _handleStockAdjustment,
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _minStockController,
                         decoration: InputDecoration(
                           labelText: l10n.lowStockThreshold,
-                          prefixIcon: const Icon(Icons.warning_amber_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          prefixIcon:
+                              const Icon(Icons.warning_amber_outlined),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ],
                   ),
@@ -489,7 +638,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         height: 24,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary),
                       )
-                    : Text(l10n.save),
+                    : Text(
+                        isNew
+                            ? (isService ? l10n.saveService : l10n.saveProduct)
+                            : l10n.saveChanges,
+                      ),
               ),
             ),
           ],

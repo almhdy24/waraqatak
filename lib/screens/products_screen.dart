@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
+import '../utils/error_utils.dart';
+import '../utils/format_utils.dart';
+import 'barcode_scanner_screen.dart';
 import 'inventory_screen.dart';
 import 'product_form_screen.dart';
 import 'activation_screen.dart';
@@ -11,6 +15,8 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
+import 'bulk_pricing_screen.dart';
+import 'csv_import_export_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   final int refreshToken;
@@ -22,10 +28,14 @@ class ProductsScreen extends StatefulWidget {
 
 class _ProductsScreenState extends State<ProductsScreen> {
   List<Product>? _products;
+  List<String> _categories = [];
   final _searchCtrl = TextEditingController();
   String _query = '';
   String? _typeFilter;
+  String? _categoryFilter;
   String? _error;
+  Timer? _debounceTimer;
+  int _searchSession = 0;
 
   static final _priceFmt = NumberFormat('#,##0.##');
 
@@ -43,31 +53,89 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged(String v) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      _query = v.trim();
+      _load();
+    });
+  }
+
   Future<void> _load() async {
+    final currentSession = ++_searchSession;
     setState(() {
       _products = null;
       _error = null;
     });
     try {
+      final categoriesFuture = DatabaseHelper.instance.getProductCategories();
       List<Product> products;
       if (_query.isNotEmpty) {
-        products = await DatabaseHelper.instance.searchProducts(_query);
+        products = await DatabaseHelper.instance.searchProducts(
+          _query,
+          category: _categoryFilter,
+        );
         if (_typeFilter != null) {
           products = products.where((p) => p.type == _typeFilter).toList();
         }
       } else {
-        products =
-            await DatabaseHelper.instance.getAllProducts(type: _typeFilter);
+        products = await DatabaseHelper.instance.getAllProducts(
+          type: _typeFilter,
+          category: _categoryFilter,
+        );
       }
-      if (!mounted) return;
-      setState(() => _products = products);
+      final categories = await categoriesFuture;
+      if (!mounted || currentSession != _searchSession) return;
+      setState(() {
+        _products = products;
+        _categories = categories;
+      });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || currentSession != _searchSession) return;
       setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _scanBarcode() async {
+    final l10n = AppLocalizations.of(context);
+    final barcode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (barcode == null || barcode.trim().isEmpty || !mounted) return;
+
+    final query = barcode.trim();
+    final matched = await DatabaseHelper.instance.searchProducts(query);
+    final exact = matched.where((p) => p.barcode == query).firstOrNull ??
+        (matched.isNotEmpty ? matched.first : null);
+
+    if (!mounted) return;
+    if (exact != null) {
+      _searchCtrl.text = exact.barcode ?? exact.name;
+      _query = _searchCtrl.text;
+      _load();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${l10n.barcodeNotFound}: $query'),
+          action: SnackBarAction(
+            label: l10n.addProduct,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProductFormScreen(initialBarcode: query),
+                ),
+              ).then((_) => _load());
+            },
+          ),
+        ),
+      );
     }
   }
 
@@ -133,7 +201,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${l10n.operationFailed}: $e')));
+            SnackBar(content: Text(ErrorUtils.toFriendlyMessage(e, l10n))));
       }
     }
   }
@@ -184,6 +252,60 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
   }
 
+  Future<void> _openBulkPricing() async {
+    final entitlement =
+        await LicenseService.instance.checkEntitlement(force: true);
+    if (!mounted) return;
+    if (!FeatureAccess.canAccess(Feature.bulkPriceUpdate, entitlement)) {
+      final result = await ProUpgradeSheet.show(
+        context,
+        feature: Feature.bulkPriceUpdate,
+      );
+      if (result == true && mounted) {
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
+        if (!mounted) return;
+        LicenseService.instance.invalidateCache();
+      }
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const BulkPricingScreen()),
+    );
+    if (mounted) _load();
+  }
+
+  Future<void> _openCsv() async {
+    final entitlement =
+        await LicenseService.instance.checkEntitlement(force: true);
+    if (!mounted) return;
+    if (!FeatureAccess.canAccess(Feature.csvImportExport, entitlement)) {
+      final result = await ProUpgradeSheet.show(
+        context,
+        feature: Feature.csvImportExport,
+      );
+      if (result == true && mounted) {
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
+        if (!mounted) return;
+        LicenseService.instance.invalidateCache();
+      }
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CsvImportExportScreen()),
+    );
+    if (mounted) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -195,9 +317,42 @@ class _ProductsScreenState extends State<ProductsScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: l10n.scanBarcode,
+            onPressed: _scanBarcode,
+          ),
+          IconButton(
             icon: const Icon(Icons.warehouse_outlined),
             tooltip: l10n.inventory,
             onPressed: _openInventory,
+          ),
+          PopupMenuButton<String>(
+            onSelected: (val) {
+              if (val == 'bulk_pricing') _openBulkPricing();
+              if (val == 'csv') _openCsv();
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'bulk_pricing',
+                child: Row(
+                  children: [
+                    const Icon(Icons.price_change_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Text(l10n.bulkPricingTitle),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'csv',
+                child: Row(
+                  children: [
+                    const Icon(Icons.import_export_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Text(l10n.csvImportExportTitle),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -210,15 +365,26 @@ class _ProductsScreenState extends State<ProductsScreen> {
               decoration: InputDecoration(
                 hintText: l10n.search,
                 prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _query.isNotEmpty
-                    ? IconButton(
+                suffixIcon: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_query.isNotEmpty)
+                      IconButton(
                         icon: const Icon(Icons.clear, size: 18),
                         onPressed: () {
+                          _debounceTimer?.cancel();
                           _searchCtrl.clear();
                           _query = '';
                           _load();
-                        })
-                    : null,
+                        },
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.qr_code_scanner, size: 20),
+                      tooltip: l10n.scanBarcode,
+                      onPressed: _scanBarcode,
+                    ),
+                  ],
+                ),
                 filled: true,
                 fillColor: cs.surfaceContainerLow,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -227,10 +393,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   borderSide: BorderSide.none,
                 ),
               ),
-              onChanged: (v) {
-                _query = v;
-                _load();
-              },
+              onChanged: _onSearchChanged,
             ),
           ),
           Padding(
@@ -245,6 +408,23 @@ class _ProductsScreenState extends State<ProductsScreen> {
               ],
             ),
           ),
+          if (_categories.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+              child: SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _categoryChip(l10n.allCategories, null),
+                    ..._categories.map((cat) => Padding(
+                          padding: const EdgeInsetsDirectional.only(start: 6),
+                          child: _categoryChip(cat, cat),
+                        )),
+                  ],
+                ),
+              ),
+            ),
           Expanded(child: _buildList(context, l10n, cs)),
         ],
       )),
@@ -255,7 +435,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
           MaterialPageRoute(builder: (_) => const ProductFormScreen()),
         ).then((_) => _load()),
         icon: const Icon(Icons.add),
-        label: Text(l10n.products),
+        label: Text(l10n.addProduct),
       ),
     );
   }
@@ -273,6 +453,20 @@ class _ProductsScreenState extends State<ProductsScreen> {
     );
   }
 
+  Widget _categoryChip(String label, String? category) {
+    final selected = _categoryFilter == category;
+    return FilterChip(
+      avatar: selected ? null : const Icon(Icons.label_outline, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: selected,
+      visualDensity: VisualDensity.compact,
+      onSelected: (_) {
+        setState(() => _categoryFilter = category);
+        _load();
+      },
+    );
+  }
+
   Widget _buildList(
       BuildContext context, AppLocalizations l10n, ColorScheme cs) {
     if (_error != null) {
@@ -280,7 +474,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
           const SizedBox(height: 12),
-          Text(l10n.operationFailed),
+          Text(
+            ErrorUtils.toFriendlyMessage(_error!, l10n),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 12),
           FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
         ]),
@@ -292,14 +489,34 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final products = _products!;
     if (products.isEmpty) {
       return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.inventory_2_outlined,
-              size: 72, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text(l10n.noProducts,
-              style:
-                  TextStyle(color: Colors.grey.shade500, fontSize: 15)),
-        ]),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.inventory_2_outlined,
+                  size: 72, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text(
+                _query.isNotEmpty ? l10n.noMatchingProduct : l10n.noProducts,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+              ),
+              if (_query.isEmpty) ...[
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ProductFormScreen()),
+                  ).then((_) => _load()),
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.addProduct),
+                ),
+              ],
+            ],
+          ),
+        ),
       );
     }
 
@@ -429,6 +646,10 @@ class _ProductCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Wrap(spacing: 10, children: [
+                          if (product.category != null &&
+                              product.category!.isNotEmpty)
+                            _metaChip(
+                                Icons.category_outlined, product.category!),
                           if (product.code != null &&
                               product.code!.isNotEmpty)
                             _metaChip(
@@ -527,8 +748,9 @@ class _ProductCard extends StatelessWidget {
                                   size: 13, color: stockColor),
                               const SizedBox(width: 4),
                               Text(
-                                product.stockQuantity
-                                    .toStringAsFixed(0),
+                                FormatUtils.formatQuantity(
+                                    product.stockQuantity,
+                                    unit: product.unit),
                                 style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
@@ -540,7 +762,7 @@ class _ProductCard extends StatelessWidget {
                                         fontSize: 11,
                                         color: Colors.grey.shade400)),
                                 Text(
-                                  product.minStock.toStringAsFixed(0),
+                                  FormatUtils.formatQuantity(product.minStock),
                                   style: TextStyle(
                                       fontSize: 11,
                                       color: Colors.grey.shade500),

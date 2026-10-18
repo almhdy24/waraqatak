@@ -5,8 +5,9 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/document.dart';
-import '../services/document_service.dart';
 import '../models/payment_method.dart';
+import '../services/document_service.dart';
+import '../utils/error_utils.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -105,8 +106,12 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     _selectedDate = doc.date;
 
     _notesController.text = doc.notes ?? '';
-    _discountController.text = doc.discount.toString();
-    _paidController.text = doc.paid.toString();
+    _discountController.text = doc.discount == doc.discount.roundToDouble()
+        ? doc.discount.toInt().toString()
+        : doc.discount.toString();
+    _paidController.text = doc.paid == doc.paid.roundToDouble()
+        ? doc.paid.toInt().toString()
+        : doc.paid.toString();
 
     if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
       _paymentMethod = doc.paymentMethod ?? 'cash';
@@ -121,11 +126,17 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       _amountController.text = doc.paid.toString();
     }
 
-    if (doc.type == 'invoice' || doc.type == 'quotation') {
+    if (doc.type == 'invoice' || doc.type == 'quotation' || doc.type == 'purchase') {
       for (final item in items) {
         _descriptionControllers.add(TextEditingController(text: item.description));
-        _quantityControllers.add(TextEditingController(text: item.quantity.toString()));
-        _priceControllers.add(TextEditingController(text: item.price.toString()));
+        _quantityControllers.add(TextEditingController(
+            text: item.quantity % 1 == 0
+                ? item.quantity.toInt().toString()
+                : item.quantity.toString()));
+        _priceControllers.add(TextEditingController(
+            text: item.price % 1 == 0
+                ? item.price.toInt().toString()
+                : item.price.toString()));
         _taxableList.add(item.taxable);
         _productIds.add(item.productId);
       }
@@ -174,6 +185,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final type = _document!.type;
     final isInvoice = type == 'invoice';
     final isQuotation = type == 'quotation';
+    final isPurchase = type == 'purchase';
     final isFinancial = type == 'payment_receipt' || type == 'expense_voucher';
     final isCustom = type == 'custom';
 
@@ -185,12 +197,12 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         name: _contactName!.trim(),
         phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
         address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-        type: type == 'expense_voucher' ? 'supplier' : 'customer',
+        type: (type == 'expense_voucher' || isPurchase) ? 'supplier' : 'customer',
       );
     }
 
     final items = <DocumentItemInput>[];
-    if (isInvoice || isQuotation) {
+    if (isInvoice || isQuotation || isPurchase) {
       for (int i = 0; i < _descriptionControllers.length; i++) {
         items.add(
           DocumentItemInput(
@@ -206,7 +218,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
 
     double discount = 0;
     double paid = 0;
-    if (isInvoice) {
+    if (isInvoice || isPurchase) {
       discount = double.tryParse(_discountController.text) ?? 0;
       paid = double.tryParse(_paidController.text) ?? 0;
     } else if (isFinancial) {
@@ -257,7 +269,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${AppLocalizations.of(context).operationFailed}: $e'),
+          content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context))),
         ),
       );
     } finally {
@@ -277,8 +289,10 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final type = _document!.type;
     final isInvoice = type == 'invoice';
     final isQuotation = type == 'quotation';
+    final isPurchase = type == 'purchase';
     final isFinancial = type == 'payment_receipt' || type == 'expense_voucher';
     final isCustom = type == 'custom';
+    final isSupplier = type == 'expense_voucher' || isPurchase;
 
     final allowedMethods = _enabledMethods;
 
@@ -300,14 +314,14 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        type == 'expense_voucher' ? l10n.supplier : l10n.customer,
+                        isSupplier ? l10n.supplier : l10n.customer,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       const SizedBox(height: 12),
                       ContactAutocompleteField(
                         initialContact: _selectedContact,
-                        label: type == 'expense_voucher' ? l10n.supplier : l10n.customer,
-                        type: type == 'expense_voucher' ? 'supplier' : 'customer',
+                        label: isSupplier ? l10n.supplier : l10n.customer,
+                        type: isSupplier ? 'supplier' : 'customer',
                         onContactChanged: (contact) {
                           setState(() {
                             _selectedContact = contact;
@@ -419,7 +433,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
               ),
             ],
 
-            if (isInvoice || isQuotation) ...[
+            if (isInvoice || isQuotation || isPurchase) ...[
               Text(l10n.products, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               ...List.generate(
@@ -430,6 +444,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                   priceController: _priceControllers[index],
                   taxable: _taxableList[index],
                   productId: _productIds[index],
+                  usePurchasePrice: isPurchase,
                   onProductChanged: (productId) {
                     setState(() => _productIds[index] = productId);
                   },
@@ -445,7 +460,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                 label: Text(l10n.products),
               ),
               const Divider(),
-              if (isInvoice) ...[
+              if (isInvoice || isPurchase) ...[
                 TextFormField(
                   controller: _discountController,
                   decoration: InputDecoration(labelText: l10n.discount),
@@ -544,7 +559,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                 ),
                 child: _saving
                     ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
-                    : Text(l10n.save),
+                    : Text(l10n.saveChanges),
               ),
             ),
           ],

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../services/pdf/pdf_report_builder.dart';
+import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
 import '../../widgets/responsive.dart';
 
@@ -36,6 +39,66 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
     }
   }
 
+  Future<void> _exportPdf() async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _rows == null) return;
+
+    final totalOutstanding = _rows!.fold(0.0,
+        (s, r) => s + (r['outstanding'] as num).toDouble());
+
+    final columns = [
+      PdfReportColumn(title: l10n.customer, flex: 2.2),
+      PdfReportColumn(title: l10n.phone, flex: 1.5),
+      PdfReportColumn(title: l10n.total, flex: 1.3, align: pw.TextAlign.right),
+      PdfReportColumn(title: l10n.paid, flex: 1.3, align: pw.TextAlign.right),
+      PdfReportColumn(title: l10n.remaining, flex: 1.3, align: pw.TextAlign.right),
+    ];
+
+    final rows = _rows!.map((r) {
+      return [
+        r['name'] as String? ?? '—',
+        r['phone'] as String? ?? '—',
+        _numFmt.format((r['total'] as num).toDouble()),
+        _numFmt.format((r['paid'] as num).toDouble()),
+        _numFmt.format((r['outstanding'] as num).toDouble()),
+      ];
+    }).toList();
+
+    final data = PdfReportData(
+      title: l10n.customerReport,
+      dateRange: DateFormat('dd/MM/yyyy').format(DateTime.now()),
+      summaryCards: [
+        PdfReportSummaryCard(
+          label: l10n.totalOutstanding,
+          value: _numFmt.format(totalOutstanding),
+        ),
+      ],
+      columns: columns,
+      rows: rows,
+      totalsRow: [
+        l10n.total,
+        '',
+        '',
+        '',
+        _numFmt.format(totalOutstanding),
+      ],
+    );
+
+    try {
+      await PdfService.printOrShareReportPdf(
+        business: business,
+        l10n: l10n,
+        data: data,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -44,7 +107,17 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
         (s, r) => s + (r['outstanding'] as num).toDouble()) ?? 0.0;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.customerReport), centerTitle: true),
+      appBar: AppBar(
+        title: Text(l10n.customerReport),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: l10n.printOrShareReport,
+            onPressed: _rows != null && _rows!.isNotEmpty ? _exportPdf : null,
+          ),
+        ],
+      ),
       body: ResponsiveCenter(child: Column(
         children: [
           if (_rows != null && _rows!.isNotEmpty)

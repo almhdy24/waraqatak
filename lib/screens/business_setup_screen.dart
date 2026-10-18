@@ -325,7 +325,11 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                           style: TextStyle(
                               fontSize: 12,
                               color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: Icon(
+                        l10n.isArabic
+                            ? Icons.chevron_left
+                            : Icons.chevron_right,
+                      ),
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(

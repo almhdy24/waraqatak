@@ -14,6 +14,7 @@ class ProductService {
     double minStock = 0,
     bool isTaxable = true,
     String? notes,
+    String? category,
   }) async {
     final now = DateTime.now();
     final product = Product(
@@ -29,6 +30,7 @@ class ProductService {
       isTaxable: isTaxable,
       isActive: true,
       notes: notes,
+      category: category,
       createdAt: now,
       updatedAt: now,
     );
@@ -50,6 +52,8 @@ class ProductService {
       isTaxable: product.isTaxable,
       isActive: product.isActive,
       notes: product.notes,
+      category: product.category,
+      taxProfileId: product.taxProfileId,
       createdAt: product.createdAt,
       updatedAt: DateTime.now(),
     );
@@ -68,16 +72,28 @@ class ProductService {
     return DatabaseHelper.instance.isProductReferenced(id);
   }
 
-  static Future<List<Product>> getAllProducts({String? type, bool? activeOnly}) async {
-    return DatabaseHelper.instance.getAllProducts(type: type, activeOnly: activeOnly);
+  static Future<List<Product>> getAllProducts({
+    String? type,
+    bool? activeOnly,
+    String? category,
+  }) async {
+    return DatabaseHelper.instance.getAllProducts(
+      type: type,
+      activeOnly: activeOnly,
+      category: category,
+    );
   }
 
-  static Future<List<Product>> searchProducts(String query) async {
-    return DatabaseHelper.instance.searchProducts(query);
+  static Future<List<String>> getCategories() async {
+    return DatabaseHelper.instance.getProductCategories();
   }
 
-  static Future<List<Product>> searchActive(String query) async {
-    return DatabaseHelper.instance.searchActiveProducts(query);
+  static Future<List<Product>> searchProducts(String query, {int? limit}) async {
+    return DatabaseHelper.instance.searchProducts(query, limit: limit);
+  }
+
+  static Future<List<Product>> searchActive(String query, {int limit = 10}) async {
+    return DatabaseHelper.instance.searchActiveProducts(query, limit: limit);
   }
 
   static Future<Product?> findByBarcode(String barcode) async {
