@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-aab:
@@ -67,18 +67,30 @@ jobs:
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: waraqatak-${{ github.ref_name }}-aab
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
 
       # Upload this to Play Console (App bundle explorer → Downloads →
       # ReTrace mapping file) so crash reports are de-obfuscated.
       - name: Upload R8 mapping file
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: waraqatak-${{ github.ref_name }}-mapping
           path: build/app/outputs/mapping/release/mapping.txt
           if-no-files-found: warn
-          retention-days: 90
+          retention-days: 14
+
+      - name: Attach assets to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" build/app/outputs/bundle/release/app-release.aab --clobber || true
+          if [ -f build/app/outputs/mapping/release/mapping.txt ]; then
+            gh release upload "${{ github.ref_name }}" build/app/outputs/mapping/release/mapping.txt --clobber || true
+          fi

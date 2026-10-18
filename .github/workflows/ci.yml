@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   analyze-and-test:
@@ -91,8 +91,18 @@ jobs:
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: waraqatak-apk-${{ github.sha }}
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 3
+
+      - name: Publish release APK asset
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="preview"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Waraqatak Preview" --notes "Latest automated APK build." --prerelease
+          gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk --clobber
