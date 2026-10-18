@@ -200,7 +200,7 @@ class LicenseService {
     return EntitlementState(
       status: EntitlementStatus.trialActive,
       deviceId: deviceId,
-      trialDaysRemaining: remaining.inDays + 1,
+      trialDaysRemaining: (remaining.inDays + 1).clamp(0, _trialDays),
     );
   }
 

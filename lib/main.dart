@@ -8,37 +8,47 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme_mode_scope.dart';
 import 'database/database_helper.dart';
 import 'localization/app_localizations.dart';
+import 'services/app_diagnostics_service.dart';
 import 'services/license_service.dart';
 import 'screens/splash_screen.dart';
 import 'theme.dart';
 
 Future<void> main() async {
-  runZonedGuarded<Future<void>>(() async {
-    WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded<Future<void>>(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
 
-    FlutterError.onError = (FlutterErrorDetails details) {
-      FlutterError.presentError(details);
-      developer.log(
-        'FlutterError',
-        error: details.exception,
-        stackTrace: details.stack,
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        developer.log(
+          'FlutterError',
+          error: details.exception,
+          stackTrace: details.stack,
+        );
+      };
+
+      PlatformDispatcher.instance.onError = (error, stack) {
+        developer.log('PlatformDispatcher', error: error, stackTrace: stack);
+        return true;
+      };
+
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      await DatabaseHelper.instance.database;
+      await AppDiagnosticsService.instance.init();
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'ar';
+      final themeMode = ThemeModeScope.decode(prefs.getString('theme_mode'));
+      runApp(WarqatekApp(initialLanguage: lang, initialThemeMode: themeMode));
+    },
+    (error, stack) {
+      developer.log('Uncaught zone error', error: error, stackTrace: stack);
+      AppDiagnosticsService.instance.recordError(
+        error,
+        stack,
+        operation: 'unhandled_exception',
       );
-    };
-
-    PlatformDispatcher.instance.onError = (error, stack) {
-      developer.log('PlatformDispatcher', error: error, stackTrace: stack);
-      return true;
-    };
-
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    await DatabaseHelper.instance.database;
-    final prefs = await SharedPreferences.getInstance();
-    final lang = prefs.getString('language') ?? 'ar';
-    final themeMode = ThemeModeScope.decode(prefs.getString('theme_mode'));
-    runApp(WarqatekApp(initialLanguage: lang, initialThemeMode: themeMode));
-  }, (error, stack) {
-    developer.log('Uncaught zone error', error: error, stackTrace: stack);
-  });
+    },
+  );
 }
 
 class WarqatekApp extends StatefulWidget {
@@ -54,8 +64,7 @@ class WarqatekApp extends StatefulWidget {
   State<WarqatekApp> createState() => _WarqatekAppState();
 }
 
-class _WarqatekAppState extends State<WarqatekApp>
-    with WidgetsBindingObserver {
+class _WarqatekAppState extends State<WarqatekApp> with WidgetsBindingObserver {
   late String _langCode;
   late ThemeMode _themeMode;
 
@@ -143,11 +152,11 @@ class _SystemInsets extends StatelessWidget {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
           .copyWith(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarDividerColor: Colors.transparent,
-        systemNavigationBarContrastEnforced: false,
-      ),
+            statusBarColor: Colors.transparent,
+            systemNavigationBarColor: Colors.transparent,
+            systemNavigationBarDividerColor: Colors.transparent,
+            systemNavigationBarContrastEnforced: false,
+          ),
       child: ColoredBox(
         color: theme.colorScheme.surface,
         child: SafeArea(top: false, child: child),
