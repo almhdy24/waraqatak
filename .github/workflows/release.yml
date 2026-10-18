@@ -5,13 +5,22 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.1.1)'
+        required: false
+        default: ''
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
 
 jobs:
-  build-aab:
-    name: Build Signed AAB
+  build-and-release:
+    name: Build & Publish Release
     runs-on: ubuntu-latest
 
     steps:
@@ -46,51 +55,77 @@ jobs:
       - name: Test
         run: flutter test
 
-      - name: Decode keystore
+      - name: Prepare signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          KS=android/app/upload-keystore.jks
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Release keystore secret KEYSTORE_BASE64 is missing."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$KS"
+          if ! keytool -certreq -keystore "$KS" -storepass "$KEYSTORE_PASSWORD" \
+               -alias "$KEY_ALIAS" -keypass "$KEY_PASSWORD" -file /dev/null >/dev/null 2>&1; then
+            echo "::error::Keystore secrets do not unlock the keystore."
+            exit 1
+          fi
+          echo "Release keystore verified."
 
-      - name: Build release AAB
+      - name: Build release APK and App Bundle
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: flutter build appbundle --release
-
-      - name: Verify AAB exists
         run: |
-          AAB=build/app/outputs/bundle/release/app-release.aab
-          test -f "$AAB" || { echo "AAB not found at $AAB"; exit 1; }
-          echo "AAB size: $(du -sh $AAB | cut -f1)"
+          echo "Building universal release APK..."
+          flutter build apk --release
+          echo "Building arm64-v8a release APK..."
+          flutter build apk --release --split-per-abi --target-platform android-arm64
+          echo "Building release App Bundle..."
+          flutter build appbundle --release
 
-      - name: Upload AAB artifact
+      - name: Prepare release assets
+        run: |
+          RAW_TAG="${{ inputs.tag || github.ref_name }}"
+          TAG="${RAW_TAG#refs/tags/}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/Waraqatak-${TAG}.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/Waraqatak-${TAG}-arm64-v8a.apk"
+          cp build/app/outputs/bundle/release/app-release.aab "dist/Waraqatak-${TAG}.aab"
+          if [ -f build/app/outputs/mapping/release/mapping.txt ]; then
+            cp build/app/outputs/mapping/release/mapping.txt "dist/mapping-${TAG}.txt"
+          fi
+          ls -la dist/
+
+      - name: Upload artifacts (optional backup)
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
-          name: waraqatak-${{ github.ref_name }}-aab
-          path: build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 14
+          name: waraqatak-${{ env.TAG }}
+          path: dist/
+          retention-days: 7
 
-      # Upload this to Play Console (App bundle explorer → Downloads →
-      # ReTrace mapping file) so crash reports are de-obfuscated.
-      - name: Upload R8 mapping file
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: waraqatak-${{ github.ref_name }}-mapping
-          path: build/app/outputs/mapping/release/mapping.txt
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Attach assets to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.ref_name }}" build/app/outputs/bundle/release/app-release.aab --clobber || true
-          if [ -f build/app/outputs/mapping/release/mapping.txt ]; then
-            gh release upload "${{ github.ref_name }}" build/app/outputs/mapping/release/mapping.txt --clobber || true
+          TAG="${{ env.TAG }}"
+          TITLE="Waraqatak $TAG"
+          VERSION_NUM="${TAG#v}"
+          NOTES_FILE=""
+          if [ -f "docs/release-notes-${VERSION_NUM}.md" ]; then
+            NOTES_FILE="docs/release-notes-${VERSION_NUM}.md"
           fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            if [ -n "$NOTES_FILE" ]; then
+              gh release create "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE"
+            else
+              gh release create "$TAG" --title "$TITLE" --generate-notes
+            fi
+          fi
+          gh release upload "$TAG" dist/* --clobber
