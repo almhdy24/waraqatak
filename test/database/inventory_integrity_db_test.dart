@@ -2,6 +2,7 @@
 // Covers Free-user stock clamping, product deletion with movements,
 // deleted-document cleanup, purchase cancellation safety, and transaction rollback.
 import 'dart:io';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -21,6 +22,7 @@ void main() {
 
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     tempDir = Directory.systemTemp.createTempSync('inventory_integrity_db_test');

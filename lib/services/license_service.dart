@@ -26,14 +26,27 @@ class SecureLicenseStorage implements LicenseStorage {
   );
 
   @override
-  Future<String?> read({required String key}) => _store.read(key: key);
+  Future<String?> read({required String key}) async {
+    try {
+      return await _store.read(key: key);
+    } on Object catch (_) {
+      return null;
+    }
+  }
 
   @override
-  Future<void> write({required String key, required String value}) =>
-      _store.write(key: key, value: value);
+  Future<void> write({required String key, required String value}) async {
+    try {
+      await _store.write(key: key, value: value);
+    } on Object catch (_) {}
+  }
 
   @override
-  Future<void> delete({required String key}) => _store.delete(key: key);
+  Future<void> delete({required String key}) async {
+    try {
+      await _store.delete(key: key);
+    } on Object catch (_) {}
+  }
 }
 
 /// Manages device identity, trial tracking, and license persistence.
