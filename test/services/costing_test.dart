@@ -375,15 +375,138 @@ void main() {
         document: doc,
         recognizedRevenue: 1000.0,
         cogs: 0.0,
-        grossProfit: 1000.0,
-        profitMargin: 100.0,
+        grossProfit: 0.0,
+        profitMargin: 0.0,
         isCostReliable: false, // Flagged!
       );
 
       expect(summary.isCostReliable, isFalse);
+      expect(summary.grossProfit, 0.0);
+      expect(summary.profitMargin, 0.0);
     });
 
-    test('17. Zero stock followed by purchase properly resets average cost to new purchase price', () {
+    test('17. Mixed known and unknown item costs make the invoice profit unavailable', () {
+      final doc = Document(
+        id: 3,
+        type: 'invoice',
+        documentNumber: 'INV-2026-003',
+        date: DateTime(2026, 10, 18),
+        subtotal: 3000.0,
+        discount: 200.0,
+        taxRate: 0.0,
+        taxAmount: 0.0,
+        total: 2800.0,
+        paid: 2800.0,
+        remaining: 0.0,
+      );
+
+      final recognizedRevenue = doc.subtotal - doc.discount;
+      final summary = SaleProfitSummary(
+        document: doc,
+        recognizedRevenue: recognizedRevenue,
+        cogs: 1000.0,
+        grossProfit: 0.0,
+        profitMargin: 0.0,
+        isCostReliable: false,
+      );
+
+      expect(summary.isCostReliable, isFalse);
+      expect(summary.recognizedRevenue, 2800.0);
+      expect(summary.grossProfit, 0.0);
+      expect(summary.profitMargin, 0.0);
+    });
+
+    test('18. Explicit zero-cost item is valid only when the business rules and data explicitly support it', () {
+      final doc = Document(
+        id: 4,
+        type: 'invoice',
+        documentNumber: 'INV-2026-004',
+        date: DateTime(2026, 10, 18),
+        subtotal: 1000.0,
+        discount: 0.0,
+        taxRate: 0.0,
+        taxAmount: 0.0,
+        total: 1000.0,
+        paid: 1000.0,
+        remaining: 0.0,
+      );
+
+      final summary = SaleProfitSummary(
+        document: doc,
+        recognizedRevenue: 1000.0,
+        cogs: 0.0,
+        grossProfit: 1000.0,
+        profitMargin: 100.0,
+        isCostReliable: true,
+      );
+
+      expect(summary.isCostReliable, isTrue);
+      expect(summary.grossProfit, 1000.0);
+      expect(summary.profitMargin, 100.0);
+    });
+
+    test('19. Aggregate reports ignore incomplete invoices when calculating reliable profit totals', () {
+      final completeInvoice = SaleProfitSummary(
+        document: Document(
+          id: 101,
+          type: 'invoice',
+          documentNumber: 'INV-100',
+          date: DateTime(2026, 10, 18),
+          subtotal: 1000.0,
+          discount: 0.0,
+          taxRate: 0.0,
+          taxAmount: 0.0,
+          total: 1000.0,
+          paid: 1000.0,
+          remaining: 0.0,
+        ),
+        recognizedRevenue: 1000.0,
+        cogs: 600.0,
+        grossProfit: 400.0,
+        profitMargin: 40.0,
+        isCostReliable: true,
+      );
+
+      final incompleteInvoice = SaleProfitSummary(
+        document: Document(
+          id: 102,
+          type: 'invoice',
+          documentNumber: 'INV-101',
+          date: DateTime(2026, 10, 19),
+          subtotal: 2000.0,
+          discount: 0.0,
+          taxRate: 0.0,
+          taxAmount: 0.0,
+          total: 2000.0,
+          paid: 2000.0,
+          remaining: 0.0,
+        ),
+        recognizedRevenue: 2000.0,
+        cogs: 0.0,
+        grossProfit: 0.0,
+        profitMargin: 0.0,
+        isCostReliable: false,
+      );
+
+      final reliableInvoices = [completeInvoice, incompleteInvoice]
+          .where((s) => s.isCostReliable)
+          .toList();
+
+      final totalRevenue = reliableInvoices.fold<double>(
+        0,
+        (sum, s) => sum + s.recognizedRevenue,
+      );
+      final totalProfit = reliableInvoices.fold<double>(
+        0,
+        (sum, s) => sum + s.grossProfit,
+      );
+
+      expect(reliableInvoices.length, 1);
+      expect(totalRevenue, 1000.0);
+      expect(totalProfit, 400.0);
+    });
+
+    test('20. Zero stock followed by purchase properly resets average cost to new purchase price', () {
       // Stock is 0.0, currentAvgCost is old (e.g. 50.0)
       final newAvg = InventoryCostingService.calculateNewWeightedAverage(
         currentStock: 0.0,
@@ -396,7 +519,7 @@ void main() {
       expect(newAvg, 120.0);
     });
 
-    test('18. Inventory valuation summary properly separates valued from unvalued items', () {
+    test('21. Inventory valuation summary properly separates valued from unvalued items', () {
       const summary = InventoryValuationSummary(
         totalValuationAtCost: 15000.0,
         valuedProductsCount: 3,
