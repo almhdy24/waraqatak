@@ -97,25 +97,21 @@ class InventoryCostingService {
   InventoryCostingService._();
   static final InventoryCostingService instance = InventoryCostingService._();
 
-  static double _calculateGrossProfit({
+  static double _safeGrossProfit({
     required double revenue,
     required double cogs,
-    required bool isReliable,
+    required bool isCostReliable,
   }) {
-    if (!isReliable) {
-      return 0.0;
-    }
+    if (!isCostReliable) return 0.0;
     return revenue - cogs;
   }
 
-  static double _calculateProfitMargin({
+  static double _safeMargin({
     required double revenue,
     required double grossProfit,
-    required bool isReliable,
+    required bool isCostReliable,
   }) {
-    if (!isReliable || revenue <= 0) {
-      return 0.0;
-    }
+    if (!isCostReliable || revenue <= 0) return 0.0;
     return (grossProfit / revenue) * 100;
   }
 
@@ -351,15 +347,13 @@ class InventoryCostingService {
       final cogs = (r['known_cogs'] as num?)?.toDouble() ?? 0.0;
       final unknownCount = (r['unknown_cost_sales_count'] as num?)?.toInt() ?? 0;
       final isReliable = unknownCount == 0;
-      final grossProfit = _calculateGrossProfit(
-        revenue: revenue,
-        cogs: cogs,
-        isReliable: isReliable,
-      );
-      final margin = _calculateProfitMargin(
+      final grossProfit = isReliable
+          ? _safeGrossProfit(revenue: revenue, cogs: cogs, isCostReliable: true)
+          : 0.0;
+      final margin = _safeMargin(
         revenue: revenue,
         grossProfit: grossProfit,
-        isReliable: isReliable,
+        isCostReliable: isReliable,
       );
 
       return ProductProfitItem(
@@ -442,15 +436,17 @@ class InventoryCostingService {
 
       // Recognized net revenue (subtotal minus discount)
       final recognizedRevenue = doc.subtotal - doc.discount;
-      final grossProfit = _calculateGrossProfit(
-        revenue: recognizedRevenue,
-        cogs: docCogs,
-        isReliable: isReliable,
-      );
-      final margin = _calculateProfitMargin(
+      final grossProfit = isReliable
+          ? _safeGrossProfit(
+              revenue: recognizedRevenue,
+              cogs: docCogs,
+              isCostReliable: true,
+            )
+          : 0.0;
+      final margin = _safeMargin(
         revenue: recognizedRevenue,
         grossProfit: grossProfit,
-        isReliable: isReliable,
+        isCostReliable: isReliable,
       );
 
       results.add(
