@@ -97,6 +97,28 @@ class InventoryCostingService {
   InventoryCostingService._();
   static final InventoryCostingService instance = InventoryCostingService._();
 
+  static double _calculateGrossProfit({
+    required double revenue,
+    required double cogs,
+    required bool isReliable,
+  }) {
+    if (!isReliable) {
+      return 0.0;
+    }
+    return revenue - cogs;
+  }
+
+  static double _calculateProfitMargin({
+    required double revenue,
+    required double grossProfit,
+    required bool isReliable,
+  }) {
+    if (!isReliable || revenue <= 0) {
+      return 0.0;
+    }
+    return (grossProfit / revenue) * 100;
+  }
+
   /// Calculates the new perpetual moving weighted-average cost.
   ///
   /// If [currentStock] <= 0 or [currentAvgCost] is null, the incoming cost
@@ -329,8 +351,16 @@ class InventoryCostingService {
       final cogs = (r['known_cogs'] as num?)?.toDouble() ?? 0.0;
       final unknownCount = (r['unknown_cost_sales_count'] as num?)?.toInt() ?? 0;
       final isReliable = unknownCount == 0;
-      final grossProfit = isReliable ? (revenue - cogs) : (revenue - cogs);
-      final margin = (revenue > 0 && isReliable) ? (grossProfit / revenue) * 100 : 0.0;
+      final grossProfit = _calculateGrossProfit(
+        revenue: revenue,
+        cogs: cogs,
+        isReliable: isReliable,
+      );
+      final margin = _calculateProfitMargin(
+        revenue: revenue,
+        grossProfit: grossProfit,
+        isReliable: isReliable,
+      );
 
       return ProductProfitItem(
         productId: (r['id'] as num).toInt(),
@@ -412,8 +442,16 @@ class InventoryCostingService {
 
       // Recognized net revenue (subtotal minus discount)
       final recognizedRevenue = doc.subtotal - doc.discount;
-      final grossProfit = recognizedRevenue - docCogs;
-      final margin = recognizedRevenue > 0 ? (grossProfit / recognizedRevenue) * 100 : 0.0;
+      final grossProfit = _calculateGrossProfit(
+        revenue: recognizedRevenue,
+        cogs: docCogs,
+        isReliable: isReliable,
+      );
+      final margin = _calculateProfitMargin(
+        revenue: recognizedRevenue,
+        grossProfit: grossProfit,
+        isReliable: isReliable,
+      );
 
       results.add(
         SaleProfitSummary(
