@@ -4,8 +4,10 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
+import '../utils/money_utils.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -176,10 +178,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         productId: _productIds[i],
       ),
     );
+    final decimalDigits = Currency.decimalDigitsForCode(_business?.currencyCode);
     return DocumentService.calculateInvoiceTotals(
       items: items,
       discount: _discount,
       taxRate: _business?.taxRate ?? 0,
+      pricesIncludeTax: _business?.pricesIncludeTax ?? false,
+      decimalDigits: decimalDigits,
     );
   }
 
@@ -245,7 +250,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     final discount = _discount;
     final total = totals.total;
     final paid = _paid;
-    final remaining = total - paid;
+    final decimalDigits = Currency.decimalDigitsForCode(_business?.currencyCode);
+    final remaining = MoneyUtils.calculateRemaining(total, paid, decimalDigits);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.purchase), centerTitle: true),

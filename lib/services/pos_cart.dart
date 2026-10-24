@@ -1,4 +1,5 @@
 import '../models/product.dart';
+import '../utils/money_utils.dart';
 import 'document_service.dart';
 
 /// One product line in the quick-sale cart.
@@ -8,7 +9,7 @@ class PosCartLine {
 
   const PosCartLine(this.product, this.quantity);
 
-  double get total => quantity * product.salePrice;
+  double get total => MoneyUtils.round(quantity * product.salePrice);
 
   PosCartLine withQuantity(double q) => PosCartLine(product, q);
 }
@@ -114,6 +115,14 @@ class PosCart {
       );
 
   /// Change to give back for a cash payment of [received] (never negative).
-  static double changeFor({required double total, required double received}) =>
-      received > total ? received - total : 0;
+  static double changeFor({
+    required double total,
+    required double received,
+    int decimalDigits = 2,
+  }) {
+    if (MoneyUtils.isOverpayment(received, total, decimalDigits)) {
+      return MoneyUtils.calculateRemaining(received, total, decimalDigits);
+    }
+    return 0.0;
+  }
 }

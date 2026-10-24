@@ -4,6 +4,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../services/document_service.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
@@ -155,10 +156,13 @@ class _QuotationScreenState extends State<QuotationScreen> {
         productId: _productIds[i],
       ),
     );
+    final decimalDigits = Currency.decimalDigitsForCode(_business?.currencyCode);
     return DocumentService.calculateInvoiceTotals(
       items: items,
       discount: 0,
       taxRate: _business?.taxRate ?? 0,
+      pricesIncludeTax: _business?.pricesIncludeTax ?? false,
+      decimalDigits: decimalDigits,
     );
   }
 

@@ -274,6 +274,30 @@ void main() {
       final singleCurrency = {'SDG'};
       expect(singleCurrency.length > 1, isFalse);
     });
+
+    test('ProductPerformanceSummary.hasMultipleCurrencies reflects currencies set correctly', () {
+      final summaryMixed = ProductPerformanceSummary(
+        items: const [],
+        totalSalesRevenue: 100.0,
+        totalCogs: 50.0,
+        totalGrossProfit: 50.0,
+        hasIncompleteCosts: false,
+        unvaluedSalesCount: 0,
+        currencies: {'SDG', 'SAR'},
+      );
+      expect(summaryMixed.hasMultipleCurrencies, isTrue);
+
+      final summarySingle = ProductPerformanceSummary(
+        items: const [],
+        totalSalesRevenue: 100.0,
+        totalCogs: 50.0,
+        totalGrossProfit: 50.0,
+        hasIncompleteCosts: false,
+        unvaluedSalesCount: 0,
+        currencies: {'SDG'},
+      );
+      expect(summarySingle.hasMultipleCurrencies, isFalse);
+    });
   });
 
   group('Phase 4 - Inventory Valuation & Unit Safety', () {

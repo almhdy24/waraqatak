@@ -323,6 +323,25 @@ class LedgerBuilder {
     final parent = d.relatedDocumentId == null
         ? null
         : byId[d.relatedDocumentId];
+    final isParentActiveInvoice =
+        parent?.type == 'invoice' &&
+        parent!.status != DocumentStatus.cancelled &&
+        parent.status != DocumentStatus.draft;
+    final isParentCancelledOrDraftInvoice =
+        parent?.type == 'invoice' &&
+        (parent!.status == DocumentStatus.cancelled ||
+            parent.status == DocumentStatus.draft);
+
+    final Account creditAccount;
+    if (isParentActiveInvoice) {
+      creditAccount = Accounts.receivables;
+    } else if (isParentCancelledOrDraftInvoice) {
+      // Customer advance / credit balance owed back to customer
+      creditAccount = Accounts.payables;
+    } else {
+      creditAccount = Accounts.otherIncome;
+    }
+
     out.add(
       JournalEntry(
         date: d.date,
@@ -335,9 +354,7 @@ class LedgerBuilder {
             debit: d.total,
           ),
           JournalLine(
-            parent?.type == 'invoice'
-                ? Accounts.receivables
-                : Accounts.otherIncome,
+            creditAccount,
             credit: d.total,
           ),
         ],
@@ -354,6 +371,25 @@ class LedgerBuilder {
     final parent = d.relatedDocumentId == null
         ? null
         : byId[d.relatedDocumentId];
+    final isParentActivePurchase =
+        parent?.type == 'purchase' &&
+        parent!.status != DocumentStatus.cancelled &&
+        parent.status != DocumentStatus.draft;
+    final isParentCancelledOrDraftPurchase =
+        parent?.type == 'purchase' &&
+        (parent!.status == DocumentStatus.cancelled ||
+            parent.status == DocumentStatus.draft);
+
+    final Account debitAccount;
+    if (isParentActivePurchase) {
+      debitAccount = Accounts.payables;
+    } else if (isParentCancelledOrDraftPurchase) {
+      // Supplier advance / refund receivable owed back by supplier
+      debitAccount = Accounts.receivables;
+    } else {
+      debitAccount = Accounts.operatingExpenses;
+    }
+
     out.add(
       JournalEntry(
         date: d.date,
@@ -362,9 +398,7 @@ class LedgerBuilder {
         reference: d.documentNumber,
         lines: [
           JournalLine(
-            parent?.type == 'purchase'
-                ? Accounts.payables
-                : Accounts.operatingExpenses,
+            debitAccount,
             debit: d.total,
           ),
           JournalLine(

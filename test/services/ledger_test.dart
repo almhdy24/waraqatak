@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:warqatek/models/contact.dart';
 import 'package:warqatek/models/document.dart';
 import 'package:warqatek/models/document_item.dart';
 import 'package:warqatek/models/document_payment.dart';
@@ -6,6 +7,7 @@ import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/models/product.dart';
 import 'package:warqatek/models/stock_movement.dart';
 import 'package:warqatek/services/accounting/ledger.dart';
+import 'package:warqatek/services/customer_statement_service.dart';
 
 Document doc(
   int id,
@@ -555,5 +557,355 @@ void main() {
         expect(stmt.trustedNetProfit, stmt.netProfit);
       },
     );
+  });
+
+  group('Phase 3: Cancelled Invoices and Receipts Accounting Remediation', () {
+    test('1. An unpaid invoice that is cancelled posts nothing to ledger', () {
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 1000, status: DocumentStatus.cancelled),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expect(entries, isEmpty);
+      expect(balanceOf(entries, Accounts.receivables), 0.0);
+      expect(balanceOf(entries, Accounts.salesRevenue), 0.0);
+      expect(balanceOf(entries, Accounts.cash), 0.0);
+      expectBalanced(entries);
+    });
+
+    test('2. A fully paid invoice that is cancelled retains cash and credits customer advance in payables', () {
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 1000, paid: 1000, status: DocumentStatus.cancelled),
+            doc(2, 'payment_receipt', day(1), subtotal: 1000, paid: 1000, related: 1, method: 'cash'),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(entries);
+      expect(entries.length, 1);
+      final receiptEntry = entries.first;
+      expect(receiptEntry.source, EntrySource.receipt);
+      // Real cash was received
+      expect(balanceOf(entries, Accounts.cash), 1000.0);
+      // Accounts Receivable is NOT credited into negative
+      expect(balanceOf(entries, Accounts.receivables), 0.0);
+      // No sales revenue recognized for cancelled invoice
+      expect(balanceOf(entries, Accounts.salesRevenue), 0.0);
+      // Funds held are classified as customer advance / refund liability in payables
+      expect(balanceOf(entries, Accounts.payables), 1000.0);
+    });
+
+    test('3. A partially paid invoice that is cancelled keeps AR at zero and records paid amount as payables', () {
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 1000, paid: 400, status: DocumentStatus.cancelled),
+            doc(2, 'payment_receipt', day(1), subtotal: 400, paid: 400, related: 1, method: 'bank'),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(entries);
+      expect(balanceOf(entries, Accounts.bank), 400.0);
+      expect(balanceOf(entries, Accounts.receivables), 0.0);
+      expect(balanceOf(entries, Accounts.salesRevenue), 0.0);
+      expect(balanceOf(entries, Accounts.payables), 400.0);
+    });
+
+    test('4. Multiple receipts against one invoice followed by cancellation record full cash and payables', () {
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 1000, paid: 600, status: DocumentStatus.cancelled),
+            doc(2, 'payment_receipt', day(2), subtotal: 350, paid: 350, related: 1, method: 'cash'),
+            doc(3, 'payment_receipt', day(3), subtotal: 250, paid: 250, related: 1, method: 'bank'),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(entries);
+      expect(entries.length, 2);
+      expect(balanceOf(entries, Accounts.cash), 350.0);
+      expect(balanceOf(entries, Accounts.bank), 250.0);
+      expect(balanceOf(entries, Accounts.receivables), 0.0);
+      expect(balanceOf(entries, Accounts.payables), 600.0);
+    });
+
+    test('5. Cancellation followed by receipt reversal clears customer advance and cash', () {
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 1000, paid: 400, status: DocumentStatus.cancelled),
+            doc(2, 'payment_receipt', day(2), subtotal: 400, paid: 400, related: 1, method: 'cash', status: DocumentStatus.cancelled),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expect(entries, isEmpty);
+      expect(balanceOf(entries, Accounts.cash), 0.0);
+      expect(balanceOf(entries, Accounts.payables), 0.0);
+      expect(balanceOf(entries, Accounts.receivables), 0.0);
+      expectBalanced(entries);
+    });
+
+    test('6. Customer statement versus general-ledger reconciliation', () {
+      const customer = Contact(id: 1, name: 'Customer Test', type: 'customer');
+      final docs = [
+        // Invoice 1 (cancelled) with Receipt 2 (400)
+        doc(1, 'invoice', day(1), subtotal: 1000, paid: 400, status: DocumentStatus.cancelled),
+        doc(2, 'payment_receipt', day(2), subtotal: 400, paid: 400, related: 1, method: 'cash'),
+        // Invoice 3 (active) with Receipt 4 (250)
+        doc(3, 'invoice', day(3), subtotal: 750, paid: 250, status: DocumentStatus.issued),
+        doc(4, 'payment_receipt', day(4), subtotal: 250, paid: 250, related: 3, method: 'bank'),
+      ];
+
+      // 1. Customer statement computation
+      final statement = CustomerStatementService.generateStatement(
+        contact: customer,
+        documents: docs,
+        from: day(1),
+        to: day(30),
+      );
+
+      // Statement closing balance reflects open active receivables (750 - 250 = 500)
+      expect(statement.closingBalance, 500.0);
+      // Explanatory section discloses the 400 receipt on cancelled invoice
+      expect(statement.hasCancelledInvoiceReceipts, isTrue);
+      expect(statement.cancelledInvoiceReceipts.length, 1);
+      expect(statement.cancelledInvoiceReceipts[0].amount, 400.0);
+
+      // 2. General Ledger computation
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: docs,
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(entries);
+      // General ledger Accounts Receivable exactly matches Customer Statement closing balance!
+      expect(balanceOf(entries, Accounts.receivables), statement.closingBalance);
+      expect(balanceOf(entries, Accounts.receivables), 500.0);
+
+      // Customer credit from cancelled invoice is held in Payables (liability), matching explanatory section
+      expect(balanceOf(entries, Accounts.payables), statement.cancelledInvoiceReceipts[0].amount);
+      expect(balanceOf(entries, Accounts.payables), 400.0);
+
+      // Cash and Bank reflect the actual funds received
+      expect(balanceOf(entries, Accounts.cash), 400.0);
+      expect(balanceOf(entries, Accounts.bank), 250.0);
+      expect(balanceOf(entries, Accounts.salesRevenue), 750.0);
+    });
+
+    test('7. Accounts Receivable before and after cancellation', () {
+      // Before cancellation: active invoice with partial receipt
+      final beforeEntries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 1000, paid: 400, status: DocumentStatus.issued),
+            doc(2, 'payment_receipt', day(2), subtotal: 400, paid: 400, related: 1, method: 'cash'),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(beforeEntries);
+      expect(balanceOf(beforeEntries, Accounts.receivables), 600.0);
+      expect(balanceOf(beforeEntries, Accounts.salesRevenue), 1000.0);
+      expect(balanceOf(beforeEntries, Accounts.cash), 400.0);
+      expect(balanceOf(beforeEntries, Accounts.payables), 0.0);
+
+      // After cancellation: invoice is cancelled, receipt remains active
+      final afterEntries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 1000, paid: 400, status: DocumentStatus.cancelled),
+            doc(2, 'payment_receipt', day(2), subtotal: 400, paid: 400, related: 1, method: 'cash'),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(afterEntries);
+      // Receivables drops to 0.0 (no negative receivable!)
+      expect(balanceOf(afterEntries, Accounts.receivables), 0.0);
+      expect(balanceOf(afterEntries, Accounts.salesRevenue), 0.0);
+      // Cash is retained
+      expect(balanceOf(afterEntries, Accounts.cash), 400.0);
+      // 400 is reclassified from receivable offset to customer advance in payables
+      expect(balanceOf(afterEntries, Accounts.payables), 400.0);
+    });
+
+    test('8. Cancelled purchase with expense voucher debits refund receivable and credits cash', () {
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'purchase', day(1), subtotal: 500, paid: 300, status: DocumentStatus.cancelled),
+            doc(2, 'expense_voucher', day(2), subtotal: 300, paid: 300, related: 1, method: 'cash'),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(entries);
+      // Cash paid to supplier is recorded
+      expect(balanceOf(entries, Accounts.cash), -300.0);
+      // Since purchase was cancelled, the money paid is a refund receivable owed by supplier
+      expect(balanceOf(entries, Accounts.receivables), 300.0);
+      expect(balanceOf(entries, Accounts.payables), 0.0);
+      expect(balanceOf(entries, Accounts.operatingExpenses), 0.0);
+    });
+
+    test('9. Normal non-cancelled invoice payment regression credits receivables as expected', () {
+      final entries = LedgerBuilder.build(
+        LedgerInput(
+          documents: [
+            doc(1, 'invoice', day(1), subtotal: 500, paid: 500, status: DocumentStatus.paid),
+            doc(2, 'payment_receipt', day(2), subtotal: 500, paid: 500, related: 1, method: 'cash'),
+          ],
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(entries);
+      expect(balanceOf(entries, Accounts.receivables), 0.0);
+      expect(balanceOf(entries, Accounts.salesRevenue), 500.0);
+      expect(balanceOf(entries, Accounts.cash), 500.0);
+      expect(balanceOf(entries, Accounts.payables), 0.0);
+    });
+
+    test('10. Multi-currency ledger isolation with cancelled documents', () {
+      final docs = [
+        // USD cancelled invoice with active USD receipt
+        Document(
+          id: 1,
+          type: 'invoice',
+          documentNumber: 'INV-USD-1',
+          date: day(1),
+          subtotal: 200,
+          discount: 0,
+          taxRate: 0,
+          taxAmount: 0,
+          total: 200,
+          paid: 200,
+          remaining: 0,
+          status: DocumentStatus.cancelled,
+          currencyCode: 'USD',
+        ),
+        Document(
+          id: 2,
+          type: 'payment_receipt',
+          documentNumber: 'REC-USD-2',
+          date: day(2),
+          subtotal: 200,
+          discount: 0,
+          taxRate: 0,
+          taxAmount: 0,
+          total: 200,
+          paid: 200,
+          remaining: 0,
+          paymentMethod: 'bank',
+          relatedDocumentId: 1,
+          status: DocumentStatus.issued,
+          currencyCode: 'USD',
+        ),
+        // SDG active invoice with active SDG receipt
+        Document(
+          id: 3,
+          type: 'invoice',
+          documentNumber: 'INV-SDG-3',
+          date: day(1),
+          subtotal: 50000,
+          discount: 0,
+          taxRate: 0,
+          taxAmount: 0,
+          total: 50000,
+          paid: 50000,
+          remaining: 0,
+          status: DocumentStatus.paid,
+          currencyCode: 'SDG',
+        ),
+        Document(
+          id: 4,
+          type: 'payment_receipt',
+          documentNumber: 'REC-SDG-4',
+          date: day(2),
+          subtotal: 50000,
+          discount: 0,
+          taxRate: 0,
+          taxAmount: 0,
+          total: 50000,
+          paid: 50000,
+          remaining: 0,
+          paymentMethod: 'cash',
+          relatedDocumentId: 3,
+          status: DocumentStatus.issued,
+          currencyCode: 'SDG',
+        ),
+      ];
+
+      // Build USD book
+      final usdDocs = docs.where((d) => d.currencyCode == 'USD').toList();
+      final usdEntries = LedgerBuilder.build(
+        LedgerInput(
+          documents: usdDocs,
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(usdEntries);
+      expect(balanceOf(usdEntries, Accounts.bank), 200.0);
+      expect(balanceOf(usdEntries, Accounts.receivables), 0.0);
+      expect(balanceOf(usdEntries, Accounts.payables), 200.0);
+
+      // Build SDG book
+      final sdgDocs = docs.where((d) => d.currencyCode == 'SDG').toList();
+      final sdgEntries = LedgerBuilder.build(
+        LedgerInput(
+          documents: sdgDocs,
+          itemsByDocument: const {},
+          products: const {},
+          stockMovements: const [],
+        ),
+      );
+
+      expectBalanced(sdgEntries);
+      expect(balanceOf(sdgEntries, Accounts.cash), 50000.0);
+      expect(balanceOf(sdgEntries, Accounts.receivables), 0.0);
+      expect(balanceOf(sdgEntries, Accounts.salesRevenue), 50000.0);
+      expect(balanceOf(sdgEntries, Accounts.payables), 0.0);
+    });
   });
 }

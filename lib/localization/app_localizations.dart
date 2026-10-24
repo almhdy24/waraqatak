@@ -1172,8 +1172,8 @@ class AppLocalizations {
     'Notice: Report contains sales with unknown historical cost',
   );
   String get mixedCurrenciesNotice => _t(
-    'تنبيه: تتضمن البيانات معاملات بعملات مختلفة',
-    'Warning: Data includes transactions in multiple currencies',
+    'تنبيه: تتضمن البيانات معاملات بعملات مختلفة دون تحويل إلى عملة موحدة',
+    'Warning: Data includes multiple currencies without conversion to a single currency',
   );
   String get inventoryValuationReport =>
       _t('تقرير تقييم المخزون', 'Inventory Valuation Report');
@@ -1508,6 +1508,62 @@ class AppLocalizations {
   String get diagnosticsExecutionFailed => _t(
     'تعذر إكمال فحص قاعدة البيانات',
     'Failed to complete database diagnostics',
+  );
+
+  // ========== GOOGLE DRIVE BACKUP ==========
+  String get googleDriveTitle =>
+      _t('النسخ السحابي (Google Drive)', 'Cloud Backup (Google Drive)');
+  String get googleDriveSubtitle => _t(
+    'نسخ واسترجاع قاعدة البيانات بأمان في مجلد التطبيق الخاص',
+    'Backup & restore securely in private app data folder',
+  );
+  String get googleDriveConnect =>
+      _t('ربط حساب Google', 'Connect Google Account');
+  String get googleDriveDisconnect =>
+      _t('قطع اتصال الحساب', 'Disconnect Account');
+  String get googleDriveUploadNow =>
+      _t('رفع نسخة احتياطية الآن', 'Upload Backup Now');
+  String get googleDriveRestoreFromCloud =>
+      _t('استرجاع من Google Drive', 'Restore from Google Drive');
+  String get googleDriveNoBackups => _t(
+    'لا توجد نسخ احتياطية في Google Drive',
+    'No backups found in Google Drive',
+  );
+  String get googleDriveUploading => _t(
+    'جاري رفع النسخة إلى Google Drive...',
+    'Uploading backup to Google Drive...',
+  );
+  String get googleDriveDownloading => _t(
+    'جاري تنزيل النسخة والتحقق منها...',
+    'Downloading and verifying backup...',
+  );
+  String get googleDriveUploadSuccess => _t(
+    'تم رفع النسخة الاحتياطية بنجاح إلى Google Drive',
+    'Backup uploaded successfully to Google Drive',
+  );
+  String get googleDriveSelectBackup =>
+      _t('اختر نسخة احتياطية للاسترجاع', 'Select a backup to restore');
+  String get googleDriveConfirmRestoreTitle =>
+      _t('تأكيد استرجاع النسخة السحابية', 'Confirm Cloud Restore');
+  String get googleDriveConfirmRestoreBody => _t(
+    'سيتم استبدال البيانات الحالية بالنسخة المحددة. سيتم إنشاء نسخة أمان محلية تلقائياً قبل البدء.',
+    'Current data will be replaced by the selected backup. A local safety backup is created automatically first.',
+  );
+  String get googleDriveSignInRequired => _t(
+    'يرجى تسجيل الدخول بحساب Google أولاً',
+    'Please sign in with a Google account first',
+  );
+  String get googleDriveErrorGeneric => _t(
+    'حدث خطأ أثناء الاتصال بـ Google Drive. يرجى التحقق من اتصال الإنترنت.',
+    'An error occurred communicating with Google Drive. Please check your internet connection.',
+  );
+  String get googleDriveErrorAuthExpired => _t(
+    'انتهت صلاحية جلسة تسجيل الدخول، يرجى إعادة الاتصال بحساب Google.',
+    'Session expired. Please reconnect your Google account.',
+  );
+  String get googleDriveErrorRestoreCorrupt => _t(
+    'فشل الاسترجاع: ملف النسخة الاحتياطية غير صالح أو تالف.',
+    'Restore failed: Backup file is invalid or corrupted.',
   );
 
   bool get isArabic => langCode == 'ar';

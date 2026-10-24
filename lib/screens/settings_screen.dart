@@ -10,6 +10,7 @@ import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
 import 'database_diagnostic_screen.dart';
+import 'google_drive_backup_screen.dart';
 import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
@@ -278,6 +279,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 }
               },
+            ),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync_outlined),
+              title: Text(l10n.googleDriveTitle),
+              subtitle: Text(l10n.googleDriveSubtitle),
+              trailing: Icon(chevronIcon),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const GoogleDriveBackupScreen(),
+                ),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.health_and_safety_outlined),

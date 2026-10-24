@@ -5,6 +5,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_payment.dart';
@@ -13,6 +14,7 @@ import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
+import '../utils/money_utils.dart';
 import '../widgets/status_badge.dart';
 import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
@@ -352,7 +354,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       FilledButton(
                         onPressed: () async {
                           final amount = double.tryParse(amountController.text) ?? 0;
-                          if (amount <= 0 || amount > doc.remaining) {
+                          final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
+                          if (amount <= 0 || MoneyUtils.isOverpayment(amount, doc.remaining, decimalDigits)) {
                             ScaffoldMessenger.of(context)
                                 .showSnackBar(SnackBar(content: Text(l10n.invalidAmount)));
                             return;

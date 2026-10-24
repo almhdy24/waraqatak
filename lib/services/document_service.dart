@@ -1,9 +1,11 @@
 import '../database/database_helper.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_status.dart';
+import '../utils/money_utils.dart';
 import 'feature_access.dart';
 import 'license_service.dart';
 
@@ -24,7 +26,7 @@ class DocumentItemInput {
     this.taxRate,
   });
 
-  double get total => quantity * price;
+  double get total => MoneyUtils.round(quantity * price);
 }
 
 class DocumentService {
@@ -90,30 +92,36 @@ class DocumentService {
     double finalPaid = 0;
     double remaining = 0;
 
+    final decimalDigits = Currency.decimalDigitsForCode(business.currencyCode);
+
     if (isFinancial) {
-      subtotal = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
-      total = paid;
+      total = canonicalPaid;
     } else if (isQuotation) {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = _calculateSubtotal(items);
+      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
       discountApplied = 0;
       taxRate = business.taxRate;
       taxAmount = _calculateTaxMultiRate(
-          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax);
-      total = business.pricesIncludeTax ? subtotal : subtotal + taxAmount;
+          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax,
+          decimalDigits: decimalDigits);
+      total = business.pricesIncludeTax
+          ? subtotal
+          : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = _calculateSubtotal(items);
-      discountApplied = discount;
+      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+      discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
       }
-      if (discountApplied > subtotal) {
+      if (MoneyUtils.isOverpayment(discountApplied, subtotal, decimalDigits)) {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
       final totals = calculateInvoiceTotals(
@@ -121,22 +129,25 @@ class DocumentService {
         discount: discountApplied,
         taxRate: business.taxRate,
         pricesIncludeTax: business.pricesIncludeTax,
+        decimalDigits: decimalDigits,
       );
       taxRate = business.taxRate;
       taxAmount = totals.taxAmount;
       total = totals.total;
-      if (paid < 0) {
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      if (canonicalPaid < 0) {
         throw ArgumentError('Paid amount cannot be negative');
       }
-      if (paid > total) {
+      if (MoneyUtils.isOverpayment(canonicalPaid, total, decimalDigits)) {
         throw ArgumentError('Paid amount cannot exceed total');
       }
-      finalPaid = paid;
-      remaining = total - finalPaid;
+      finalPaid = canonicalPaid;
+      remaining = MoneyUtils.calculateRemaining(total, finalPaid, decimalDigits);
     } else if (isCustom) {
-      subtotal = paid;
-      total = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      total = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
     } else {
       throw ArgumentError('Unknown document type: $type');
@@ -149,7 +160,7 @@ class DocumentService {
     if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       status = DocumentStatus.draft;
     } else if (isInvoice || isPurchase) {
-      status = DocumentStatus.fromPayment(finalPaid, total);
+      status = DocumentStatus.fromPayment(finalPaid, total, decimalDigits: decimalDigits);
     } else {
       status = DocumentStatus.issued;
     }
@@ -272,30 +283,36 @@ class DocumentService {
     double finalPaid = 0;
     double remaining = 0;
 
+    final decimalDigits = Currency.decimalDigitsForCode(existing.currencyCode);
+
     if (isFinancial) {
-      subtotal = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
-      total = paid;
+      total = canonicalPaid;
     } else if (isQuotation) {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = _calculateSubtotal(items);
+      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
       discountApplied = 0;
       taxRate = business.taxRate;
       taxAmount = _calculateTaxMultiRate(
-          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax);
-      total = business.pricesIncludeTax ? subtotal : subtotal + taxAmount;
+          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax,
+          decimalDigits: decimalDigits);
+      total = business.pricesIncludeTax
+          ? subtotal
+          : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = _calculateSubtotal(items);
-      discountApplied = discount;
+      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+      discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
       }
-      if (discountApplied > subtotal) {
+      if (MoneyUtils.isOverpayment(discountApplied, subtotal, decimalDigits)) {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
       final totals = calculateInvoiceTotals(
@@ -303,22 +320,25 @@ class DocumentService {
         discount: discountApplied,
         taxRate: business.taxRate,
         pricesIncludeTax: business.pricesIncludeTax,
+        decimalDigits: decimalDigits,
       );
       taxRate = business.taxRate;
       taxAmount = totals.taxAmount;
       total = totals.total;
-      if (paid < 0) {
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      if (canonicalPaid < 0) {
         throw ArgumentError('Paid amount cannot be negative');
       }
-      if (paid > total) {
+      if (MoneyUtils.isOverpayment(canonicalPaid, total, decimalDigits)) {
         throw ArgumentError('Paid amount cannot exceed total');
       }
-      finalPaid = paid;
-      remaining = total - finalPaid;
+      finalPaid = canonicalPaid;
+      remaining = MoneyUtils.calculateRemaining(total, finalPaid, decimalDigits);
     } else if (isCustom) {
-      subtotal = paid;
-      total = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      total = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
     } else {
       throw ArgumentError('Unknown document type: $type');
@@ -331,7 +351,7 @@ class DocumentService {
     if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       newStatus = DocumentStatus.draft;
     } else if (isInvoice || isPurchase) {
-      newStatus = DocumentStatus.fromPayment(finalPaid, total);
+      newStatus = DocumentStatus.fromPayment(finalPaid, total, decimalDigits: decimalDigits);
     } else {
       newStatus = DocumentStatus.issued;
     }
@@ -505,19 +525,29 @@ class DocumentService {
   /// so total = subtotal − discount (tax is extracted for display only).
   /// [pricesIncludeTax] = false → exclusive mode: tax is added on top,
   /// so total = subtotal − discount + taxAmount.
+  ///
+  /// [decimalDigits] defines the currency's canonical rounding scale (default: 2).
   static ({double subtotal, double taxAmount, double total})
       calculateInvoiceTotals({
     required List<DocumentItemInput> items,
     required double discount,
     required double taxRate,
     bool pricesIncludeTax = false,
+    int decimalDigits = 2,
   }) {
-    final subtotal = _calculateSubtotal(items);
+    final subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+    final canonicalDiscount = MoneyUtils.round(discount, decimalDigits);
     final taxAmount = _calculateTaxMultiRate(
-        items, discount, taxRate, subtotal, pricesIncludeTax);
+      items,
+      canonicalDiscount,
+      taxRate,
+      subtotal,
+      pricesIncludeTax,
+      decimalDigits: decimalDigits,
+    );
     final total = pricesIncludeTax
-        ? subtotal - discount
-        : subtotal - discount + taxAmount;
+        ? MoneyUtils.round(subtotal - canonicalDiscount, decimalDigits)
+        : MoneyUtils.round(subtotal - canonicalDiscount + taxAmount, decimalDigits);
     return (subtotal: subtotal, taxAmount: taxAmount, total: total);
   }
 
@@ -527,8 +557,9 @@ class DocumentService {
     double discount,
     double fallbackRate,
     double subtotal,
-    bool pricesIncludeTax,
-  ) {
+    bool pricesIncludeTax, {
+    int decimalDigits = 2,
+  }) {
     if (subtotal <= 0) return 0;
     final discountRatio = (subtotal - discount) / subtotal;
     var totalTax = 0.0;
@@ -541,7 +572,7 @@ class DocumentService {
           ? itemAfterDiscount * rate / (100 + rate) // extract from inclusive price
           : itemAfterDiscount * rate / 100; // add on top (exclusive)
     }
-    return totalTax < 0 ? 0 : totalTax;
+    return MoneyUtils.round(totalTax < 0 ? 0.0 : totalTax, decimalDigits);
   }
 
 }

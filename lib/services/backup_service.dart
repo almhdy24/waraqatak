@@ -218,8 +218,7 @@ class BackupService {
   }
 
   /// Restores database content from parsed backup JSON.
-  /// Used by [restoreBackup] and tests.
-  @visibleForTesting
+  /// Used by [restoreBackup], [GoogleDriveBackupService], and tests.
   static Future<bool> restoreFromJsonMap(
     Map<String, dynamic> jsonMap, {
     bool createSafetyBackup = true,
