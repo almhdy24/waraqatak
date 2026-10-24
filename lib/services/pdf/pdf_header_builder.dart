@@ -29,6 +29,12 @@ class PdfHeaderBuilder {
     final showTax = style.showTaxId &&
         business.taxId != null &&
         business.taxId!.trim().isNotEmpty;
+    final showTaxReg = business.taxReg != null &&
+        business.taxReg!.trim().isNotEmpty;
+    final showCR = business.commercialReg != null &&
+        business.commercialReg!.trim().isNotEmpty;
+    final showBranch = business.branch != null &&
+        business.branch!.trim().isNotEmpty;
 
     final details = pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -50,11 +56,35 @@ class PdfHeaderBuilder {
           ),
         if (showTax)
           PdfTextUtils.directionalText(
-            business.taxId!,
+            '${isArabic ? 'الرقم الضريبي:' : 'Tax ID:'} ${business.taxId!}',
             font: regular,
             fontSize: theme.fs(10),
             color: infoColor,
-            fallbackDirection: pw.TextDirection.ltr,
+            fallbackDirection: fallbackDir,
+          ),
+        if (showTaxReg)
+          PdfTextUtils.directionalText(
+            '${isArabic ? 'رقم التسجيل الضريبي:' : 'Tax Reg:'} ${business.taxReg!}',
+            font: regular,
+            fontSize: theme.fs(10),
+            color: infoColor,
+            fallbackDirection: fallbackDir,
+          ),
+        if (showCR)
+          PdfTextUtils.directionalText(
+            '${isArabic ? 'السجل التجاري:' : 'CR:'} ${business.commercialReg!}',
+            font: regular,
+            fontSize: theme.fs(10),
+            color: infoColor,
+            fallbackDirection: fallbackDir,
+          ),
+        if (showBranch)
+          PdfTextUtils.directionalText(
+            '${isArabic ? 'الفرع:' : 'Branch:'} ${business.branch!}',
+            font: regular,
+            fontSize: theme.fs(10),
+            color: infoColor,
+            fallbackDirection: fallbackDir,
           ),
         if (style.showBusinessContact) ...[
           pw.SizedBox(height: 4),

@@ -118,6 +118,7 @@ class PurchaseReportSummary {
   final double totalRemaining;
   final int cancelledCount;
   final Set<String> currencies;
+  final Map<String, ({double purchases, double paid, double remaining})> totalsByCurrency;
 
   const PurchaseReportSummary({
     required this.items,
@@ -126,6 +127,7 @@ class PurchaseReportSummary {
     required this.totalRemaining,
     required this.cancelledCount,
     required this.currencies,
+    this.totalsByCurrency = const {},
   });
 }
 
@@ -489,6 +491,8 @@ class BusinessReportingService {
     double totalRemaining = 0.0;
     int cancelledCount = 0;
     final currencies = <String>{};
+    final totalsByCurrency =
+        <String, ({double purchases, double paid, double remaining})>{};
 
     final items = <PurchaseReportItem>[];
 
@@ -506,6 +510,14 @@ class BusinessReportingService {
         totalPurchases += doc.total;
         totalPaid += doc.paid;
         totalRemaining += doc.remaining;
+
+        final prev = totalsByCurrency[doc.currencyCode] ??
+            (purchases: 0.0, paid: 0.0, remaining: 0.0);
+        totalsByCurrency[doc.currencyCode] = (
+          purchases: prev.purchases + doc.total,
+          paid: prev.paid + doc.paid,
+          remaining: prev.remaining + doc.remaining,
+        );
       }
 
       items.add(PurchaseReportItem(
@@ -525,6 +537,7 @@ class BusinessReportingService {
       totalRemaining: totalRemaining,
       cancelledCount: cancelledCount,
       currencies: currencies,
+      totalsByCurrency: totalsByCurrency,
     );
   }
 

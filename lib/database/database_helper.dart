@@ -1441,6 +1441,31 @@ class DatabaseHelper {
     return (rows.first['outstanding'] as num?)?.toDouble() ?? 0;
   }
 
+  /// Returns outstanding balances grouped by currency code for a given contact and docType.
+  /// Never sums amounts across distinct currencies into one nominal total.
+  Future<Map<String, double>> getContactOutstandingByCurrency(
+    int contactId,
+    String docType,
+  ) async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT currency_code, COALESCE(SUM(remaining), 0) AS outstanding
+      FROM documents
+      WHERE contact_id = ? AND type = ? AND status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+      GROUP BY currency_code
+      HAVING outstanding > 0
+    ''', [contactId, docType]);
+    final map = <String, double>{};
+    for (final r in rows) {
+      final code = (r['currency_code'] as String?) ?? 'SDG';
+      final val = (r['outstanding'] as num?)?.toDouble() ?? 0.0;
+      if (val > 0) {
+        map[code] = val;
+      }
+    }
+    return map;
+  }
+
   // ========== Products ==========
   Future<int> insertProduct(Product p) async {
     final db = await database;
@@ -3290,6 +3315,7 @@ class DatabaseHelper {
           'price': item['price'],
           'total': item['total'],
           'taxable': item['taxable'],
+          'tax_rate': item['tax_rate'],
         });
       }
 
@@ -3560,6 +3586,7 @@ class DatabaseHelper {
             'price': item['price'],
             'total': item['total'],
             'taxable': item['taxable'],
+            'tax_rate': item['tax_rate'],
           });
         }
       }
@@ -4127,11 +4154,39 @@ class DatabaseHelper {
 
   Future<int> deletePaymentMethod(int id) async {
     final db = await database;
+    final rows = await db.query(
+      'payment_methods',
+      columns: ['key', 'is_predefined'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (rows.isEmpty) return 0;
+    final isPredefined = (rows.first['is_predefined'] as int?) == 1;
+    if (isPredefined) {
+      throw StateError('Cannot delete predefined payment method');
+    }
+    final key = rows.first['key'] as String;
+    if (await isPaymentMethodUsedInDocuments(key)) {
+      throw StateError('Cannot delete payment method: in use by existing transactions');
+    }
     return db.delete(
       'payment_methods',
       where: 'id = ? AND is_predefined = 0',
       whereArgs: [id],
     );
+  }
+
+  /// Retrieves a payment method by its unique key.
+  Future<PaymentMethod?> getPaymentMethodByKey(String key) async {
+    final db = await database;
+    final rows = await db.query(
+      'payment_methods',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return PaymentMethod.fromMap(rows.first);
   }
 
   // ========== Cached In-App Notifications ==========

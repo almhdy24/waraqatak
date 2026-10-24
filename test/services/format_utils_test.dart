@@ -45,4 +45,19 @@ void main() {
       expect(FormatUtils.formatQuantity(2, unit: '   '), '2');
     });
   });
+
+  group('FormatUtils.formatTaxRate', () {
+    test('formats whole integers without trailing decimals', () {
+      expect(FormatUtils.formatTaxRate(0.0), '0%');
+      expect(FormatUtils.formatTaxRate(15.0), '15%');
+      expect(FormatUtils.formatTaxRate(100.0), '100%');
+    });
+
+    test('preserves fractional decimal tax rates accurately', () {
+      expect(FormatUtils.formatTaxRate(15.5), '15.5%');
+      expect(FormatUtils.formatTaxRate(5.25), '5.25%');
+      expect(FormatUtils.formatTaxRate(0.5), '0.5%');
+      expect(FormatUtils.formatTaxRate(7.75), '7.75%');
+    });
+  });
 }

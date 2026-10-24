@@ -14,6 +14,7 @@ import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
+import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
 import '../widgets/status_badge.dart';
 import 'customer_detail_screen.dart';
@@ -37,6 +38,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   Document? _relatedDocument;
   Document? _convertedInvoice;
   List<PaymentMethod> _enabledMethods = [];
+  List<PaymentMethod> _allMethods = [];
   bool _loading = true;
   String? _error;
 
@@ -63,6 +65,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       }
 
       final enabledMethods = await DatabaseHelper.instance.getEnabledPaymentMethods();
+      final allMethods = await DatabaseHelper.instance.getPaymentMethods();
 
       final futures = await Future.wait([
         db.getFirstBusiness(),
@@ -89,6 +92,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _relatedDocument = futures[4] as Document?;
         _convertedInvoice = doc.type == 'quotation' ? futures[5] as Document? : null;
         _enabledMethods = enabledMethods;
+        _allMethods = allMethods;
         _loading = false;
       });
     } catch (e) {
@@ -404,7 +408,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   }
 
   String _methodLabel(String key, AppLocalizations l10n) {
-    final m = _enabledMethods.where((m) => m.key == key).firstOrNull;
+    final m = _allMethods.where((m) => m.key == key).firstOrNull;
     if (m != null) return m.label(l10n.langCode);
     return CurrencyUtils.getPaymentMethodLabel(key, l10n);
   }
@@ -688,7 +692,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
               _totalRow(l10n.subtotal, doc.subtotal, sym),
               if (doc.discount > 0) _totalRow(l10n.discount, doc.discount, sym),
               if (doc.taxAmount > 0)
-                _totalRow('${l10n.tax} (${doc.taxRate.toStringAsFixed(0)}%)', doc.taxAmount, sym),
+                _totalRow('${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})', doc.taxAmount, sym),
               _totalRow(l10n.total, doc.total, sym, bold: true),
               if (isInvoice) ...[
                 _totalRow(l10n.paid, doc.paid, sym),

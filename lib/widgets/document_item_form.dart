@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../screens/barcode_scanner_screen.dart';
 import '../screens/product_form_screen.dart';
+import '../utils/format_utils.dart';
 import 'product_autocomplete_field.dart';
 
 class DocumentItemForm extends StatefulWidget {
@@ -11,9 +12,11 @@ class DocumentItemForm extends StatefulWidget {
   final TextEditingController quantityController;
   final TextEditingController priceController;
   final bool taxable;
+  final double? taxRate;
   final ValueChanged<bool?> onTaxableChanged;
   final int? productId;
   final ValueChanged<int?> onProductChanged;
+  final ValueChanged<Product?>? onProductSelected;
   final VoidCallback onDelete;
   final VoidCallback? onChanged;
   final bool usePurchasePrice;
@@ -24,9 +27,11 @@ class DocumentItemForm extends StatefulWidget {
     required this.quantityController,
     required this.priceController,
     required this.taxable,
+    this.taxRate,
     required this.onTaxableChanged,
     this.productId,
     required this.onProductChanged,
+    this.onProductSelected,
     required this.onDelete,
     this.onChanged,
     this.usePurchasePrice = false,
@@ -55,7 +60,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
 
   void _onProductSelected(Product? product) {
     if (product == null) return;
-    final price = widget.usePurchasePrice ? product.purchasePrice : product.salePrice;
+    final price = widget.usePurchasePrice
+        ? product.purchasePrice
+        : product.salePrice;
     setState(() {
       _selectedProductId = product.id;
       widget.descriptionController.text = product.name;
@@ -63,12 +70,14 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
       widget.onTaxableChanged(product.isTaxable);
     });
     widget.onProductChanged(product.id);
+    widget.onProductSelected?.call(product);
     widget.onChanged?.call();
   }
 
   void _clearProduct() {
     setState(() => _selectedProductId = null);
     widget.onProductChanged(null);
+    widget.onProductSelected?.call(null);
     widget.onChanged?.call();
   }
 
@@ -122,11 +131,32 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
+    final qty = double.tryParse(widget.quantityController.text) ?? 0.0;
+    final price = double.tryParse(widget.priceController.text) ?? 0.0;
+    final lineTotal = qty * price;
+
+    String taxBadgeLabel;
+    if (!widget.taxable) {
+      taxBadgeLabel = l10n.itemNonTaxable;
+    } else if (widget.taxRate != null) {
+      taxBadgeLabel =
+          '${l10n.itemTaxable} (${FormatUtils.formatTaxRate(widget.taxRate!)})';
+    } else {
+      taxBadgeLabel = l10n.itemTaxable;
+    }
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_selectedProductId == null)
               Row(
@@ -137,6 +167,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       onProductSelected: _onProductSelected,
                     ),
                   ),
+                  const SizedBox(width: 4),
                   IconButton(
                     icon: const Icon(Icons.qr_code_scanner),
                     tooltip: l10n.scanBarcode,
@@ -145,64 +176,180 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                 ],
               )
             else
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.descriptionController.text,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 16,
+                      color: cs.primary,
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: _clearProduct,
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        widget.descriptionController.text,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _clearProduct,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.close, size: 16),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             TextFormField(
               controller: widget.descriptionController,
-              decoration: InputDecoration(labelText: l10n.itemDescription),
+              decoration: InputDecoration(
+                labelText: l10n.itemDescription,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                border: const OutlineInputBorder(),
+              ),
               validator: (v) => v == null || v.isEmpty ? l10n.required : null,
+              onChanged: (_) => widget.onChanged?.call(),
             ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
+                  flex: 3,
                   child: TextFormField(
                     controller: widget.quantityController,
-                    decoration: InputDecoration(labelText: l10n.itemQuantity),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: l10n.itemQuantity,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      border: const OutlineInputBorder(),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     validator: (v) {
-                      final qty = double.tryParse(v ?? '');
-                      if (qty == null || qty <= 0) return l10n.invalidQuantity;
+                      final q = double.tryParse(v ?? '');
+                      if (q == null || q <= 0) return l10n.invalidQuantity;
                       return null;
                     },
-                    onChanged: (_) => widget.onChanged?.call(), // ✅ تحديث فوري
+                    onChanged: (_) => widget.onChanged?.call(),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
+                  flex: 4,
                   child: TextFormField(
                     controller: widget.priceController,
-                    decoration: InputDecoration(labelText: l10n.itemPrice),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: l10n.itemPrice,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      border: const OutlineInputBorder(),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     validator: (v) {
-                      final price = double.tryParse(v ?? '');
-                      if (price == null || price < 0) return l10n.invalidAmount;
+                      final p = double.tryParse(v ?? '');
+                      if (p == null || p < 0) return l10n.invalidAmount;
                       return null;
                     },
-                    onChanged: (_) => widget.onChanged?.call(), // ✅ تحديث فوري
+                    onChanged: (_) => widget.onChanged?.call(),
                   ),
                 ),
-                Checkbox(
-                  value: widget.taxable,
-                  onChanged: (v) {
-                    widget.onTaxableChanged(v);
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                InkWell(
+                  onTap: () {
+                    widget.onTaxableChanged(!widget.taxable);
                     widget.onChanged?.call();
                   },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.taxable
+                          ? cs.primaryContainer.withValues(alpha: 0.6)
+                          : cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: widget.taxable
+                            ? cs.primary.withValues(alpha: 0.3)
+                            : cs.outlineVariant,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          widget.taxable
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          size: 16,
+                          color: widget.taxable
+                              ? cs.primary
+                              : cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          taxBadgeLabel,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: widget.taxable
+                                ? cs.primary
+                                : cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+                const Spacer(),
+                if (lineTotal > 0)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      '${l10n.lineTotal}: ${lineTotal.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ),
                 IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon: Icon(Icons.delete_outline, color: cs.error, size: 20),
+                  tooltip: l10n.delete,
                   onPressed: widget.onDelete,
+                  visualDensity: VisualDensity.compact,
                 ),
               ],
             ),

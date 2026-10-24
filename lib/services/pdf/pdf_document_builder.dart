@@ -10,6 +10,7 @@ import '../../models/contact.dart';
 import '../../models/document.dart';
 import '../../models/document_item.dart';
 import '../../utils/currency_utils.dart';
+import '../../utils/format_utils.dart';
 import '../../utils/pdf_settings.dart';
 import '../../utils/print_settings.dart';
 import 'pdf_customer_builder.dart';
@@ -49,6 +50,10 @@ class PdfDocumentBuilder {
       }
     }
 
+    final paymentMethodLabel = doc.paymentMethod != null
+        ? await CurrencyUtils.resolvePaymentMethodLabel(doc.paymentMethod!, l10n)
+        : '';
+
     if (paperSize == PaperSize.thermal80mm) {
       return _buildThermal(
         doc: doc,
@@ -76,6 +81,7 @@ class PdfDocumentBuilder {
       logoImage: logoImage,
       paperSize: paperSize,
       theme: theme,
+      paymentMethodLabel: paymentMethodLabel,
     );
   }
 
@@ -91,6 +97,7 @@ class PdfDocumentBuilder {
     pw.MemoryImage? logoImage,
     PaperSize paperSize = PaperSize.a4,
     required PdfTheme theme,
+    String paymentMethodLabel = '',
   }) async {
     final pdf = pw.Document();
     final style = theme.style;
@@ -191,7 +198,7 @@ class PdfDocumentBuilder {
               doc.paymentMethod != null)
             _buildInfoRow(
               label: l10n.paymentMethod,
-              value: CurrencyUtils.getPaymentMethodLabel(doc.paymentMethod!, l10n),
+              value: paymentMethodLabel,
               bold: bold,
               regular: regular,
               textColor: theme.textColor,
@@ -555,7 +562,12 @@ class PdfDocumentBuilder {
     }
 
     if (doc.discount > 0) totRow(l10n.discount, doc.discount);
-    if (doc.taxAmount > 0) totRow('${l10n.tax} ${doc.taxRate.toStringAsFixed(0)}%', doc.taxAmount);
+    if (doc.taxAmount > 0) {
+      totRow(
+        '${l10n.tax} ${FormatUtils.formatTaxRate(doc.taxRate)}',
+        doc.taxAmount,
+      );
+    }
     totRow(l10n.grandTotal, doc.total, emph: true);
     if (doc.paid > 0) totRow(l10n.paid, doc.paid);
     if (doc.remaining > 0) totRow(l10n.remaining, doc.remaining);

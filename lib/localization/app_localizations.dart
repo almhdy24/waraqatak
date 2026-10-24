@@ -698,6 +698,103 @@ class AppLocalizations {
   String get contactTaxId => _t('الرقم الضريبي للجهة', 'Contact Tax ID');
   String get taxProfile => _t('الملف الضريبي', 'Tax Profile');
   String get noTaxProfile => _t('بدون ملف ضريبي', 'No Tax Profile');
+  String get taxIncluded => _t('الضريبة (مشمولة)', 'Tax (Included)');
+  String get netTaxableBase =>
+      _t('المبلغ الخاضع للضريبة (غير شامل)', 'Taxable Base (Excl. Tax)');
+  String get subtotalInclusive =>
+      _t('المجموع شامل الضريبة', 'Subtotal (Incl. Tax)');
+  String get paymentMethodInUseCannotDelete => _t(
+    'لا يمكن حذف طريقة الدفع هذه لأنها مستخدمة في معاملات سابقة. يمكنك تعطيلها بدلاً من ذلك لمنع استخدامها في المعاملات الجديدة.',
+    'Cannot delete this payment method because it is referenced in past transactions. You can disable it instead to prevent new transactions while preserving your history.',
+  );
+  String get cannotDeletePaymentMethodTitle =>
+      _t('تعذر حذف طريقة الدفع', 'Cannot Delete Payment Method');
+  String get currencyScopeNote => _t(
+    'العملة الافتراضية تنطبق على المستندات والمنتجات الجديدة. تحتفظ المعاملات السابقة بالعملة التي سُجلت بها.',
+    'Default currency applies to new documents and products. Existing transactions retain their recorded currency.',
+  );
+  String get taxLivePreview =>
+      _t('معاينة توضيحية لاحتساب الضريبة', 'Tax Calculation Preview');
+  String get taxLivePreviewDesc => _t(
+    'مثال توضيحي لصنف بقيمة 100 مع خصم 10%',
+    'Example for an item of 100 with 10% discount',
+  );
+  String get disableMethodAction => _t('تعطيل الطريقة', 'Disable Method');
+  String get taxSettingsManagedInFinancial => _t(
+    'يتم ضبط خيارات الضريبة وملفات الأسعار من شاشة الإعدادات المالية.',
+    'Tax options and rates are configured in Financial Settings.',
+  );
+  String get taxesStatus => _t('حالة نظام الضريبة', 'Tax System Status');
+  String get taxesEnabledActive => _t('الضريبة مفعلة', 'Taxes Active');
+  String get taxesDisabledInactive =>
+      _t('الضريبة معطلة (0%)', 'Taxes Disabled (0%)');
+  String get productTaxOverrideNote => _t(
+    'يمكن تخصيص ملف ضريبي مختلف لكل منتج على حدة من شاشة تفاصيل المنتج (مثل: الأصناف المعفاة أو الخاضعة لنسبة صفرية).',
+    'Individual products can override this default with their own tax profile (e.g. zero-rated or exempt items).',
+  );
+  String get taxExclusiveExplained => _t(
+    'الأسعار المدخلة غير شاملة: تُضاف الضريبة كقيمة إضافية فوق سعر الصنف.',
+    'Prices exclude tax: tax is added on top of the item price.',
+  );
+  String get taxInclusiveExplained => _t(
+    'الأسعار المدخلة شاملة: يتم استخراج الضريبة من داخل سعر الصنف دون زيادة المجموع.',
+    'Prices include tax: tax is extracted from the item price without increasing the total.',
+  );
+  String get taxSampleEnteredPrice =>
+      _t('سعر الصنف المدخل', 'Entered Item Price');
+  String get taxSampleNetBase =>
+      _t('الأساس الخاضع للضريبة', 'Net Taxable Base');
+  String get taxSampleTaxAmount => _t('مبلغ الضريبة', 'Tax Amount');
+  String get taxSampleTotalPayable =>
+      _t('الإجمالي النهائي المستحق', 'Total Payable');
+  String get taxZeroRatedVsDisabled => _t(
+    'الفرق بين تعطيل الضريبة والنسبة الصفرية: تعطيل الضريبة يلغي احتساب الضرائب نهائياً، بينما النسبة الصفرية (0%) تعامل الصنف كخاضع للضريبة رسمياً بنسبة 0%.',
+    'Difference: Disabling tax turns off calculation entirely, while zero-rated (0%) records the item under tax regulations with 0% tax.',
+  );
+  String get basicInfo =>
+      _t('البيانات الأساسية ومعلومات الاتصال', 'Basic Identity & Contact');
+  String get visualBranding => _t('الشعار والمظهر', 'Logo & Visual Branding');
+  String get financialDefaults =>
+      _t('الإعدادات المالية الافتراضية', 'Financial Defaults');
+  String get legalAndTaxInfo =>
+      _t('البيانات القانونية والضريبية', 'Legal & Tax Details');
+  String get notConfigured => _t('غير محدد', 'Not configured');
+  String get configureInFinancial =>
+      _t('تعديل في الإعدادات المالية', 'Configure in Financial Settings');
+  String get activeMethods => _t('طرق الدفع المفعلة', 'Active Payment Methods');
+  String get disabledMethods =>
+      _t('طرق الدفع المعطلة', 'Disabled Payment Methods');
+  String get methodStatusActive => _t('مفعلة', 'Active');
+  String get methodStatusDisabled => _t('معطلة', 'Disabled');
+  String get methodNameRequired =>
+      _t('يرجى إدخال اسم طريقة الدفع', 'Please enter a payment method name');
+  String get itemTaxable => _t('خاضع للضريبة', 'Taxable');
+  String get itemNonTaxable => _t('غير خاضع', 'Non-taxable');
+  String get lineTotal => _t('الإجمالي', 'Line Total');
+  String get checkForUpdates => _t('التحقق من التحديثات', 'Check for Updates');
+  String get checkForUpdatesSubtitle => _t(
+    'التحقق من توفر إصدارات جديدة على Google Play',
+    'Check for new versions on Google Play',
+  );
+  String get checkingForUpdates =>
+      _t('جاري التحقق من التحديثات...', 'Checking for updates...');
+  String get appUpToDate => _t(
+    'أنت تستخدم أحدث إصدار من التطبيق',
+    'You are using the latest version',
+  );
+  String get updateAvailable =>
+      _t('يتوفر تحديث جديد', 'A new update is available');
+  String get updateDownloadedRestart => _t(
+    'تم تنزيل التحديث. يرجى إعادة تشغيل التطبيق لتثبيته.',
+    'Update downloaded. Restart the app to apply it.',
+  );
+  String get restartNow => _t('إعادة التشغيل الآن', 'Restart Now');
+  String get updateCheckFailed => _t(
+    'تعذر التحقق من التحديثات حالياً',
+    'Unable to check for updates at this time',
+  );
+  String get updateFailed =>
+      _t('تعذر إكمال التحديث', 'Unable to complete update');
 
   // ========== ACTIVATION & ENTITLEMENT ==========
   // Pro features are unlocked only by an activation key obtained outside the
@@ -1580,8 +1677,10 @@ class AppLocalizations {
     'هل أنت متأكد من حذف هذه النسخة الاحتياطية من Google Drive؟ لا يمكن التراجع عن هذا الإجراء.',
     'Are you sure you want to delete this backup from Google Drive? This action cannot be undone.',
   );
-  String get googleDriveDeleting =>
-      _t('جاري حذف النسخة الاحتياطية...', 'Deleting backup from Google Drive...');
+  String get googleDriveDeleting => _t(
+    'جاري حذف النسخة الاحتياطية...',
+    'Deleting backup from Google Drive...',
+  );
   String get googleDriveDeleteSuccess => _t(
     'تم حذف النسخة الاحتياطية من Google Drive بنجاح',
     'Backup deleted from Google Drive successfully',
@@ -1636,8 +1735,10 @@ class AppLocalizations {
   String get repairTabAll => _t('الكل', 'All');
   String get repairTabAuto => _t('قابل للإصلاح التلقائي', 'Auto-Repairable');
   String get repairTabReview => _t('يتطلب المراجعة', 'Requires Review');
-  String get repairRecordsCount => _t('عدد السجلات المتأثرة', 'Affected Records');
-  String get repairPlannedChange => _t('الإجراء المخطط تنفيذه', 'Planned Action');
+  String get repairRecordsCount =>
+      _t('عدد السجلات المتأثرة', 'Affected Records');
+  String get repairPlannedChange =>
+      _t('الإجراء المخطط تنفيذه', 'Planned Action');
   String get repairRecommendedAction =>
       _t('الإجراء الموصى به', 'Recommended Action');
   String get repairReversible => _t('قابل للتراجع', 'Reversible');
@@ -1650,8 +1751,10 @@ class AppLocalizations {
     'تم نسخ التقرير التشخيصي إلى الحافظة بنجاح',
     'Diagnostic report copied to clipboard successfully',
   );
-  String get repairNoIssues =>
-      _t('قاعدة البيانات سليمة وخالية من المشكلات', 'Database is clean and healthy');
+  String get repairNoIssues => _t(
+    'قاعدة البيانات سليمة وخالية من المشكلات',
+    'Database is clean and healthy',
+  );
   String get repairExecuting => _t(
     'جاري تنفيذ الإصلاح والتحقق من السلامة...',
     'Executing repair and verifying integrity...',

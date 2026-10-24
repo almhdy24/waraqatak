@@ -4,6 +4,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../../localization/app_localizations.dart';
 import '../../models/document.dart';
+import '../../utils/format_utils.dart';
 import '../../utils/pdf_settings.dart';
 import 'pdf_theme.dart';
 
@@ -26,6 +27,10 @@ class PdfTotalsBuilder {
     final fontSize = theme.fs(11);
     final minimal = theme.style.template == PdfTemplate.minimal;
 
+    final isInclusiveTax =
+        (doc.subtotal - doc.discount - doc.total).abs() < 0.01 &&
+        doc.taxAmount > 0;
+
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
       decoration: minimal
@@ -42,30 +47,39 @@ class PdfTotalsBuilder {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          _row(
-            label: l10n.subtotal,
-            value: doc.subtotal,
-            currency: currency,
-            font: regular,
-            color: textColor,
-            labelDirection: labelDirection,
-            fontSize: fontSize,
-          ),
-          if (doc.discount > 0)
+          if (isInclusiveTax) ...[
             _row(
-              label: l10n.discount,
-              value: doc.discount,
+              label: l10n.subtotalInclusive,
+              value: doc.subtotal,
               currency: currency,
               font: regular,
               color: textColor,
               labelDirection: labelDirection,
               fontSize: fontSize,
             ),
-          if (doc.taxAmount > 0)
+            if (doc.discount > 0)
+              _row(
+                label: l10n.discount,
+                value: doc.discount,
+                currency: currency,
+                font: regular,
+                color: textColor,
+                labelDirection: labelDirection,
+                fontSize: fontSize,
+              ),
+            _row(
+              label: l10n.netTaxableBase,
+              value: doc.total - doc.taxAmount,
+              currency: currency,
+              font: regular,
+              color: textColor,
+              labelDirection: labelDirection,
+              fontSize: fontSize,
+            ),
             _row(
               label: doc.taxRate > 0
-                  ? '${l10n.tax} (${doc.taxRate.toStringAsFixed(0)}%)'
-                  : l10n.tax,
+                  ? '${l10n.taxIncluded} (${FormatUtils.formatTaxRate(doc.taxRate)})'
+                  : l10n.taxIncluded,
               value: doc.taxAmount,
               currency: currency,
               font: regular,
@@ -73,6 +87,39 @@ class PdfTotalsBuilder {
               labelDirection: labelDirection,
               fontSize: fontSize,
             ),
+          ] else ...[
+            _row(
+              label: l10n.subtotal,
+              value: doc.subtotal,
+              currency: currency,
+              font: regular,
+              color: textColor,
+              labelDirection: labelDirection,
+              fontSize: fontSize,
+            ),
+            if (doc.discount > 0)
+              _row(
+                label: l10n.discount,
+                value: doc.discount,
+                currency: currency,
+                font: regular,
+                color: textColor,
+                labelDirection: labelDirection,
+                fontSize: fontSize,
+              ),
+            if (doc.taxAmount > 0)
+              _row(
+                label: doc.taxRate > 0
+                    ? '${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})'
+                    : l10n.tax,
+                value: doc.taxAmount,
+                currency: currency,
+                font: regular,
+                color: textColor,
+                labelDirection: labelDirection,
+                fontSize: fontSize,
+              ),
+          ],
           pw.Divider(color: theme.borderColor),
           _row(
             label: l10n.total,

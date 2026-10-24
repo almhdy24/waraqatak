@@ -6,6 +6,7 @@ import '../models/entitlement.dart';
 import '../services/backup_service.dart';
 import '../services/license_service.dart';
 import '../services/app_diagnostics_service.dart';
+import '../services/app_update_service.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
@@ -98,12 +99,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 elevation: 0,
                 color: cs.primaryContainer.withValues(alpha: 0.35),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppDesignTokens.cardRadius,
+                  ),
                   side: BorderSide(color: cs.primary.withValues(alpha: 0.2)),
                 ),
                 child: ListTile(
-                  leading: Icon(Icons.workspace_premium_rounded, color: cs.primary, size: 28),
-                  title: Text(l10n.licenseScreenTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  leading: Icon(
+                    Icons.workspace_premium_rounded,
+                    color: cs.primary,
+                    size: 28,
+                  ),
+                  title: Text(
+                    l10n.licenseScreenTitle,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   subtitle: Text(_entitlementLabel(l10n)),
                   trailing: Icon(chevronIcon, color: cs.primary),
                   onTap: () async {
@@ -123,8 +133,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
-                  side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+                  borderRadius: BorderRadius.circular(
+                    AppDesignTokens.cardRadius,
+                  ),
+                  side: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.7),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -134,7 +148,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       trailing: Icon(chevronIcon),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const BusinessSetupScreen(),
+                        ),
                       ),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
@@ -158,7 +174,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       trailing: Icon(chevronIcon),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const PaymentMethodsScreen(),
+                        ),
                       ),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
@@ -169,7 +187,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       trailing: Icon(chevronIcon),
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const PdfCustomizeScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const PdfCustomizeScreen(),
+                        ),
                       ),
                     ),
                   ],
@@ -183,8 +203,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
-                  side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+                  borderRadius: BorderRadius.circular(
+                    AppDesignTokens.cardRadius,
+                  ),
+                  side: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.7),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -245,8 +269,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
-                  side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+                  borderRadius: BorderRadius.circular(
+                    AppDesignTokens.cardRadius,
+                  ),
+                  side: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.7),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -273,11 +301,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                         if (proceed != true) return;
                         try {
-                          final saved = await BackupService.createBackupUserChosen();
+                          final saved =
+                              await BackupService.createBackupUserChosen();
                           if (context.mounted && saved) {
-                            ScaffoldMessenger.of(
-                              context,
-                            ).showSnackBar(SnackBar(content: Text(l10n.backupSavedTo)));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(l10n.backupSavedTo)),
+                            );
                           }
                         } catch (_) {
                           if (context.mounted) {
@@ -306,7 +335,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ElevatedButton(
                                 onPressed: () => Navigator.pop(context, true),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Theme.of(context).colorScheme.error,
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.error,
                                   foregroundColor: Theme.of(
                                     context,
                                   ).colorScheme.onPrimary,
@@ -321,10 +352,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             final success = await BackupService.restoreBackup();
                             if (context.mounted && success) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(l10n.operationSuccessful)),
+                                SnackBar(
+                                  content: Text(l10n.operationSuccessful),
+                                ),
                               );
                               // Return to home and reload data
-                              Navigator.of(context).popUntil((route) => route.isFirst);
+                              Navigator.of(
+                                context,
+                              ).popUntil((route) => route.isFirst);
                             }
                           } catch (_) {
                             if (context.mounted) {
@@ -373,8 +408,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Card(
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
-                  side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
+                  borderRadius: BorderRadius.circular(
+                    AppDesignTokens.cardRadius,
+                  ),
+                  side: BorderSide(
+                    color: cs.outlineVariant.withValues(alpha: 0.7),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -392,13 +431,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 builder: (ctx) => AlertDialog(
                                   title: Text(l10n.diagnosticSharingModalTitle),
                                   content: SingleChildScrollView(
-                                    child: Text(l10n.diagnosticSharingModalBody),
+                                    child: Text(
+                                      l10n.diagnosticSharingModalBody,
+                                    ),
                                   ),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(ctx),
                                       child: Text(
-                                        MaterialLocalizations.of(ctx).closeButtonLabel,
+                                        MaterialLocalizations.of(
+                                          ctx,
+                                        ).closeButtonLabel,
                                       ),
                                     ),
                                   ],
@@ -438,6 +481,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         context,
                         MaterialPageRoute(builder: (_) => const AboutScreen()),
                       ),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(Icons.system_update_outlined),
+                      title: Text(l10n.checkForUpdates),
+                      subtitle: Text(l10n.checkForUpdatesSubtitle),
+                      trailing: AppUpdateService.instance.isChecking
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(chevronIcon),
+                      onTap: AppUpdateService.instance.isChecking
+                          ? null
+                          : () async {
+                              setState(() {});
+                              await AppUpdateService.instance.checkForUpdate(
+                                context: context,
+                                manual: true,
+                              );
+                              if (mounted) setState(() {});
+                            },
                     ),
                   ],
                 ),

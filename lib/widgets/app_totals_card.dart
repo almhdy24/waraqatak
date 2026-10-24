@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../localization/app_localizations.dart';
+import '../utils/format_utils.dart';
 import 'app_design_tokens.dart';
 
 /// Reusable financial summary and balance card for Invoices, Purchases,
@@ -16,6 +17,8 @@ class AppTotalsCard extends StatelessWidget {
   final String currencySymbol;
   final bool showPaymentRow;
   final String? paymentHelperText;
+  final bool isTaxInclusive;
+  final double? netTaxableBase;
 
   const AppTotalsCard({
     super.key,
@@ -29,9 +32,12 @@ class AppTotalsCard extends StatelessWidget {
     required this.currencySymbol,
     this.showPaymentRow = true,
     this.paymentHelperText,
+    this.isTaxInclusive = false,
+    this.netTaxableBase,
   });
 
-  String _fmt(double v) => '${NumberFormat('#,##0.00').format(v)} $currencySymbol';
+  String _fmt(double v) =>
+      '${NumberFormat('#,##0.00').format(v)} $currencySymbol';
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +64,9 @@ class AppTotalsCard extends StatelessWidget {
               Icon(Icons.calculate_outlined, size: 20, color: cs.primary),
               const SizedBox(width: AppDesignTokens.space8),
               Text(
-                l10n.isArabic ? 'الملخص المالي والحسابات' : 'Financial Summary & Balance',
+                l10n.isArabic
+                    ? 'الملخص المالي والحسابات'
+                    : 'Financial Summary & Balance',
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: cs.onSurface,
@@ -67,7 +75,12 @@ class AppTotalsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppDesignTokens.space12),
-          _buildRow(l10n.subtotal, _fmt(subtotal), theme, cs),
+          _buildRow(
+            isTaxInclusive ? l10n.subtotalInclusive : l10n.subtotal,
+            _fmt(subtotal),
+            theme,
+            cs,
+          ),
           if (discount > 0)
             _buildRow(
               l10n.discount,
@@ -76,13 +89,23 @@ class AppTotalsCard extends StatelessWidget {
               cs,
               valueColor: AppDesignTokens.danger,
             ),
-          if (taxRate > 0)
+          if (isTaxInclusive && (taxAmount > 0 || taxRate > 0)) ...[
+            if (netTaxableBase != null)
+              _buildRow(l10n.netTaxableBase, _fmt(netTaxableBase!), theme, cs),
             _buildRow(
-              '${l10n.tax} (${taxRate.toStringAsFixed(1)}%)',
+              '${l10n.taxIncluded} (${FormatUtils.formatTaxRate(taxRate)})',
               _fmt(taxAmount),
               theme,
               cs,
             ),
+          ] else if (taxAmount > 0 || taxRate > 0) ...[
+            _buildRow(
+              '${l10n.tax} (${FormatUtils.formatTaxRate(taxRate)})',
+              _fmt(taxAmount),
+              theme,
+              cs,
+            ),
+          ],
           const Divider(height: AppDesignTokens.space20),
           _buildRow(
             l10n.total,
@@ -102,7 +125,9 @@ class AppTotalsCard extends StatelessWidget {
               theme,
               cs,
               isTotal: true,
-              valueColor: remaining > 0 ? AppDesignTokens.danger : AppDesignTokens.success,
+              valueColor: remaining > 0
+                  ? AppDesignTokens.danger
+                  : AppDesignTokens.success,
             ),
             if (paymentHelperText != null && paymentHelperText!.isNotEmpty) ...[
               const SizedBox(height: AppDesignTokens.space8),
@@ -117,7 +142,11 @@ class AppTotalsCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, size: 14, color: cs.onSurfaceVariant),
+                    Icon(
+                      Icons.info_outline,
+                      size: 14,
+                      color: cs.onSurfaceVariant,
+                    ),
                     const SizedBox(width: AppDesignTokens.space8),
                     Expanded(
                       child: Text(

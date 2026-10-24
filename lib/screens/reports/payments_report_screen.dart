@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/date_range_filter.dart';
+import '../../models/payment_method.dart';
 import '../../utils/currency_utils.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
@@ -17,6 +18,7 @@ class PaymentsReportScreen extends StatefulWidget {
 class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   DateRangeFilter _range = DateRangeFilter.thisMonth();
   List<Map<String, dynamic>>? _rows;
+  Map<String, PaymentMethod> _methodsMap = {};
   String? _error;
 
   static final _numFmt = NumberFormat('#,##0.##');
@@ -35,8 +37,12 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         from: _range.from,
         to: _range.to,
       );
+      final methods = await DatabaseHelper.instance.getPaymentMethods();
       if (!mounted) return;
-      setState(() => _rows = rows);
+      setState(() {
+        _rows = rows;
+        _methodsMap = {for (final m in methods) m.key: m};
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -151,7 +157,11 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 [
                   row['recipient_name'] as String? ?? '',
                   if (method != null)
-                    CurrencyUtils.getPaymentMethodLabel(method, AppLocalizations.of(ctx)),
+                    _methodsMap[method]?.label(AppLocalizations.of(ctx).langCode) ??
+                        CurrencyUtils.getPaymentMethodLabel(
+                          method,
+                          AppLocalizations.of(ctx),
+                        ),
                 ].where((s) => s.isNotEmpty).join(' · '),
                 style: const TextStyle(fontSize: 12),
               )),

@@ -34,6 +34,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   final List<TextEditingController> _priceControllers = [];
   final List<bool> _taxableList = [];
   final List<int?> _productIds = [];
+  final List<double?> _taxRates = [];
+  Map<int, double> _profileRates = {};
 
   Business? _business;
   Contact? _selectedContact;
@@ -71,8 +73,17 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   Future<void> _loadBusiness() async {
     final business = await DatabaseHelper.instance.getFirstBusiness();
+    final profiles = await DatabaseHelper.instance.getTaxProfiles(
+      activeOnly: true,
+    );
     if (!mounted) return;
-    setState(() => _business = business);
+    setState(() {
+      _business = business;
+      _profileRates = {
+        for (final p in profiles)
+          if (p.id != null) p.id!: p.rate,
+      };
+    });
   }
 
   void _addItem() {
@@ -82,6 +93,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       _priceControllers.add(TextEditingController());
       _taxableList.add(true);
       _productIds.add(null);
+      _taxRates.add(null);
     });
   }
 
@@ -96,6 +108,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       _priceControllers.removeAt(index);
       _taxableList.removeAt(index);
       _productIds.removeAt(index);
+      _taxRates.removeAt(index);
     });
   }
 
@@ -108,36 +121,35 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   }
 
   ({double subtotal, double taxAmount, double total}) get _totals {
-    final items = List.generate(
-      _descriptionControllers.length,
-      (index) => DocumentItemInput(
-        description: _descriptionControllers[index].text,
-        quantity: double.tryParse(_quantityControllers[index].text) ?? 0,
-        price: double.tryParse(_priceControllers[index].text) ?? 0,
-        taxable: _taxableList[index],
-        productId: _productIds[index],
-      ),
+    final items = _buildItems();
+    final decimalDigits = Currency.decimalDigitsForCode(
+      _business?.currencyCode,
     );
-    final decimalDigits = Currency.decimalDigitsForCode(_business?.currencyCode);
+    final effectiveTaxRate = (_business?.taxesEnabled ?? false)
+        ? (_business?.taxRate ?? 0)
+        : 0.0;
     return DocumentService.calculateInvoiceTotals(
       items: items,
       discount: _discount,
-      taxRate: _business?.taxRate ?? 0,
-      pricesIncludeTax: _business?.pricesIncludeTax ?? false,
+      taxRate: effectiveTaxRate,
+      pricesIncludeTax:
+          (_business?.taxesEnabled ?? false) &&
+          (_business?.pricesIncludeTax ?? false),
       decimalDigits: decimalDigits,
     );
   }
 
   List<DocumentItemInput> _buildItems() => List.generate(
-        _descriptionControllers.length,
-        (i) => DocumentItemInput(
-          description: _descriptionControllers[i].text.trim(),
-          quantity: double.tryParse(_quantityControllers[i].text) ?? 0,
-          price: double.tryParse(_priceControllers[i].text) ?? 0,
-          taxable: _taxableList[i],
-          productId: _productIds[i],
-        ),
-      );
+    _descriptionControllers.length,
+    (i) => DocumentItemInput(
+      description: _descriptionControllers[i].text.trim(),
+      quantity: double.tryParse(_quantityControllers[i].text) ?? 0,
+      price: double.tryParse(_priceControllers[i].text) ?? 0,
+      taxable: _taxableList[i],
+      productId: _productIds[i],
+      taxRate: _taxRates[i],
+    ),
+  );
 
   Future<void> _save({bool isDraft = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
@@ -158,7 +170,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       if (!isDraft) {
         for (final item in items) {
           if (item.productId != null && item.quantity > 0) {
-            final p = await DatabaseHelper.instance.getProductById(item.productId!);
+            final p = await DatabaseHelper.instance.getProductById(
+              item.productId!,
+            );
             if (p != null && p.isProduct && p.stockQuantity < item.quantity) {
               lowStockWarnings.add(p.name);
             }
@@ -192,12 +206,21 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       }
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: docId)),
+        MaterialPageRoute(
+          builder: (_) => DocumentDetailScreen(documentId: docId),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
+        SnackBar(
+          content: Text(
+            ErrorUtils.getFriendlyErrorMessage(
+              e,
+              l10n: AppLocalizations.of(context),
+            ),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -214,135 +237,169 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final discount = _discount;
     final total = totals.total;
     final paid = _paid;
-    final decimalDigits = Currency.decimalDigitsForCode(_business?.currencyCode);
+    final decimalDigits = Currency.decimalDigitsForCode(
+      _business?.currencyCode,
+    );
     final remaining = MoneyUtils.calculateRemaining(total, paid, decimalDigits);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.invoice), centerTitle: true),
-      body: ResponsiveCenter(child: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            ContactAutocompleteField(
-              label: l10n.customer,
-              type: 'customer',
-              initialContact: _selectedContact,
-              onContactChanged: (contact) => _selectedContact = contact,
-            ),
-            const SizedBox(height: 16),
-            AppSectionHeader(
-              title: l10n.items,
-              count: _descriptionControllers.length,
-            ),
-            const SizedBox(height: 8),
-            ...List.generate(
-              _descriptionControllers.length,
-              (index) => DocumentItemForm(
-                descriptionController: _descriptionControllers[index],
-                quantityController: _quantityControllers[index],
-                priceController: _priceControllers[index],
-                taxable: _taxableList[index],
-                productId: _productIds[index],
-                onProductChanged: (productId) {
-                  setState(() => _productIds[index] = productId);
-                },
-                onTaxableChanged: (value) {
-                  setState(() => _taxableList[index] = value ?? true);
-                },
-                onDelete: () => _removeItem(index),
-                onChanged: () => setState(() {}),
+      body: ResponsiveCenter(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              ContactAutocompleteField(
+                label: l10n.customer,
+                type: 'customer',
+                initialContact: _selectedContact,
+                onContactChanged: (contact) => _selectedContact = contact,
               ),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _addItem,
-              icon: const Icon(Icons.add_circle_outline_rounded),
-              label: Text(l10n.addItem),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(46),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+              const SizedBox(height: 16),
+              AppSectionHeader(
+                title: l10n.items,
+                count: _descriptionControllers.length,
+              ),
+              const SizedBox(height: 8),
+              ...List.generate(
+                _descriptionControllers.length,
+                (index) => DocumentItemForm(
+                  descriptionController: _descriptionControllers[index],
+                  quantityController: _quantityControllers[index],
+                  priceController: _priceControllers[index],
+                  taxable: _taxableList[index],
+                  taxRate: _taxRates[index],
+                  productId: _productIds[index],
+                  onProductChanged: (productId) {
+                    setState(() => _productIds[index] = productId);
+                  },
+                  onProductSelected: (product) {
+                    setState(() {
+                      if (product == null) {
+                        _taxRates[index] = null;
+                      } else if (!product.isTaxable) {
+                        _taxableList[index] = false;
+                        _taxRates[index] = 0.0;
+                      } else if (product.taxProfileId != null) {
+                        _taxRates[index] = _profileRates[product.taxProfileId];
+                      } else {
+                        _taxRates[index] = null;
+                      }
+                    });
+                  },
+                  onTaxableChanged: (value) {
+                    setState(() => _taxableList[index] = value ?? true);
+                  },
+                  onDelete: () => _removeItem(index),
+                  onChanged: () => setState(() {}),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              l10n.paymentDetails,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _discountController,
-              decoration: InputDecoration(
-                labelText: l10n.discount,
-                prefixIcon: const Icon(Icons.percent_rounded, size: 20),
-              ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _paidController,
-              decoration: InputDecoration(
-                labelText: l10n.paid,
-                prefixIcon: const Icon(Icons.payments_outlined, size: 20),
-                helperText: l10n.remainingBalanceHelper,
-              ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _notesController,
-              decoration: InputDecoration(
-                labelText: l10n.notes,
-                prefixIcon: const Icon(Icons.notes_rounded, size: 20),
-              ),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-            AppTotalsCard(
-              subtotal: subtotal,
-              discount: discount,
-              taxAmount: totals.taxAmount,
-              taxRate: _business?.taxRate ?? 0,
-              total: total,
-              paid: paid,
-              remaining: remaining,
-              currencySymbol: _business?.currencySymbol ?? '',
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: _saving ? null : () => _save(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _addItem,
+                icon: const Icon(Icons.add_circle_outline_rounded),
+                label: Text(l10n.addItem),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(46),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.buttonRadius,
+                    ),
                   ),
                 ),
-                child: _saving
-                    ? SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                        ),
-                      )
-                    : Text(l10n.saveInvoice),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _saving ? null : () => _save(isDraft: true),
-              child: Text(l10n.saveDraft),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Text(
+                l10n.paymentDetails,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _discountController,
+                decoration: InputDecoration(
+                  labelText: l10n.discount,
+                  prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _paidController,
+                decoration: InputDecoration(
+                  labelText: l10n.paid,
+                  prefixIcon: const Icon(Icons.payments_outlined, size: 20),
+                  helperText: l10n.remainingBalanceHelper,
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesController,
+                decoration: InputDecoration(
+                  labelText: l10n.notes,
+                  prefixIcon: const Icon(Icons.notes_rounded, size: 20),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 16),
+              AppTotalsCard(
+                subtotal: subtotal,
+                discount: discount,
+                taxAmount: totals.taxAmount,
+                taxRate: _business?.taxRate ?? 0,
+                total: total,
+                paid: paid,
+                remaining: remaining,
+                currencySymbol: _business?.currencySymbol ?? '',
+                isTaxInclusive: _business?.pricesIncludeTax ?? false,
+                netTaxableBase: (_business?.pricesIncludeTax ?? false)
+                    ? (total - totals.taxAmount)
+                    : null,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton(
+                  onPressed: _saving ? null : () => _save(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppDesignTokens.buttonRadius,
+                      ),
+                    ),
+                  ),
+                  child: _saving
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(l10n.saveInvoice),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _saving ? null : () => _save(isDraft: true),
+                child: Text(l10n.saveDraft),
+              ),
+            ],
+          ),
         ),
-      )),
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 
 class CurrencyUtils {
@@ -26,6 +27,21 @@ class CurrencyUtils {
         if (l10n.langCode != 'ar' && customLabelEn != null) return customLabelEn;
         return method;
     }
+  }
+
+  /// Resolves the human-readable label asynchronously from the database,
+  /// supporting custom payment methods with localized names as well as predefined methods.
+  static Future<String> resolvePaymentMethodLabel(
+    String method,
+    AppLocalizations l10n, {
+    DatabaseHelper? db,
+  }) async {
+    final database = db ?? DatabaseHelper.instance;
+    final pm = await database.getPaymentMethodByKey(method);
+    if (pm != null) {
+      return pm.label(l10n.langCode);
+    }
+    return getPaymentMethodLabel(method, l10n);
   }
 
   static bool isPaymentMethodAllowed(String method, String currencyCode) => true;

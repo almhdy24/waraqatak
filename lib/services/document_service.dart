@@ -93,6 +93,12 @@ class DocumentService {
     double remaining = 0;
 
     final decimalDigits = Currency.decimalDigitsForCode(business.currencyCode);
+    final effectiveItems = (!isFinancial && !isCustom)
+        ? await resolveItemsTaxRates(items, business)
+        : items;
+    final effectiveTaxRate = await resolveEffectiveTaxRate(business);
+    final effectivePricesIncludeTax =
+        business.taxesEnabled && business.pricesIncludeTax;
 
     if (isFinancial) {
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
@@ -104,19 +110,19 @@ class DocumentService {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
       discountApplied = 0;
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = _calculateTaxMultiRate(
-          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax,
+          effectiveItems, discountApplied, taxRate, subtotal, effectivePricesIncludeTax,
           decimalDigits: decimalDigits);
-      total = business.pricesIncludeTax
+      total = effectivePricesIncludeTax
           ? subtotal
           : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
       discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
@@ -125,13 +131,13 @@ class DocumentService {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
       final totals = calculateInvoiceTotals(
-        items: items,
+        items: effectiveItems,
         discount: discountApplied,
-        taxRate: business.taxRate,
-        pricesIncludeTax: business.pricesIncludeTax,
+        taxRate: effectiveTaxRate,
+        pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = totals.taxAmount;
       total = totals.total;
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
@@ -184,7 +190,7 @@ class DocumentService {
       currencyCode: business.currencyCode,
     );
 
-    final documentItems = items.map((item) => DocumentItem(
+    final documentItems = effectiveItems.map((item) => DocumentItem(
       documentId: 0,
       productId: item.productId,
       description: item.description,
@@ -284,6 +290,12 @@ class DocumentService {
     double remaining = 0;
 
     final decimalDigits = Currency.decimalDigitsForCode(existing.currencyCode);
+    final effectiveItems = (!isFinancial && !isCustom)
+        ? await resolveItemsTaxRates(items, business)
+        : items;
+    final effectiveTaxRate = await resolveEffectiveTaxRate(business);
+    final effectivePricesIncludeTax =
+        business.taxesEnabled && business.pricesIncludeTax;
 
     if (isFinancial) {
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
@@ -295,19 +307,19 @@ class DocumentService {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
       discountApplied = 0;
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = _calculateTaxMultiRate(
-          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax,
+          effectiveItems, discountApplied, taxRate, subtotal, effectivePricesIncludeTax,
           decimalDigits: decimalDigits);
-      total = business.pricesIncludeTax
+      total = effectivePricesIncludeTax
           ? subtotal
           : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
       discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
@@ -316,13 +328,13 @@ class DocumentService {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
       final totals = calculateInvoiceTotals(
-        items: items,
+        items: effectiveItems,
         discount: discountApplied,
-        taxRate: business.taxRate,
-        pricesIncludeTax: business.pricesIncludeTax,
+        taxRate: effectiveTaxRate,
+        pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = totals.taxAmount;
       total = totals.total;
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
@@ -379,7 +391,7 @@ class DocumentService {
       currencyCode: existing.currencyCode,
     );
 
-    final documentItems = items.map((item) => DocumentItem(
+    final documentItems = effectiveItems.map((item) => DocumentItem(
       documentId: documentId,
       productId: item.productId,
       description: item.description,
@@ -514,6 +526,102 @@ class DocumentService {
 
   static double _calculateSubtotal(List<DocumentItemInput> items) {
     return items.fold<double>(0.0, (sum, item) => sum + item.total);
+  }
+
+  /// Resolves the effective business default tax rate:
+  /// - If [business.taxesEnabled] is false -> always 0.0.
+  /// - If [business.taxesEnabled] is true:
+  ///   - If [business.defaultTaxProfileId] is set, lookup profile rate if active.
+  ///   - Otherwise falls back to [business.taxRate].
+  static Future<double> resolveEffectiveTaxRate(
+    Business business, {
+    DatabaseHelper? db,
+  }) async {
+    if (!business.taxesEnabled) return 0.0;
+    final database = db ?? DatabaseHelper.instance;
+    if (business.defaultTaxProfileId != null) {
+      final profile =
+          await database.getTaxProfileById(business.defaultTaxProfileId!);
+      if (profile != null && profile.isActive) {
+        return profile.rate;
+      }
+    }
+    return business.taxRate;
+  }
+
+  /// Resolves line items' tax rates and taxable status from their linked products
+  /// and tax profiles when not explicitly provided.
+  /// - If [business.taxesEnabled] is false, all items are treated as 0% tax.
+  /// - If an item is linked to a product:
+  ///   - If the product is not taxable, [taxable] becomes false, and [taxRate] is 0.0.
+  ///   - If the product has a linked active tax profile, [taxRate] is set to the profile's rate.
+  ///   - If the product has a 0% tax profile, [taxRate] is set to 0.0 (zero-rated).
+  static Future<List<DocumentItemInput>> resolveItemsTaxRates(
+    List<DocumentItemInput> items,
+    Business business, {
+    DatabaseHelper? db,
+  }) async {
+    if (!business.taxesEnabled) {
+      return items
+          .map((item) => DocumentItemInput(
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price,
+                taxable: false,
+                productId: item.productId,
+                taxRate: 0.0,
+              ))
+          .toList();
+    }
+
+    final database = db ?? DatabaseHelper.instance;
+    final resolved = <DocumentItemInput>[];
+
+    for (final item in items) {
+      if (item.taxRate != null) {
+        // Explicit per-item rate already provided
+        resolved.add(item);
+        continue;
+      }
+
+      if (item.productId != null) {
+        final product = await database.getProductById(item.productId!);
+        if (product != null) {
+          if (!product.isTaxable) {
+            resolved.add(DocumentItemInput(
+              description: item.description,
+              quantity: item.quantity,
+              price: item.price,
+              taxable: false,
+              productId: item.productId,
+              taxRate: 0.0,
+            ));
+            continue;
+          }
+
+          if (product.taxProfileId != null) {
+            final profile =
+                await database.getTaxProfileById(product.taxProfileId!);
+            if (profile != null && profile.isActive) {
+              resolved.add(DocumentItemInput(
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price,
+                taxable: true,
+                productId: item.productId,
+                taxRate: profile.rate,
+              ));
+              continue;
+            }
+          }
+        }
+      }
+
+      // No explicit product profile; keep item with null taxRate (will use business fallback)
+      resolved.add(item);
+    }
+
+    return resolved;
   }
 
   /// Calculates invoice totals supporting per-item tax rates and inclusive/exclusive modes.

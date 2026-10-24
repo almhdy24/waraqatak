@@ -6,12 +6,14 @@ import 'document_service.dart';
 class PosCartLine {
   final Product product;
   final double quantity;
+  final double? taxRate;
 
-  const PosCartLine(this.product, this.quantity);
+  const PosCartLine(this.product, this.quantity, {this.taxRate});
 
   double get total => MoneyUtils.round(quantity * product.salePrice);
 
-  PosCartLine withQuantity(double q) => PosCartLine(product, q);
+  PosCartLine withQuantity(double q) =>
+      PosCartLine(product, q, taxRate: taxRate);
 }
 
 /// Why a product could not be added or its quantity raised.
@@ -41,15 +43,16 @@ class PosCart {
 
   /// Adds one unit of [product] (or [quantity] units). Returns an error
   /// instead of exceeding available stock.
-  PosCartError? add(Product product, {double quantity = 1}) {
+  PosCartError? add(Product product, {double quantity = 1, double? taxRate}) {
     final i = _lines.indexWhere((l) => l.product.id == product.id);
     final current = i < 0 ? 0.0 : _lines[i].quantity;
     final next = current + quantity;
     if (tracksStock(product) && next > product.stockQuantity) {
       return PosCartError.outOfStock;
     }
+    final lineRate = taxRate ?? (product.isTaxable ? null : 0.0);
     if (i < 0) {
-      _lines.add(PosCartLine(product, next));
+      _lines.add(PosCartLine(product, next, taxRate: lineRate));
     } else {
       _lines[i] = _lines[i].withQuantity(next);
     }
@@ -99,6 +102,7 @@ class PosCart {
             price: l.product.salePrice,
             taxable: l.product.isTaxable,
             productId: l.product.id,
+            taxRate: l.taxRate,
           ),
       ];
 

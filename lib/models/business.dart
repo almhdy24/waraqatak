@@ -51,6 +51,9 @@ class Business {
 
   String get currencySymbol => Currency.symbolForCode(currencyCode);
 
+  /// The effective fallback tax rate, respecting the [taxesEnabled] master toggle.
+  double get effectiveTaxRate => taxesEnabled ? taxRate : 0.0;
+
   Map<String, dynamic> toMap() => {
         'id': id,
         'name': name,

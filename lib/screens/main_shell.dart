@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
+import '../services/app_update_service.dart';
 import '../widgets/responsive.dart';
 import 'customers_screen.dart';
 import 'documents_screen.dart';
@@ -25,6 +26,14 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
     _homeKey = GlobalKey<HomeScreenState>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppUpdateService.instance.checkForUpdate(
+          context: context,
+          manual: false,
+        );
+      }
+    });
   }
 
   void _select(int i) {
