@@ -500,7 +500,7 @@ void main() {
       expect(DatabaseRepairService.categoryLabel(DiagnosticCategory.paymentMismatch, l10nAr),
           contains('اختلاف بين المبلغ المسدد وسجل المدفوعات'));
       expect(DatabaseRepairService.categoryLabel(DiagnosticCategory.stockDiscrepancy, l10nAr),
-          contains('اختلاف رصيد المخزون عن سجل حركة الأصناف'));
+          contains('اختلاف بين رصيد المخزون وسجل الحركات'));
       expect(DatabaseRepairService.categoryLabel(DiagnosticCategory.negativeStock, l10nAr),
           contains('رصيد مخزون سالب'));
     });
@@ -630,7 +630,7 @@ void main() {
       expect(reportText, contains('المعرفات المتأثرة: #5, #6'));
 
       expect(reportText, contains('المشكلة #2: [تنبيه تدقيق]'));
-      expect(reportText, contains('التصنيف: اختلاف رصيد المخزون عن سجل حركة الأصناف'));
+      expect(reportText, contains('التصنيف: اختلاف بين رصيد المخزون وسجل الحركات'));
       expect(reportText, contains('السجلات المتأثرة: 3 من حركات المخزون'));
       expect(reportText, contains('المعرفات المتأثرة: #12, #13, #14'));
 

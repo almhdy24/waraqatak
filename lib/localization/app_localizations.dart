@@ -1618,7 +1618,7 @@ class AppLocalizations {
   String get diagnosticsCategoryPayments =>
       _t('اختلاف بين المبلغ المسدد وسجل المدفوعات', 'Payment Discrepancies');
   String get diagnosticsCategoryStock =>
-      _t('اختلاف رصيد المخزون عن سجل حركة الأصناف', 'Stock Discrepancy');
+      _t('اختلاف بين رصيد المخزون وسجل الحركات', 'Stock Discrepancy');
   String get diagnosticsCategoryMissingOpeningStock =>
       _t('رصيد افتتاحي مفقود', 'Missing Opening Stock');
   String get diagnosticsCategoryNegativeStock =>
