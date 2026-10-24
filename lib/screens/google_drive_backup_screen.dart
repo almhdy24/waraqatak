@@ -41,8 +41,18 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
         str.contains('network')) {
       return l10n.networkError;
     }
-    if (error is GoogleSignInException ||
-        str.contains('sign-in') ||
+    if (error is GoogleSignInException) {
+      switch (error.code) {
+        case GoogleSignInExceptionCode.canceled:
+          return l10n.googleDriveSignInCancelled;
+        case GoogleSignInExceptionCode.clientConfigurationError:
+        case GoogleSignInExceptionCode.providerConfigurationError:
+          return l10n.googleDriveErrorConfig;
+        default:
+          return l10n.googleDriveErrorAuthExpired;
+      }
+    }
+    if (str.contains('sign-in') ||
         str.contains('authorization') ||
         str.contains('401') ||
         str.contains('403') ||
@@ -75,6 +85,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     setState(() {
       _loading = true;
       _statusMessage = null;
+      _isError = false;
     });
     try {
       final success = await _service.signIn();
@@ -85,13 +96,23 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
       });
       if (success) {
         await _fetchBackups();
+      } else {
+        final l10n = AppLocalizations.of(context);
+        setState(() {
+          _statusMessage = l10n.googleDriveErrorGeneric;
+          _isError = true;
+        });
       }
     } catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
+      final isCancellation = e is GoogleSignInException &&
+          e.code == GoogleSignInExceptionCode.canceled;
       setState(() {
-        _statusMessage = _mapErrorToMessage(e, l10n);
-        _isError = true;
+        _statusMessage = isCancellation
+            ? l10n.googleDriveSignInCancelled
+            : _mapErrorToMessage(e, l10n);
+        _isError = !isCancellation;
       });
     } finally {
       if (mounted) setState(() => _loading = false);

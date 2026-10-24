@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/services/google_drive_backup_service.dart';
 
 class FakeGoogleDriveClient implements GoogleDriveClient {
@@ -14,6 +16,8 @@ class FakeGoogleDriveClient implements GoogleDriveClient {
   bool throwOnUpload = false;
   bool throwOnDownload = false;
   bool throwOnList = false;
+  bool returnFalseOnSignIn = false;
+  Exception? throwOnSignIn;
 
   @override
   String? get currentUserEmail => signedIn ? email : null;
@@ -23,6 +27,8 @@ class FakeGoogleDriveClient implements GoogleDriveClient {
 
   @override
   Future<bool> signIn() async {
+    if (throwOnSignIn != null) throw throwOnSignIn!;
+    if (returnFalseOnSignIn) return false;
     signedIn = true;
     email = 'merchant@example.com';
     return true;
@@ -325,6 +331,81 @@ void main() {
         DefaultGoogleDriveClient.serverClientId,
         DefaultGoogleDriveClient.defaultServerClientId,
       );
+    });
+  });
+
+  group('GoogleDriveBackupService authentication and error handling', () {
+    test('signIn succeeds and updates signedIn status and currentUserEmail', () async {
+      expect(await GoogleDriveBackupService.instance.isSignedIn(), isFalse);
+      expect(GoogleDriveBackupService.instance.currentUserEmail, isNull);
+
+      final success = await GoogleDriveBackupService.instance.signIn();
+      expect(success, isTrue);
+      expect(await GoogleDriveBackupService.instance.isSignedIn(), isTrue);
+      expect(GoogleDriveBackupService.instance.currentUserEmail, 'merchant@example.com');
+    });
+
+    test('signIn propagates cancellation exception on user cancellation or credential mismatch', () async {
+      fakeClient.throwOnSignIn = const GoogleSignInException(
+        code: GoogleSignInExceptionCode.canceled,
+        description: 'User canceled or credential manager was canceled by provider',
+      );
+
+      expect(
+        () => GoogleDriveBackupService.instance.signIn(),
+        throwsA(
+          isA<GoogleSignInException>().having(
+            (e) => e.code,
+            'code',
+            GoogleSignInExceptionCode.canceled,
+          ),
+        ),
+      );
+    });
+
+    test('signIn propagates configuration exception when OAuth client is misconfigured', () async {
+      fakeClient.throwOnSignIn = const GoogleSignInException(
+        code: GoogleSignInExceptionCode.clientConfigurationError,
+        description: 'serverClientId must be provided on Android',
+      );
+
+      expect(
+        () => GoogleDriveBackupService.instance.signIn(),
+        throwsA(
+          isA<GoogleSignInException>().having(
+            (e) => e.code,
+            'code',
+            GoogleSignInExceptionCode.clientConfigurationError,
+          ),
+        ),
+      );
+    });
+
+    test('signIn returns false when authorization is denied without throwing', () async {
+      fakeClient.returnFalseOnSignIn = true;
+      final result = await GoogleDriveBackupService.instance.signIn();
+      expect(result, isFalse);
+      expect(await GoogleDriveBackupService.instance.isSignedIn(), isFalse);
+    });
+
+    test('signOut clears user email and sign-in state', () async {
+      await GoogleDriveBackupService.instance.signIn();
+      expect(await GoogleDriveBackupService.instance.isSignedIn(), isTrue);
+
+      await GoogleDriveBackupService.instance.signOut();
+      expect(await GoogleDriveBackupService.instance.isSignedIn(), isFalse);
+      expect(GoogleDriveBackupService.instance.currentUserEmail, isNull);
+    });
+
+    test('localization messages support cancellation and config errors', () {
+      final l10nAr = AppLocalizations('ar');
+      final l10nEn = AppLocalizations('en');
+
+      expect(l10nAr.googleDriveSignInCancelled, contains('تم إلغاء'));
+      expect(l10nEn.googleDriveSignInCancelled, contains('cancelled'));
+
+      expect(l10nAr.googleDriveErrorConfig, contains('Google Cloud'));
+      expect(l10nEn.googleDriveErrorConfig, contains('Google Cloud'));
     });
   });
 }

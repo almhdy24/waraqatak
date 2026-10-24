@@ -106,7 +106,11 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
     try {
       _account ??= await _googleSignIn.attemptLightweightAuthentication();
       return _account != null;
-    } catch (_) {
+    } on GoogleSignInException catch (e) {
+      debugPrint('[GoogleDrive] Lightweight sign-in exception: code=${e.code.name}, description=${e.description}');
+      return false;
+    } catch (e) {
+      debugPrint('[GoogleDrive] Lightweight sign-in failed: ${e.runtimeType}');
       return false;
     }
   }
@@ -115,7 +119,9 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
     await _ensureInitialized();
     try {
       _account ??= await _googleSignIn.attemptLightweightAuthentication();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[GoogleDrive] Lightweight attempt before fresh headers: ${e.runtimeType}');
+    }
     _account ??= await _googleSignIn.authenticate(
       scopeHint: [drive.DriveApi.driveAppdataScope],
     );
@@ -149,23 +155,35 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
   @override
   Future<bool> signIn() async {
     try {
+      debugPrint('[GoogleDrive] Starting sign-in flow (serverClientId configured: ${serverClientId.isNotEmpty})...');
       await _ensureInitialized();
       _account = await _googleSignIn.authenticate(
         scopeHint: [drive.DriveApi.driveAppdataScope],
       );
+      debugPrint('[GoogleDrive] Authenticate completed. Account obtained: ${_account != null}');
       if (_account != null) {
+        debugPrint('[GoogleDrive] Requesting authorization headers for scope: ${drive.DriveApi.driveAppdataScope}...');
         final headers = await _account!.authorizationClient.authorizationHeaders(
           [drive.DriveApi.driveAppdataScope],
           promptIfNecessary: true,
         );
-        if (headers != null) {
+        final hasAuthHeader = headers != null && headers.containsKey('Authorization');
+        debugPrint('[GoogleDrive] Authorization result: hasAuthHeader=$hasAuthHeader');
+        if (hasAuthHeader) {
           _driveApi = drive.DriveApi(_GoogleAuthClient(_getFreshHeaders));
           return true;
+        } else {
+          debugPrint('[GoogleDrive] Authorization denied or returned null headers');
+          return false;
         }
       }
       return false;
-    } catch (_) {
-      return false;
+    } on GoogleSignInException catch (e) {
+      debugPrint('[GoogleDrive] GoogleSignInException: code=${e.code.name}, description=${e.description}');
+      rethrow;
+    } catch (e, st) {
+      debugPrint('[GoogleDrive] Unexpected sign-in error: ${e.runtimeType} -> $e\n$st');
+      rethrow;
     }
   }
 

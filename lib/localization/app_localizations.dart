@@ -1565,6 +1565,14 @@ class AppLocalizations {
     'فشل الاسترجاع: ملف النسخة الاحتياطية غير صالح أو تالف.',
     'Restore failed: Backup file is invalid or corrupted.',
   );
+  String get googleDriveSignInCancelled => _t(
+    'تم إلغاء تسجيل الدخول أو لم يتم إكمال التحقق.',
+    'Sign-in was cancelled or verification was not completed.',
+  );
+  String get googleDriveErrorConfig => _t(
+    'فشل إعداد المصادقة، يرجى التحقق من إعدادات Google Cloud وتطابق بصمة التطبيق.',
+    'Authentication configuration failed. Please verify Google Cloud settings and app certificate.',
+  );
 
   bool get isArabic => langCode == 'ar';
 
