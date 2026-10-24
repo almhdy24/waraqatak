@@ -28,7 +28,7 @@ void main() {
     if (f.existsSync()) f.deleteSync();
     final db = DatabaseHelper.instance;
     await db.insertBusiness(const Business(
-        name: 'متجر', ownerName: 'أحمد', phone: '1', address: 'x', taxRate: 10));
+        name: 'متجر', ownerName: 'أحمد', phone: '1', address: 'x', taxRate: 10, taxesEnabled: true));
     business = (await db.getFirstBusiness())!;
     final penId = await ProductService.createProduct(name: 'قلم', salePrice: 500, stockQuantity: 5, barcode: '111');
     final repId = await ProductService.createProduct(name: 'صيانة', salePrice: 1500, type: Product.typeService, isTaxable: false);
@@ -41,7 +41,7 @@ void main() {
     final method = (await db.getEnabledPaymentMethods()).first.key;
     final cart = PosCart()..add(pen, quantity: 2)..add(repair);
     cart.discount = 500;
-    final t = cart.totals(taxRate: business.taxRate, pricesIncludeTax: business.pricesIncludeTax);
+    final t = cart.totals(taxRate: business.effectiveTaxRate, pricesIncludeTax: business.pricesIncludeTax);
 
     final id = await DocumentService.createDocument(
       type: 'invoice', business: business, items: cart.toItemInputs(),
