@@ -73,6 +73,14 @@ class AboutScreen extends StatelessWidget {
                 _SectionTitle(l10n.supportAndContact),
                 _Group(children: [
                   _LinkTile(
+                    icon: Icons.help_outline_rounded,
+                    iconColor: Theme.of(context).colorScheme.primary,
+                    title: l10n.helpCenter,
+                    subtitle: 'almhdy24.com/products/waraqatak/help',
+                    onTap: () => UrlLauncherUtils.launch(
+                        context, AppConstants.helpCenterUrl),
+                  ),
+                  _LinkTile(
                     icon: Icons.chat_rounded,
                     iconColor: const Color(0xFF25D366),
                     title: l10n.whatsappSupport,

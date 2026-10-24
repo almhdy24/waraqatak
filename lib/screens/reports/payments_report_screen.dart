@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/date_range_filter.dart';
 import '../../models/payment_method.dart';
 import '../../utils/currency_utils.dart';
+import '../document_detail_screen.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
 
@@ -141,14 +142,28 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
           ),
           child: ListTile(
+            onTap: row['document_id'] != null
+                ? () => _openDocument(context, row['document_id'] as int)
+                : null,
             leading: CircleAvatar(
               backgroundColor: color.withValues(alpha: 0.1),
               child: Icon(isIn ? Icons.arrow_downward : Icons.arrow_upward,
                   color: color, size: 20),
             ),
             title: Row(children: [
-              Expanded(child: Text(row['document_number'] as String,
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
+              Expanded(
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      row['document_number'] as String,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(_numFmt.format(amount),
                   style: TextStyle(fontWeight: FontWeight.w600, color: color)),
             ]),
@@ -172,5 +187,34 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         );
       },
     );
+  }
+
+  Future<void> _openDocument(BuildContext context, int docId) async {
+    final doc = await DatabaseHelper.instance.getDocumentById(docId);
+    if (!context.mounted) return;
+    if (doc == null) {
+      final l10n = AppLocalizations.of(context);
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.documentNotFound),
+          content: Text(l10n.documentNotFoundDesc),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.close),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DocumentDetailScreen(documentId: docId),
+      ),
+    );
+    if (mounted) _load();
   }
 }

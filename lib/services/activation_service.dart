@@ -26,6 +26,9 @@ enum ActivationOutcome {
   /// This is never shown as "invalid key" — the key may well be valid; we
   /// just couldn't talk to the server reliably.
   serverUnreachable,
+
+  /// Device identity could not be verified securely by the operating system.
+  deviceUnavailable,
 }
 
 /// Thin wrapper around the Elmahdi Pay SDK used only for key activation.

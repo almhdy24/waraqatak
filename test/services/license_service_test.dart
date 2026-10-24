@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/models/entitlement.dart';
 import 'package:warqatek/services/activation_service.dart';
@@ -323,5 +324,133 @@ void main() {
       expect(s.status, EntitlementStatus.trialActive);
       expect(storage.data['wq_trial_start'], originalStart);
     });
+  });
+
+  group('getOrCreateDeviceId with Android ID / UUID migration', () {
+    const deviceChannel = MethodChannel('com.elmahdi.waraqatak/device');
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(deviceChannel, null);
+    });
+
+    test(
+      'returns existing stored UUID without overwriting or invoking platform channel',
+      () async {
+        const existingStoredUuid = '11111111-2222-4333-8444-555555555555';
+        storage.data['wq_device_id'] = existingStoredUuid;
+
+        var platformChannelCalled = false;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceChannel, (call) async {
+              platformChannelCalled = true;
+              return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+            });
+
+        final id = await service.getOrCreateDeviceId();
+
+        expect(id, existingStoredUuid);
+        expect(storage.data['wq_device_id'], existingStoredUuid);
+        expect(
+          platformChannelCalled,
+          isFalse,
+          reason: 'Existing stored ID must be preserved and never overwritten',
+        );
+      },
+    );
+
+    test(
+      'derives stable UUID v8 from Android ID hash when no ID is stored',
+      () async {
+        const dummySha256 =
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+        final expectedUuid = LicenseService.uuidFromHash(dummySha256);
+
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceChannel, (call) async {
+              if (call.method == 'stableIdHash') {
+                return dummySha256;
+              }
+              return null;
+            });
+
+        final id = await service.getOrCreateDeviceId();
+
+        expect(id, expectedUuid);
+        expect(storage.data['wq_device_id'], expectedUuid);
+        expect(
+          id,
+          matches(
+            RegExp(
+              r'^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'throws StateError and does not generate random UUID when platform channel returns null',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceChannel, (call) async {
+              if (call.method == 'stableIdHash') {
+                return null;
+              }
+              return null;
+            });
+
+        expect(
+          () => service.getOrCreateDeviceId(),
+          throwsA(isA<StateError>()),
+          reason: 'Must refuse to generate unstable random UUID',
+        );
+        expect(storage.data['wq_device_id'], isNull);
+      },
+    );
+
+    test(
+      'throws StateError and does not generate random UUID when platform channel returns empty/invalid hash',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceChannel, (call) async {
+              return '';
+            });
+
+        expect(() => service.getOrCreateDeviceId(), throwsA(isA<StateError>()));
+        expect(storage.data['wq_device_id'], isNull);
+      },
+    );
+
+    test('throws StateError when platform channel throws exception', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(deviceChannel, (call) async {
+            throw PlatformException(
+              code: 'UNAVAILABLE',
+              message: 'Channel error',
+            );
+          });
+
+      expect(() => service.getOrCreateDeviceId(), throwsA(isA<StateError>()));
+      expect(storage.data['wq_device_id'], isNull);
+    });
+
+    test(
+      'entitlement compute uses fallback placeholder when device ID is unavailable without crashing',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceChannel, (call) async => null);
+
+        final entitlement = await service.checkEntitlement();
+        expect(entitlement.status, EntitlementStatus.trialActive);
+        expect(entitlement.deviceId, '00000000-0000-0000-0000-000000000000');
+        expect(
+          storage.data['wq_device_id'],
+          isNull,
+          reason:
+              'Placeholder must not be written to persistent secure storage',
+        );
+      },
+    );
   });
 }

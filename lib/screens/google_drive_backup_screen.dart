@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../localization/app_localizations.dart';
 import '../services/google_drive_backup_service.dart';
@@ -423,24 +423,47 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                         label: Text(l10n.googleDriveConnect),
                       )
                     else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _loading ? null : _signOut,
-                              icon: const Icon(Icons.logout),
-                              label: Text(l10n.googleDriveDisconnect),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: _loading ? null : _uploadBackup,
-                              icon: const Icon(Icons.cloud_upload_outlined),
-                              label: Text(l10n.googleDriveUploadNow),
-                            ),
-                          ),
-                        ],
+                      LayoutBuilder(
+                        builder: (ctx, constraints) {
+                          final isNarrow = constraints.maxWidth < 340;
+                          if (isNarrow) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed: _loading ? null : _uploadBackup,
+                                  icon: const Icon(Icons.cloud_upload_outlined),
+                                  label: Text(l10n.googleDriveUploadNow),
+                                ),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _loading ? null : _signOut,
+                                  icon: const Icon(Icons.logout),
+                                  label: Text(l10n.googleDriveDisconnect),
+                                ),
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _loading ? null : _signOut,
+                                  icon: const Icon(Icons.logout),
+                                  label: Text(l10n.googleDriveDisconnect),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: _loading ? null : _uploadBackup,
+                                  icon: const Icon(Icons.cloud_upload_outlined),
+                                  label: Text(l10n.googleDriveUploadNow),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                   ],
                 ),
@@ -544,57 +567,76 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                         horizontal: 12,
                         vertical: 10,
                       ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 20,
-                            backgroundColor: cs.surfaceContainerHighest,
-                            child: Icon(
-                              Icons.inventory_2_outlined,
-                              color: cs.primary,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  b.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                      child: LayoutBuilder(
+                        builder: (ctx, constraints) {
+                          final isCompact = constraints.maxWidth < 340;
+                          return Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: cs.surfaceContainerHighest,
+                                child: Icon(
+                                  Icons.inventory_2_outlined,
+                                  color: cs.primary,
+                                  size: 18,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${b.formattedSize} • ${_dateFmt.format(b.modifiedTime.toLocal())}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: cs.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Directionality(
+                                      textDirection: TextDirection.ltr,
+                                      child: Text(
+                                        b.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13.5,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Directionality(
+                                      textDirection: TextDirection.ltr,
+                                      child: Text(
+                                        '${b.formattedSize} • ${_dateFmt.format(b.modifiedTime.toLocal())}',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: cs.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              FilledButton.tonal(
+                                onPressed: _loading ? null : () => _confirmAndRestore(b),
+                                style: FilledButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isCompact ? 8 : 12,
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton.tonal(
-                            onPressed: _loading ? null : () => _confirmAndRestore(b),
-                            child: Text(l10n.restore),
-                          ),
-                          const SizedBox(width: 4),
-                          IconButton(
-                            icon: Icon(
-                              Icons.delete_outline,
-                              color: cs.error,
-                            ),
-                            tooltip: l10n.googleDriveDeleteBackup,
-                            onPressed: _loading ? null : () => _confirmAndDelete(b),
-                          ),
-                        ],
+                                child: Text(l10n.restore),
+                              ),
+                              const SizedBox(width: 2),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  color: cs.error,
+                                  size: 20,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                tooltip: l10n.googleDriveDeleteBackup,
+                                onPressed: _loading ? null : () => _confirmAndDelete(b),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),

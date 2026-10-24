@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
@@ -152,11 +153,53 @@ class _LicenseScreenState extends State<LicenseScreen> {
                         _row(l10n.licenseTypeLabel, _typeLabel(l10n)),
                         const Divider(height: 1),
                         _row(l10n.licenseExpiryLabel, _expiryLabel(l10n)),
+                        if (_state?.deviceId != null && _state!.deviceId.isNotEmpty) ...[
+                          const Divider(height: 1),
+                          _rowWithCopy(
+                            context,
+                            l10n.deviceIdLabel,
+                            _state!.deviceId,
+                            l10n,
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                Card(
+                  elevation: 0,
+                  color: cs.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: cs.outlineVariant),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.transferNoticeTitle,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          l10n.transferNoticeBody,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurfaceVariant,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Text(
                   l10n.licenseOnExpiryTitle,
                   style: const TextStyle(
@@ -255,6 +298,51 @@ class _LicenseScreenState extends State<LicenseScreen> {
               textAlign: TextAlign.end,
               style: const TextStyle(fontSize: 14),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rowWithCopy(
+    BuildContext context,
+    String label,
+    String value,
+    AppLocalizations l10n,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(
+              value.length > 18 ? '${value.substring(0, 16)}…' : value,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.copy_rounded, size: 18),
+            tooltip: l10n.copyDeviceId,
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(l10n.deviceIdCopied)),
+              );
+            },
           ),
         ],
       ),

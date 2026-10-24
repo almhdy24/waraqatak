@@ -43,7 +43,17 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _lastOutcome = null;
     });
 
-    final deviceId = await LicenseService.instance.getOrCreateDeviceId();
+    final String deviceId;
+    try {
+      deviceId = await LicenseService.instance.getOrCreateDeviceId();
+    } catch (_) {
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      setState(() => _lastOutcome = ActivationOutcome.deviceUnavailable);
+      _showError(l10n.activationDeviceUnavailable);
+      return;
+    }
+
     final outcome = await ActivationService.activate(key, deviceId);
     if (!mounted) return;
 
@@ -62,6 +72,8 @@ class _ActivationScreenState extends State<ActivationScreen> {
         _showError(l10n.activationTooManyAttempts);
       case ActivationOutcome.serverUnreachable:
         _showError(l10n.activationServerUnreachable);
+      case ActivationOutcome.deviceUnavailable:
+        _showError(l10n.activationDeviceUnavailable);
     }
   }
 
@@ -134,6 +146,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
           TextField(
             controller: _ctrl,
             autofocus: true,
+            textDirection: TextDirection.ltr,
             // Keys are case-sensitive base64url segments joined by '.', so
             // no auto-capitalization, autocorrect or suggestions.
             keyboardType: TextInputType.visiblePassword,
@@ -146,6 +159,19 @@ class _ActivationScreenState extends State<ActivationScreen> {
               labelText: l10n.enterActivationKey,
               hintText: l10n.activationKeyHint,
               prefixIcon: const Icon(Icons.vpn_key_outlined),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.content_paste_outlined),
+                tooltip: l10n.pasteKey,
+                onPressed: () async {
+                  final data = await Clipboard.getData(Clipboard.kTextPlain);
+                  if (data?.text != null && data!.text!.trim().isNotEmpty) {
+                    final pasted = data.text!.trim();
+                    _ctrl.text = pasted;
+                    _ctrl.selection =
+                        TextSelection.collapsed(offset: pasted.length);
+                  }
+                },
+              ),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12)),
               errorText: _error,
@@ -212,6 +238,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
         ActivationOutcome.invalid => l10n.activationTipKeyFormat,
         ActivationOutcome.serverUnreachable => l10n.activationTipServer,
         ActivationOutcome.tooManyAttempts => l10n.activationTipAttempts,
+        ActivationOutcome.deviceUnavailable => l10n.activationTipDevice,
         ActivationOutcome.success => '',
       };
 

@@ -60,7 +60,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       final db = DatabaseHelper.instance;
       final doc = await db.getDocumentById(widget.documentId);
       if (doc == null) {
-        if (mounted) Navigator.pop(context);
+        if (mounted) {
+          final l10n = AppLocalizations.of(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.documentNotFoundDesc)),
+          );
+          Navigator.pop(context);
+        }
         return;
       }
 

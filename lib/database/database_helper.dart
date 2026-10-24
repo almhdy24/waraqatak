@@ -1722,12 +1722,17 @@ class DatabaseHelper {
 
   Future<List<StockMovement>> getStockMovements(int productId) async {
     final db = await database;
-    final maps = await db.query(
-      'stock_movements',
-      where: 'product_id = ?',
-      whereArgs: [productId],
-      orderBy: 'date DESC',
-    );
+    const sql = '''
+      SELECT sm.*, p.name AS product_name, p.unit AS product_unit,
+             d.document_number AS reference_document_number,
+             d.type AS reference_document_type
+      FROM stock_movements sm
+      LEFT JOIN products p ON sm.product_id = p.id
+      LEFT JOIN documents d ON sm.reference_document_id = d.id
+      WHERE sm.product_id = ?
+      ORDER BY sm.date DESC, sm.id DESC
+    ''';
+    final maps = await db.rawQuery(sql, [productId]);
     return maps.map(StockMovement.fromMap).toList();
   }
 
@@ -1766,9 +1771,12 @@ class DatabaseHelper {
 
     final sql =
         '''
-      SELECT sm.*, p.name AS product_name, p.unit AS product_unit
+      SELECT sm.*, p.name AS product_name, p.unit AS product_unit,
+             d.document_number AS reference_document_number,
+             d.type AS reference_document_type
       FROM stock_movements sm
       LEFT JOIN products p ON sm.product_id = p.id
+      LEFT JOIN documents d ON sm.reference_document_id = d.id
       $whereClause
       ORDER BY sm.date DESC, sm.id DESC
       LIMIT ? OFFSET ?

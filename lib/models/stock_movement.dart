@@ -14,6 +14,8 @@ class StockMovement {
   final String type;
   final double quantity; // positive = stock in, negative = stock out
   final int? referenceDocumentId;
+  final String? referenceDocumentNumber;
+  final String? referenceDocumentType;
   final DateTime date;
   final String? notes;
   final String? productName;
@@ -29,6 +31,8 @@ class StockMovement {
     required this.type,
     required this.quantity,
     this.referenceDocumentId,
+    this.referenceDocumentNumber,
+    this.referenceDocumentType,
     required this.date,
     this.notes,
     this.productName,
@@ -59,6 +63,8 @@ class StockMovement {
         type: map['type'] as String,
         quantity: (map['quantity'] as num).toDouble(),
         referenceDocumentId: map['reference_document_id'] as int?,
+        referenceDocumentNumber: map['reference_document_number'] as String?,
+        referenceDocumentType: map['reference_document_type'] as String?,
         date: DateTime.parse(map['date'] as String),
         notes: map['notes'] as String?,
         productName: map['product_name'] as String?,
@@ -75,6 +81,8 @@ class StockMovement {
     String? type,
     double? quantity,
     int? referenceDocumentId,
+    String? referenceDocumentNumber,
+    String? referenceDocumentType,
     DateTime? date,
     String? notes,
     String? productName,
@@ -90,6 +98,10 @@ class StockMovement {
       type: type ?? this.type,
       quantity: quantity ?? this.quantity,
       referenceDocumentId: referenceDocumentId ?? this.referenceDocumentId,
+      referenceDocumentNumber:
+          referenceDocumentNumber ?? this.referenceDocumentNumber,
+      referenceDocumentType:
+          referenceDocumentType ?? this.referenceDocumentType,
       date: date ?? this.date,
       notes: notes ?? this.notes,
       productName: productName ?? this.productName,

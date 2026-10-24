@@ -177,18 +177,20 @@ void main() {
   group('URL allowlist — AppConstants outbound links', () {
     // The ONLY outbound URLs the app is permitted to open. The shell guard
     // (`tool/check_play_compliance.sh` → Pass 3) scans the reviewer-visible
-    // screens for the same allowlist; this test anchors the three constants
+    // screens for the same allowlist; this test anchors the constants
     // and makes any new URL constant a diff that will be noticed in review.
     const allowed = {
       'https://almhdy24.com/products/waraqatak/privacy.html',
       'https://almhdy24.com/products/waraqatak/terms.html',
       'https://almhdy24.com/products/waraqatak/delete.html',
+      'https://almhdy24.com/products/waraqatak/help/',
     };
 
-    test('three product-site URLs match the allowlist exactly', () {
+    test('product-site URLs match the allowlist exactly', () {
       expect(allowed, contains(AppConstants.privacyPolicyUrl));
       expect(allowed, contains(AppConstants.termsUrl));
       expect(allowed, contains(AppConstants.deleteDataUrl));
+      expect(allowed, contains(AppConstants.helpCenterUrl));
     });
 
     test('each URL is https and lives on almhdy24.com/products/waraqatak/',
@@ -197,11 +199,10 @@ void main() {
         AppConstants.privacyPolicyUrl,
         AppConstants.termsUrl,
         AppConstants.deleteDataUrl,
+        AppConstants.helpCenterUrl,
       ]) {
         expect(url.startsWith('https://almhdy24.com/products/waraqatak/'),
             isTrue, reason: '$url does not match the product-site prefix');
-        expect(url.endsWith('.html'), isTrue,
-            reason: '$url does not end with .html');
       }
     });
 

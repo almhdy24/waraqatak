@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/date_range_filter.dart';
@@ -10,6 +10,7 @@ import '../services/pdf_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
+import 'document_detail_screen.dart';
 import 'reports/report_date_filter.dart';
 
 class AuditHistoryScreen extends StatefulWidget {
@@ -237,22 +238,38 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
                                             mainAxisSize: MainAxisSize.min,
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text('التاريخ: $dateStr', style: const TextStyle(fontSize: 12)),
+                                              Text('${l10n.date}: $dateStr', style: const TextStyle(fontSize: 12)),
                                               const SizedBox(height: 6),
-                                              Text('النوع: $action', style: const TextStyle(fontSize: 12)),
+                                              Text('${l10n.actionTypeLabel}: $action', style: const TextStyle(fontSize: 12)),
                                               if (e['entity_type'] != null) ...[
                                                 const SizedBox(height: 6),
-                                                Text('الكيان: ${e['entity_type']} (#${e['entity_id'] ?? ""})',
-                                                    style: const TextStyle(fontSize: 12)),
+                                                Row(
+                                                  children: [
+                                                    Text('${l10n.entityLabel}: ${e['entity_type']} ', style: const TextStyle(fontSize: 12)),
+                                                    if (e['entity_id'] != null)
+                                                      Directionality(
+                                                        textDirection: TextDirection.ltr,
+                                                        child: Text('(#${e['entity_id']})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                                      ),
+                                                  ],
+                                                ),
                                               ],
                                               const SizedBox(height: 10),
-                                              const Text('التفاصيل:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                              Text('${l10n.detailsLabel}:', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                               const SizedBox(height: 4),
                                               SelectableText(details, style: const TextStyle(fontSize: 12)),
                                             ],
                                           ),
                                         ),
                                         actions: [
+                                          if (e['entity_type'] == 'document' && e['entity_id'] != null)
+                                            FilledButton.tonal(
+                                              onPressed: () {
+                                                Navigator.pop(ctx);
+                                                _openDocument(context, e['entity_id'] as int);
+                                              },
+                                              child: Text(l10n.viewDocument),
+                                            ),
                                           TextButton(
                                             onPressed: () => Navigator.pop(ctx),
                                             child: Text(l10n.close),
@@ -281,5 +298,34 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
         _load();
       },
     );
+  }
+
+  Future<void> _openDocument(BuildContext context, int docId) async {
+    final doc = await DatabaseHelper.instance.getDocumentById(docId);
+    if (!context.mounted) return;
+    if (doc == null) {
+      final l10n = AppLocalizations.of(context);
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.documentNotFound),
+          content: Text(l10n.documentNotFoundDesc),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.close),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DocumentDetailScreen(documentId: docId),
+      ),
+    );
+    if (mounted) _load();
   }
 }

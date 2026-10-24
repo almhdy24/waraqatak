@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../models/app_notification.dart';
 import '../services/app_ops_service.dart';
 import '../utils/url_launcher_utils.dart';
 import '../widgets/responsive.dart';
+import 'database_diagnostic_screen.dart';
+import 'google_drive_backup_screen.dart';
+import 'license_screen.dart';
+import 'settings_screen.dart';
 
 class NotificationsInboxScreen extends StatefulWidget {
   const NotificationsInboxScreen({super.key});
@@ -113,18 +118,9 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
               if (item.actionUrl != null && item.actionUrl!.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 FilledButton.icon(
-                  onPressed: () {
-                    final raw = item.actionUrl!.trim();
-                    final isSafe = RegExp(
-                      r'^https://([a-z0-9-]+\.)*almhdy24\.com(/.*)?$',
-                      caseSensitive: false,
-                    ).hasMatch(raw);
-                    if (isSafe) {
-                      UrlLauncherUtils.launch(ctx, raw);
-                    }
-                  },
-                  icon: const Icon(Icons.open_in_new, size: 18),
-                  label: Text(l10n.openLink),
+                  onPressed: () => _handleAction(ctx, item.actionUrl!.trim(), l10n),
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  label: Text(l10n.openDestination),
                 ),
               ],
               const SizedBox(height: 12),
@@ -136,6 +132,62 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _handleAction(BuildContext ctx, String actionUrl, AppLocalizations l10n) {
+    Navigator.of(ctx).pop();
+    final lower = actionUrl.toLowerCase();
+
+    if (lower == 'settings' || lower == 'app://settings') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      );
+      return;
+    }
+    if (lower == 'backup' ||
+        lower == 'drive' ||
+        lower == 'google_drive' ||
+        lower == 'app://backup' ||
+        lower == 'app://drive') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const GoogleDriveBackupScreen()),
+      );
+      return;
+    }
+    if (lower == 'license' || lower == 'app://license') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LicenseScreen()),
+      );
+      return;
+    }
+    if (lower == 'diagnostic' || lower == 'repair' || lower == 'app://diagnostic') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const DatabaseDiagnosticScreen()),
+      );
+      return;
+    }
+    if (lower == 'help' || lower == 'app://help') {
+      UrlLauncherUtils.launch(context, AppConstants.helpCenterUrl);
+      return;
+    }
+
+    final isSafeWeb = RegExp(
+      r'^https://([a-z0-9-]+\.)*almhdy24\.com(/.*)?$',
+      caseSensitive: false,
+    ).hasMatch(actionUrl);
+
+    if (isSafeWeb) {
+      UrlLauncherUtils.launch(context, actionUrl);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.networkError)),
     );
   }
 

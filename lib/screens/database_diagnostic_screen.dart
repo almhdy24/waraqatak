@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:sqflite/sqflite.dart';
 
 import '../localization/app_localizations.dart';
@@ -442,7 +442,10 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                   children: issue.affectedIds
                       .map(
                         (id) => Chip(
-                          label: Text('#$id'),
+                          label: Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: Text('#$id'),
+                          ),
                           padding: EdgeInsets.zero,
                           labelStyle: const TextStyle(
                             fontFamily: 'monospace',

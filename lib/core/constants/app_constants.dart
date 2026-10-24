@@ -24,6 +24,8 @@ class AppConstants {
   // Every URL the app opens is declared here and allowlisted by the
   // compliance guard (tool/check_play_compliance.sh). If you need another
   // link, update the guard and `docs/play-compliance.md` first.
+  static const String helpCenterUrl =
+      'https://almhdy24.com/products/waraqatak/help/';
   static const String privacyPolicyUrl =
       'https://almhdy24.com/products/waraqatak/privacy.html';
   static const String termsUrl =

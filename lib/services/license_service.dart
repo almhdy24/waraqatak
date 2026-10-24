@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -98,11 +96,22 @@ class LicenseService {
   /// An already stored id is always kept, so existing activations stay valid.
   /// New installs derive the id from a hash of the Android ID, which is
   /// stable across uninstall/reinstall on the same device, so a reinstall
-  /// can re-activate the same key. Falls back to a random UUID.
+  /// can re-activate the same key.
+  ///
+  /// If the platform channel cannot obtain a valid Android ID (e.g. broken emulator
+  /// value, restricted OS environment, or platform channel error), this method throws
+  /// a [StateError] instead of generating a random transient UUID that would break
+  /// device identity stability across reinstallations.
   Future<String> getOrCreateDeviceId() async {
     var id = await _store.read(key: _kDeviceId);
     if (id == null || id.isEmpty) {
-      id = await _stableDeviceId() ?? _generateUuidV4();
+      final stableId = await _stableDeviceId();
+      if (stableId == null || stableId.isEmpty) {
+        throw StateError(
+          'Stable device identifier could not be retrieved from the operating system.',
+        );
+      }
+      id = stableId;
       await _store.write(key: _kDeviceId, value: id);
     }
     return id;
@@ -140,7 +149,15 @@ class LicenseService {
   void invalidateCache() => _cached = null;
 
   Future<EntitlementState> _compute() async {
-    final deviceId = await getOrCreateDeviceId();
+    String? deviceId;
+    try {
+      deviceId = await getOrCreateDeviceId();
+    } catch (_) {
+      // In restricted environments where Android ID cannot be obtained and no ID
+      // was previously stored, fall back to an unpersisted placeholder so basic trial
+      // evaluation and offline documents flow can continue without crashing.
+      deviceId = '00000000-0000-0000-0000-000000000000';
+    }
     final now = _clock();
 
     await _updateLastLaunch(now);
@@ -327,15 +344,7 @@ class LicenseService {
     invalidateCache();
   }
 
-  // ── UUID v4 ────────────────────────────────────────────────────────────────
-
-  String _generateUuidV4() {
-    final rng = Random.secure();
-    final b = List<int>.generate(16, (_) => rng.nextInt(256));
-    b[6] = (b[6] & 0x0f) | 0x40; // version 4
-    b[8] = (b[8] & 0x3f) | 0x80; // variant 10
-    return _formatUuid(b);
-  }
+  // ── UUID Formatting ────────────────────────────────────────────────────────
 
   static String _formatUuid(List<int> b) {
     String h(int v) => v.toRadixString(16).padLeft(2, '0');

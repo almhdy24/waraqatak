@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:pdf/widgets.dart' as pw;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
@@ -421,14 +421,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: m.referenceDocumentId != null
-                  ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DocumentDetailScreen(
-                            documentId: m.referenceDocumentId!,
-                          ),
-                        ),
-                      ).then((_) => _load())
+                  ? () => _openDocument(context, m.referenceDocumentId!)
                   : null,
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -503,12 +496,18 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                               children: [
                                 Icon(Icons.link, size: 12, color: cs.primary),
                                 const SizedBox(width: 4),
-                                Text(
-                                  '#${m.referenceDocumentId}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: cs.primary,
-                                    fontWeight: FontWeight.w500,
+                                Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: Text(
+                                    m.referenceDocumentNumber != null &&
+                                            m.referenceDocumentNumber!.isNotEmpty
+                                        ? '${_docTypeLabel(m.referenceDocumentType, l10n)}: ${m.referenceDocumentNumber}'
+                                        : '#${m.referenceDocumentId}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: cs.primary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -519,13 +518,27 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                               item.balanceBefore != null &&
                               item.balanceAfter != null) ...[
                             const SizedBox(height: 4),
-                            Text(
-                              '${l10n.balanceBefore}: ${FormatUtils.formatQuantity(item.balanceBefore!)} -> ${l10n.balanceAfter}: ${FormatUtils.formatQuantity(item.balanceAfter!)}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.blueGrey.shade700,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  '${l10n.balanceBefore}: ',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.blueGrey.shade700,
+                                  ),
+                                ),
+                                Directionality(
+                                  textDirection: TextDirection.ltr,
+                                  child: Text(
+                                    '${FormatUtils.formatQuantity(item.balanceBefore!)} → ${FormatUtils.formatQuantity(item.balanceAfter!)}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.blueGrey.shade700,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                           // Cost info
@@ -577,5 +590,44 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _openDocument(BuildContext context, int docId) async {
+    final doc = await DatabaseHelper.instance.getDocumentById(docId);
+    if (!context.mounted) return;
+    if (doc == null) {
+      final l10n = AppLocalizations.of(context);
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.documentNotFound),
+          content: Text(l10n.documentNotFoundDesc),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.close),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DocumentDetailScreen(documentId: docId),
+      ),
+    );
+    if (mounted) _load();
+  }
+
+  String _docTypeLabel(String? type, AppLocalizations l10n) {
+    return switch (type) {
+      'invoice' => l10n.invoice,
+      'purchase' => l10n.purchase,
+      'quotation' => l10n.quotation,
+      'receipt' => l10n.paymentReceipt,
+      _ => l10n.documents,
+    };
   }
 }

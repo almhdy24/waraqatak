@@ -854,6 +854,37 @@ class AppLocalizations {
     'تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً.',
     'Could not reach the server. Please try again later.',
   );
+  String get activationDeviceUnavailable => _t(
+    'تعذّر التحقق من هوية هذا الجهاز بشكل آمن.',
+    'Could not verify device identity securely.',
+  );
+  String get activationTipDevice => _t(
+    'تلميح: تأكد من تفعيل خدمات النظام أو تشغيل التطبيق على جهاز مدعوم.',
+    'Tip: Ensure system services are active or run the app on a supported device.',
+  );
+  String get pasteKey => _t('لصق', 'Paste');
+  String get deviceIdLabel => _t('معرّف الجهاز', 'Device Identifier');
+  String get copyDeviceId => _t('نسخ معرّف الجهاز', 'Copy device identifier');
+  String get deviceIdCopied =>
+      _t('تم نسخ معرّف الجهاز إلى الحافظة', 'Device identifier copied to clipboard');
+  String get transferNoticeTitle => _t('نقل الترخيص إلى جهاز آخر', 'License Transfer');
+  String get transferNoticeBody => _t(
+    'لترخيص جهاز جديد، يرجى إزالة المفتاح من هذا الجهاز أولاً عبر الزر أدناه لتتمكن من تفعيله على جهازك الآخر.',
+    'To activate on another device, remove the key from this device first using the button below.',
+  );
+  String get documentNotFound => _t('المستند غير موجود', 'Document not found');
+  String get documentNotFoundDesc => _t(
+    'تعذّر العثور على المستند المطلوب في قاعدة البيانات، أو قد يكون تم حذفه.',
+    'The requested document was not found in the database or may have been deleted.',
+  );
+  String get viewDocument => _t('عرض المستند', 'View Document');
+  String get helpCenter => _t('مركز المساعدة', 'Help Center');
+  String get helpCenterSubtitle =>
+      _t('دليل الاستخدام والأسئلة الشائعة عبر الإنترنت', 'Online user guides & FAQs');
+  String get openDestination => _t('فتح', 'Open');
+  String get entityLabel => _t('الكيان', 'Entity');
+  String get actionTypeLabel => _t('نوع الإجراء', 'Action Type');
+  String get detailsLabel => _t('التفاصيل', 'Details');
 
   // ── License screen (Settings → License) ───────────────────────────────────
   String get licenseScreenTitle => _t('التفعيل والترخيص', 'License');

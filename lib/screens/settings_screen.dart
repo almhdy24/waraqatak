@@ -462,6 +462,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     ListTile(
+                      leading: const Icon(Icons.help_outline),
+                      title: Text(l10n.helpCenter),
+                      subtitle: Text(l10n.helpCenterSubtitle),
+                      trailing: const Icon(Icons.open_in_new, size: 18),
+                      onTap: () => UrlLauncherUtils.launch(
+                        context,
+                        AppConstants.helpCenterUrl,
+                      ),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
                       leading: const Icon(Icons.privacy_tip_outlined),
                       title: Text(l10n.privacyPolicy),
                       subtitle: Text(l10n.privacySettingsDescription),

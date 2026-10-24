@@ -26,9 +26,11 @@ class MainActivity : FlutterActivity() {
      */
     private fun stableIdHash(): String? {
         val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        if (androidId.isNullOrEmpty() || androidId == BROKEN_ANDROID_ID) return null
+        if (androidId.isNullOrBlank() || androidId == BROKEN_ANDROID_ID) return null
+        val trimmed = androidId.trim()
+        if (trimmed.length < 8) return null
         val digest = MessageDigest.getInstance("SHA-256")
-            .digest("$packageName:$androidId".toByteArray(Charsets.UTF_8))
+            .digest("$packageName:$trimmed".toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
 

@@ -109,9 +109,9 @@ SUPPORT_SURFACE=(
   "lib/screens/activation_screen.dart"
 )
 
-# The ONLY outbound hosts the app is permitted to reach. Three product-site
-# pages (privacy, terms, delete-data) plus the activation API host.
-URL_ALLOWLIST_RE='^(https://almhdy24\.com/products/waraqatak/(privacy|terms|delete)\.html|https://api\.almhdy24\.com(/.*)?)$'
+# The ONLY outbound hosts the app is permitted to reach. Four product-site
+# pages (privacy, terms, delete-data, help) plus the activation API host.
+URL_ALLOWLIST_RE='^(https://almhdy24\.com/products/waraqatak/(privacy|terms|delete)\.html|https://almhdy24\.com/products/waraqatak/help/?|https://api\.almhdy24\.com(/.*)?)$'
 
 # Support links, allowed on SUPPORT_SURFACE files only.
 SUPPORT_URL_RE='^(https://wa\.me/249993452125|https://www\.facebook\.com/profile\.php\?id=61593843478292|https://almhdy24\.com|https://play\.google\.com/store/apps/details\?id=com\.elmahdi\.waraqatak)$'
