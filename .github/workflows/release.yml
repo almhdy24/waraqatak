@@ -102,14 +102,6 @@ jobs:
           fi
           ls -la dist/
 
-      - name: Upload artifacts (optional backup)
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: waraqatak-${{ env.TAG }}
-          path: dist/
-          retention-days: 7
-
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
