@@ -158,10 +158,7 @@ class InventoryCostingService {
 
     await txn.update(
       'products',
-      {
-        'average_cost': avgCost,
-        'cost_status': costStatus,
-      },
+      {'average_cost': avgCost, 'cost_status': costStatus},
       where: 'id = ?',
       whereArgs: [productId],
     );
@@ -200,7 +197,8 @@ class InventoryCostingService {
         (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
     final avgCost = (pRows.first['average_cost'] as num?)?.toDouble();
     final costStatus =
-        pRows.first['cost_status'] as String? ?? StockMovement.costStatusUnknown;
+        pRows.first['cost_status'] as String? ??
+        StockMovement.costStatusUnknown;
 
     if (delta < 0 && (currentStock + delta) < -0.0001) {
       throw StateError('Stock cannot be negative');
@@ -299,7 +297,9 @@ class InventoryCostingService {
       final status = r['cost_status'] as String? ?? Product.costStatusUnknown;
 
       if (qty > 0) {
-        if (status == Product.costStatusKnown && avgCost != null && avgCost >= 0) {
+        if (status == Product.costStatusKnown &&
+            avgCost != null &&
+            avgCost >= 0) {
           totalValuation += qty * avgCost;
           valuedCount++;
         } else {
@@ -324,7 +324,8 @@ class InventoryCostingService {
     required DateTime to,
   }) async {
     final db = await DatabaseHelper.instance.database;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT
         p.id,
         p.name,
@@ -344,13 +345,16 @@ class InventoryCostingService {
       WHERE p.is_active = 1
       GROUP BY p.id
       ORDER BY sales_revenue DESC, p.name
-    ''', [from.toIso8601String(), to.toIso8601String()]);
+    ''',
+      [from.toIso8601String(), to.toIso8601String()],
+    );
 
     return rows.map((r) {
       final salesQty = (r['sales_qty'] as num?)?.toDouble() ?? 0.0;
       final revenue = (r['sales_revenue'] as num?)?.toDouble() ?? 0.0;
       final cogs = (r['known_cogs'] as num?)?.toDouble() ?? 0.0;
-      final unknownCount = (r['unknown_cost_sales_count'] as num?)?.toInt() ?? 0;
+      final unknownCount =
+          (r['unknown_cost_sales_count'] as num?)?.toInt() ?? 0;
       final isReliable = unknownCount == 0;
       final grossProfit = revenue - cogs;
       // Show partial margin even when unreliable so callers can disclose it;
@@ -363,7 +367,9 @@ class InventoryCostingService {
         productUnit: r['unit'] as String?,
         currentStock: (r['stock_quantity'] as num?)?.toDouble() ?? 0.0,
         averageCost: (r['average_cost'] as num?)?.toDouble(),
-        isCostKnown: r['cost_status'] == Product.costStatusKnown && r['average_cost'] != null,
+        isCostKnown:
+            r['cost_status'] == Product.costStatusKnown &&
+            r['average_cost'] != null,
         salesQty: salesQty,
         salesRevenue: revenue,
         cogs: cogs,
@@ -387,7 +393,12 @@ class InventoryCostingService {
         : 'type = ? AND status != ? AND date >= ? AND date <= ?';
     final whereArgs = includeCancelled
         ? ['invoice', from.toIso8601String(), to.toIso8601String()]
-        : ['invoice', DocumentStatus.cancelled, from.toIso8601String(), to.toIso8601String()];
+        : [
+            'invoice',
+            DocumentStatus.cancelled,
+            from.toIso8601String(),
+            to.toIso8601String(),
+          ];
 
     final docMaps = await db.query(
       'documents',
@@ -438,7 +449,9 @@ class InventoryCostingService {
       // Recognized net revenue (subtotal minus discount)
       final recognizedRevenue = doc.subtotal - doc.discount;
       final grossProfit = recognizedRevenue - docCogs;
-      final margin = recognizedRevenue > 0 ? (grossProfit / recognizedRevenue) * 100 : 0.0;
+      final margin = recognizedRevenue > 0
+          ? (grossProfit / recognizedRevenue) * 100
+          : 0.0;
 
       results.add(
         SaleProfitSummary(
@@ -459,25 +472,45 @@ class InventoryCostingService {
   Future<LegacyCostSummary> getLegacyCostSummary() async {
     final db = await DatabaseHelper.instance.database;
 
-    final mKnown = Sqflite.firstIntValue(await db.rawQuery(
-      "SELECT COUNT(*) FROM stock_movements WHERE cost_status = '${StockMovement.costStatusKnown}'",
-    )) ?? 0;
+    final mKnown =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM stock_movements WHERE cost_status = '${StockMovement.costStatusKnown}'",
+          ),
+        ) ??
+        0;
 
-    final mReconstructed = Sqflite.firstIntValue(await db.rawQuery(
-      "SELECT COUNT(*) FROM stock_movements WHERE cost_status = '${StockMovement.costStatusReconstructed}'",
-    )) ?? 0;
+    final mReconstructed =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM stock_movements WHERE cost_status = '${StockMovement.costStatusReconstructed}'",
+          ),
+        ) ??
+        0;
 
-    final mUnknown = Sqflite.firstIntValue(await db.rawQuery(
-      "SELECT COUNT(*) FROM stock_movements WHERE cost_status = '${StockMovement.costStatusUnknown}' OR cost_status IS NULL",
-    )) ?? 0;
+    final mUnknown =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM stock_movements WHERE cost_status = '${StockMovement.costStatusUnknown}' OR cost_status IS NULL",
+          ),
+        ) ??
+        0;
 
-    final pKnown = Sqflite.firstIntValue(await db.rawQuery(
-      "SELECT COUNT(*) FROM products WHERE cost_status = '${Product.costStatusKnown}'",
-    )) ?? 0;
+    final pKnown =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM products WHERE cost_status = '${Product.costStatusKnown}'",
+          ),
+        ) ??
+        0;
 
-    final pUnknown = Sqflite.firstIntValue(await db.rawQuery(
-      "SELECT COUNT(*) FROM products WHERE cost_status != '${Product.costStatusKnown}' OR cost_status IS NULL",
-    )) ?? 0;
+    final pUnknown =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM products WHERE cost_status != '${Product.costStatusKnown}' OR cost_status IS NULL",
+          ),
+        ) ??
+        0;
 
     return LegacyCostSummary(
       knownMovements: mKnown,
