@@ -1662,6 +1662,14 @@ class AppLocalizations {
   String get repairReviewBadge =>
       _t('يتطلب مراجعة يدوية', 'Requires Manual Review');
 
+  // ========== UI OVERHAUL ENHANCEMENTS ==========
+  String get paymentDetails => _t('تفاصيل الدفع', 'Payment Details');
+  String get remainingBalanceHelper => _t(
+    'يُحسب الرصيد المتبقي تلقائياً بناءً على المبلغ المدفوع',
+    'Remaining balance is calculated automatically from the paid amount',
+  );
+  String get financialOverview => _t('الملخص المالي', 'Financial Overview');
+
   bool get isArabic => langCode == 'ar';
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;

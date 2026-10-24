@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
@@ -8,85 +7,13 @@ import '../models/currency.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_totals_card.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
-
-class _TotalsCard extends StatelessWidget {
-  final AppLocalizations l10n;
-  final String currencySymbol;
-  final double taxRate;
-  final double subtotal;
-  final double discount;
-  final double taxAmount;
-  final double total;
-  final double paid;
-  final double remaining;
-
-  const _TotalsCard({
-    required this.l10n,
-    required this.currencySymbol,
-    required this.taxRate,
-    required this.subtotal,
-    required this.discount,
-    required this.taxAmount,
-    required this.total,
-    required this.paid,
-    required this.remaining,
-  });
-
-  String _fmt(double v) => '${NumberFormat('#,##0.00').format(v)} $currencySymbol';
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          children: [
-            _row(l10n.subtotal, _fmt(subtotal)),
-            if (discount > 0) _row(l10n.discount, '- ${_fmt(discount)}', color: cs.error),
-            if (taxRate > 0) _row('${l10n.tax} ($taxRate%)', _fmt(taxAmount)),
-            const Divider(height: 16),
-            _row(l10n.total, _fmt(total), bold: true, color: cs.primary),
-            _row(l10n.paid, _fmt(paid)),
-            _row(
-              l10n.remaining,
-              _fmt(remaining),
-              bold: true,
-              color: remaining > 0 ? cs.error : Colors.green,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String label, String value, {bool bold = false, Color? color}) {
-    final style = TextStyle(
-      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-      color: color,
-      fontSize: bold ? 15 : 13,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: style),
-          Text(value, style: style),
-        ],
-      ),
-    );
-  }
-}
 
 class PurchaseScreen extends StatefulWidget {
   final Contact? preselectedContact;
@@ -267,7 +194,11 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
               onContactChanged: (contact) => _selectedContact = contact,
             ),
             const SizedBox(height: 16),
-            Text(l10n.items, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            AppSectionHeader(
+              title: l10n.items,
+              count: _descriptionControllers.length,
+            ),
+            const SizedBox(height: 8),
             ...List.generate(
               _descriptionControllers.length,
               (index) => DocumentItemForm(
@@ -283,40 +214,61 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 onChanged: () => setState(() {}),
               ),
             ),
-            ElevatedButton.icon(
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
               onPressed: _addItem,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_circle_outline_rounded),
               label: Text(l10n.addItem),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            Text(
+              l10n.paymentDetails,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
             TextFormField(
               controller: _discountController,
-              decoration: InputDecoration(labelText: l10n.discount),
+              decoration: InputDecoration(
+                labelText: l10n.discount,
+                prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+              ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _paidController,
-              decoration: InputDecoration(labelText: l10n.paid),
+              decoration: InputDecoration(
+                labelText: l10n.paid,
+                prefixIcon: const Icon(Icons.payments_outlined, size: 20),
+                helperText: l10n.remainingBalanceHelper,
+              ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _notesController,
-              decoration: InputDecoration(labelText: l10n.notes),
+              decoration: InputDecoration(
+                labelText: l10n.notes,
+                prefixIcon: const Icon(Icons.notes_rounded, size: 20),
+              ),
               maxLines: 2,
             ),
             const SizedBox(height: 16),
-            _TotalsCard(
-              l10n: l10n,
-              currencySymbol: _business?.currencySymbol ?? '',
-              taxRate: _business?.taxRate ?? 0,
+            AppTotalsCard(
               subtotal: subtotal,
               discount: discount,
               taxAmount: totals.taxAmount,
+              taxRate: _business?.taxRate ?? 0,
               total: total,
               paid: paid,
               remaining: remaining,
+              currencySymbol: _business?.currencySymbol ?? '',
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -327,6 +279,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+                  ),
                 ),
                 child: _saving
                     ? SizedBox(

@@ -8,6 +8,8 @@ import '../../models/document_status.dart';
 import '../../services/inventory_costing_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
+import '../../widgets/app_design_tokens.dart';
+import '../../widgets/app_empty_state.dart';
 import '../document_detail_screen.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
@@ -260,15 +262,11 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     }
     if (_sales == null) return const Center(child: CircularProgressIndicator());
     if (_sales!.isEmpty) {
-      return Center(child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.trending_up_rounded, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 12),
-          Text(l10n.noDataForPeriod, textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey)),
-        ]),
-      ));
+      return AppEmptyState(
+        icon: Icons.trending_up_rounded,
+        title: l10n.noReportData,
+        description: l10n.noDataForPeriod,
+      );
     }
 
     return ListView.builder(
@@ -282,8 +280,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           elevation: 0,
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
           ),
           child: ListTile(
             title: Row(children: [

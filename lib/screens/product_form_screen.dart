@@ -8,6 +8,7 @@ import '../services/license_service.dart';
 import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../widgets/app_design_tokens.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'barcode_scanner_screen.dart';
@@ -316,6 +317,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           children: [
             // Type selector
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -363,6 +369,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
             // Basic info
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -471,6 +482,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
             // Pricing
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -514,6 +530,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             // Stock (products only)
             if (!isService) ...[
               Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                  side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -569,6 +590,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
             // Tax, active, notes
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -631,6 +657,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 style: FilledButton.styleFrom(
                   backgroundColor: primaryColor,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+                  ),
                 ),
                 child: _saving
                     ? SizedBox(

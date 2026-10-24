@@ -1,76 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
 import '../services/document_service.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_section_header.dart';
+import '../widgets/app_totals_card.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
-
-class _TotalsCard extends StatelessWidget {
-  final AppLocalizations l10n;
-  final String currencySymbol;
-  final double taxRate;
-  final double subtotal;
-  final double taxAmount;
-  final double total;
-
-  const _TotalsCard({
-    required this.l10n,
-    required this.currencySymbol,
-    required this.taxRate,
-    required this.subtotal,
-    required this.taxAmount,
-    required this.total,
-  });
-
-  String _fmt(double v) => '${NumberFormat('#,##0.00').format(v)} $currencySymbol';
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Column(
-          children: [
-            _row(l10n.subtotal, _fmt(subtotal), cs),
-            if (taxRate > 0) _row('${l10n.tax} ($taxRate%)', _fmt(taxAmount), cs),
-            const Divider(height: 16),
-            _row(l10n.total, _fmt(total), cs, bold: true, color: cs.primary),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String label, String value, ColorScheme cs, {bool bold = false, Color? color}) {
-    final style = TextStyle(
-      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-      color: color,
-      fontSize: bold ? 15 : 13,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: style),
-          Text(value, style: style),
-        ],
-      ),
-    );
-  }
-}
 
 class QuotationScreen extends StatefulWidget {
   const QuotationScreen({super.key});
@@ -224,7 +165,11 @@ class _QuotationScreenState extends State<QuotationScreen> {
               onContactChanged: (c) => _contact = c,
             ),
             const SizedBox(height: 16),
-            Text(l10n.items, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            AppSectionHeader(
+              title: l10n.items,
+              count: _desc.length,
+            ),
+            const SizedBox(height: 8),
             ...List.generate(_desc.length, (i) => DocumentItemForm(
               descriptionController: _desc[i],
               quantityController: _qty[i],
@@ -240,29 +185,46 @@ class _QuotationScreenState extends State<QuotationScreen> {
               onDelete: () => _removeItem(i),
               onChanged: () => setState(() {}),
             )),
-            ElevatedButton.icon(
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
               onPressed: _addItem,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_circle_outline_rounded),
               label: Text(l10n.addItem),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+                ),
+              ),
             ),
-            const SizedBox(height: 12),
-            _TotalsCard(
-              l10n: l10n,
-              currencySymbol: _business?.currencySymbol ?? '',
-              taxRate: _business?.taxRate ?? 0,
+            const SizedBox(height: 16),
+            AppTotalsCard(
               subtotal: totals.subtotal,
+              discount: 0,
               taxAmount: totals.taxAmount,
+              taxRate: _business?.taxRate ?? 0,
               total: totals.total,
+              paid: 0,
+              remaining: 0,
+              currencySymbol: _business?.currencySymbol ?? '',
+              showPaymentRow: false,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _validityController,
-              decoration: InputDecoration(labelText: l10n.validityDays),
+              decoration: InputDecoration(
+                labelText: l10n.validityDays,
+                prefixIcon: const Icon(Icons.calendar_month_outlined, size: 20),
+              ),
               keyboardType: TextInputType.number,
             ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _notesController,
-              decoration: InputDecoration(labelText: l10n.notes),
+              decoration: InputDecoration(
+                labelText: l10n.notes,
+                prefixIcon: const Icon(Icons.notes_rounded, size: 20),
+              ),
               maxLines: 2,
             ),
             const SizedBox(height: 24),
@@ -271,7 +233,12 @@ class _QuotationScreenState extends State<QuotationScreen> {
               height: 52,
               child: FilledButton(
                 onPressed: () => _save(),
-                style: FilledButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.onPrimary),
+                style: FilledButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+                  ),
+                ),
                 child: Text(l10n.save),
               ),
             ),

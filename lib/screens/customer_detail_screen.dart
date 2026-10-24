@@ -14,6 +14,9 @@ import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_section_header.dart';
 import '../widgets/customer_statement_dialog.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
@@ -411,16 +414,16 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         const SizedBox(height: 24),
 
         // ── Documents ─────────────────────────────────────────────────────
-        Text(l10n.recentDocuments,
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold)),
+        AppSectionHeader(
+          title: l10n.recentDocuments,
+          count: _documents!.isNotEmpty ? _documents!.length : null,
+        ),
         const SizedBox(height: 8),
         if (_documents!.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-                child: Text(l10n.noDocuments,
-                    style: TextStyle(color: Colors.grey.shade500))),
+          AppEmptyState(
+            icon: Icons.description_outlined,
+            title: l10n.noDocuments,
+            description: l10n.noDocumentsHint,
           )
         else
           ..._documents!.map((doc) => _DocumentTile(
@@ -513,7 +516,7 @@ class _StatCard extends StatelessWidget {
           color: highlight
               ? color.withValues(alpha: 0.06)
               : Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
           border: Border.all(
             color: highlight
                 ? color.withValues(alpha: 0.3)
@@ -569,12 +572,12 @@ class _DocumentTile extends StatelessWidget {
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
         side: BorderSide(color: cs.outlineVariant),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(

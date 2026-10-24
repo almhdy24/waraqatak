@@ -13,6 +13,7 @@ import 'product_form_screen.dart';
 import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'bulk_pricing_screen.dart';
@@ -488,35 +489,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
     final products = _products!;
     if (products.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.inventory_2_outlined,
-                  size: 72, color: Colors.grey.shade300),
-              const SizedBox(height: 16),
-              Text(
-                _query.isNotEmpty ? l10n.noMatchingProduct : l10n.noProducts,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
-              ),
-              if (_query.isEmpty) ...[
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const ProductFormScreen()),
-                  ).then((_) => _load()),
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.addProduct),
-                ),
-              ],
-            ],
-          ),
-        ),
+      if (_query.isNotEmpty) {
+        return AppEmptyState(
+          icon: Icons.search_off_rounded,
+          title: l10n.noSearchResults,
+          description: l10n.noMatchingProduct,
+        );
+      }
+      return AppEmptyState(
+        icon: Icons.inventory_2_outlined,
+        title: l10n.noProducts,
+        actionLabel: l10n.addProduct,
+        onAction: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ProductFormScreen()),
+        ).then((_) => _load()),
       );
     }
 
