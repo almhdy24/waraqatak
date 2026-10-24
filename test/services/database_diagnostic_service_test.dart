@@ -725,4 +725,423 @@ void main() {
       }
     },
   );
+
+  test('12. Signed movement total-cost validation and magnitude check', () async {
+    late int prodId;
+    late int mvtPositivePurchaseId;
+    late int mvtPurchaseCancelNegCostId;
+    late int mvtSalePosCostId;
+    late int mvtIncorrectMagnitudeId;
+    late int mvtInvertedSignId;
+
+    try {
+      prodId = await rawDb.insert('products', {
+        'name': 'منتج اختبار التكلفة الموقعة',
+        'type': 'product',
+        'stock_quantity': 50.0,
+        'purchase_price': 20.0,
+        'sale_price': 30.0,
+        'average_cost': 20.0,
+        'cost_status': StockMovement.costStatusKnown,
+      });
+
+      // 1. Positive purchase movement: qty = 5.0, unit_cost = 20.0, total_cost = 100.0
+      mvtPositivePurchaseId = await rawDb.insert('stock_movements', {
+        'product_id': prodId,
+        'type': StockMovement.typePurchase,
+        'quantity': 5.0,
+        'unit_cost': 20.0,
+        'total_cost': 100.0,
+        'cost_status': StockMovement.costStatusKnown,
+        'date': DateTime.now().toIso8601String(),
+      });
+
+      // 2. Negative purchase cancellation with negative total cost: qty = -3.0, unit_cost = 20.0, total_cost = -60.0
+      mvtPurchaseCancelNegCostId = await rawDb.insert('stock_movements', {
+        'product_id': prodId,
+        'type': StockMovement.typeCancellation,
+        'quantity': -3.0,
+        'unit_cost': 20.0,
+        'total_cost': -60.0,
+        'cost_status': StockMovement.costStatusKnown,
+        'date': DateTime.now().toIso8601String(),
+      });
+
+      // 3. Sale movement with positive total cost convention: qty = -2.0, unit_cost = 20.0, total_cost = 40.0
+      mvtSalePosCostId = await rawDb.insert('stock_movements', {
+        'product_id': prodId,
+        'type': StockMovement.typeSale,
+        'quantity': -2.0,
+        'unit_cost': 20.0,
+        'total_cost': 40.0,
+        'cost_status': StockMovement.costStatusKnown,
+        'date': DateTime.now().toIso8601String(),
+      });
+
+      // 4. Genuinely incorrect total-cost magnitude: qty = 4.0, unit_cost = 15.0, total_cost = 99.0 (expected: 60.0)
+      mvtIncorrectMagnitudeId = await rawDb.insert('stock_movements', {
+        'product_id': prodId,
+        'type': StockMovement.typePurchase,
+        'quantity': 4.0,
+        'unit_cost': 15.0,
+        'total_cost': 99.0,
+        'cost_status': StockMovement.costStatusKnown,
+        'date': DateTime.now().toIso8601String(),
+      });
+
+      // 5. Inverted sign on positive quantity: qty = 2.0, unit_cost = 20.0, total_cost = -40.0
+      mvtInvertedSignId = await rawDb.insert('stock_movements', {
+        'product_id': prodId,
+        'type': StockMovement.typePurchase,
+        'quantity': 2.0,
+        'unit_cost': 20.0,
+        'total_cost': -40.0,
+        'cost_status': StockMovement.costStatusKnown,
+        'date': DateTime.now().toIso8601String(),
+      });
+
+      final report = await DatabaseDiagnosticService.runDiagnostics(db: rawDb);
+      final costMismatchFinding = report.findings.firstWhere(
+        (f) => f.code == 'movement_total_cost_mismatch',
+      );
+
+      // Valid movements must NOT be flagged
+      expect(
+        costMismatchFinding.affectedIds,
+        isNot(contains(mvtPositivePurchaseId)),
+      );
+      expect(
+        costMismatchFinding.affectedIds,
+        isNot(contains(mvtPurchaseCancelNegCostId)),
+      );
+      expect(
+        costMismatchFinding.affectedIds,
+        isNot(contains(mvtSalePosCostId)),
+      );
+
+      // Genuinely incorrect magnitude and invalid inverted sign MUST be flagged
+      expect(
+        costMismatchFinding.affectedIds,
+        contains(mvtIncorrectMagnitudeId),
+      );
+      expect(costMismatchFinding.affectedIds, contains(mvtInvertedSignId));
+      expect(costMismatchFinding.requiresManualReview, isTrue);
+    } finally {
+      await rawDb.delete(
+        'stock_movements',
+        where: 'id IN (?, ?, ?, ?, ?)',
+        whereArgs: [
+          mvtPositivePurchaseId,
+          mvtPurchaseCancelNegCostId,
+          mvtSalePosCostId,
+          mvtIncorrectMagnitudeId,
+          mvtInvertedSignId,
+        ],
+      );
+      await rawDb.delete('products', where: 'id = ?', whereArgs: [prodId]);
+    }
+  });
+
+  test(
+    '13. Payment diagnostics distinguish active vs correctly cancelled vs inconsistent cancelled documents',
+    () async {
+      late int activeExcessInvId;
+      late int activeExcessPaymentId;
+      late int correctlyCancelledInvId;
+      late int correctlyCancelledPaymentId;
+      late int cleanCancelledInvId;
+      late int inconsistentCancelledInvId;
+      late int inconsistentCancelledPaymentId;
+
+      try {
+        // A. Active document with excess payments (d.paid = 100, payments_sum = 150)
+        activeExcessInvId = await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-ACTIVE-EXCESS',
+          'date': DateTime.now().toIso8601String(),
+          'subtotal': 200.0,
+          'total': 200.0,
+          'paid': 100.0,
+          'remaining': 100.0,
+          'status': 'partially_paid',
+        });
+        activeExcessPaymentId = await rawDb.insert('document_payments', {
+          'document_id': activeExcessInvId,
+          'amount': 150.0,
+          'payment_method': 'cash',
+          'date': DateTime.now().toIso8601String(),
+        });
+
+        // B. Correctly cancelled document where payments match paid (d.paid = 100, payments_sum = 100)
+        correctlyCancelledInvId = await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-CANCELLED-OK',
+          'date': DateTime.now().toIso8601String(),
+          'subtotal': 100.0,
+          'total': 100.0,
+          'paid': 100.0,
+          'remaining': 0.0,
+          'status': 'cancelled',
+        });
+        correctlyCancelledPaymentId = await rawDb.insert('document_payments', {
+          'document_id': correctlyCancelledInvId,
+          'amount': 100.0,
+          'payment_method': 'cash',
+          'date': DateTime.now().toIso8601String(),
+        });
+
+        // C. Correctly cancelled document with zero payments (d.paid = 0, payments_sum = 0)
+        cleanCancelledInvId = await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-CANCELLED-CLEAN',
+          'date': DateTime.now().toIso8601String(),
+          'subtotal': 100.0,
+          'total': 100.0,
+          'paid': 0.0,
+          'remaining': 100.0,
+          'status': 'cancelled',
+        });
+
+        // D. Cancelled document with unresolved payment discrepancy (d.paid = 50, payments_sum = 100)
+        inconsistentCancelledInvId = await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-CANCELLED-DISCREPANT',
+          'date': DateTime.now().toIso8601String(),
+          'subtotal': 100.0,
+          'total': 100.0,
+          'paid': 50.0,
+          'remaining': 50.0,
+          'status': 'cancelled',
+        });
+        inconsistentCancelledPaymentId = await rawDb
+            .insert('document_payments', {
+              'document_id': inconsistentCancelledInvId,
+              'amount': 100.0,
+              'payment_method': 'cash',
+              'date': DateTime.now().toIso8601String(),
+            });
+
+        final report = await DatabaseDiagnosticService.runDiagnostics(
+          db: rawDb,
+        );
+
+        // 1. Active document is flagged in payment_records_exceed_document_paid
+        final activeExcessFinding = report.findings.firstWhere(
+          (f) => f.code == 'payment_records_exceed_document_paid',
+        );
+        expect(activeExcessFinding.affectedIds, contains(activeExcessInvId));
+        expect(
+          activeExcessFinding.affectedIds,
+          isNot(contains(correctlyCancelledInvId)),
+        );
+        expect(
+          activeExcessFinding.affectedIds,
+          isNot(contains(cleanCancelledInvId)),
+        );
+        expect(
+          activeExcessFinding.affectedIds,
+          isNot(contains(inconsistentCancelledInvId)),
+        );
+
+        // 2. Correctly cancelled documents are NOT flagged
+        final cancelledMismatchFinding = report.findings.firstWhere(
+          (f) => f.code == 'cancelled_document_payment_mismatch',
+        );
+        expect(
+          cancelledMismatchFinding.affectedIds,
+          isNot(contains(correctlyCancelledInvId)),
+        );
+        expect(
+          cancelledMismatchFinding.affectedIds,
+          isNot(contains(cleanCancelledInvId)),
+        );
+
+        // 3. Inconsistent cancelled document IS flagged in cancelled_document_payment_mismatch
+        expect(
+          cancelledMismatchFinding.affectedIds,
+          contains(inconsistentCancelledInvId),
+        );
+        expect(cancelledMismatchFinding.requiresManualReview, isTrue);
+      } finally {
+        await rawDb.delete(
+          'document_payments',
+          where: 'id IN (?, ?, ?)',
+          whereArgs: [
+            activeExcessPaymentId,
+            correctlyCancelledPaymentId,
+            inconsistentCancelledPaymentId,
+          ],
+        );
+        await rawDb.delete(
+          'documents',
+          where: 'id IN (?, ?, ?, ?)',
+          whereArgs: [
+            activeExcessInvId,
+            correctlyCancelledInvId,
+            cleanCancelledInvId,
+            inconsistentCancelledInvId,
+          ],
+        );
+      }
+    },
+  );
+
+  test(
+    '14. Manual-review safety flags set to true for financial & stock integrity findings',
+    () async {
+      await rawDb.execute('PRAGMA foreign_keys = OFF');
+      late int orphanedMovementId;
+      late int mismatchDocId;
+      late int mismatchItemId;
+
+      try {
+        // Orphaned stock movement (product 99998 doesn't exist)
+        orphanedMovementId = await rawDb.insert('stock_movements', {
+          'product_id': 99998,
+          'type': StockMovement.typeOpening,
+          'quantity': 10.0,
+          'date': DateTime.now().toIso8601String(),
+        });
+
+        // Document subtotal mismatch (subtotal 500 != line total 200)
+        mismatchDocId = await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-SUBTOTAL-MISMATCH-TEST',
+          'date': DateTime.now().toIso8601String(),
+          'subtotal': 500.0,
+          'total': 500.0,
+          'paid': 0.0,
+          'remaining': 500.0,
+          'status': 'issued',
+        });
+        mismatchItemId = await rawDb.insert('document_items', {
+          'document_id': mismatchDocId,
+          'description': 'بند اختبار',
+          'quantity': 2.0,
+          'price': 100.0,
+          'total': 200.0,
+          'taxable': 0,
+        });
+
+        final report = await DatabaseDiagnosticService.runDiagnostics(
+          db: rawDb,
+        );
+
+        // Verify orphaned_stock_movements has requiresManualReview: true
+        final orphanedMvtFinding = report.findings.firstWhere(
+          (f) => f.code == 'orphaned_stock_movements',
+        );
+        expect(orphanedMvtFinding.affectedIds, contains(orphanedMovementId));
+        expect(orphanedMvtFinding.requiresManualReview, isTrue);
+
+        // Verify document_items_sum_mismatch has requiresManualReview: true
+        final subtotalFinding = report.findings.firstWhere(
+          (f) => f.code == 'document_items_sum_mismatch',
+        );
+        expect(subtotalFinding.affectedIds, contains(mismatchDocId));
+        expect(subtotalFinding.requiresManualReview, isTrue);
+      } finally {
+        await rawDb.delete(
+          'document_items',
+          where: 'id = ?',
+          whereArgs: [mismatchItemId],
+        );
+        await rawDb.delete(
+          'documents',
+          where: 'id = ?',
+          whereArgs: [mismatchDocId],
+        );
+        await rawDb.delete(
+          'stock_movements',
+          where: 'id = ?',
+          whereArgs: [orphanedMovementId],
+        );
+        await rawDb.execute('PRAGMA foreign_keys = ON');
+      }
+    },
+  );
+
+  test(
+    '15. Legacy schema compatibility: costing diagnostics skipped gracefully without crashing',
+    () async {
+      // Create a standalone in-memory database mimicking a pre-v15 schema (no costing columns)
+      final legacyDb = await openDatabase(
+        inMemoryDatabasePath,
+        version: 1,
+        onCreate: (db, version) async {
+          await db.execute('''
+            CREATE TABLE products (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              type TEXT DEFAULT 'product',
+              stock_quantity REAL DEFAULT 0,
+              purchase_price REAL DEFAULT 0,
+              sale_price REAL DEFAULT 0
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE documents (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              document_number TEXT NOT NULL,
+              type TEXT NOT NULL,
+              status TEXT NOT NULL,
+              subtotal REAL DEFAULT 0,
+              discount REAL DEFAULT 0,
+              tax_amount REAL DEFAULT 0,
+              total REAL DEFAULT 0,
+              paid REAL DEFAULT 0,
+              remaining REAL DEFAULT 0,
+              related_document_id INTEGER
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE document_items (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              document_id INTEGER NOT NULL,
+              product_id INTEGER,
+              description TEXT NOT NULL,
+              quantity REAL NOT NULL,
+              price REAL NOT NULL,
+              total REAL NOT NULL
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE document_payments (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              document_id INTEGER NOT NULL,
+              amount REAL NOT NULL,
+              receipt_document_id INTEGER
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE stock_movements (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              product_id INTEGER NOT NULL,
+              type TEXT NOT NULL,
+              quantity REAL NOT NULL,
+              reference_document_id INTEGER,
+              date TEXT,
+              notes TEXT
+            )
+          ''');
+        },
+      );
+
+      try {
+        // Run diagnostics against raw legacy schema without crashing
+        final report = await DatabaseDiagnosticService.runDiagnostics(
+          db: legacyDb,
+        );
+
+        expect(report.totalChecksRun, greaterThan(0));
+        final legacyFinding = report.findings.firstWhere(
+          (f) => f.code == 'legacy_schema_costing_unsupported',
+        );
+        expect(legacyFinding.severity, DiagnosticSeverity.info);
+        expect(legacyFinding.category, DiagnosticCategory.inventoryCosting);
+      } finally {
+        await legacyDb.close();
+      }
+    },
+  );
 }

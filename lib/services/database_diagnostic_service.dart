@@ -219,7 +219,7 @@ class DatabaseDiagnosticService {
           title: 'Orphaned stock movements',
           explanation:
               'Found ${ids.length} stock movement(s) referencing non-existent product(s).',
-          requiresManualReview: false,
+          requiresManualReview: true,
           metadata: {
             'count': ids.length,
             'missing_product_ids': orphanedMovements
@@ -402,7 +402,7 @@ class DatabaseDiagnosticService {
           title: 'Document subtotal does not match line items',
           explanation:
               'Found ${ids.length} document(s) whose subtotal does not equal the sum of line items.',
-          requiresManualReview: false,
+          requiresManualReview: true,
         ),
       );
     }
@@ -568,12 +568,13 @@ class DatabaseDiagnosticService {
   ) async {
     int checks = 0;
 
-    // 4.1 Sum of payment rows exceeds document paid amount
+    // 4.1 Sum of payment rows exceeds document paid amount (active documents)
     checks++;
     final paymentsExceedPaid = await db.rawQuery('''
       SELECT d.id, d.document_number, d.paid, SUM(dp.amount) AS payments_sum
       FROM documents d
       JOIN document_payments dp ON d.id = dp.document_id
+      WHERE d.status != '${DocumentStatus.cancelled}'
       GROUP BY d.id
       HAVING payments_sum > d.paid + $_balanceEpsilon
     ''');
@@ -588,19 +589,20 @@ class DatabaseDiagnosticService {
           affectedIds: ids,
           title: 'Payment records sum exceeds document paid amount',
           explanation:
-              'Found ${ids.length} document(s) where total of document_payments exceeds document.paid.',
+              'Found ${ids.length} active document(s) where total of document_payments exceeds document.paid.',
           requiresManualReview: false,
         ),
       );
     }
 
-    // 4.2 Sum of payment rows is non-zero but less than document paid amount
+    // 4.2 Sum of payment rows is non-zero but less than document paid amount (active documents)
     // (Note: Requires manual review because legacy invoices may have upfront payment recorded only on the document).
     checks++;
     final paymentsLessThanPaid = await db.rawQuery('''
       SELECT d.id, d.document_number, d.paid, SUM(dp.amount) AS payments_sum
       FROM documents d
       JOIN document_payments dp ON d.id = dp.document_id
+      WHERE d.status != '${DocumentStatus.cancelled}'
       GROUP BY d.id
       HAVING payments_sum > 0 AND payments_sum < d.paid - $_balanceEpsilon
     ''');
@@ -615,7 +617,7 @@ class DatabaseDiagnosticService {
           affectedIds: ids,
           title: 'Payment records sum is less than document paid balance',
           explanation:
-              'Found ${ids.length} document(s) where document.paid exceeds recorded payment rows. May reflect legacy upfront payments or missing receipts.',
+              'Found ${ids.length} active document(s) where document.paid exceeds recorded payment rows. May reflect legacy upfront payments or missing receipts.',
           requiresManualReview: true,
         ),
       );
@@ -645,6 +647,47 @@ class DatabaseDiagnosticService {
           explanation:
               'Found ${ids.length} active receipt/voucher document(s) that lack a corresponding row in document_payments.',
           requiresManualReview: true,
+        ),
+      );
+    }
+
+    // 4.4 Cancelled documents with unresolved payment discrepancy
+    checks++;
+    final cancelledPaymentMismatches = await db.rawQuery('''
+      SELECT d.id, d.document_number, d.paid, SUM(dp.amount) AS payments_sum
+      FROM documents d
+      JOIN document_payments dp ON d.id = dp.document_id
+      WHERE d.status = '${DocumentStatus.cancelled}'
+      GROUP BY d.id
+      HAVING abs(d.paid - payments_sum) > $_balanceEpsilon
+    ''');
+    if (cancelledPaymentMismatches.isNotEmpty) {
+      final ids = cancelledPaymentMismatches
+          .map((r) => r['id'] as int)
+          .toList();
+      findings.add(
+        DiagnosticFinding(
+          code: 'cancelled_document_payment_mismatch',
+          category: DiagnosticCategory.paymentMismatch,
+          severity: DiagnosticSeverity.warning,
+          entityType: 'documents',
+          affectedIds: ids,
+          title: 'Payment discrepancy in cancelled document',
+          explanation:
+              'Found ${ids.length} cancelled document(s) with conflicting payment records where document_payments sum differs from document.paid.',
+          requiresManualReview: true,
+          metadata: {
+            'discrepancies': cancelledPaymentMismatches
+                .map(
+                  (r) => {
+                    'document_id': r['id'],
+                    'document_number': r['document_number'],
+                    'paid': r['paid'],
+                    'payments_sum': r['payments_sum'],
+                  },
+                )
+                .toList(),
+          },
         ),
       );
     }
@@ -796,6 +839,28 @@ class DatabaseDiagnosticService {
   ) async {
     int checks = 0;
 
+    // Check if costing columns exist (schema version >= 15)
+    final productCols = await db.rawQuery("PRAGMA table_info('products')");
+    final hasCostingColumns = productCols.any(
+      (c) => c['name'] == 'cost_status',
+    );
+    if (!hasCostingColumns) {
+      findings.add(
+        const DiagnosticFinding(
+          code: 'legacy_schema_costing_unsupported',
+          category: DiagnosticCategory.inventoryCosting,
+          severity: DiagnosticSeverity.info,
+          entityType: 'database',
+          affectedIds: [],
+          title: 'Legacy database schema: costing diagnostics skipped',
+          explanation:
+              'Database schema predates version 15 (historical costing columns not present). Costing diagnostics require schema migration.',
+          requiresManualReview: false,
+        ),
+      );
+      return checks;
+    }
+
     // 7.1 Product marked 'known' cost_status but average_cost is NULL
     checks++;
     final knownMissingCost = await db.rawQuery('''
@@ -899,14 +964,17 @@ class DatabaseDiagnosticService {
       );
     }
 
-    // 7.5 Stock movement total_cost mismatch: total_cost != abs(quantity) * unit_cost
+    // 7.5 Stock movement total_cost mismatch: abs(total_cost) != abs(quantity) * unit_cost
     checks++;
     final movementCostMismatch = await db.rawQuery('''
       SELECT id, product_id, type, quantity, unit_cost, total_cost
       FROM stock_movements
       WHERE unit_cost IS NOT NULL
         AND total_cost IS NOT NULL
-        AND abs(total_cost - (abs(quantity) * unit_cost)) > $_moneyEpsilon
+        AND (
+          abs(abs(total_cost) - (abs(quantity) * unit_cost)) > $_moneyEpsilon
+          OR (quantity > 0 AND total_cost < -$_moneyEpsilon)
+        )
     ''');
     if (movementCostMismatch.isNotEmpty) {
       final ids = movementCostMismatch.map((r) => r['id'] as int).toList();
@@ -920,8 +988,8 @@ class DatabaseDiagnosticService {
           title:
               'Stock movement total cost does not match quantity * unit_cost',
           explanation:
-              'Found ${ids.length} stock movement(s) where total_cost != abs(quantity) * unit_cost.',
-          requiresManualReview: false,
+              'Found ${ids.length} stock movement(s) where total_cost does not match quantity * unit_cost.',
+          requiresManualReview: true,
         ),
       );
     }
