@@ -48,6 +48,7 @@ void main() {
 
   setUp(() async {
     DatabaseRepairService.safetyBackupOverride = () async => '${tempDir.path}/test_safety.waraq';
+    await rawDb.execute('PRAGMA foreign_keys = OFF');
     // Clear dynamic tables between tests
     await rawDb.delete('document_items');
     await rawDb.delete('document_payments');
@@ -58,8 +59,9 @@ void main() {
     await rawDb.delete('products');
   });
 
-  tearDown(() {
+  tearDown(() async {
     DatabaseRepairService.safetyBackupOverride = null;
+    await rawDb.execute('PRAGMA foreign_keys = ON');
   });
 
   group('SQLite Real Schema Integration: Safe Auto-Repairs', () {

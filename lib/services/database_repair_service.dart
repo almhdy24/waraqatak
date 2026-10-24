@@ -88,7 +88,7 @@ class DatabaseRepairService {
       case 'orphaned_document_items':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic ? 'بنود فواتير يتيمة' : 'Orphaned Invoice Items',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -108,9 +108,7 @@ class DatabaseRepairService {
       case 'broken_receipt_reference_in_payments':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'إشارات سندات قبض محذوفة في المدفوعات'
-              : 'Broken Receipt Links in Payments',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -130,9 +128,7 @@ class DatabaseRepairService {
       case 'broken_document_reference_in_movements':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'إشارات مستندات محذوفة في حركات المخزون'
-              : 'Broken Document Links in Stock Movements',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -152,9 +148,7 @@ class DatabaseRepairService {
       case 'broken_related_document_in_documents':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'إشارات مستندات مرتبطة محذوفة'
-              : 'Broken Related Document Pointers',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -174,9 +168,7 @@ class DatabaseRepairService {
       case 'orphaned_stocktake_items':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'بنود جرد يتيمة لجلسات محذوفة'
-              : 'Orphaned Stocktake Lines',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -196,9 +188,7 @@ class DatabaseRepairService {
       case 'document_remaining_calculation_mismatch':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'عدم تطابق الرصيد المتبقي للمستند'
-              : 'Document Remaining Balance Mismatch',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -220,9 +210,7 @@ class DatabaseRepairService {
       case 'document_status_partial_invalid':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'عدم تطابق حالة المستند مع سجل السداد'
-              : 'Document Status Out of Sync with Payments',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -242,9 +230,7 @@ class DatabaseRepairService {
       case 'movement_total_cost_mismatch':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'عدم تطابق إجمالي تكلفة حركة المخزون'
-              : 'Stock Movement Total Cost Calculation Mismatch',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -267,9 +253,7 @@ class DatabaseRepairService {
       case 'active_receipt_missing_payment_record':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'سند قبض نشط غير مقيد في جدول السداد'
-              : 'Active Linked Receipt Missing Payment Record',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -287,9 +271,7 @@ class DatabaseRepairService {
       case 'stock_movement_ledger_mismatch':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'عدم تطابق رصيد المخزون مع الحركات'
-              : 'Stock Quantity Mismatch with Movement Ledger',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -307,9 +289,7 @@ class DatabaseRepairService {
       case 'product_negative_average_cost':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'تكلفة متوسطة سالبة للمنتج'
-              : 'Negative Product Average Cost',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,
@@ -327,9 +307,7 @@ class DatabaseRepairService {
       case 'movement_negative_unit_cost':
         return RepairableIssue(
           finding: f,
-          title: l10n.isArabic
-              ? 'حركة مخزون بتكلفة وحدة سالبة'
-              : 'Stock Movement with Negative Unit Cost',
+          title: f.title,
           explanation: f.explanation,
           severity: f.severity,
           category: f.category,

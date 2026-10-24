@@ -960,7 +960,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
         childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
         leading: Icon(icon, color: color, size: 24),
         title: Text(
-          issue.title,
+          issue.finding.title,
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -1056,7 +1056,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        l10n.repairReviewBadge,
+                        l10n.diagnosticsManualReviewRequired,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: Colors.amber.shade900,
                           fontWeight: FontWeight.bold,
