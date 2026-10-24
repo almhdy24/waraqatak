@@ -18,16 +18,16 @@ String formatAmount(double v) {
 }
 
 String entrySourceLabel(EntrySource s, AppLocalizations l10n) => switch (s) {
-      EntrySource.invoice => l10n.invoice,
-      EntrySource.invoicePayment => l10n.entryInvoicePayment,
-      EntrySource.receipt => l10n.paymentReceipt,
-      EntrySource.purchase => l10n.purchase,
-      EntrySource.purchasePayment => l10n.entryPurchasePayment,
-      EntrySource.expenseVoucher => l10n.expenseVoucher,
-      EntrySource.costOfSales => l10n.entryCostOfSales,
-      EntrySource.openingStock => l10n.entryOpeningStock,
-      EntrySource.stockAdjustment => l10n.entryStockAdjustment,
-    };
+  EntrySource.invoice => l10n.invoice,
+  EntrySource.invoicePayment => l10n.entryInvoicePayment,
+  EntrySource.receipt => l10n.paymentReceipt,
+  EntrySource.purchase => l10n.purchase,
+  EntrySource.purchasePayment => l10n.entryPurchasePayment,
+  EntrySource.expenseVoucher => l10n.expenseVoucher,
+  EntrySource.costOfSales => l10n.entryCostOfSales,
+  EntrySource.openingStock => l10n.entryOpeningStock,
+  EntrySource.stockAdjustment => l10n.entryStockAdjustment,
+};
 
 /// Financial statements derived from the double-entry ledger.
 class AccountingScreen extends StatefulWidget {
@@ -41,7 +41,8 @@ class AccountingScreen extends StatefulWidget {
 }
 
 class _AccountingScreenState extends State<AccountingScreen> {
-  late DateRangeFilter _range = widget.initialRange ?? DateRangeFilter.thisMonth();
+  late DateRangeFilter _range =
+      widget.initialRange ?? DateRangeFilter.thisMonth();
   String? _currency;
   LedgerBook? _book;
   bool _failed = false;
@@ -92,11 +93,14 @@ class _AccountingScreenState extends State<AccountingScreen> {
   Widget _body(BuildContext context, AppLocalizations l10n) {
     if (_failed) {
       return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(l10n.operationFailed),
-          const SizedBox(height: 8),
-          FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(l10n.operationFailed),
+            const SizedBox(height: 8),
+            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
+          ],
+        ),
       );
     }
     final book = _book;
@@ -115,50 +119,63 @@ class _AccountingScreenState extends State<AccountingScreen> {
         if (book.currencies.length > 1)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-            child: Row(children: [
-              Text(l10n.currency),
-              const SizedBox(width: 12),
-              DropdownButton<String>(
-                value: book.currencyCode,
-                items: [
-                  for (final c in book.currencies)
-                    DropdownMenuItem(value: c, child: Text(c)),
-                ],
-                onChanged: (c) {
-                  if (c == null || c == book.currencyCode) return;
-                  _currency = c;
-                  _load();
-                },
-              ),
-            ]),
+            child: Row(
+              children: [
+                Text(l10n.currency),
+                const SizedBox(width: 12),
+                DropdownButton<String>(
+                  value: book.currencyCode,
+                  items: [
+                    for (final c in book.currencies)
+                      DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: (c) {
+                    if (c == null || c == book.currencyCode) return;
+                    _currency = c;
+                    _load();
+                  },
+                ),
+              ],
+            ),
           ),
         Expanded(
           child: entries.isEmpty
               ? _EmptyBooks(message: l10n.noEntriesYet)
-              : TabBarView(children: [
-                  _IncomeStatementView(
-                    statement: AccountingReports.incomeStatement(entries,
-                        from: _range.from, to: _range.to),
-                    period: _range.label(l10n),
-                    symbol: symbol,
-                  ),
-                  _BalanceSheetView(
-                    sheet: AccountingReports.balanceSheet(entries, asOf: _range.to),
-                    asOf: asOf,
-                    symbol: symbol,
-                  ),
-                  _TrialBalanceView(
-                    trial: AccountingReports.trialBalance(entries, to: _range.to),
-                    asOf: asOf,
-                    symbol: symbol,
-                  ),
-                  _AccountsView(
-                    entries: entries,
-                    range: _range,
-                    asOf: asOf,
-                    symbol: symbol,
-                  ),
-                ]),
+              : TabBarView(
+                  children: [
+                    _IncomeStatementView(
+                      statement: AccountingReports.incomeStatement(
+                        entries,
+                        from: _range.from,
+                        to: _range.to,
+                      ),
+                      period: _range.label(l10n),
+                      symbol: symbol,
+                    ),
+                    _BalanceSheetView(
+                      sheet: AccountingReports.balanceSheet(
+                        entries,
+                        asOf: _range.to,
+                      ),
+                      asOf: asOf,
+                      symbol: symbol,
+                    ),
+                    _TrialBalanceView(
+                      trial: AccountingReports.trialBalance(
+                        entries,
+                        to: _range.to,
+                      ),
+                      asOf: asOf,
+                      symbol: symbol,
+                    ),
+                    _AccountsView(
+                      entries: entries,
+                      range: _range,
+                      asOf: asOf,
+                      symbol: symbol,
+                    ),
+                  ],
+                ),
         ),
       ],
     );
@@ -175,15 +192,24 @@ class _EmptyBooks extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.account_balance_outlined, size: 64, color: scheme.outlineVariant),
-          const SizedBox(height: 12),
-          Text(message, style: TextStyle(color: scheme.onSurfaceVariant)),
-          const SizedBox(height: 16),
-          Text(AppLocalizations.of(context).accountingNote,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.account_balance_outlined,
+              size: 64,
+              color: scheme.outlineVariant,
+            ),
+            const SizedBox(height: 12),
+            Text(message, style: TextStyle(color: scheme.onSurfaceVariant)),
+            const SizedBox(height: 16),
+            Text(
+              AppLocalizations.of(context).accountingNote,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-        ]),
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -211,9 +237,13 @@ class _Section extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(title,
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, color: scheme.primary)),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: scheme.primary,
+              ),
+            ),
             const SizedBox(height: 6),
             ...children,
           ],
@@ -225,12 +255,19 @@ class _Section extends StatelessWidget {
 
 class _Row extends StatelessWidget {
   final String label;
-  final double amount;
+  final double? amount;
+  final String? textValue;
   final bool bold;
   final bool divider;
   final Color? color;
-  const _Row(this.label, this.amount,
-      {this.bold = false, this.divider = false, this.color});
+  const _Row(
+    this.label,
+    this.amount, {
+    this.textValue,
+    this.bold = false,
+    this.divider = false,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -239,27 +276,35 @@ class _Row extends StatelessWidget {
       fontSize: bold ? 15 : 14,
       color: color,
     );
-    return Column(children: [
-      if (divider) const Divider(height: 12),
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(children: [
-          Expanded(child: Text(label, style: style)),
-          Text(formatAmount(amount),
-              style: style.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()])),
-        ]),
-      ),
-    ]);
+    return Column(
+      children: [
+        if (divider) const Divider(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Expanded(child: Text(label, style: style)),
+              Text(
+                textValue ?? (amount != null ? formatAmount(amount!) : '—'),
+                style: style.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }
 
 /// Highlighted single figure (net profit, grand totals, balances).
 class _TotalCard extends StatelessWidget {
   final String label;
-  final double amount;
+  final double? amount;
+  final String? textValue;
   final Color? color;
-  const _TotalCard(this.label, this.amount, {this.color});
+  const _TotalCard(this.label, this.amount, {this.textValue, this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +316,7 @@ class _TotalCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: _Row(label, amount, bold: true, color: c),
+        child: _Row(label, amount, textValue: textValue, bold: true, color: c),
       ),
     );
   }
@@ -289,20 +334,29 @@ class _Header extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(children: [
-        Expanded(
-          child: Text('$text · $symbol',
-              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13)),
-        ),
-        if (balanced != null)
-          Chip(
-            visualDensity: VisualDensity.compact,
-            avatar: Icon(balanced! ? Icons.check_circle : Icons.error_outline,
-                size: 18, color: balanced! ? Colors.green : scheme.error),
-            label: Text(balanced! ? l10n.balancedLabel : l10n.notBalancedLabel,
-                style: const TextStyle(fontSize: 12)),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$text · $symbol',
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+            ),
           ),
-      ]),
+          if (balanced != null)
+            Chip(
+              visualDensity: VisualDensity.compact,
+              avatar: Icon(
+                balanced! ? Icons.check_circle : Icons.error_outline,
+                size: 18,
+                color: balanced! ? Colors.green : scheme.error,
+              ),
+              label: Text(
+                balanced! ? l10n.balancedLabel : l10n.notBalancedLabel,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -313,8 +367,11 @@ class _IncomeStatementView extends StatelessWidget {
   final IncomeStatement statement;
   final String period;
   final String symbol;
-  const _IncomeStatementView(
-      {required this.statement, required this.period, required this.symbol});
+  const _IncomeStatementView({
+    required this.statement,
+    required this.period,
+    required this.symbol,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -326,22 +383,53 @@ class _IncomeStatementView extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       children: [
         _Header(period, symbol),
-        _Section(title: l10n.revenueSection, children: [
-          _Row(l10n.accountName(Accounts.salesRevenue.code), s.salesRevenue),
-          _Row(l10n.accountName(Accounts.cogs.code), -s.costOfSales),
-          _Row(l10n.grossProfit, s.grossProfit, bold: true, divider: true),
-          _Row(l10n.accountName(Accounts.otherIncome.code), s.otherIncome),
-        ]),
-        _Section(title: l10n.expensesSection, children: [
-          _Row(l10n.accountName(Accounts.operatingExpenses.code),
-              s.operatingExpenses),
-          _Row(l10n.accountName(Accounts.inventoryAdjustments.code),
-              s.inventoryAdjustments),
-          _Row(l10n.total, s.operatingExpenses + s.inventoryAdjustments,
-              bold: true, divider: true),
-        ]),
-        _TotalCard(profit ? l10n.netProfit : l10n.netLoss, s.netProfit,
-            color: profit ? Colors.green.shade700 : scheme.error),
+        _Section(
+          title: l10n.revenueSection,
+          children: [
+            _Row(l10n.accountName(Accounts.salesRevenue.code), s.salesRevenue),
+            _Row(l10n.accountName(Accounts.cogs.code), -s.costOfSales),
+            _Row(
+              l10n.grossProfit,
+              s.trustedGrossProfit,
+              textValue: s.hasIncompleteCostOfSales ? '—' : null,
+              bold: true,
+              divider: true,
+              color: (s.trustedGrossProfit != null && s.trustedGrossProfit! < 0)
+                  ? scheme.error
+                  : null,
+            ),
+            _Row(l10n.accountName(Accounts.otherIncome.code), s.otherIncome),
+          ],
+        ),
+        _Section(
+          title: l10n.expensesSection,
+          children: [
+            _Row(
+              l10n.accountName(Accounts.operatingExpenses.code),
+              s.operatingExpenses,
+            ),
+            _Row(
+              l10n.accountName(Accounts.inventoryAdjustments.code),
+              s.inventoryAdjustments,
+            ),
+            _Row(
+              l10n.total,
+              s.operatingExpenses + s.inventoryAdjustments,
+              bold: true,
+              divider: true,
+            ),
+          ],
+        ),
+        _TotalCard(
+          s.hasIncompleteCostOfSales
+              ? l10n.netProfit
+              : (profit ? l10n.netProfit : l10n.netLoss),
+          s.trustedNetProfit,
+          textValue: s.hasIncompleteCostOfSales ? '—' : null,
+          color: s.hasIncompleteCostOfSales
+              ? Colors.amber.shade900
+              : (profit ? Colors.green.shade700 : scheme.error),
+        ),
         const SizedBox(height: 12),
         if (s.hasIncompleteCostOfSales)
           Container(
@@ -354,7 +442,11 @@ class _IncomeStatementView extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, size: 14, color: Colors.amber.shade900),
+                Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: Colors.amber.shade900,
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -369,8 +461,10 @@ class _IncomeStatementView extends StatelessWidget {
               ],
             ),
           ),
-        Text(l10n.accountingNote,
-            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+        Text(
+          l10n.accountingNote,
+          style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+        ),
       ],
     );
   }
@@ -382,36 +476,50 @@ class _BalanceSheetView extends StatelessWidget {
   final BalanceSheet sheet;
   final String asOf;
   final String symbol;
-  const _BalanceSheetView(
-      {required this.sheet, required this.asOf, required this.symbol});
+  const _BalanceSheetView({
+    required this.sheet,
+    required this.asOf,
+    required this.symbol,
+  });
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final b = sheet;
     List<Widget> rows(Map<Account, double> m) => [
-          for (final e in m.entries)
-            if (e.value.abs() >= 0.005) _Row(l10n.accountName(e.key.code), e.value),
-        ];
+      for (final e in m.entries)
+        if (e.value.abs() >= 0.005) _Row(l10n.accountName(e.key.code), e.value),
+    ];
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
         _Header(asOf, symbol, balanced: b.isBalanced),
-        _Section(title: l10n.assetsSection, children: [
-          ...rows(b.assets),
-          _Row(l10n.totalAssets, b.totalAssets, bold: true, divider: true),
-        ]),
-        _Section(title: l10n.liabilitiesSection, children: [
-          ...rows(b.liabilities),
-          _Row(l10n.total, b.totalLiabilities, bold: true, divider: true),
-        ]),
-        _Section(title: l10n.equitySection, children: [
-          ...rows(b.equity),
-          _Row(l10n.retainedEarnings, b.retainedEarnings),
-          _Row(l10n.total, b.totalEquity, bold: true, divider: true),
-        ]),
-        _TotalCard(l10n.totalLiabilitiesEquity,
-            b.totalLiabilities + b.totalEquity),
+        _Section(
+          title: l10n.assetsSection,
+          children: [
+            ...rows(b.assets),
+            _Row(l10n.totalAssets, b.totalAssets, bold: true, divider: true),
+          ],
+        ),
+        _Section(
+          title: l10n.liabilitiesSection,
+          children: [
+            ...rows(b.liabilities),
+            _Row(l10n.total, b.totalLiabilities, bold: true, divider: true),
+          ],
+        ),
+        _Section(
+          title: l10n.equitySection,
+          children: [
+            ...rows(b.equity),
+            _Row(l10n.retainedEarnings, b.retainedEarnings),
+            _Row(l10n.total, b.totalEquity, bold: true, divider: true),
+          ],
+        ),
+        _TotalCard(
+          l10n.totalLiabilitiesEquity,
+          b.totalLiabilities + b.totalEquity,
+        ),
       ],
     );
   }
@@ -423,8 +531,11 @@ class _TrialBalanceView extends StatelessWidget {
   final TrialBalance trial;
   final String asOf;
   final String symbol;
-  const _TrialBalanceView(
-      {required this.trial, required this.asOf, required this.symbol});
+  const _TrialBalanceView({
+    required this.trial,
+    required this.asOf,
+    required this.symbol,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -441,21 +552,29 @@ class _TrialBalanceView extends StatelessWidget {
     const numStyle = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
     final bold = numStyle.copyWith(fontWeight: FontWeight.bold);
 
-    Widget line(String code, String name, String debit, String credit,
-            {TextStyle style = numStyle}) =>
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(children: [
-            SizedBox(width: 44, child: Text(code, style: style)),
-            Expanded(child: Text(name, style: style)),
-            SizedBox(
-                width: 96,
-                child: Text(debit, style: style, textAlign: TextAlign.end)),
-            SizedBox(
-                width: 96,
-                child: Text(credit, style: style, textAlign: TextAlign.end)),
-          ]),
-        );
+    Widget line(
+      String code,
+      String name,
+      String debit,
+      String credit, {
+      TextStyle style = numStyle,
+    }) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(width: 44, child: Text(code, style: style)),
+          Expanded(child: Text(name, style: style)),
+          SizedBox(
+            width: 96,
+            child: Text(debit, style: style, textAlign: TextAlign.end),
+          ),
+          SizedBox(
+            width: 96,
+            child: Text(credit, style: style, textAlign: TextAlign.end),
+          ),
+        ],
+      ),
+    );
 
     return ListView(
       padding: const EdgeInsets.all(12),
@@ -469,22 +588,33 @@ class _TrialBalanceView extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Column(children: [
-              line(l10n.accountCode, l10n.accountColumn, l10n.debit, l10n.credit,
-                  style: bold.copyWith(color: scheme.primary)),
-              const Divider(height: 1),
-              for (final r in rows)
+            child: Column(
+              children: [
                 line(
-                  r.$1.code,
-                  l10n.accountName(r.$1.code),
-                  r.$2 > 0 ? formatAmount(r.$2) : '',
-                  r.$2 < 0 ? formatAmount(-r.$2) : '',
+                  l10n.accountCode,
+                  l10n.accountColumn,
+                  l10n.debit,
+                  l10n.credit,
+                  style: bold.copyWith(color: scheme.primary),
                 ),
-              const Divider(height: 1),
-              line('', l10n.total, formatAmount(totalDebit),
+                const Divider(height: 1),
+                for (final r in rows)
+                  line(
+                    r.$1.code,
+                    l10n.accountName(r.$1.code),
+                    r.$2 > 0 ? formatAmount(r.$2) : '',
+                    r.$2 < 0 ? formatAmount(-r.$2) : '',
+                  ),
+                const Divider(height: 1),
+                line(
+                  '',
+                  l10n.total,
+                  formatAmount(totalDebit),
                   formatAmount(totalCredit),
-                  style: bold),
-            ]),
+                  style: bold,
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -499,11 +629,12 @@ class _AccountsView extends StatelessWidget {
   final DateRangeFilter range;
   final String asOf;
   final String symbol;
-  const _AccountsView(
-      {required this.entries,
-      required this.range,
-      required this.asOf,
-      required this.symbol});
+  const _AccountsView({
+    required this.entries,
+    required this.range,
+    required this.asOf,
+    required this.symbol,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -524,22 +655,30 @@ class _AccountsView extends StatelessWidget {
               side: BorderSide(color: scheme.outlineVariant),
             ),
             child: ListTile(
-              leading: Text(a.code,
-                  style: TextStyle(
-                      color: scheme.primary, fontWeight: FontWeight.bold)),
+              leading: Text(
+                a.code,
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               title: Text(l10n.accountName(a.code)),
-              trailing: Text(formatAmount(balances[a] ?? 0),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: [FontFeature.tabularFigures()])),
+              trailing: Text(
+                formatAmount(balances[a] ?? 0),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => AccountLedgerScreen(
-                      entries: entries,
-                      account: a,
-                      range: range,
-                      symbol: symbol),
+                    entries: entries,
+                    account: a,
+                    range: range,
+                    symbol: symbol,
+                  ),
                 ),
               ),
             ),
@@ -569,8 +708,12 @@ class AccountLedgerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final gl = AccountingReports.generalLedger(entries, account,
-        from: range.from, to: range.to);
+    final gl = AccountingReports.generalLedger(
+      entries,
+      account,
+      from: range.from,
+      to: range.to,
+    );
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.accountName(account.code)),
@@ -585,9 +728,11 @@ class AccountLedgerScreen extends StatelessWidget {
             if (gl.lines.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(l10n.noDataForPeriod,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: scheme.onSurfaceVariant)),
+                child: Text(
+                  l10n.noDataForPeriod,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
               ),
             for (final line in gl.lines)
               Card(
@@ -600,9 +745,10 @@ class AccountLedgerScreen extends StatelessWidget {
                 child: ListTile(
                   onTap: () => _showEntry(context, line.entry),
                   title: Text(
-                      '${entrySourceLabel(line.entry.source, l10n)} · ${line.entry.reference}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                    '${entrySourceLabel(line.entry.source, l10n)} · ${line.entry.reference}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   subtitle: Text(_dateFmt.format(line.entry.date)),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -613,14 +759,19 @@ class AccountLedgerScreen extends StatelessWidget {
                             ? '${l10n.debit} ${formatAmount(line.debit)}'
                             : '${l10n.credit} ${formatAmount(line.credit)}',
                         style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: line.debit > 0
-                                ? Colors.green.shade700
-                                : Colors.orange.shade800),
+                          fontWeight: FontWeight.w600,
+                          color: line.debit > 0
+                              ? Colors.green.shade700
+                              : Colors.orange.shade800,
+                        ),
                       ),
-                      Text(formatAmount(line.runningBalance),
-                          style: TextStyle(
-                              fontSize: 12, color: scheme.onSurfaceVariant)),
+                      Text(
+                        formatAmount(line.runningBalance),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -646,43 +797,65 @@ class AccountLedgerScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                  '${l10n.journalEntry} · ${entrySourceLabel(entry.source, l10n)} · ${entry.reference}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+                '${l10n.journalEntry} · ${entrySourceLabel(entry.source, l10n)} · ${entry.reference}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               Text(_dateFmt.format(entry.date)),
               const Divider(),
               for (final l in entry.lines)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(children: [
-                    Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
                         child: Text(
-                            '${l.account.code} ${l10n.accountName(l.account.code)}')),
-                    SizedBox(
+                          '${l.account.code} ${l10n.accountName(l.account.code)}',
+                        ),
+                      ),
+                      SizedBox(
                         width: 90,
-                        child: Text(l.debit > 0 ? formatAmount(l.debit) : '',
-                            textAlign: TextAlign.end)),
-                    SizedBox(
+                        child: Text(
+                          l.debit > 0 ? formatAmount(l.debit) : '',
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
+                      SizedBox(
                         width: 90,
-                        child: Text(l.credit > 0 ? formatAmount(l.credit) : '',
-                            textAlign: TextAlign.end)),
-                  ]),
+                        child: Text(
+                          l.credit > 0 ? formatAmount(l.credit) : '',
+                          textAlign: TextAlign.end,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               const Divider(),
-              Row(children: [
-                Expanded(
-                    child: Text(l10n.total,
-                        style: const TextStyle(fontWeight: FontWeight.bold))),
-                SizedBox(
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.total,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  SizedBox(
                     width: 90,
-                    child: Text(formatAmount(entry.totalDebit),
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(fontWeight: FontWeight.bold))),
-                SizedBox(
+                    child: Text(
+                      formatAmount(entry.totalDebit),
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  SizedBox(
                     width: 90,
-                    child: Text(formatAmount(entry.totalCredit),
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(fontWeight: FontWeight.bold))),
-              ]),
+                    child: Text(
+                      formatAmount(entry.totalCredit),
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

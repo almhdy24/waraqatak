@@ -410,13 +410,15 @@ class LedgerBuilder {
             ),
           );
         } else {
-          events.add(_StockEvent(
-            d.date,
-            it.productId!,
-            -it.quantity,
-            doc: d,
-            unitCost: it.unitCost,
-          ));
+          events.add(
+            _StockEvent(
+              d.date,
+              it.productId!,
+              -it.quantity,
+              doc: d,
+              unitCost: it.unitCost,
+            ),
+          );
         }
       }
     }
@@ -424,9 +426,12 @@ class LedgerBuilder {
       final p = input.products[m.productId];
       if (p == null || p.type != Product.typeProduct) continue;
       if (m.type == StockMovement.typeOpening && m.quantity > 0) {
-        final openingCost = m.unitCost ??
+        final openingCost =
+            m.unitCost ??
             (p.costStatus == Product.costStatusKnown ? p.averageCost : null) ??
-            (input.productPricesApply && p.purchasePrice > 0 ? p.purchasePrice : null);
+            (input.productPricesApply && p.purchasePrice > 0
+                ? p.purchasePrice
+                : null);
         events.add(
           _StockEvent(
             m.date,
@@ -448,12 +453,7 @@ class LedgerBuilder {
         );
       } else if (m.type == StockMovement.typeCancellation && m.quantity > 0) {
         events.add(
-          _StockEvent(
-            m.date,
-            m.productId,
-            m.quantity,
-            unitCost: m.unitCost,
-          ),
+          _StockEvent(m.date, m.productId, m.quantity, unitCost: m.unitCost),
         );
       }
     }
@@ -480,8 +480,11 @@ class LedgerBuilder {
           first[p.id]?.subtract(const Duration(milliseconds: 1)) ??
           p.createdAt ??
           DateTime(2000);
-      final openingCost = (p.costStatus == Product.costStatusKnown ? p.averageCost : null) ??
-          (input.productPricesApply && p.purchasePrice > 0 ? p.purchasePrice : null);
+      final openingCost =
+          (p.costStatus == Product.costStatusKnown ? p.averageCost : null) ??
+          (input.productPricesApply && p.purchasePrice > 0
+              ? p.purchasePrice
+              : null);
       if (openingCost == null || openingCost <= 0) continue;
       events.add(
         _StockEvent(
@@ -514,7 +517,9 @@ class LedgerBuilder {
         resolvedAvg = v / q;
       } else if (e.unitCost != null && e.unitCost! > 0) {
         resolvedAvg = e.unitCost!;
-      } else if (p.costStatus == Product.costStatusKnown && p.averageCost != null && p.averageCost! > 0) {
+      } else if (p.costStatus == Product.costStatusKnown &&
+          p.averageCost != null &&
+          p.averageCost! > 0) {
         resolvedAvg = p.averageCost!;
       } else if (input.productPricesApply && p.purchasePrice > 0) {
         resolvedAvg = p.purchasePrice;
@@ -666,7 +671,11 @@ class IncomeStatement {
   });
 
   /// Trusted gross profit only when all sales have known cost of sales; null otherwise.
-  double? get trustedGrossProfit => hasIncompleteCostOfSales ? null : grossProfit;
+  double? get trustedGrossProfit =>
+      hasIncompleteCostOfSales ? null : grossProfit;
+
+  /// Trusted net profit only when all sales have known cost of sales; null otherwise.
+  double? get trustedNetProfit => hasIncompleteCostOfSales ? null : netProfit;
 
   double get grossProfit => salesRevenue - costOfSales;
   double get netProfit =>
@@ -755,7 +764,9 @@ class AccountingReports {
             .firstOrNull ??
         0;
     final inRange = entries.where((e) => _inRange(e.date, from, to));
-    final uncosted = inRange.where((e) => e.source == EntrySource.costOfSales && e.isCostMissing).length;
+    final uncosted = inRange
+        .where((e) => e.source == EntrySource.costOfSales && e.isCostMissing)
+        .length;
     return IncomeStatement(
       salesRevenue: bal(Accounts.salesRevenue),
       otherIncome: bal(Accounts.otherIncome),
