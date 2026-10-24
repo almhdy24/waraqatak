@@ -486,6 +486,493 @@ void main() {
       expect(text, contains('Recommended next step:'));
     });
   });
+
+  group('DatabaseRepairService - Arabic Localization & Accounting Terminology', () {
+    test('every DiagnosticCategory maps to clear professional Arabic terminology', () {
+      final categories = DiagnosticCategory.values;
+      for (final cat in categories) {
+        final labelAr = DatabaseRepairService.categoryLabel(cat, l10nAr);
+        expect(labelAr, isNotEmpty);
+        expect(labelAr, isNot(contains(cat.name))); // Never exposes raw enum name!
+      }
+
+      // Check specific accounting terminology requirements:
+      expect(DatabaseRepairService.categoryLabel(DiagnosticCategory.paymentMismatch, l10nAr),
+          contains('اختلاف بين المبلغ المسدد وسجل المدفوعات'));
+      expect(DatabaseRepairService.categoryLabel(DiagnosticCategory.stockDiscrepancy, l10nAr),
+          contains('اختلاف رصيد المخزون عن سجل حركة الأصناف'));
+      expect(DatabaseRepairService.categoryLabel(DiagnosticCategory.negativeStock, l10nAr),
+          contains('رصيد مخزون سالب'));
+    });
+
+    test('all 32 diagnostic finding codes produce tailored Arabic titles, explanations, and actions', () {
+      const all32Codes = [
+        'orphaned_document_items',
+        'broken_product_reference_in_items',
+        'orphaned_document_payments',
+        'broken_receipt_reference_in_payments',
+        'orphaned_stock_movements',
+        'broken_document_reference_in_movements',
+        'broken_related_document_in_documents',
+        'orphaned_stocktake_items',
+        'document_total_calculation_mismatch',
+        'document_items_sum_mismatch',
+        'document_remaining_calculation_mismatch',
+        'document_overpaid',
+        'document_status_paid_incomplete',
+        'document_status_unpaid_with_payments',
+        'document_status_partial_invalid',
+        'payment_records_exceed_document_paid',
+        'payment_records_less_than_document_paid',
+        'active_receipt_missing_payment_record',
+        'cancelled_document_payment_mismatch',
+        'stock_movement_ledger_mismatch',
+        'missing_opening_stock',
+        'negative_stock_quantity',
+        'suspicious_nan_or_infinite_stock',
+        'legacy_schema_costing_unsupported',
+        'product_cost_status_known_missing_cost',
+        'product_negative_average_cost',
+        'product_held_stock_unknown_cost',
+        'movement_known_status_missing_cost',
+        'movement_total_cost_mismatch',
+        'movement_negative_unit_cost',
+        'issued_sale_item_missing_cost',
+        'duplicate_document_number',
+      ];
+
+      final findings = all32Codes.map((code) => DiagnosticFinding(
+        code: code,
+        title: 'English title for $code',
+        explanation: 'English explanation for $code',
+        severity: DiagnosticSeverity.warning,
+        category: DiagnosticCategory.orphanedRecord,
+        affectedIds: [100],
+        entityType: 'document_items',
+        requiresManualReview: false,
+      )).toList();
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: findings,
+        totalChecksRun: 32,
+      );
+
+      final issuesAr = DatabaseRepairService.categorizeReport(report, l10nAr);
+      expect(issuesAr.length, equals(32));
+
+      for (final issue in issuesAr) {
+        expect(issue.title, isNotEmpty);
+        expect(issue.explanation, isNotEmpty);
+        expect(issue.plannedChange, isNotEmpty);
+        expect(issue.recommendedAction, isNotEmpty);
+
+        // Assert no raw English titles leaked in Arabic report:
+        expect(issue.title, isNot(startsWith('English title')));
+        expect(issue.explanation, isNot(startsWith('English explanation')));
+
+        // Assert Arabic characters present:
+        expect(RegExp(r'[\u0600-\u06FF]').hasMatch(issue.title), isTrue);
+        expect(RegExp(r'[\u0600-\u06FF]').hasMatch(issue.explanation), isTrue);
+        expect(RegExp(r'[\u0600-\u06FF]').hasMatch(issue.plannedChange), isTrue);
+        expect(RegExp(r'[\u0600-\u06FF]').hasMatch(issue.recommendedAction), isTrue);
+      }
+    });
+
+    test('exported Arabic report contains zero raw English labels, enums, or table names', () {
+      final findings = [
+        const DiagnosticFinding(
+          code: 'payment_records_less_than_document_paid',
+          title: 'Payment records less than document paid',
+          severity: DiagnosticSeverity.error,
+          category: DiagnosticCategory.paymentMismatch,
+          affectedIds: [5, 6],
+          explanation: 'Payment rows do not match document paid',
+          entityType: 'document_payments',
+          requiresManualReview: true,
+        ),
+        const DiagnosticFinding(
+          code: 'stock_movement_ledger_mismatch',
+          title: 'Stock movement ledger mismatch',
+          severity: DiagnosticSeverity.warning,
+          category: DiagnosticCategory.stockDiscrepancy,
+          affectedIds: [12, 13, 14],
+          explanation: 'Stock quantity differs from movements sum',
+          entityType: 'stock_movements',
+          requiresManualReview: true,
+        ),
+      ];
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime(2026, 10, 24, 15, 30, 0),
+        findings: findings,
+        totalChecksRun: 32,
+      );
+
+      final issuesAr = DatabaseRepairService.categorizeReport(report, l10nAr);
+      final reportText = DatabaseRepairService.exportReportText(report, issuesAr, l10nAr);
+
+      // 1. Verify Arabic headers and sections
+      expect(reportText, contains('تقرير فحص وإصلاح قاعدة البيانات — ورقتك'));
+      expect(reportText, contains('تاريخ ووقت الفحص: 2026-10-24 15:30:00'));
+      expect(reportText, contains('إجمالي الفحوصات المنفذة: 32'));
+      expect(reportText, contains('عدد المشكلات المكتشفة: 2'));
+      expect(reportText, contains('أخطاء تكامل البيانات: 1'));
+      expect(reportText, contains('تنبيهات التدقيق المحاسبي: 1'));
+
+      // 2. Verify Arabic issue detail labels
+      expect(reportText, contains('المشكلة #1: [خطأ تكامل]'));
+      expect(reportText, contains('التصنيف: اختلاف بين المبلغ المسدد وسجل المدفوعات'));
+      expect(reportText, contains('السجلات المتأثرة: 2 من سجلات المدفوعات'));
+      expect(reportText, contains('قابل للإصلاح التلقائي: يتطلب مراجعة يدوية'));
+      expect(reportText, contains('الإجراء المخطط:'));
+      expect(reportText, contains('الإجراء الموصى به:'));
+      expect(reportText, contains('المعرفات المتأثرة: #5, #6'));
+
+      expect(reportText, contains('المشكلة #2: [تنبيه تدقيق]'));
+      expect(reportText, contains('التصنيف: اختلاف رصيد المخزون عن سجل حركة الأصناف'));
+      expect(reportText, contains('السجلات المتأثرة: 3 من حركات المخزون'));
+      expect(reportText, contains('المعرفات المتأثرة: #12, #13, #14'));
+
+      // 3. Verify no raw enum names, table names, or English labels
+      expect(reportText, isNot(contains('paymentMismatch')));
+      expect(reportText, isNot(contains('stockDiscrepancy')));
+      expect(reportText, isNot(contains('document_payments')));
+      expect(reportText, isNot(contains('stock_movements')));
+      expect(reportText, isNot(contains('Auto-repair safe:')));
+      expect(reportText, isNot(contains('Category:')));
+      expect(reportText, isNot(contains('Affected records:')));
+      expect(reportText, isNot(contains('Explanation:')));
+    });
+
+    test('entity types are converted to user-friendly Arabic without exposing raw tables', () {
+      expect(l10nAr.diagnosticEntityType('document_items'), equals('بنود المستندات'));
+      expect(l10nAr.diagnosticEntityType('products'), equals('أصناف المخزون'));
+      expect(l10nAr.diagnosticEntityType('stock_movements'), equals('حركات المخزون'));
+      expect(l10nAr.diagnosticEntityType('documents'), equals('مستندات'));
+      expect(l10nAr.diagnosticEntityType('document_payments'), equals('سجلات المدفوعات'));
+      expect(l10nAr.diagnosticEntityType('stocktake_items'), equals('بنود الجرد'));
+      expect(l10nAr.diagnosticEntityType('stocktake_sessions'), equals('جلسات الجرد'));
+    });
+  });
+
+  group('DatabaseRepairService - Accounting Safety & Payment Invariants', () {
+    test('1. Legacy upfront payments without payment rows are protected from automatic repair', () async {
+      // Legacy document where upfront payment was stored directly on document without rows in document_payments
+      const legacyFinding = DiagnosticFinding(
+        code: 'payment_records_less_than_document_paid',
+        title: 'Payment records sum is less than document paid balance',
+        severity: DiagnosticSeverity.warning,
+        category: DiagnosticCategory.paymentMismatch,
+        affectedIds: [1001],
+        explanation: 'Legacy invoice with upfront paid amount but no individual payment rows',
+        entityType: 'documents',
+        requiresManualReview: true,
+      );
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: [legacyFinding],
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nAr);
+      final issue = issues.first;
+
+      expect(issue.isSafeAutoRepair, isFalse);
+      expect(issue.requiresManualReview, isTrue);
+      expect(issue.plannedChange, contains('لا يتم حذف أو تعديل أي مدفوعات نقدية'));
+      expect(issue.recommendedAction, contains('يتطلب مراجعة محاسبية يدوية'));
+
+      // Execution attempt must be rejected
+      final result = await DatabaseRepairService.repairIssue(
+        db: FakeDatabaseExecutor(),
+        issue: issue,
+        createSafetyBackup: false,
+        l10n: l10nAr,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.repairedCount, equals(0));
+      expect(result.error, equals('Manual review required'));
+      expect(result.message, contains('هذه المشكلة تتطلب مراجعة يدوية ولا يمكن إصلاحها تلقائياً'));
+    });
+
+    test('2. Complete and consistent payment rows produce zero unsafe repair issues', () {
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: const [],
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nEn);
+      expect(issues, isEmpty);
+
+      final reportText = DatabaseRepairService.exportReportText(report, issues, l10nEn);
+      expect(reportText, contains('Database is completely clean with zero integrity issues.'));
+    });
+
+    test('3. Partial payments with payment records exceeding document paid strictly require manual review', () async {
+      // payment_records_exceed_document_paid must never auto-recalculate document.paid
+      const excessFinding = DiagnosticFinding(
+        code: 'payment_records_exceed_document_paid',
+        title: 'Payment records sum exceeds document paid amount',
+        severity: DiagnosticSeverity.error,
+        category: DiagnosticCategory.paymentMismatch,
+        affectedIds: [2001],
+        explanation: 'Payment rows sum exceeds document paid balance',
+        entityType: 'documents',
+        requiresManualReview: true,
+      );
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: [excessFinding],
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nAr);
+      final issue = issues.first;
+
+      expect(issue.isSafeAutoRepair, isFalse);
+      expect(issue.requiresManualReview, isTrue);
+
+      final result = await DatabaseRepairService.repairIssue(
+        db: FakeDatabaseExecutor(),
+        issue: issue,
+        createSafetyBackup: false,
+        l10n: l10nAr,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.repairedCount, equals(0));
+      expect(result.error, equals('Manual review required'));
+    });
+
+    test('4. Missing payment records for active receipt require manual review', () async {
+      const missingReceiptRowFinding = DiagnosticFinding(
+        code: 'active_receipt_missing_payment_record',
+        title: 'Active linked receipt/voucher missing payment record',
+        severity: DiagnosticSeverity.warning,
+        category: DiagnosticCategory.paymentMismatch,
+        affectedIds: [3001],
+        explanation: 'Active receipt has no row in document_payments',
+        entityType: 'documents',
+        requiresManualReview: true,
+      );
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: [missingReceiptRowFinding],
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nEn);
+      final issue = issues.first;
+
+      expect(issue.isSafeAutoRepair, isFalse);
+      expect(issue.requiresManualReview, isTrue);
+
+      final result = await DatabaseRepairService.repairIssue(
+        db: FakeDatabaseExecutor(),
+        issue: issue,
+        createSafetyBackup: false,
+        l10n: l10nEn,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.repairedCount, equals(0));
+      expect(result.error, equals('Manual review required'));
+    });
+
+    test('5. Cancelled document payment mismatches and reversals are preserved for audit trail', () async {
+      const cancelledMismatchFinding = DiagnosticFinding(
+        code: 'cancelled_document_payment_mismatch',
+        title: 'Payment discrepancy in cancelled document',
+        severity: DiagnosticSeverity.warning,
+        category: DiagnosticCategory.paymentMismatch,
+        affectedIds: [4001],
+        explanation: 'Cancelled document has remaining payment rows pending customer refund confirmation',
+        entityType: 'documents',
+        requiresManualReview: true,
+      );
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: [cancelledMismatchFinding],
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nAr);
+      final issue = issues.first;
+
+      expect(issue.isSafeAutoRepair, isFalse);
+      expect(issue.requiresManualReview, isTrue);
+      expect(issue.plannedChange, contains('لا يتم حذف المدفوعات المسجلة تلقائياً'));
+
+      final result = await DatabaseRepairService.repairIssue(
+        db: FakeDatabaseExecutor(),
+        issue: issue,
+        createSafetyBackup: false,
+        l10n: l10nAr,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.error, equals('Manual review required'));
+    });
+
+    test('6. Failed repair triggers complete transaction rollback and reports rolledBack = true', () async {
+      const safeFinding = DiagnosticFinding(
+        code: 'orphaned_document_items',
+        title: 'Orphaned document items',
+        severity: DiagnosticSeverity.error,
+        category: DiagnosticCategory.orphanedRecord,
+        affectedIds: [5001],
+        explanation: 'Items with no parent document',
+        entityType: 'document_items',
+        requiresManualReview: false,
+      );
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: [safeFinding],
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nAr);
+      final issue = issues.first;
+      expect(issue.isSafeAutoRepair, isTrue);
+
+      final failingDb = MockRollbackDatabase();
+
+      final result = await DatabaseRepairService.repairIssue(
+        db: failingDb,
+        issue: issue,
+        createSafetyBackup: false,
+        l10n: l10nAr,
+      );
+
+      expect(result.success, isFalse);
+      expect(result.repairedCount, equals(0));
+      expect(result.rolledBack, isTrue);
+      expect(failingDb.rollbackOccurred, isTrue);
+      expect(result.message, contains('فشل الإصلاح أثناء المعاملة. تم التراجع عن جميع التغييرات'));
+    });
+
+    test('7. Batch repairAllSafe strictly excludes all payment mismatch issues and preserves payment records', () async {
+      final mixedFindings = [
+        const DiagnosticFinding(
+          code: 'payment_records_less_than_document_paid',
+          title: 'Payment records less than paid',
+          severity: DiagnosticSeverity.warning,
+          category: DiagnosticCategory.paymentMismatch,
+          affectedIds: [6001],
+          explanation: 'Payment records less than paid',
+          entityType: 'documents',
+          requiresManualReview: true,
+        ),
+        const DiagnosticFinding(
+          code: 'payment_records_exceed_document_paid',
+          title: 'Payment records exceed paid',
+          severity: DiagnosticSeverity.error,
+          category: DiagnosticCategory.paymentMismatch,
+          affectedIds: [6002],
+          explanation: 'Payment records exceed paid',
+          entityType: 'documents',
+          requiresManualReview: true,
+        ),
+        const DiagnosticFinding(
+          code: 'active_receipt_missing_payment_record',
+          title: 'Active receipt missing payment record',
+          severity: DiagnosticSeverity.warning,
+          category: DiagnosticCategory.paymentMismatch,
+          affectedIds: [6003],
+          explanation: 'Active receipt missing payment record',
+          entityType: 'documents',
+          requiresManualReview: true,
+        ),
+      ];
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: mixedFindings,
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nAr);
+
+      // Verify that NONE of the payment mismatch issues are marked as safe auto-repair
+      final safeCount = issues.where((i) => i.isSafeAutoRepair).length;
+      expect(safeCount, equals(0));
+
+      final batchResult = await DatabaseRepairService.repairAllSafe(
+        db: FakeDatabaseExecutor(),
+        issues: issues,
+        createSafetyBackup: false,
+        l10n: l10nAr,
+      );
+
+      expect(batchResult.success, isTrue);
+      expect(batchResult.repairedCount, equals(0));
+      expect(batchResult.message, contains('لا توجد مشكلات آمنة قابلة للإصلاح التلقائي'));
+    });
+
+    test('8. Accurate remaining balance calculation mismatch is strictly arithmetic and does not mutate payments', () {
+      const remainingFinding = DiagnosticFinding(
+        code: 'document_remaining_calculation_mismatch',
+        title: 'Document remaining balance mismatch',
+        severity: DiagnosticSeverity.error,
+        category: DiagnosticCategory.documentBalanceMismatch,
+        affectedIds: [7001],
+        explanation: 'Remaining balance does not match total - paid',
+        entityType: 'documents',
+        requiresManualReview: false,
+      );
+
+      final report = DatabaseDiagnosticReport(
+        executedAt: DateTime.now(),
+        findings: [remainingFinding],
+        totalChecksRun: 32,
+      );
+
+      final issues = DatabaseRepairService.categorizeReport(report, l10nAr);
+      final issue = issues.first;
+
+      // This is an arithmetic repair on the document table itself, leaving paid and payments untouched
+      expect(issue.isSafeAutoRepair, isTrue);
+      expect(issue.category, equals(DiagnosticCategory.documentBalanceMismatch));
+      expect(issue.plannedChange, contains('إعادة احتساب وتحديث الرصيد المتبقي بناءً على الإجمالي والمدفوع'));
+    });
+  });
+}
+
+// Mock database to verify transaction rollback on failure
+class MockRollbackDatabase implements Database {
+  bool rollbackOccurred = false;
+
+  @override
+  Future<T> transaction<T>(Future<T> Function(Transaction txn) action, {bool? exclusive}) async {
+    try {
+      final mockTxn = MockFailingTransaction();
+      return await action(mockTxn);
+    } catch (e) {
+      rollbackOccurred = true;
+      rethrow;
+    }
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class MockFailingTransaction implements Transaction {
+  @override
+  Future<int> rawDelete(String sql, [List<Object?>? arguments]) async {
+    throw Exception('Simulated database failure during repair execution');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 // Dummy DatabaseExecutor to test non-DB branch guards

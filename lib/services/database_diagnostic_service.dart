@@ -569,6 +569,8 @@ class DatabaseDiagnosticService {
     int checks = 0;
 
     // 4.1 Sum of payment rows exceeds document paid amount (active documents)
+    // (Note: Requires manual accounting review because payments may be duplicate, erroneously
+    // entered, or unverified against bank receipts/statements).
     checks++;
     final paymentsExceedPaid = await db.rawQuery('''
       SELECT d.id, d.document_number, d.paid, SUM(dp.amount) AS payments_sum
@@ -590,7 +592,7 @@ class DatabaseDiagnosticService {
           title: 'Payment records sum exceeds document paid amount',
           explanation:
               'Found ${ids.length} active document(s) where total of document_payments exceeds document.paid.',
-          requiresManualReview: false,
+          requiresManualReview: true,
         ),
       );
     }

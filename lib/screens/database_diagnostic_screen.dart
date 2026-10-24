@@ -3,12 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:sqflite/sqflite.dart';
 
+import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/database_diagnostic.dart';
+import '../models/product.dart';
 import '../services/database_diagnostic_service.dart';
 import '../services/database_repair_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/responsive.dart';
+import 'document_detail_screen.dart';
+import 'product_form_screen.dart';
+import 'stock_movements_screen.dart';
+import 'stocktake/stocktake_screen.dart';
 
 /// Advanced repair and diagnostic screen presenting data integrity checks and
 /// executing safe, transaction-protected database repairs.
@@ -200,6 +206,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
       final result = await DatabaseRepairService.repairIssue(
         db: db,
         issue: issue,
+        l10n: l10n,
       );
 
       if (!mounted) return;
@@ -290,6 +297,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
       final result = await DatabaseRepairService.repairAllSafe(
         db: db,
         issues: safeIssues,
+        l10n: l10n,
       );
 
       if (!mounted) return;
@@ -963,7 +971,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
         childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
         leading: Icon(icon, color: color, size: 24),
         title: Text(
-          issue.finding.title,
+          issue.title,
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -996,7 +1004,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '${issue.affectedCount} ${issue.finding.entityType}',
+                  '${issue.affectedCount} ${l10n.diagnosticEntityType(issue.finding.entityType)}',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: color,
                     fontWeight: FontWeight.bold,
@@ -1164,6 +1172,565 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     );
   }
 
+  String _docTypeLabel(String? type, AppLocalizations l10n) {
+    return switch (type) {
+      'invoice' => l10n.invoice,
+      'purchase' => l10n.purchase,
+      'quotation' => l10n.quotation,
+      'payment_receipt' => l10n.paymentReceipt,
+      'expense_voucher' => l10n.expenseVoucher,
+      _ => l10n.documents,
+    };
+  }
+
+  Future<DatabaseExecutor> _resolveDb() async {
+    return widget.db ?? await DatabaseHelper.instance.database;
+  }
+
+  Future<void> _openSingleRecord(String entityType, int id) async {
+    final l10n = AppLocalizations.of(context);
+    final db = await _resolveDb();
+
+    switch (entityType) {
+      case 'documents':
+        final rows = await db.rawQuery(
+          'SELECT id, document_number, type FROM documents WHERE id = ?',
+          [id],
+        );
+        if (!mounted) return;
+        if (rows.isEmpty) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType);
+          return;
+        }
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => DocumentDetailScreen(documentId: id),
+          ),
+        );
+        if (mounted) _runDiagnostics();
+
+      case 'products':
+        final rows = await db.rawQuery(
+          'SELECT * FROM products WHERE id = ?',
+          [id],
+        );
+        if (!mounted) return;
+        if (rows.isEmpty) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType);
+          return;
+        }
+        final product = Product.fromMap(rows.first);
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductFormScreen(product: product),
+          ),
+        );
+        if (mounted) _runDiagnostics();
+
+      case 'stock_movements':
+        final rows = await db.rawQuery('''
+          SELECT sm.id, sm.product_id, sm.reference_document_id
+          FROM stock_movements sm
+          WHERE sm.id = ?
+        ''', [id]);
+        if (!mounted) return;
+        if (rows.isEmpty) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType);
+          return;
+        }
+        final refDocId = rows.first['reference_document_id'] as int?;
+        if (refDocId != null) {
+          final docRows = await db.rawQuery(
+            'SELECT id FROM documents WHERE id = ?',
+            [refDocId],
+          );
+          if (docRows.isNotEmpty && mounted) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DocumentDetailScreen(documentId: refDocId),
+              ),
+            );
+            if (mounted) _runDiagnostics();
+            return;
+          }
+        }
+        final prodId = rows.first['product_id'] as int?;
+        if (prodId != null) {
+          final prodRows = await db.rawQuery(
+            'SELECT * FROM products WHERE id = ?',
+            [prodId],
+          );
+          if (prodRows.isNotEmpty && mounted) {
+            final product = Product.fromMap(prodRows.first);
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StockMovementsScreen(initialProduct: product),
+              ),
+            );
+            if (mounted) _runDiagnostics();
+            return;
+          }
+        }
+        if (mounted) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType);
+        }
+
+      case 'document_payments':
+        final rows = await db.rawQuery('''
+          SELECT dp.id, dp.document_id, dp.receipt_document_id
+          FROM document_payments dp
+          WHERE dp.id = ?
+        ''', [id]);
+        if (!mounted) return;
+        if (rows.isEmpty) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType);
+          return;
+        }
+        final receiptId = rows.first['receipt_document_id'] as int?;
+        final docId = rows.first['document_id'] as int?;
+        final targetId = receiptId ?? docId;
+        if (targetId != null) {
+          final docRows = await db.rawQuery(
+            'SELECT id FROM documents WHERE id = ?',
+            [targetId],
+          );
+          if (docRows.isNotEmpty && mounted) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DocumentDetailScreen(documentId: targetId),
+              ),
+            );
+            if (mounted) _runDiagnostics();
+            return;
+          }
+        }
+        if (mounted) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType);
+        }
+
+      case 'document_items':
+        final rows = await db.rawQuery(
+          'SELECT id, document_id FROM document_items WHERE id = ?',
+          [id],
+        );
+        if (!mounted) return;
+        if (rows.isEmpty) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType);
+          return;
+        }
+        final docId = rows.first['document_id'] as int?;
+        if (docId != null) {
+          final docRows = await db.rawQuery(
+            'SELECT id FROM documents WHERE id = ?',
+            [docId],
+          );
+          if (docRows.isNotEmpty && mounted) {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DocumentDetailScreen(documentId: docId),
+              ),
+            );
+            if (mounted) _runDiagnostics();
+            return;
+          }
+        }
+        if (mounted) {
+          _showRecordNotFoundDialog(context, l10n, id, entityType, isOrphaned: true);
+        }
+
+      case 'stocktake_items':
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const StocktakeScreen()),
+        );
+        if (mounted) _runDiagnostics();
+
+      default:
+        _showRecordNotFoundDialog(context, l10n, id, entityType);
+    }
+  }
+
+  void _showRecordNotFoundDialog(
+    BuildContext context,
+    AppLocalizations l10n,
+    int id,
+    String entityType, {
+    bool isOrphaned = false,
+  }) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.info_outline, color: Colors.orange, size: 36),
+        title: Text(l10n.diagnosticsRecordUnavailable),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isOrphaned
+                  ? l10n.diagnosticsRecordOrphanedDesc
+                  : l10n.diagnosticsRecordUnavailableDesc,
+              style: const TextStyle(height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '#$id (${l10n.diagnosticEntityType(entityType)})',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAffectedRecordsSheet(RepairableIssue issue) async {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final entityType = issue.finding.entityType;
+    final ids = issue.affectedIds;
+    final db = await _resolveDb();
+
+    final records = await _fetchRecordDetails(db, entityType, ids, l10n);
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.35,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (sheetCtx, scrollCtrl) => Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurfaceVariant.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.list_alt_rounded, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${l10n.diagnosticsAffectedRecordsTitle} (${ids.length})',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(sheetCtx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.separated(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: records.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                itemBuilder: (listCtx, idx) {
+                  final rec = records[idx];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: rec.exists
+                          ? cs.primaryContainer.withValues(alpha: 0.5)
+                          : Colors.orange.withValues(alpha: 0.15),
+                      child: Icon(
+                        rec.icon,
+                        color: rec.exists ? cs.primary : Colors.orange.shade800,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      rec.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: rec.subtitle != null
+                        ? Text(
+                            rec.subtitle!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          )
+                        : null,
+                    trailing: Icon(
+                      l10n.isArabic ? Icons.chevron_left : Icons.chevron_right,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _openSingleRecord(entityType, rec.id);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<List<_DiagnosticRecordDetails>> _fetchRecordDetails(
+    DatabaseExecutor db,
+    String entityType,
+    List<int> ids,
+    AppLocalizations l10n,
+  ) async {
+    final list = <_DiagnosticRecordDetails>[];
+    if (ids.isEmpty) return list;
+    final inList = ids.join(',');
+
+    switch (entityType) {
+      case 'documents':
+        final rows = await db.rawQuery(
+          'SELECT id, document_number, type, date, recipient_name, total FROM documents WHERE id IN ($inList)',
+        );
+        final rowMap = {for (final r in rows) r['id'] as int: r};
+        for (final id in ids) {
+          final r = rowMap[id];
+          if (r != null) {
+            final typeLabel = _docTypeLabel(r['type'] as String?, l10n);
+            final docNum = r['document_number'] as String? ?? '#$id';
+            final recipient = r['recipient_name'] as String?;
+            final date = r['date'] as String?;
+            final total = (r['total'] as num?)?.toDouble() ?? 0.0;
+            final subParts = [
+              if (recipient != null && recipient.isNotEmpty) recipient,
+              if (date != null) date.split('T').first,
+              total.toStringAsFixed(2),
+            ];
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '$typeLabel: $docNum',
+                subtitle: subParts.join(' • '),
+                icon: Icons.description_outlined,
+                exists: true,
+              ),
+            );
+          } else {
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '#$id (${l10n.documentNotFoundDesc})',
+                icon: Icons.broken_image_outlined,
+                exists: false,
+              ),
+            );
+          }
+        }
+
+      case 'products':
+        final rows = await db.rawQuery(
+          'SELECT id, name, sku, stock_quantity FROM products WHERE id IN ($inList)',
+        );
+        final rowMap = {for (final r in rows) r['id'] as int: r};
+        for (final id in ids) {
+          final r = rowMap[id];
+          if (r != null) {
+            final name = r['name'] as String;
+            final qty = (r['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+            final sku = r['sku'] as String?;
+            final sub = [
+              if (sku != null && sku.isNotEmpty) 'SKU: $sku',
+              '${l10n.stock}: $qty',
+            ].join(' • ');
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '${l10n.product}: $name',
+                subtitle: sub,
+                icon: Icons.inventory_2_outlined,
+                exists: true,
+              ),
+            );
+          } else {
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '#$id (${l10n.diagnosticsRecordUnavailable})',
+                icon: Icons.broken_image_outlined,
+                exists: false,
+              ),
+            );
+          }
+        }
+
+      case 'stock_movements':
+        final rows = await db.rawQuery('''
+          SELECT sm.id, sm.product_id, sm.quantity, sm.movement_type, sm.reference_document_id,
+                 p.name AS product_name, d.document_number, d.type AS document_type
+          FROM stock_movements sm
+          LEFT JOIN products p ON sm.product_id = p.id
+          LEFT JOIN documents d ON sm.reference_document_id = d.id
+          WHERE sm.id IN ($inList)
+        ''');
+        final rowMap = {for (final r in rows) r['id'] as int: r};
+        for (final id in ids) {
+          final r = rowMap[id];
+          if (r != null) {
+            final pName = r['product_name'] as String? ?? '#${r['product_id']}';
+            final qty = (r['quantity'] as num?)?.toDouble() ?? 0.0;
+            final qtyStr = qty > 0 ? '+$qty' : '$qty';
+            final docNum = r['document_number'] as String?;
+            final docType = _docTypeLabel(r['document_type'] as String?, l10n);
+            final sub = docNum != null ? '${l10n.relatedDocument}: $docType: $docNum' : null;
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '${l10n.stockMovement}: $pName ($qtyStr)',
+                subtitle: sub,
+                icon: Icons.swap_horiz_outlined,
+                exists: true,
+              ),
+            );
+          } else {
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '#$id',
+                icon: Icons.broken_image_outlined,
+                exists: false,
+              ),
+            );
+          }
+        }
+
+      case 'document_payments':
+        final rows = await db.rawQuery('''
+          SELECT dp.id, dp.document_id, dp.amount, dp.payment_method, dp.date, dp.receipt_document_id,
+                 d.document_number, d.type AS document_type
+          FROM document_payments dp
+          LEFT JOIN documents d ON dp.document_id = d.id
+          WHERE dp.id IN ($inList)
+        ''');
+        final rowMap = {for (final r in rows) r['id'] as int: r};
+        for (final id in ids) {
+          final r = rowMap[id];
+          if (r != null) {
+            final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+            final method = r['payment_method'] as String? ?? '';
+            final docNum = r['document_number'] as String?;
+            final sub = docNum != null ? '${l10n.parentDocument}: $docNum' : null;
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '${l10n.paymentMethod}: $method (${amt.toStringAsFixed(2)})',
+                subtitle: sub,
+                icon: Icons.payments_outlined,
+                exists: true,
+              ),
+            );
+          } else {
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '#$id',
+                icon: Icons.broken_image_outlined,
+                exists: false,
+              ),
+            );
+          }
+        }
+
+      case 'document_items':
+        final rows = await db.rawQuery('''
+          SELECT di.id, di.document_id, di.product_name, di.quantity, di.total,
+                 d.document_number, d.type AS document_type
+          FROM document_items di
+          LEFT JOIN documents d ON di.document_id = d.id
+          WHERE di.id IN ($inList)
+        ''');
+        final rowMap = {for (final r in rows) r['id'] as int: r};
+        for (final id in ids) {
+          final r = rowMap[id];
+          if (r != null) {
+            final pName = r['product_name'] as String? ?? '#$id';
+            final docNum = r['document_number'] as String?;
+            final sub = docNum != null
+                ? '${l10n.relatedDocument}: $docNum'
+                : '${l10n.diagnosticsCategoryOrphaned} (${l10n.diagnosticsRecordUnavailable})';
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '${l10n.item}: $pName',
+                subtitle: sub,
+                icon: docNum != null ? Icons.receipt_long_outlined : Icons.link_off_outlined,
+                exists: docNum != null,
+              ),
+            );
+          } else {
+            list.add(
+              _DiagnosticRecordDetails(
+                id: id,
+                title: '#$id',
+                icon: Icons.broken_image_outlined,
+                exists: false,
+              ),
+            );
+          }
+        }
+
+      default:
+        for (final id in ids) {
+          list.add(
+            _DiagnosticRecordDetails(
+              id: id,
+              title: '#$id',
+              icon: Icons.circle_outlined,
+              exists: true,
+            ),
+          );
+        }
+    }
+    return list;
+  }
+
   Widget _buildAffectedIdsWrap(
     RepairableIssue issue,
     AppLocalizations l10n,
@@ -1174,42 +1741,83 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     final totalIds = issue.affectedIds.length;
     final visibleIds = issue.affectedIds.take(maxVisibleIds).toList();
     final remainingCount = totalIds - maxVisibleIds;
+    final entityType = issue.finding.entityType;
 
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ...visibleIds.map(
-          (id) => Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              '#$id',
-              style: theme.textTheme.labelSmall?.copyWith(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w600,
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            ...visibleIds.map(
+              (id) => Material(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(6),
+                child: InkWell(
+                  onTap: () => _openSingleRecord(entityType, id),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '#$id',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        Icon(
+                          Icons.open_in_new,
+                          size: 11,
+                          color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            if (remainingCount > 0)
+              Material(
+                color: cs.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(6),
+                child: InkWell(
+                  onTap: () => _showAffectedRecordsSheet(issue),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Text(
+                      '+$remainingCount ${l10n.diagnosticsMoreIds}',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-        if (remainingCount > 0)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
+        if (totalIds > 1) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            icon: const Icon(Icons.list_alt_rounded, size: 16),
+            label: Text(
+              '${l10n.diagnosticsViewAffectedRecords} ($totalIds)',
+              style: const TextStyle(fontSize: 12),
             ),
-            child: Text(
-              '+$remainingCount ${l10n.diagnosticsMoreIds}',
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: cs.primary,
-                fontWeight: FontWeight.bold,
-              ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
+            onPressed: () => _showAffectedRecordsSheet(issue),
           ),
+        ],
       ],
     );
   }
@@ -1244,4 +1852,20 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
       ),
     );
   }
+}
+
+class _DiagnosticRecordDetails {
+  final int id;
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final bool exists;
+
+  const _DiagnosticRecordDetails({
+    required this.id,
+    required this.title,
+    this.subtitle,
+    required this.icon,
+    required this.exists,
+  });
 }

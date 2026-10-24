@@ -75,14 +75,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _loadTaxProfiles() async {
-    final profiles =
-        await DatabaseHelper.instance.getTaxProfiles(activeOnly: true);
-    if (mounted) setState(() => _taxProfiles = profiles);
+    try {
+      final profiles =
+          await DatabaseHelper.instance.getTaxProfiles(activeOnly: true);
+      if (mounted) setState(() => _taxProfiles = profiles);
+    } catch (_) {}
   }
 
   Future<void> _loadCategories() async {
-    final categories = await DatabaseHelper.instance.getProductCategories();
-    if (mounted) setState(() => _existingCategories = categories);
+    try {
+      final categories = await DatabaseHelper.instance.getProductCategories();
+      if (mounted) setState(() => _existingCategories = categories);
+    } catch (_) {}
   }
 
   @override

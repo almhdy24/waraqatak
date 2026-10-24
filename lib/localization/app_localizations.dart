@@ -1611,17 +1611,22 @@ class AppLocalizations {
   String get diagnosticsCategoryAll => _t('الكل', 'All');
   String get diagnosticsCategoryOrphaned =>
       _t('سجلات يتيمة', 'Orphaned Records');
-  String get diagnosticsCategoryBalances => _t('تطابق الأرصدة', 'Balances');
+  String get diagnosticsCategoryBalances =>
+      _t('تطابق أرصدة المستندات', 'Document Balances');
   String get diagnosticsCategoryStatuses =>
       _t('حالات المستندات', 'Document Statuses');
-  String get diagnosticsCategoryPayments => _t('المدفوعات', 'Payments');
-  String get diagnosticsCategoryStock => _t('المخزون والحركات', 'Stock Ledger');
+  String get diagnosticsCategoryPayments =>
+      _t('اختلاف بين المبلغ المسدد وسجل المدفوعات', 'Payment Discrepancies');
+  String get diagnosticsCategoryStock =>
+      _t('اختلاف رصيد المخزون عن سجل حركة الأصناف', 'Stock Discrepancy');
   String get diagnosticsCategoryMissingOpeningStock =>
       _t('رصيد افتتاحي مفقود', 'Missing Opening Stock');
   String get diagnosticsCategoryNegativeStock =>
-      _t('رصيد سالب', 'Negative Stock');
-  String get diagnosticsCategoryCosting => _t('التكاليف', 'Costing');
-  String get diagnosticsCategoryDuplicates => _t('أرقام مكررة', 'Duplicates');
+      _t('رصيد مخزون سالب', 'Negative Physical Stock');
+  String get diagnosticsCategoryCosting =>
+      _t('تكلفة المخزون', 'Inventory Costing');
+  String get diagnosticsCategoryDuplicates =>
+      _t('أرقام مستندات مكررة', 'Duplicate Document Numbers');
   String get diagnosticsAffectedIds => _t('المعرفات المتأثرة', 'Affected IDs');
   String get diagnosticsMoreIds => _t('إضافية', 'more');
   String get diagnosticsManualReviewRequired =>
@@ -1637,6 +1642,66 @@ class AppLocalizations {
     'تعذر إكمال فحص قاعدة البيانات',
     'Failed to complete database diagnostics',
   );
+  String get diagnosticsViewAffectedRecords =>
+      _t('عرض السجلات المتأثرة', 'View Affected Records');
+  String get diagnosticsAffectedRecordsTitle =>
+      _t('السجلات المتأثرة', 'Affected Records');
+  String get diagnosticsOpenRecord => _t('فتح السجل', 'Open Record');
+  String get diagnosticsRecordUnavailable =>
+      _t('السجل غير متاح', 'Record Unavailable');
+  String get diagnosticsRecordUnavailableDesc => _t(
+    'لم يتم العثور على هذا السجل في قاعدة البيانات أو قد تم حذفه مسبقاً.',
+    'This record was not found in the database or has already been deleted.',
+  );
+  String get diagnosticsRecordOrphanedDesc => _t(
+    'هذا القيد يتيم ولا يرتبط بأي مستند رئيسي نشط.',
+    'This entry is orphaned and does not link to any active parent document.',
+  );
+  String get parentDocument => _t('المستند الأصلي', 'Parent Document');
+
+  String diagnosticEntityType(String entityType) {
+    if (!isArabic) {
+      return switch (entityType) {
+        'document_items' => 'document items',
+        'products' => 'products',
+        'stock_movements' => 'stock movements',
+        'documents' => 'documents',
+        'document_payments' => 'payment rows',
+        'stocktake_items' => 'stocktake items',
+        'stocktake_sessions' => 'stocktake sessions',
+        'database' => 'database',
+        _ => entityType,
+      };
+    }
+    return switch (entityType) {
+      'document_items' => 'بنود المستندات',
+      'products' => 'أصناف المخزون',
+      'stock_movements' => 'حركات المخزون',
+      'documents' => 'مستندات',
+      'document_payments' => 'سجلات المدفوعات',
+      'stocktake_items' => 'بنود الجرد',
+      'stocktake_sessions' => 'جلسات الجرد',
+      'database' => 'قاعدة البيانات',
+      _ => entityType,
+    };
+  }
+
+  String diagnosticSeverity(String severityName) {
+    if (!isArabic) {
+      return switch (severityName.toLowerCase()) {
+        'error' => 'Integrity Error',
+        'warning' => 'Audit Warning',
+        'info' => 'Information',
+        _ => severityName,
+      };
+    }
+    return switch (severityName.toLowerCase()) {
+      'error' => 'خطأ تكامل',
+      'warning' => 'تنبيه تدقيق',
+      'info' => 'ملاحظة',
+      _ => severityName,
+    };
+  }
 
   // ========== GOOGLE DRIVE BACKUP ==========
   String get googleDriveTitle =>

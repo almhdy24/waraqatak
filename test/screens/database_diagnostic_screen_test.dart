@@ -148,12 +148,12 @@ void main() {
 
       // 2. Finding titles are present
       expect(
-        find.text('Broken document references in stock movements'),
+        find.text('حركات مخزون مرتبطة بمستندات غير موجودة'),
         findsOneWidget,
       );
-      expect(find.text('Negative stock balance'), findsOneWidget);
+      expect(find.text('رصيد مخزون سالب للبضاعة'), findsOneWidget);
       expect(
-        find.text('Inventory held with unknown cost basis'),
+        find.text('مخزون فعلي متوفر بتكلفة مجهولة أو غير محددة'),
         findsOneWidget,
       );
 
@@ -227,8 +227,8 @@ void main() {
       expect(find.text(l10n.diagnosticsManualReviewRequired), findsOneWidget);
 
       // 2. Finding titles are both displayed
-      expect(find.text('Negative stock balance'), findsOneWidget);
-      expect(find.text('Orphaned document items'), findsOneWidget);
+      expect(find.text('رصيد مخزون سالب للبضاعة'), findsOneWidget);
+      expect(find.text('بنود فواتير يتيمة بدون مستند أصلي'), findsOneWidget);
     } finally {
       await tester.runAsync(() async {
         await rawDb.delete(
@@ -326,13 +326,13 @@ void main() {
         await _pumpUntilDiagnosticsLoaded(tester);
 
         // Initially all 3 findings are visible
-        expect(find.text('Orphaned document items'), findsOneWidget);
+        expect(find.text('بنود فواتير يتيمة بدون مستند أصلي'), findsOneWidget);
         expect(
-          find.text('Product stock does not match movement history'),
+          find.text('اختلاف رصيد المخزون عن سجل حركة الأصناف'),
           findsOneWidget,
         );
         expect(
-          find.text('Product with stock has no recorded stock movements'),
+          find.text('صنف يحتوي على حركات مخزون بدون رصيد افتتاحي'),
           findsOneWidget,
         );
 
@@ -359,20 +359,20 @@ void main() {
         expect(orphanedChipFinder, findsOneWidget);
         expect(allChipFinder, findsOneWidget);
 
-        // 2. Tap 'المخزون والحركات' FilterChip
+        // 2. Tap 'اختلاف رصيد المخزون عن سجل حركة الأصناف' FilterChip
         await tester.ensureVisible(stockChipFinder);
         await tester.tap(stockChipFinder);
         await tester.pumpAndSettle();
 
         expect(
-          find.text('Product stock does not match movement history'),
+          find.text('اختلاف رصيد المخزون عن سجل حركة الأصناف'),
           findsOneWidget,
         );
         expect(
-          find.text('Product with stock has no recorded stock movements'),
+          find.text('صنف يحتوي على حركات مخزون بدون رصيد افتتاحي'),
           findsNothing,
         );
-        expect(find.text('Orphaned document items'), findsNothing);
+        expect(find.text('بنود فواتير يتيمة بدون مستند أصلي'), findsNothing);
 
         // 3. Tap 'رصيد افتتاحي مفقود' FilterChip
         await tester.ensureVisible(missingOpeningChipFinder);
@@ -380,27 +380,27 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          find.text('Product with stock has no recorded stock movements'),
+          find.text('صنف يحتوي على حركات مخزون بدون رصيد افتتاحي'),
           findsOneWidget,
         );
         expect(
-          find.text('Product stock does not match movement history'),
+          find.text('اختلاف رصيد المخزون عن سجل حركة الأصناف'),
           findsNothing,
         );
-        expect(find.text('Orphaned document items'), findsNothing);
+        expect(find.text('بنود فواتير يتيمة بدون مستند أصلي'), findsNothing);
 
         // 4. Tap 'الكل' FilterChip: all 3 findings are restored
         await tester.ensureVisible(allChipFinder);
         await tester.tap(allChipFinder);
         await tester.pumpAndSettle();
 
-        expect(find.text('Orphaned document items'), findsOneWidget);
+        expect(find.text('بنود فواتير يتيمة بدون مستند أصلي'), findsOneWidget);
         expect(
-          find.text('Product stock does not match movement history'),
+          find.text('اختلاف رصيد المخزون عن سجل حركة الأصناف'),
           findsOneWidget,
         );
         expect(
-          find.text('Product with stock has no recorded stock movements'),
+          find.text('صنف يحتوي على حركات مخزون بدون رصيد افتتاحي'),
           findsOneWidget,
         );
       } finally {
@@ -465,7 +465,7 @@ void main() {
       await _pumpUntilDiagnosticsLoaded(tester);
 
       // Expand the finding tile
-      final findingTile = find.text('Orphaned document items');
+      final findingTile = find.text('بنود فواتير يتيمة بدون مستند أصلي');
       expect(findingTile, findsOneWidget);
       await tester.tap(findingTile);
       await tester.pumpAndSettle();
