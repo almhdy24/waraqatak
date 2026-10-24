@@ -386,5 +386,31 @@ void main() {
         expect(Accounts.byCode(a.code), same(a));
       }
     });
+
+    test('missing COGS is not silently zeroed: income statement flags incomplete costs and untrusted profit', () {
+      // Sale of product with purchasePrice=0 and no recorded movements/purchases
+      final entries = LedgerBuilder.build(LedgerInput(
+        documents: [doc(10, 'invoice', day(1), subtotal: 500)],
+        itemsByDocument: {
+          10: [item(10, 5, 100, productId: 99)],
+        },
+        products: const {
+          99: Product(id: 99, name: 'مجهول', salePrice: 100, purchasePrice: 0),
+        },
+        stockMovements: const [],
+      ));
+
+      // Trial balance and balance sheet remain balanced
+      expectBalanced(entries);
+
+      final stmt = AccountingReports.incomeStatement(entries);
+      expect(stmt.salesRevenue, 500.0);
+      expect(stmt.costOfSales, 0.0);
+      expect(stmt.hasIncompleteCostOfSales, isTrue,
+          reason: 'Sale with missing COGS must flag income statement as incomplete');
+      expect(stmt.uncostedSalesCount, 1);
+      expect(stmt.trustedGrossProfit, isNull,
+          reason: 'Gross profit cannot be trusted when COGS is missing');
+    });
   });
 }

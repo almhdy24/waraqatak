@@ -53,6 +53,12 @@ class ProductProfitItem {
     required this.isCostReliable,
     required this.unknownCostSalesCount,
   });
+
+  /// Gross profit only when cost is fully known; null otherwise.
+  double? get trustedGrossProfit => isCostReliable ? grossProfit : null;
+
+  /// Profit margin only when cost is fully known; null otherwise.
+  double? get trustedProfitMargin => isCostReliable ? profitMargin : null;
 }
 
 /// Sales document with recognized revenue, COGS, and gross profit.
@@ -60,6 +66,14 @@ class SaleProfitSummary {
   final Document document;
   final double recognizedRevenue;
   final double cogs;
+
+  /// Partial gross profit (revenue minus known COGS).
+  ///
+  /// When [isCostReliable] is false this figure is understated because some
+  /// item costs were unknown and excluded from [cogs].  Callers MUST check
+  /// [isCostReliable] before treating this as a definitive profit figure.
+  ///
+  /// Use [trustedGrossProfit] when you need a value safe for aggregation.
   final double grossProfit;
   final double profitMargin;
   final bool isCostReliable;
@@ -72,6 +86,15 @@ class SaleProfitSummary {
     required this.profitMargin,
     required this.isCostReliable,
   });
+
+  /// Gross profit only when cost is fully known; null otherwise.
+  ///
+  /// Safe to use in aggregate sums — unreliable invoices contribute nothing
+  /// rather than an overstated zero-cost profit figure.
+  double? get trustedGrossProfit => isCostReliable ? grossProfit : null;
+
+  /// Profit margin only when cost is fully known; null otherwise.
+  double? get trustedProfitMargin => isCostReliable ? profitMargin : null;
 }
 
 /// Summary of legacy cost migration and status.
@@ -329,8 +352,10 @@ class InventoryCostingService {
       final cogs = (r['known_cogs'] as num?)?.toDouble() ?? 0.0;
       final unknownCount = (r['unknown_cost_sales_count'] as num?)?.toInt() ?? 0;
       final isReliable = unknownCount == 0;
-      final grossProfit = isReliable ? (revenue - cogs) : (revenue - cogs);
-      final margin = (revenue > 0 && isReliable) ? (grossProfit / revenue) * 100 : 0.0;
+      final grossProfit = revenue - cogs;
+      // Show partial margin even when unreliable so callers can disclose it;
+      // isCostReliable=false signals that the cost figure is incomplete.
+      final margin = revenue > 0 ? (grossProfit / revenue) * 100 : 0.0;
 
       return ProductProfitItem(
         productId: (r['id'] as num).toInt(),

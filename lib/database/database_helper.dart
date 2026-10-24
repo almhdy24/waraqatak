@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -23,7 +24,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 16;
+  static const int dbVersion = 17;
 
   static Database? _database;
 
@@ -430,8 +431,16 @@ class DatabaseHelper {
     );
   }
 
+  @visibleForTesting
+  Future<void> upgradeTablesForTest(
+    DatabaseExecutor db,
+    int oldVersion,
+    int newVersion,
+  ) =>
+      _upgradeTables(db, oldVersion, newVersion);
+
   Future<void> _upgradeTables(
-    Database db,
+    DatabaseExecutor db,
     int oldVersion,
     int newVersion,
   ) async {
@@ -862,10 +871,31 @@ class DatabaseHelper {
         'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
       );
     }
+
+    if (oldVersion < 17) {
+      // v1.1.3 hotfix: Re-run the historical invoice item costing repair for
+      // databases that were upgraded to v15/v16 before step 6 of
+      // _migrateLegacyCosting (invoice item cost reconstruction) was
+      // introduced, or where that step left recoverable items as NULL.
+      //
+      // This migration is strictly additive and idempotent:
+      //   - It only writes to rows where total_cost IS NULL.
+      //   - It never replaces a non-NULL cost.
+      //   - It never invents cost values; it only uses defensible purchase
+      //     evidence already present in the database.
+      //   - It runs inside the existing _upgradeTables transaction so a
+      //     crash mid-migration will not leave partial data.
+      await _repairInvoiceItemCosts(db);
+    }
   }
 
   Future<void> _migrateLegacyCosting(DatabaseExecutor db) async {
-    // 1. Reconstruct purchase movements from linked purchase document items
+    // Idempotency note: All UPDATE statements use WHERE guards that exclude
+    // rows already repaired (cost_status != 'unknown' OR unit_cost IS NOT NULL),
+    // so running this migration twice is safe.
+
+    // 1. Reconstruct purchase movements from linked purchase document items.
+    //    Only update rows that still have no cost recorded (idempotent).
     final purchaseMovements = await db.rawQuery('''
       SELECT sm.id AS movement_id, sm.product_id, sm.quantity, sm.reference_document_id,
              di.price AS item_price
@@ -873,6 +903,7 @@ class DatabaseHelper {
       INNER JOIN documents d ON d.id = sm.reference_document_id AND d.type = 'purchase'
       INNER JOIN document_items di ON di.document_id = d.id AND di.product_id = sm.product_id
       WHERE sm.type = 'purchase' AND sm.reference_document_id IS NOT NULL
+        AND (sm.unit_cost IS NULL OR sm.cost_status = '${StockMovement.costStatusUnknown}')
     ''');
 
     for (final pm in purchaseMovements) {
@@ -894,25 +925,35 @@ class DatabaseHelper {
       }
     }
 
-    // 2. Reconstruct purchase document_items cost fields
+    // 2. Reconstruct purchase document_items cost fields (idempotent: only
+    //    update rows where unit_cost is still null).
     await db.rawUpdate('''
       UPDATE document_items
       SET unit_cost = price, total_cost = quantity * price
       WHERE document_id IN (SELECT id FROM documents WHERE type = 'purchase')
+        AND unit_cost IS NULL
     ''');
 
-    // 3. Mark opening movements without cost basis as unknown
+    // 3. Mark opening movements without cost basis as unknown (idempotent).
     await db.rawUpdate('''
       UPDATE stock_movements
       SET cost_status = '${StockMovement.costStatusUnknown}', provenance = 'legacy_opening'
       WHERE type = '${StockMovement.typeOpening}' AND (cost_status = 'unknown' OR cost_status IS NULL)
+        AND unit_cost IS NULL
     ''');
 
-    // 4. Mark legacy sale movements as unknown
+    // 4. Mark legacy sale and cancellation movements as unknown (idempotent).
     await db.rawUpdate('''
       UPDATE stock_movements
       SET cost_status = '${StockMovement.costStatusUnknown}', provenance = 'legacy_sale'
       WHERE type = '${StockMovement.typeSale}' AND (cost_status = 'unknown' OR cost_status IS NULL)
+        AND unit_cost IS NULL
+    ''');
+    await db.rawUpdate('''
+      UPDATE stock_movements
+      SET cost_status = '${StockMovement.costStatusUnknown}', provenance = 'legacy_cancellation'
+      WHERE type = '${StockMovement.typeCancellation}' AND (cost_status = 'unknown' OR cost_status IS NULL)
+        AND unit_cost IS NULL
     ''');
 
     // 5. Products: if a product only has reconstructed purchases and no unknown movements,
@@ -967,6 +1008,228 @@ class DatabaseHelper {
         }
       }
     }
+
+    // Historical invoice document_items repair is handled exclusively by
+    // _repairInvoiceItemCosts in the v17 migration branch. This prevents legacy
+    // step 6 from prematurely populating invoice costs with catalog averages
+    // during a direct v14-to-v17 upgrade.
+  }
+
+  /// Narrowly-scoped, idempotent repair of historical invoice document_items
+  /// that are still missing unit_cost / total_cost after legacy migrations.
+  ///
+  /// Called from the v17 migration so that:
+  ///   - Users upgrading from v14 (pre-costing) receive the safe repair once.
+  ///   - Users upgrading from v15/v16 receive the repair without re-running v15.
+  ///
+  /// Reconstruction rules (IAS 2 moving weighted average):
+  ///   (a) Calculate moving weighted-average cost across all finalized purchases
+  ///       strictly on or before the invoice date (date <= docDate).
+  ///   (b) If an opening stock movement exists with a known unit cost on or
+  ///       before docDate, it enters the pool at that known cost.
+  ///   (c) If an opening stock or adjustment with UNKNOWN cost exists on or before
+  ///       docDate, the true weighted average cannot be established without
+  ///       guessing, so the cost remains NULL (unknown).
+  ///   (d) Never use purchases dated after the invoice date.
+  ///   (e) Never use today's products.average_cost as a historical fallback.
+  ///
+  /// Cross-table consistency:
+  ///   - Repaired document_items update their corresponding sale stock_movements
+  ///     by primary key ID, matching by quantity to avoid collision on multi-line
+  ///     invoices referencing the same product.
+  ///   - stock_movements.total_cost is computed as ABS(quantity) * unitCost.
+  ///   - Existing non-NULL / known costs are never overwritten.
+  static Future<void> _repairInvoiceItemCosts(DatabaseExecutor db) async {
+    // Fetch uncosted invoice items (product-linked, positive quantity,
+    // non-draft, non-cancelled).
+    final uncostedItems = await db.rawQuery('''
+      SELECT di.id AS item_id, di.product_id, di.quantity,
+             d.id AS doc_id, d.date AS doc_date
+      FROM document_items di
+      INNER JOIN documents d ON d.id = di.document_id
+      WHERE d.type = 'invoice'
+        AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+        AND di.product_id IS NOT NULL
+        AND di.quantity > 0
+        AND di.total_cost IS NULL
+    ''');
+
+    if (uncostedItems.isEmpty) return; // Nothing to repair — fast exit.
+
+    // Audit log header (best-effort; failure must not abort the migration).
+    try {
+      await db.insert('audit_log', {
+        'action': 'v17_costing_repair_start',
+        'entity_type': 'migration',
+        'entity_id': null,
+        'details':
+            'Repairing ${uncostedItems.length} uncosted invoice item(s)',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+
+    int repairedCount = 0;
+
+    for (final row in uncostedItems) {
+      final itemId = row['item_id'] as int;
+      final productId = row['product_id'] as int;
+      final docId = row['doc_id'] as int;
+      final qty = (row['quantity'] as num).toDouble();
+      final docDate = row['doc_date'] as String;
+
+      double? reconstructedUnitCost;
+
+      // 1. Check if any incoming stock movement with unknown cost occurred on or
+      //    before the invoice date (e.g. uncosted legacy opening stock, uncosted
+      //    adjustment, or uncosted sale cancellation return).
+      //    If so, the cost basis of the inventory pool is unknown and cannot be
+      //    calculated without fabrication.
+      final hasUnknownIncoming = (Sqflite.firstIntValue(await db.rawQuery('''
+        SELECT COUNT(*) FROM stock_movements
+        WHERE product_id = ?
+          AND quantity > 0
+          AND type IN ('${StockMovement.typeOpening}', '${StockMovement.typeAdjustment}', '${StockMovement.typeCancellation}')
+          AND (cost_status = '${StockMovement.costStatusUnknown}' OR cost_status IS NULL OR unit_cost IS NULL OR unit_cost <= 0)
+          AND date <= ?
+      ''', [productId, docDate])) ?? 0) > 0;
+
+      if (!hasUnknownIncoming) {
+        // 2. Query all finalized purchases strictly on or before docDate in chronological order.
+        final purchasesBefore = await db.rawQuery('''
+          SELECT di_p.quantity, di_p.price AS unit_cost, d_p.date AS doc_date
+          FROM document_items di_p
+          INNER JOIN documents d_p ON d_p.id = di_p.document_id
+          WHERE d_p.type = 'purchase'
+            AND d_p.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+            AND di_p.product_id = ?
+            AND d_p.date <= ?
+            AND di_p.price > 0
+          ORDER BY d_p.date ASC, d_p.id ASC
+        ''', [productId, docDate]);
+
+        // 3. Query all other incoming stock movements with known unit cost on or before docDate
+        //    (opening stock, positive adjustments, and positive returns/cancellations).
+        final otherIncomingBefore = await db.rawQuery('''
+          SELECT quantity, unit_cost, date
+          FROM stock_movements
+          WHERE product_id = ?
+            AND quantity > 0
+            AND type IN ('${StockMovement.typeOpening}', '${StockMovement.typeAdjustment}', '${StockMovement.typeCancellation}')
+            AND cost_status = '${StockMovement.costStatusKnown}'
+            AND unit_cost IS NOT NULL
+            AND unit_cost > 0
+            AND date <= ?
+          ORDER BY date ASC, id ASC
+        ''', [productId, docDate]);
+
+        final allIncomingCosts = <double>[
+          ...purchasesBefore.map((p) => (p['unit_cost'] as num).toDouble()),
+          ...otherIncomingBefore.map((o) => (o['unit_cost'] as num).toDouble()),
+        ];
+
+        if (allIncomingCosts.isNotEmpty) {
+          final firstPrice = allIncomingCosts.first;
+          // Check if all incoming inventory batches on or before docDate had the identical unit price.
+          // If batches had varying prices (or different adjustment / opening costs), moving weighted
+          // average cannot be verified without complete chronological replay of intermediate sales
+          // and stockouts. In that case, we leave reconstructedUnitCost = NULL.
+          final allSamePrice = allIncomingCosts.every(
+            (c) => (c - firstPrice).abs() < 0.001,
+          );
+          if (allSamePrice && firstPrice > 0) {
+            reconstructedUnitCost = firstPrice;
+          }
+        }
+      }
+
+      // If no defensible historical evidence exists on or before docDate,
+      // reconstructedUnitCost remains NULL. Never fall back to products.average_cost.
+
+      if (reconstructedUnitCost != null && reconstructedUnitCost > 0) {
+        // Reconcile corresponding stock_movement unambiguously:
+        final itemCountForProduct = (Sqflite.firstIntValue(await db.rawQuery('''
+          SELECT COUNT(*) FROM document_items
+          WHERE document_id = ? AND product_id = ?
+        ''', [docId, productId])) ?? 0);
+
+        final candidateMovements = await db.rawQuery('''
+          SELECT id, quantity
+          FROM stock_movements
+          WHERE reference_document_id = ?
+            AND product_id = ?
+            AND type = '${StockMovement.typeSale}'
+            AND (cost_status = '${StockMovement.costStatusUnknown}' OR unit_cost IS NULL)
+          ORDER BY id ASC
+        ''', [docId, productId]);
+
+        int? targetMovementId;
+        if (itemCountForProduct == 1 && candidateMovements.length == 1) {
+          final mQty = ((candidateMovements.first['quantity'] as num).toDouble()).abs();
+          // Unambiguous 1-to-1 match ONLY if movement quantity matches invoice line quantity
+          // exactly (verifying the line was fully deducted from stock, NOT oversold).
+          if ((mQty - qty).abs() < 0.001) {
+            targetMovementId = candidateMovements.first['id'] as int;
+          }
+        } else if (itemCountForProduct > 1 && candidateMovements.isNotEmpty) {
+          // Multiple invoice lines exist for this product.
+          // Match ONLY if there is an exact, unique quantity match:
+          // 1. Exactly one candidate movement has ABS(quantity) == qty.
+          // 2. Exactly one line item for this product on this invoice has quantity == qty.
+          final exactQtyMatches = candidateMovements.where(
+            (m) => (((m['quantity'] as num).toDouble()).abs() - qty).abs() < 0.001,
+          ).toList();
+          final linesWithThisQty = (Sqflite.firstIntValue(await db.rawQuery('''
+            SELECT COUNT(*) FROM document_items
+            WHERE document_id = ? AND product_id = ? AND quantity = ?
+          ''', [docId, productId, qty])) ?? 0);
+
+          if (exactQtyMatches.length == 1 && linesWithThisQty == 1) {
+            targetMovementId = exactQtyMatches.first['id'] as int;
+          }
+        }
+
+        // Only update document_items IF a corresponding stock movement was successfully
+        // and unambiguously reconciled. If stock was oversold or movement is ambiguous,
+        // leave total_cost = NULL so the reporting layer treats the sale as untrusted.
+        if (targetMovementId != null) {
+          await db.update(
+            'document_items',
+            {
+              'unit_cost': reconstructedUnitCost,
+              'total_cost': qty * reconstructedUnitCost,
+            },
+            where: 'id = ? AND total_cost IS NULL',
+            whereArgs: [itemId],
+          );
+
+          await db.rawUpdate('''
+            UPDATE stock_movements
+            SET unit_cost = ?,
+                total_cost = ABS(quantity) * ?,
+                cost_status = '${StockMovement.costStatusReconstructed}',
+                provenance = 'v17_invoice_repair'
+            WHERE id = ?
+              AND (cost_status = '${StockMovement.costStatusUnknown}' OR unit_cost IS NULL)
+          ''', [reconstructedUnitCost, reconstructedUnitCost, targetMovementId]);
+
+          repairedCount++;
+        }
+      }
+      // If no dated basis found, leave total_cost = NULL (unknown — correct state).
+    }
+
+    // Audit log summary.
+    try {
+      await db.insert('audit_log', {
+        'action': 'v17_costing_repair_complete',
+        'entity_type': 'migration',
+        'entity_id': null,
+        'details':
+            'Repaired $repairedCount of ${uncostedItems.length} item(s); '
+            '${uncostedItems.length - repairedCount} remain unresolvable (unknown)',
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
   }
 
   // ========== Business ==========
@@ -1171,8 +1434,16 @@ class DatabaseHelper {
         }
       }
       final map = p.toMap();
-      // Prevent direct modification of stock_quantity through product metadata update
+      // Prevent direct modification of stock_quantity through product metadata update.
       map.remove('stock_quantity');
+      // Never overwrite costing fields through a metadata edit.
+      // average_cost and cost_status are managed exclusively by the costing
+      // service (purchase receipts, stock adjustments, cost reconciliation).
+      // Removing them from the update map preserves whatever the costing
+      // service last wrote, even when the user changes the catalog
+      // purchase_price in the product form.
+      map.remove('average_cost');
+      map.remove('cost_status');
       return txn.update('products', map, where: 'id = ?', whereArgs: [p.id]);
     });
   }
@@ -1552,10 +1823,14 @@ class DatabaseHelper {
                     ? (currentStock >= item.quantity ? item.quantity : currentStock)
                     : 0.0;
               }
+              final bool isFullyBacked = deductQty >= item.quantity;
               if (deductQty > 0) {
-                itemUnitCost = isCostKnown ? avgCost : null;
-                itemTotalCost = isCostKnown ? deductQty * avgCost : null;
-                final itemCostStatus = isCostKnown
+                // If stock was partially oversold, cost for the whole line is incomplete
+                // and must NOT be marked as fully trusted on document_items.
+                itemUnitCost = (isCostKnown && isFullyBacked) ? avgCost : null;
+                itemTotalCost = (isCostKnown && isFullyBacked) ? item.quantity * avgCost : null;
+                final movementCost = isCostKnown ? deductQty * avgCost : null;
+                final movementCostStatus = (isCostKnown && isFullyBacked)
                     ? StockMovement.costStatusKnown
                     : StockMovement.costStatusUnknown;
 
@@ -1568,10 +1843,10 @@ class DatabaseHelper {
                   productId: item.productId!,
                   type: StockMovement.typeSale,
                   quantity: -deductQty,
-                  unitCost: itemUnitCost,
-                  totalCost: itemTotalCost,
-                  costStatus: itemCostStatus,
-                  provenance: 'sales_invoice',
+                  unitCost: isCostKnown ? avgCost : null,
+                  totalCost: movementCost,
+                  costStatus: movementCostStatus,
+                  provenance: isFullyBacked ? 'sales_invoice' : 'sales_invoice_partial',
                   referenceDocumentId: docId,
                   date: doc.date,
                 );
@@ -1979,10 +2254,14 @@ class DatabaseHelper {
                     ? (currentStock >= item.quantity ? item.quantity : currentStock)
                     : 0.0;
               }
+              final bool isFullyBacked = deductQty >= item.quantity;
               if (deductQty > 0) {
-                itemUnitCost = isCostKnown ? avgCost : null;
-                itemTotalCost = isCostKnown ? deductQty * avgCost : null;
-                final itemCostStatus = isCostKnown
+                // If stock was partially oversold, cost for the whole line is incomplete
+                // and must NOT be marked as fully trusted on document_items.
+                itemUnitCost = (isCostKnown && isFullyBacked) ? avgCost : null;
+                itemTotalCost = (isCostKnown && isFullyBacked) ? item.quantity * avgCost : null;
+                final movementCost = isCostKnown ? deductQty * avgCost : null;
+                final movementCostStatus = (isCostKnown && isFullyBacked)
                     ? StockMovement.costStatusKnown
                     : StockMovement.costStatusUnknown;
 
@@ -1995,10 +2274,10 @@ class DatabaseHelper {
                   productId: item.productId!,
                   type: StockMovement.typeSale,
                   quantity: -deductQty,
-                  unitCost: itemUnitCost,
-                  totalCost: itemTotalCost,
-                  costStatus: itemCostStatus,
-                  provenance: 'sales_invoice',
+                  unitCost: isCostKnown ? avgCost : null,
+                  totalCost: movementCost,
+                  costStatus: movementCostStatus,
+                  provenance: isFullyBacked ? 'sales_invoice' : 'sales_invoice_partial',
                   referenceDocumentId: doc.id,
                   date: doc.date,
                 );
@@ -2899,10 +3178,12 @@ class DatabaseHelper {
                   ? (currentStock >= qty ? qty : currentStock)
                   : 0.0;
             }
+            final bool isFullyBacked = deductQty >= qty;
             if (deductQty > 0) {
-              final unitCost = isCostKnown ? avgCost : null;
-              final totalCost = isCostKnown ? deductQty * avgCost : null;
-              final itemCostStatus = isCostKnown
+              final unitCost = (isCostKnown && isFullyBacked) ? avgCost : null;
+              final totalCost = (isCostKnown && isFullyBacked) ? qty * avgCost : null;
+              final movementCost = isCostKnown ? deductQty * avgCost : null;
+              final movementCostStatus = (isCostKnown && isFullyBacked)
                   ? StockMovement.costStatusKnown
                   : StockMovement.costStatusUnknown;
 
@@ -2915,10 +3196,10 @@ class DatabaseHelper {
                 productId: productId,
                 type: StockMovement.typeSale,
                 quantity: -deductQty,
-                unitCost: unitCost,
-                totalCost: totalCost,
-                costStatus: itemCostStatus,
-                provenance: 'sales_invoice',
+                unitCost: isCostKnown ? avgCost : null,
+                totalCost: movementCost,
+                costStatus: movementCostStatus,
+                provenance: isFullyBacked ? 'sales_invoice' : 'sales_invoice_partial',
                 referenceDocumentId: id,
                 date: doc.date,
               );

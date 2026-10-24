@@ -343,6 +343,32 @@ class _IncomeStatementView extends StatelessWidget {
         _TotalCard(profit ? l10n.netProfit : l10n.netLoss, s.netProfit,
             color: profit ? Colors.green.shade700 : scheme.error),
         const SizedBox(height: 12),
+        if (s.hasIncompleteCostOfSales)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.shade700, width: 0.5),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 14, color: Colors.amber.shade900),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${l10n.costIncomplete} (${s.uncostedSalesCount})',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.amber.shade900,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Text(l10n.accountingNote,
             style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
       ],

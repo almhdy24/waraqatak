@@ -88,6 +88,7 @@ class JournalEntry {
   final int? documentId;
   final String reference;
   final List<JournalLine> lines;
+  final bool isCostMissing;
 
   const JournalEntry({
     required this.date,
@@ -95,6 +96,7 @@ class JournalEntry {
     required this.reference,
     required this.lines,
     this.documentId,
+    this.isCostMissing = false,
   });
 
   double get totalDebit => lines.fold(0, (s, l) => s + l.debit);
@@ -408,7 +410,13 @@ class LedgerBuilder {
             ),
           );
         } else {
-          events.add(_StockEvent(d.date, it.productId!, -it.quantity, doc: d));
+          events.add(_StockEvent(
+            d.date,
+            it.productId!,
+            -it.quantity,
+            doc: d,
+            unitCost: it.unitCost,
+          ));
         }
       }
     }
@@ -416,18 +424,36 @@ class LedgerBuilder {
       final p = input.products[m.productId];
       if (p == null || p.type != Product.typeProduct) continue;
       if (m.type == StockMovement.typeOpening && m.quantity > 0) {
+        final openingCost = m.unitCost ??
+            (p.costStatus == Product.costStatusKnown ? p.averageCost : null) ??
+            (input.productPricesApply && p.purchasePrice > 0 ? p.purchasePrice : null);
         events.add(
           _StockEvent(
             m.date,
             m.productId,
             m.quantity,
-            unitCost: p.purchasePrice,
+            unitCost: openingCost,
             opening: true,
           ),
         );
       } else if (m.type == StockMovement.typeAdjustment && m.quantity != 0) {
         events.add(
-          _StockEvent(m.date, m.productId, m.quantity, adjustment: true),
+          _StockEvent(
+            m.date,
+            m.productId,
+            m.quantity,
+            unitCost: m.unitCost,
+            adjustment: true,
+          ),
+        );
+      } else if (m.type == StockMovement.typeCancellation && m.quantity > 0) {
+        events.add(
+          _StockEvent(
+            m.date,
+            m.productId,
+            m.quantity,
+            unitCost: m.unitCost,
+          ),
         );
       }
     }
@@ -454,12 +480,15 @@ class LedgerBuilder {
           first[p.id]?.subtract(const Duration(milliseconds: 1)) ??
           p.createdAt ??
           DateTime(2000);
+      final openingCost = (p.costStatus == Product.costStatusKnown ? p.averageCost : null) ??
+          (input.productPricesApply && p.purchasePrice > 0 ? p.purchasePrice : null);
+      if (openingCost == null || openingCost <= 0) continue;
       events.add(
         _StockEvent(
           date,
           p.id!,
           unexplained,
-          unitCost: p.purchasePrice,
+          unitCost: openingCost,
           opening: true,
         ),
       );
@@ -479,9 +508,19 @@ class LedgerBuilder {
       final q = qty[e.productId] ?? 0;
       final v = value[e.productId] ?? 0;
       final p = input.products[e.productId]!;
-      final avg = q > _eps
-          ? v / q
-          : (input.productPricesApply ? p.purchasePrice : 0.0);
+
+      double? resolvedAvg;
+      if (q > _eps && v > _eps) {
+        resolvedAvg = v / q;
+      } else if (e.unitCost != null && e.unitCost! > 0) {
+        resolvedAvg = e.unitCost!;
+      } else if (p.costStatus == Product.costStatusKnown && p.averageCost != null && p.averageCost! > 0) {
+        resolvedAvg = p.averageCost!;
+      } else if (input.productPricesApply && p.purchasePrice > 0) {
+        resolvedAvg = p.purchasePrice;
+      }
+
+      final avg = resolvedAvg ?? 0.0;
 
       if (e.quantity > 0 && e.unitCost != null) {
         // Purchase or opening stock: enters at its own cost.
@@ -511,6 +550,24 @@ class LedgerBuilder {
       value[e.productId] = newQty.abs() <= _eps
           ? 0
           : v + (e.quantity > 0 ? cost : -cost);
+
+      if (!e.adjustment && cost.abs() <= _eps) {
+        // Missing COGS: record an explicit journal entry indicating uncosted sale
+        // so the income statement can disclose that cost of sales is incomplete
+        // rather than silently presenting 100% gross profit.
+        out.add(
+          JournalEntry(
+            date: e.date,
+            source: EntrySource.costOfSales,
+            documentId: e.doc?.id,
+            reference: e.doc?.documentNumber ?? p.name,
+            lines: const [],
+            isCostMissing: true,
+          ),
+        );
+        continue;
+      }
+
       if (cost.abs() <= _eps) continue;
 
       if (e.adjustment) {
@@ -595,13 +652,21 @@ class IncomeStatement {
   final double costOfSales;
   final double inventoryAdjustments;
   final double operatingExpenses;
+  final bool hasIncompleteCostOfSales;
+  final int uncostedSalesCount;
+
   const IncomeStatement({
     required this.salesRevenue,
     required this.otherIncome,
     required this.costOfSales,
     required this.inventoryAdjustments,
     required this.operatingExpenses,
+    this.hasIncompleteCostOfSales = false,
+    this.uncostedSalesCount = 0,
   });
+
+  /// Trusted gross profit only when all sales have known cost of sales; null otherwise.
+  double? get trustedGrossProfit => hasIncompleteCostOfSales ? null : grossProfit;
 
   double get grossProfit => salesRevenue - costOfSales;
   double get netProfit =>
@@ -689,12 +754,16 @@ class AccountingReports {
             .map((r) => r.balance)
             .firstOrNull ??
         0;
+    final inRange = entries.where((e) => _inRange(e.date, from, to));
+    final uncosted = inRange.where((e) => e.source == EntrySource.costOfSales && e.isCostMissing).length;
     return IncomeStatement(
       salesRevenue: bal(Accounts.salesRevenue),
       otherIncome: bal(Accounts.otherIncome),
       costOfSales: bal(Accounts.cogs),
       inventoryAdjustments: bal(Accounts.inventoryAdjustments),
       operatingExpenses: bal(Accounts.operatingExpenses),
+      hasIncompleteCostOfSales: uncosted > 0,
+      uncostedSalesCount: uncosted,
     );
   }
 

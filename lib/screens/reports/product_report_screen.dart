@@ -135,10 +135,10 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       rows = summary.items.map((i) {
         final marginStr = i.isCostReliable && i.salesRevenue > 0
             ? '${i.profitMargin.toStringAsFixed(1)}%'
-            : '--';
+            : '—';
         final profitStr = i.isCostReliable
             ? _numFmt.format(i.grossProfit)
-            : '${_numFmt.format(i.grossProfit)}*';
+            : '—';
         return [
           i.productName,
           _numFmt.format(i.salesRevenue),
@@ -151,7 +151,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
         l10n.total,
         _numFmt.format(summary.totalSalesRevenue),
         _numFmt.format(summary.totalCogs),
-        _numFmt.format(summary.totalGrossProfit),
+        summary.hasIncompleteCosts
+            ? '${_numFmt.format(summary.totalTrustedGrossProfit)}*'
+            : _numFmt.format(summary.totalTrustedGrossProfit),
         '',
       ];
       warning = l10n.grossProfitNotice;
@@ -173,7 +175,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
         final valStr = i.currentValuation != null ? _numFmt.format(i.currentValuation) : '—';
         final profitStr = i.isCostReliable
             ? _numFmt.format(i.grossProfit)
-            : '${_numFmt.format(i.grossProfit)}*';
+            : '—';
         return [
           i.productName,
           FormatUtils.formatQuantity(i.salesQty, unit: i.unit),
@@ -187,7 +189,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
         l10n.total,
         '',
         _numFmt.format(summary.totalSalesRevenue),
-        _numFmt.format(summary.totalGrossProfit),
+        summary.hasIncompleteCosts
+            ? '${_numFmt.format(summary.totalTrustedGrossProfit)}*'
+            : _numFmt.format(summary.totalTrustedGrossProfit),
         '',
         '',
       ];
@@ -213,7 +217,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
         ),
         PdfReportSummaryCard(
           label: l10n.grossProfit,
-          value: _numFmt.format(summary.totalGrossProfit),
+          value: summary.hasIncompleteCosts
+              ? '${_numFmt.format(summary.totalTrustedGrossProfit)}*'
+              : _numFmt.format(summary.totalTrustedGrossProfit),
         ),
       ],
       columns: columns,
@@ -243,7 +249,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
 
     final totalSalesValue = summary?.totalSalesRevenue ?? 0.0;
     final totalCogs = summary?.totalCogs ?? 0.0;
-    final totalProfit = summary?.totalGrossProfit ?? 0.0;
+    final totalProfit = summary?.totalTrustedGrossProfit ?? 0.0;
     final hasUnknownCost = summary?.hasIncompleteCosts ?? false;
 
     return Scaffold(
@@ -535,14 +541,14 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                       _statCell(l10n.cogs, _numFmt.format(item.cogs), Colors.blueGrey),
                       _statCell(
                         l10n.grossProfit,
-                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '${_numFmt.format(item.grossProfit)}*',
-                        item.grossProfit >= 0 ? Colors.teal : Colors.red,
+                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '—',
+                        (item.isCostReliable && item.grossProfit >= 0) ? Colors.teal : Colors.grey,
                       ),
                       _statCell(
                         l10n.profitMargin,
                         item.isCostReliable && item.salesRevenue > 0
                             ? '${item.profitMargin.toStringAsFixed(1)}%'
-                            : '--',
+                            : '—',
                         Colors.indigo,
                       ),
                     ],
@@ -557,8 +563,8 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                       _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), Colors.green),
                       _statCell(
                         l10n.grossProfit,
-                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '${_numFmt.format(item.grossProfit)}*',
-                        item.grossProfit >= 0 ? Colors.teal : Colors.red,
+                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '—',
+                        (item.isCostReliable && item.grossProfit >= 0) ? Colors.teal : Colors.grey,
                       ),
                       if (item.currentValuation != null)
                         _statCell(l10n.inventoryValuationAtCost, _numFmt.format(item.currentValuation), Colors.teal),

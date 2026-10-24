@@ -57,7 +57,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final finalized = _sales!.where((s) => s.document.status != DocumentStatus.cancelled).toList();
     final totalSales = finalized.fold(0.0, (s, item) => s + item.document.total);
     final totalCogs = finalized.fold(0.0, (s, item) => s + item.cogs);
-    final totalProfit = finalized.fold(0.0, (s, item) => s + item.grossProfit);
+    // Only include gross profit from fully-costed invoices in aggregate totals.
+    // Invoices with unknown cost contribute null (trustedGrossProfit) and are
+    // excluded from the sum so the header never shows an overstated figure.
+    final totalTrustedProfit = finalized.fold(0.0, (s, item) => s + (item.trustedGrossProfit ?? 0.0));
     final totalPaid = finalized.fold(0.0, (s, item) => s + item.document.paid);
     final totalRemaining = finalized.fold(0.0, (s, item) => s + item.document.remaining);
     final hasIncompleteCost = finalized.any((s) => !s.isCostReliable);
@@ -78,7 +81,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       final isCancelled = doc.status == DocumentStatus.cancelled;
       final profitStr = isCancelled
           ? '—'
-          : (item.isCostReliable ? _numFmt.format(item.grossProfit) : '${_numFmt.format(item.grossProfit)}*');
+          : (item.isCostReliable ? _numFmt.format(item.grossProfit) : '—');
 
       return [
         _dateFmt.format(doc.date),
@@ -107,7 +110,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         ),
         PdfReportSummaryCard(
           label: l10n.grossProfit,
-          value: _numFmt.format(totalProfit),
+          // Only sum gross profit from fully-costed invoices.
+          value: hasIncompleteCost
+              ? '${_numFmt.format(totalTrustedProfit)}*'
+              : _numFmt.format(totalTrustedProfit),
         ),
         PdfReportSummaryCard(
           label: l10n.totalPaid,
@@ -122,7 +128,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         '',
         _numFmt.format(totalSales),
         _numFmt.format(totalCogs),
-        _numFmt.format(totalProfit),
+        hasIncompleteCost ? '${_numFmt.format(totalTrustedProfit)}*' : _numFmt.format(totalTrustedProfit),
         _numFmt.format(totalPaid),
         _numFmt.format(totalRemaining),
       ],
@@ -150,7 +156,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final cancelled = _sales?.where((s) => s.document.status == DocumentStatus.cancelled).toList() ?? [];
     final totalSales = finalized.fold(0.0, (s, item) => s + item.document.total);
     final totalCogs = finalized.fold(0.0, (s, item) => s + item.cogs);
-    final totalProfit = finalized.fold(0.0, (s, item) => s + item.grossProfit);
+    // Only include gross profit from fully-costed invoices in aggregate totals.
+    final totalTrustedProfit = finalized.fold(0.0, (s, item) => s + (item.trustedGrossProfit ?? 0.0));
     final totalPaid = finalized.fold(0.0, (s, item) => s + item.document.paid);
     final totalRemaining = finalized.fold(0.0, (s, item) => s + item.document.remaining);
     final hasIncompleteCost = finalized.any((s) => !s.isCostReliable);
@@ -182,7 +189,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   const SizedBox(width: 8),
                   _summaryChip(l10n.cogs, totalCogs, Colors.blueGrey),
                   const SizedBox(width: 8),
-                  _summaryChip(l10n.grossProfit, totalProfit, Colors.teal),
+                  // Show only the trusted (fully-costed) gross profit total.
+                  // The amber disclosure badge already signals incomplete cost.
+                  _summaryChip(l10n.grossProfit, totalTrustedProfit, Colors.teal),
                 ],
               ),
             ),
@@ -316,10 +325,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   const SizedBox(height: 2),
                   Row(children: [
                     Text(
-                      '${l10n.grossProfit}: ${_numFmt.format(item.grossProfit)} ${doc.currencySymbol}',
+                      item.isCostReliable
+                          ? '${l10n.grossProfit}: ${_numFmt.format(item.grossProfit)} ${doc.currencySymbol}'
+                          : '${l10n.grossProfit}: —',
                       style: TextStyle(
                         fontSize: 11,
-                        color: item.grossProfit >= 0 ? Colors.teal.shade700 : Colors.red,
+                        color: (item.isCostReliable && item.grossProfit >= 0)
+                            ? Colors.teal.shade700
+                            : (item.isCostReliable ? Colors.red : Colors.grey),
                         fontWeight: FontWeight.w500,
                       ),
                     ),

@@ -40,6 +40,12 @@ class ProductPerformanceItem {
     this.averageCost,
     this.currentValuation,
   });
+
+  /// Gross profit only when cost is fully known; null otherwise.
+  double? get trustedGrossProfit => isCostReliable ? grossProfit : null;
+
+  /// Profit margin only when cost is fully known; null otherwise.
+  double? get trustedProfitMargin => isCostReliable ? profitMargin : null;
 }
 
 /// Consolidated summary for product performance reports.
@@ -47,7 +53,23 @@ class ProductPerformanceSummary {
   final List<ProductPerformanceItem> items;
   final double totalSalesRevenue;
   final double totalCogs;
+
+  /// Sum of gross profit across ALL products, including those with incomplete
+  /// cost data.  This value is understated for products with unknown cost
+  /// (their COGS is excluded from the sum).  Check [hasIncompleteCosts] before
+  /// treating this as a definitive profit figure.
+  ///
+  /// Use [totalTrustedGrossProfit] for aggregate totals that must not include
+  /// overstated figures.
   final double totalGrossProfit;
+
+  /// Sum of gross profit only from products whose cost is fully known
+  /// ([ProductPerformanceItem.isCostReliable] == true).
+  ///
+  /// Safe to display as a definitive aggregate — unreliable products
+  /// contribute zero rather than an inflated zero-COGS figure.
+  final double totalTrustedGrossProfit;
+
   final bool hasIncompleteCosts;
   final int unvaluedSalesCount;
   final Set<String> currencies;
@@ -57,10 +79,12 @@ class ProductPerformanceSummary {
     required this.totalSalesRevenue,
     required this.totalCogs,
     required this.totalGrossProfit,
+    double? totalTrustedGrossProfit,
     required this.hasIncompleteCosts,
     required this.unvaluedSalesCount,
     required this.currencies,
-  });
+  }) : totalTrustedGrossProfit = totalTrustedGrossProfit ??
+            (hasIncompleteCosts ? 0.0 : totalGrossProfit);
 }
 
 /// Item representing a purchase document in purchase reports.
@@ -238,6 +262,7 @@ class BusinessReportingService {
 
     double totalRevenue = 0.0;
     double totalCogs = 0.0;
+    double totalTrustedGrossProfit = 0.0;
     int unvaluedSalesTotal = 0;
     final allCurrencies = <String>{};
 
@@ -268,12 +293,16 @@ class BusinessReportingService {
 
       final isReliable = unknownCount == 0;
       final grossProfit = revenue - cogs;
-      final margin = (revenue > 0 && isReliable) ? (grossProfit / revenue) * 100 : 0.0;
+      // Show partial margin even when unreliable so callers can disclose it;
+      // isCostReliable=false signals that the cost figure is incomplete.
+      final margin = revenue > 0 ? (grossProfit / revenue) * 100 : 0.0;
 
       final currentValuation = isCostKnown ? (stockQty > 0 ? stockQty * avgCost : 0.0) : null;
 
       totalRevenue += revenue;
       totalCogs += cogs;
+      // Only accumulate into the trusted total when cost is fully known.
+      if (isReliable) totalTrustedGrossProfit += grossProfit;
       unvaluedSalesTotal += unknownCount;
 
       items.add(ProductPerformanceItem(
@@ -299,7 +328,22 @@ class BusinessReportingService {
     if (sortBy == 'quantity') {
       items.sort((a, b) => b.salesQty.compareTo(a.salesQty));
     } else if (sortBy == 'profit') {
-      items.sort((a, b) => b.grossProfit.compareTo(a.grossProfit));
+      items.sort((a, b) {
+        final aProfit = a.trustedGrossProfit;
+        final bProfit = b.trustedGrossProfit;
+        if (aProfit != null && bProfit != null) {
+          final cmp = bProfit.compareTo(aProfit);
+          if (cmp != 0) return cmp;
+        } else if (aProfit != null && bProfit == null) {
+          return -1; // Trusted profit ranks above untrusted profit
+        } else if (aProfit == null && bProfit != null) {
+          return 1;
+        }
+        // Tie-break deterministically: revenue descending, then product name
+        final revCmp = b.salesRevenue.compareTo(a.salesRevenue);
+        if (revCmp != 0) return revCmp;
+        return a.productName.compareTo(b.productName);
+      });
     } else {
       // default: revenue
       items.sort((a, b) => b.salesRevenue.compareTo(a.salesRevenue));
@@ -310,6 +354,7 @@ class BusinessReportingService {
       totalSalesRevenue: totalRevenue,
       totalCogs: totalCogs,
       totalGrossProfit: totalRevenue - totalCogs,
+      totalTrustedGrossProfit: totalTrustedGrossProfit,
       hasIncompleteCosts: unvaluedSalesTotal > 0,
       unvaluedSalesCount: unvaluedSalesTotal,
       currencies: allCurrencies,
