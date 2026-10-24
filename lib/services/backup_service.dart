@@ -11,8 +11,11 @@ import '../database/database_helper.dart';
 
 class BackupService {
   static const String backupExtension = 'waraq';
-  static const int currentBackupVersion = 3;
+  static const int currentBackupVersion = 4;
   static const String appId = 'warqatek';
+
+  @visibleForTesting
+  static Future<String> Function()? safetyBackupOverride;
 
   static const List<String> _requiredTables = [
     'businesses',
@@ -22,6 +25,20 @@ class BackupService {
     'document_items',
     'document_counters',
   ];
+
+  static Future<Directory> _getBackupDirectory() async {
+    try {
+      return await getApplicationDocumentsDirectory();
+    } catch (_) {
+      try {
+        final db = await DatabaseHelper.instance.database;
+        if (db.path.isNotEmpty && db.path != ':memory:') {
+          return File(db.path).parent;
+        }
+      } catch (_) {}
+      return Directory.systemTemp;
+    }
+  }
 
   // ============================================================
   // SHARE BACKUP
@@ -43,9 +60,43 @@ class BackupService {
     final fileName =
         'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
 
-    final directory = await getApplicationDocumentsDirectory();
+    final directory = await _getBackupDirectory();
     final file = File('${directory.path}/$fileName');
     await file.writeAsString(jsonStr, encoding: utf8);
+
+    return file.path;
+  }
+
+  // ============================================================
+  // PRE-RESTORE SAFETY BACKUP
+  // ============================================================
+
+  /// Creates and validates an automatic safety backup of the current database.
+  /// Throws an exception if creation, writing, or validation fails, ensuring
+  /// that restore does not proceed on an unsafe state.
+  static Future<String> createSafetyBackup() async {
+    if (safetyBackupOverride != null) {
+      return await safetyBackupOverride!();
+    }
+
+    final jsonStr = await _buildBackupJson();
+    final fileName =
+        'warqatek_safety_pre_restore_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
+
+    final directory = await _getBackupDirectory();
+    final file = File('${directory.path}/$fileName');
+    await file.writeAsString(jsonStr, encoding: utf8, flush: true);
+
+    // Validate the safety backup immediately from disk
+    final readBackBytes = await file.readAsBytes();
+    if (readBackBytes.isEmpty) {
+      throw Exception('Created safety backup is empty');
+    }
+    final decoded = jsonDecode(utf8.decode(readBackBytes));
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Created safety backup has invalid format');
+    }
+    _validateBackup(decoded);
 
     return file.path;
   }
@@ -76,9 +127,7 @@ class BackupService {
   // ============================================================
 
   static Future<bool> restoreBackup() async {
-    final file = await FilePicker.pickFile(
-      type: FileType.any,
-    );
+    final file = await FilePicker.pickFile(type: FileType.any);
 
     if (file == null) return false;
 
@@ -104,8 +153,21 @@ class BackupService {
   /// Restores database content from parsed backup JSON.
   /// Used by [restoreBackup] and tests.
   @visibleForTesting
-  static Future<bool> restoreFromJsonMap(Map<String, dynamic> jsonMap) async {
+  static Future<bool> restoreFromJsonMap(
+    Map<String, dynamic> jsonMap, {
+    bool createSafetyBackup = true,
+  }) async {
     _validateBackup(jsonMap);
+
+    // Create and validate an automatic safety backup of the current database
+    // before touching any data. If this fails, restore aborts immediately.
+    if (createSafetyBackup) {
+      final safetyPath = await BackupService.createSafetyBackup();
+      await DatabaseHelper.instance.logAuditEvent(
+        'pre_restore_safety_backup_created',
+        details: 'path=$safetyPath',
+      );
+    }
 
     final data = jsonMap['data'] as Map<String, dynamic>;
     final db = await DatabaseHelper.instance.database;
@@ -113,6 +175,8 @@ class BackupService {
     await db.transaction((txn) async {
       await txn.delete('document_payments');
       await txn.delete('document_items');
+      await txn.delete('stocktake_items');
+      await txn.delete('stocktake_sessions');
       await txn.delete('stock_movements');
       await txn.delete('documents');
       await txn.delete('contacts');
@@ -155,13 +219,15 @@ class BackupService {
         await txn.insert('document_counters', row);
       }
       // document_payments is optional (absent in backups created before Phase 1)
-      if (data.containsKey('document_payments') && data['document_payments'] is List) {
+      if (data.containsKey('document_payments') &&
+          data['document_payments'] is List) {
         for (final row in _convertRows(data['document_payments'])) {
           await txn.insert('document_payments', row);
         }
       }
       // stock_movements is optional (absent in backups created before Phase 3.4)
-      if (data.containsKey('stock_movements') && data['stock_movements'] is List) {
+      if (data.containsKey('stock_movements') &&
+          data['stock_movements'] is List) {
         for (final row in _convertRows(data['stock_movements'])) {
           await txn.insert('stock_movements', row);
         }
@@ -174,17 +240,42 @@ class BackupService {
         }
       }
       // payment_methods is optional (absent in backups created before Phase 3.6)
-      if (data.containsKey('payment_methods') && data['payment_methods'] is List) {
+      if (data.containsKey('payment_methods') &&
+          data['payment_methods'] is List) {
         await txn.delete('payment_methods');
         for (final row in _convertRows(data['payment_methods'])) {
           await txn.insert('payment_methods', row);
         }
       }
+      // stocktake_sessions is optional (absent in backups created before v16)
+      if (data.containsKey('stocktake_sessions') &&
+          data['stocktake_sessions'] is List) {
+        for (final row in _convertRows(data['stocktake_sessions'])) {
+          await txn.insert('stocktake_sessions', row);
+        }
+      }
+      // stocktake_items is optional (absent in backups created before v16)
+      if (data.containsKey('stocktake_items') &&
+          data['stocktake_items'] is List) {
+        for (final row in _convertRows(data['stocktake_items'])) {
+          await txn.insert('stocktake_items', row);
+        }
+      }
+      // audit_log is optional (absent in older backups)
+      if (data.containsKey('audit_log') && data['audit_log'] is List) {
+        await txn.delete('audit_log');
+        for (final row in _convertRows(data['audit_log'])) {
+          await txn.insert('audit_log', row);
+        }
+      }
     });
 
     await _restoreLogoIfNeeded(jsonMap);
-    await DatabaseHelper.instance.logAuditEvent('backup_restored',
-        details: 'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}');
+    await DatabaseHelper.instance.logAuditEvent(
+      'backup_restored',
+      details:
+          'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}',
+    );
     return true;
   }
 
@@ -273,10 +364,11 @@ class BackupService {
         'stock_movements': await db.query('stock_movements'),
         'tax_profiles': await db.query('tax_profiles'),
         'payment_methods': await db.query('payment_methods'),
+        'stocktake_sessions': await db.query('stocktake_sessions'),
+        'stocktake_items': await db.query('stocktake_items'),
+        'audit_log': await db.query('audit_log'),
       },
-      'assets': {
-        'logo_base64': logoBase64,
-      },
+      'assets': {'logo_base64': logoBase64},
     };
 
     return const JsonEncoder.withIndent('  ').convert(backupData);
@@ -296,15 +388,17 @@ class BackupService {
     try {
       final logoBytes = base64Decode(logoBase64);
       final directory = await getApplicationDocumentsDirectory();
-      final fileName = 'business_logo_${DateTime.now().millisecondsSinceEpoch}.png';
+      final fileName =
+          'business_logo_${DateTime.now().millisecondsSinceEpoch}.png';
       final file = File('${directory.path}/$fileName');
       await file.writeAsBytes(logoBytes, flush: true);
 
       final business = await DatabaseHelper.instance.getFirstBusiness();
       if (business == null) return;
 
-      await DatabaseHelper.instance
-          .updateBusiness(business.copyWith(logoPath: file.path));
+      await DatabaseHelper.instance.updateBusiness(
+        business.copyWith(logoPath: file.path),
+      );
     } catch (_) {
       // Do not fail restore due to logo
     }
