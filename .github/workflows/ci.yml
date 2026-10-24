@@ -91,17 +91,8 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           # Test APK only: fall back to debug signing if the keystore secret is
           # absent. release.yml (Play uploads) stays strict.
-          ALLOW_DEBUG_SIGNING: 'true'
+          ALLOW_DEBUG_SIGNING: 'false'
         run: flutter build apk --release
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: waraqatak-apk-${{ github.sha }}
-          path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
-          retention-days: 3
 
       - name: Publish release APK asset
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

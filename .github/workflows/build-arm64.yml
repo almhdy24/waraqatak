@@ -76,17 +76,8 @@ jobs:
         env:
           # Test APK: allow the debug-key fallback above (Play uploads use
           # release.yml, which stays strict).
-          ALLOW_DEBUG_SIGNING: 'true'
+          ALLOW_DEBUG_SIGNING: 'false'
         run: flutter build apk --release --split-per-abi --target-platform android-arm64
-
-      - name: Upload arm64 APK artifact
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: waraqatak-arm64-v8a-${{ github.sha }}
-          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          if-no-files-found: error
-          retention-days: 3
 
       - name: Publish arm64 release asset
         if: github.ref == 'refs/heads/main'
