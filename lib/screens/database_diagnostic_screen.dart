@@ -503,7 +503,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.repairSystemTitle),
+        title: Text(l10n.databaseDiagnosticsTitle),
         centerTitle: true,
         actions: [
           IconButton(
