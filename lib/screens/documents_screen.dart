@@ -5,6 +5,9 @@ import '../localization/app_localizations.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_search_bar.dart';
 import '../widgets/status_badge.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -65,61 +68,72 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.documents), centerTitle: true),
-      body: ResponsiveCenter(child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: TextField(
-              decoration: InputDecoration(
+      body: ResponsiveCenter(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: AppSearchBar(
                 hintText: '${l10n.search}...',
-                prefixIcon: const Icon(Icons.search_rounded),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                isDense: true,
+                onChanged: (v) {
+                  _query = v;
+                  _load();
+                },
+                onClear: () {
+                  _query = '';
+                  _load();
+                },
               ),
-              onChanged: (v) {
-                _query = v;
-                _load();
-              },
             ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                _chip('all', l10n.all),
-                _chip('invoice', l10n.invoice),
-                _chip('purchase', l10n.purchase),
-                _chip('quotation', l10n.quotation),
-                _chip('payment_receipt', l10n.paymentReceipt),
-                _chip('expense_voucher', l10n.expenseVoucher),
-                _chip('custom', l10n.customDocument),
-              ],
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(
+                children: [
+                  _chip('all', l10n.all),
+                  _chip('invoice', l10n.invoice),
+                  _chip('purchase', l10n.purchase),
+                  _chip('quotation', l10n.quotation),
+                  _chip('payment_receipt', l10n.paymentReceipt),
+                  _chip('expense_voucher', l10n.expenseVoucher),
+                  _chip('custom', l10n.customDocument),
+                ],
+              ),
             ),
-          ),
-          Expanded(child: _buildList(l10n)),
-        ],
-      )),
+            const SizedBox(height: 4),
+            Expanded(child: _buildList(l10n, theme)),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildList(AppLocalizations l10n) {
+  Widget _buildList(AppLocalizations l10n, ThemeData theme) {
     if (_error != null) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 12),
-            Text(
-              ErrorUtils.toFriendlyMessage(_error!, l10n),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 48, color: theme.colorScheme.error),
+              const SizedBox(height: 12),
+              Text(
+                ErrorUtils.toFriendlyMessage(_error!, l10n),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(l10n.retry),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -130,38 +144,23 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     final docs = _documents!;
     if (docs.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.description_outlined,
-                  size: 56,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
-              const SizedBox(height: 16),
-              Text(
-                _query.isNotEmpty ? l10n.noSearchResults : l10n.noDocumentsTitle,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _query.isNotEmpty ? l10n.noSearchResultsHint : l10n.noDocumentsHint,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
+      if (_query.isNotEmpty) {
+        return AppEmptyState(
+          icon: Icons.search_off_rounded,
+          title: l10n.noSearchResults,
+          description: l10n.noSearchResultsHint,
+        );
+      }
+      return AppEmptyState(
+        icon: Icons.description_outlined,
+        title: l10n.noDocumentsTitle,
+        description: l10n.noDocumentsHint,
       );
     }
 
     return ListView.builder(
       itemCount: docs.length,
-      padding: const EdgeInsets.only(top: 4, bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       itemBuilder: (ctx, i) {
         final doc = docs[i];
         final showRemaining = (doc.type == 'invoice' || doc.type == 'purchase') &&
@@ -170,63 +169,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             doc.remaining > 0;
 
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          margin: const EdgeInsets.only(bottom: 8),
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+            side: BorderSide(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.7)),
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            leading: CircleAvatar(
-              backgroundColor:
-                  Theme.of(ctx).colorScheme.primaryContainer,
-              child: Icon(_iconFor(doc.type),
-                  size: 20, color: Theme.of(ctx).colorScheme.primary),
-            ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(doc.documentNumber,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                Text(
-                  '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (doc.recipientName != null && doc.recipientName!.isNotEmpty)
-                  Text(doc.recipientName!,
-                      style: const TextStyle(fontSize: 13),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(_dateFmt.format(doc.date),
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF6B7280))),
-                    const Spacer(),
-                    StatusBadge(status: doc.status),
-                  ],
-                ),
-                if (showRemaining)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      '${l10n.remaining}: ${_numFmt.format(doc.remaining)} ${doc.currencySymbol}',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(ctx).colorScheme.error,
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ),
-              ],
-            ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
             onTap: () async {
               await Navigator.push(
                 ctx,
@@ -236,6 +186,101 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               );
               _load();
             },
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(AppDesignTokens.smallRadius),
+                        ),
+                        child: Icon(
+                          _iconFor(doc.type),
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              doc.documentNumber,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                            if (doc.recipientName != null && doc.recipientName!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  doc.recipientName!,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          StatusBadge(status: doc.status),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(height: 1, thickness: 0.5),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 13,
+                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _dateFmt.format(doc.date),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (showRemaining)
+                        Text(
+                          '${l10n.remaining}: ${_numFmt.format(doc.remaining)} ${doc.currencySymbol}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -244,8 +289,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
   Widget _chip(String type, String label) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3),
-      child: ChoiceChip(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: FilterChip(
         label: Text(label),
         selected: _filterType == type,
         onSelected: (_) {

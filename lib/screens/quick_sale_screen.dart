@@ -99,8 +99,8 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   ({double subtotal, double taxAmount, double total}) get _totals =>
       _cart.totals(
-        taxRate: _business?.taxRate ?? 0,
-        pricesIncludeTax: _business?.pricesIncludeTax ?? false,
+        taxRate: _business?.effectiveTaxRate ?? 0,
+        pricesIncludeTax: (_business?.taxesEnabled ?? false) && (_business?.pricesIncludeTax ?? false),
       );
 
   void _toast(String msg) {

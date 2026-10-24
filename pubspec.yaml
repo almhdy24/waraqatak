@@ -4,7 +4,7 @@ description: Waraqatak - invoices and business documents.
 
 publish_to: 'none'
 
-version: 1.1.3+7
+version: 1.1.4-alpha.2+9
 
 environment:
   sdk: '>=3.11.0 <4.0.0'
@@ -51,6 +51,10 @@ dependencies:
   # Elmahdi Pay — subscription & license SDK
   elmahdi_pay_flutter:
     path: packages/elmahdi_pay_flutter
+  google_sign_in: ^7.2.0
+  googleapis: ^17.0.0
+  http: ^1.2.0
+  in_app_update: ^4.2.5
 
 dependency_overrides:
   # path_provider_android 2.3.x introduced a JNI/NDK-28 dependency that
@@ -64,10 +68,6 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.4
 
-  # Direct dev-only pin for the already-transitive `http` package, so tests
-  # can import `package:http/testing.dart` (MockClient) without pulling in a
-  # new runtime dependency.
-  http: ^1.2.0
   # Test-only: runs database tests against a real SQLite on the host.
   sqflite_common_ffi: ^2.4.0+3
 

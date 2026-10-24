@@ -832,8 +832,9 @@ void main() {
           int? targetMovementId;
           for (final m in movements) {
             final mId = m['id'] as int;
-            if (repairedMovements.containsKey(mId))
+            if (repairedMovements.containsKey(mId)) {
               continue; // already repaired
+            }
             final mQty = ((m['quantity'] as num).toDouble()).abs();
             if (mQty == lineQty) {
               targetMovementId = mId;

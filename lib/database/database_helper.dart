@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../models/payment_method.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
@@ -19,6 +21,7 @@ import '../models/diagnostic_report.dart';
 import '../models/stocktake.dart';
 import '../services/inventory_costing_service.dart';
 import '../utils/format_utils.dart';
+import '../utils/money_utils.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -1436,6 +1439,31 @@ class DatabaseHelper {
       WHERE $where
     ''', args);
     return (rows.first['outstanding'] as num?)?.toDouble() ?? 0;
+  }
+
+  /// Returns outstanding balances grouped by currency code for a given contact and docType.
+  /// Never sums amounts across distinct currencies into one nominal total.
+  Future<Map<String, double>> getContactOutstandingByCurrency(
+    int contactId,
+    String docType,
+  ) async {
+    final db = await database;
+    final rows = await db.rawQuery('''
+      SELECT currency_code, COALESCE(SUM(remaining), 0) AS outstanding
+      FROM documents
+      WHERE contact_id = ? AND type = ? AND status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+      GROUP BY currency_code
+      HAVING outstanding > 0
+    ''', [contactId, docType]);
+    final map = <String, double>{};
+    for (final r in rows) {
+      final code = (r['currency_code'] as String?) ?? 'SDG';
+      final val = (r['outstanding'] as num?)?.toDouble() ?? 0.0;
+      if (val > 0) {
+        map[code] = val;
+      }
+    }
+    return map;
   }
 
   // ========== Products ==========
@@ -2944,17 +2972,24 @@ class DatabaseHelper {
         final receiptTotal = receiptRows.isNotEmpty
             ? ((receiptRows.first['total'] as num?)?.toDouble() ?? 0.0)
             : 0.0;
+        final decimalDigits = Currency.decimalDigitsForCode(invoice.currencyCode);
         final amountToReverse = pTotal > 0 ? pTotal : receiptTotal;
+        final canonicalReverse = MoneyUtils.round(amountToReverse, decimalDigits);
 
-        final newPaid = (invoice.paid - amountToReverse).clamp(
+        final newPaid = math.max(
           0.0,
+          MoneyUtils.round(invoice.paid - canonicalReverse, decimalDigits),
+        );
+        final newRemaining = MoneyUtils.calculateRemaining(
           invoice.total,
+          newPaid,
+          decimalDigits,
         );
-        final newRemaining = (invoice.total - newPaid).clamp(
-          0.0,
-          double.infinity,
+        final newStatus = DocumentStatus.fromPayment(
+          newPaid,
+          invoice.total,
+          decimalDigits: decimalDigits,
         );
-        final newStatus = DocumentStatus.fromPayment(newPaid, invoice.total);
         await txn.update(
           'documents',
           {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
@@ -3086,10 +3121,13 @@ class DatabaseHelper {
     if (doc.status == DocumentStatus.paid) {
       throw StateError('Document is already fully paid');
     }
-    if (amount <= 0) {
+    final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
+    final canonicalAmount = MoneyUtils.round(amount, decimalDigits);
+
+    if (canonicalAmount <= 0) {
       throw ArgumentError('Payment amount must be greater than zero');
     }
-    if (amount > doc.remaining) {
+    if (MoneyUtils.isOverpayment(canonicalAmount, doc.remaining, decimalDigits)) {
       throw ArgumentError('Payment cannot exceed remaining amount');
     }
 
@@ -3106,12 +3144,12 @@ class DatabaseHelper {
       'contact_id': doc.contactId,
       'recipient_name': doc.recipientName,
       'recipient_phone': doc.recipientPhone,
-      'subtotal': amount,
+      'subtotal': canonicalAmount,
       'discount': 0.0,
       'tax_rate': 0.0,
       'tax_amount': 0.0,
-      'total': amount,
-      'paid': amount,
+      'total': canonicalAmount,
+      'paid': canonicalAmount,
       'remaining': 0.0,
       'payment_method': paymentMethod,
       'valid_until': null,
@@ -3124,7 +3162,7 @@ class DatabaseHelper {
     // Record the payment row linked to the receipt
     await txn.insert('document_payments', {
       'document_id': documentId,
-      'amount': amount,
+      'amount': canonicalAmount,
       'payment_method': paymentMethod,
       'date': now.toIso8601String(),
       'notes': notes,
@@ -3132,9 +3170,9 @@ class DatabaseHelper {
     });
 
     // Update invoice totals
-    final newPaid = doc.paid + amount;
-    final newRemaining = (doc.total - newPaid).clamp(0.0, double.infinity);
-    final newStatus = DocumentStatus.fromPayment(newPaid, doc.total);
+    final newPaid = MoneyUtils.round(doc.paid + canonicalAmount, decimalDigits);
+    final newRemaining = MoneyUtils.calculateRemaining(doc.total, newPaid, decimalDigits);
+    final newStatus = DocumentStatus.fromPayment(newPaid, doc.total, decimalDigits: decimalDigits);
 
     await txn.update(
       'documents',
@@ -3277,6 +3315,7 @@ class DatabaseHelper {
           'price': item['price'],
           'total': item['total'],
           'taxable': item['taxable'],
+          'tax_rate': item['tax_rate'],
         });
       }
 
@@ -3547,6 +3586,7 @@ class DatabaseHelper {
             'price': item['price'],
             'total': item['total'],
             'taxable': item['taxable'],
+            'tax_rate': item['tax_rate'],
           });
         }
       }
@@ -4114,11 +4154,39 @@ class DatabaseHelper {
 
   Future<int> deletePaymentMethod(int id) async {
     final db = await database;
+    final rows = await db.query(
+      'payment_methods',
+      columns: ['key', 'is_predefined'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (rows.isEmpty) return 0;
+    final isPredefined = (rows.first['is_predefined'] as int?) == 1;
+    if (isPredefined) {
+      throw StateError('Cannot delete predefined payment method');
+    }
+    final key = rows.first['key'] as String;
+    if (await isPaymentMethodUsedInDocuments(key)) {
+      throw StateError('Cannot delete payment method: in use by existing transactions');
+    }
     return db.delete(
       'payment_methods',
       where: 'id = ? AND is_predefined = 0',
       whereArgs: [id],
     );
+  }
+
+  /// Retrieves a payment method by its unique key.
+  Future<PaymentMethod?> getPaymentMethodByKey(String key) async {
+    final db = await database;
+    final rows = await db.query(
+      'payment_methods',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return PaymentMethod.fromMap(rows.first);
   }
 
   // ========== Cached In-App Notifications ==========

@@ -17,6 +17,8 @@ import 'activation_screen.dart';
 import '../widgets/responsive.dart';
 import 'audit_history_screen.dart';
 import 'reports/advanced_inventory_analytics_screen.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_section_header.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -202,17 +204,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 Padding(
                   padding: EdgeInsets.only(
                     top: catIndex == 0 ? 8 : 20,
-                    bottom: 8,
-                    right: 4,
-                    left: 4,
+                    bottom: 6,
                   ),
-                  child: Text(
-                    cat.title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: primaryColor,
-                    ),
+                  child: AppSectionHeader(
+                    title: cat.title,
+                    count: cat.reports.length,
                   ),
                 ),
                 ...cat.reports.map((entry) {
@@ -223,9 +219,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     child: Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
                         side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
+                          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7),
                         ),
                       ),
                       child: ListTile(

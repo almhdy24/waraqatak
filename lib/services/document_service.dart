@@ -1,9 +1,11 @@
 import '../database/database_helper.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_status.dart';
+import '../utils/money_utils.dart';
 import 'feature_access.dart';
 import 'license_service.dart';
 
@@ -24,7 +26,7 @@ class DocumentItemInput {
     this.taxRate,
   });
 
-  double get total => quantity * price;
+  double get total => MoneyUtils.round(quantity * price);
 }
 
 class DocumentService {
@@ -90,53 +92,68 @@ class DocumentService {
     double finalPaid = 0;
     double remaining = 0;
 
+    final decimalDigits = Currency.decimalDigitsForCode(business.currencyCode);
+    final effectiveItems = (!isFinancial && !isCustom)
+        ? await resolveItemsTaxRates(items, business)
+        : items;
+    final effectiveTaxRate = await resolveEffectiveTaxRate(business);
+    final effectivePricesIncludeTax =
+        business.taxesEnabled && business.pricesIncludeTax;
+
     if (isFinancial) {
-      subtotal = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
-      total = paid;
+      total = canonicalPaid;
     } else if (isQuotation) {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = _calculateSubtotal(items);
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
       discountApplied = 0;
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = _calculateTaxMultiRate(
-          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax);
-      total = business.pricesIncludeTax ? subtotal : subtotal + taxAmount;
+          effectiveItems, discountApplied, taxRate, subtotal, effectivePricesIncludeTax,
+          decimalDigits: decimalDigits);
+      total = effectivePricesIncludeTax
+          ? subtotal
+          : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = _calculateSubtotal(items);
-      discountApplied = discount;
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
+      discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
       }
-      if (discountApplied > subtotal) {
+      if (MoneyUtils.isOverpayment(discountApplied, subtotal, decimalDigits)) {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
       final totals = calculateInvoiceTotals(
-        items: items,
+        items: effectiveItems,
         discount: discountApplied,
-        taxRate: business.taxRate,
-        pricesIncludeTax: business.pricesIncludeTax,
+        taxRate: effectiveTaxRate,
+        pricesIncludeTax: effectivePricesIncludeTax,
+        decimalDigits: decimalDigits,
       );
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = totals.taxAmount;
       total = totals.total;
-      if (paid < 0) {
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      if (canonicalPaid < 0) {
         throw ArgumentError('Paid amount cannot be negative');
       }
-      if (paid > total) {
+      if (MoneyUtils.isOverpayment(canonicalPaid, total, decimalDigits)) {
         throw ArgumentError('Paid amount cannot exceed total');
       }
-      finalPaid = paid;
-      remaining = total - finalPaid;
+      finalPaid = canonicalPaid;
+      remaining = MoneyUtils.calculateRemaining(total, finalPaid, decimalDigits);
     } else if (isCustom) {
-      subtotal = paid;
-      total = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      total = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
     } else {
       throw ArgumentError('Unknown document type: $type');
@@ -149,7 +166,7 @@ class DocumentService {
     if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       status = DocumentStatus.draft;
     } else if (isInvoice || isPurchase) {
-      status = DocumentStatus.fromPayment(finalPaid, total);
+      status = DocumentStatus.fromPayment(finalPaid, total, decimalDigits: decimalDigits);
     } else {
       status = DocumentStatus.issued;
     }
@@ -173,7 +190,7 @@ class DocumentService {
       currencyCode: business.currencyCode,
     );
 
-    final documentItems = items.map((item) => DocumentItem(
+    final documentItems = effectiveItems.map((item) => DocumentItem(
       documentId: 0,
       productId: item.productId,
       description: item.description,
@@ -272,53 +289,68 @@ class DocumentService {
     double finalPaid = 0;
     double remaining = 0;
 
+    final decimalDigits = Currency.decimalDigitsForCode(existing.currencyCode);
+    final effectiveItems = (!isFinancial && !isCustom)
+        ? await resolveItemsTaxRates(items, business)
+        : items;
+    final effectiveTaxRate = await resolveEffectiveTaxRate(business);
+    final effectivePricesIncludeTax =
+        business.taxesEnabled && business.pricesIncludeTax;
+
     if (isFinancial) {
-      subtotal = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
-      total = paid;
+      total = canonicalPaid;
     } else if (isQuotation) {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = _calculateSubtotal(items);
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
       discountApplied = 0;
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = _calculateTaxMultiRate(
-          items, discountApplied, taxRate, subtotal, business.pricesIncludeTax);
-      total = business.pricesIncludeTax ? subtotal : subtotal + taxAmount;
+          effectiveItems, discountApplied, taxRate, subtotal, effectivePricesIncludeTax,
+          decimalDigits: decimalDigits);
+      total = effectivePricesIncludeTax
+          ? subtotal
+          : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = _calculateSubtotal(items);
-      discountApplied = discount;
+      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
+      discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
       }
-      if (discountApplied > subtotal) {
+      if (MoneyUtils.isOverpayment(discountApplied, subtotal, decimalDigits)) {
         throw ArgumentError('Discount cannot exceed subtotal');
       }
       final totals = calculateInvoiceTotals(
-        items: items,
+        items: effectiveItems,
         discount: discountApplied,
-        taxRate: business.taxRate,
-        pricesIncludeTax: business.pricesIncludeTax,
+        taxRate: effectiveTaxRate,
+        pricesIncludeTax: effectivePricesIncludeTax,
+        decimalDigits: decimalDigits,
       );
-      taxRate = business.taxRate;
+      taxRate = effectiveTaxRate;
       taxAmount = totals.taxAmount;
       total = totals.total;
-      if (paid < 0) {
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      if (canonicalPaid < 0) {
         throw ArgumentError('Paid amount cannot be negative');
       }
-      if (paid > total) {
+      if (MoneyUtils.isOverpayment(canonicalPaid, total, decimalDigits)) {
         throw ArgumentError('Paid amount cannot exceed total');
       }
-      finalPaid = paid;
-      remaining = total - finalPaid;
+      finalPaid = canonicalPaid;
+      remaining = MoneyUtils.calculateRemaining(total, finalPaid, decimalDigits);
     } else if (isCustom) {
-      subtotal = paid;
-      total = paid;
-      finalPaid = paid;
+      final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
+      subtotal = canonicalPaid;
+      total = canonicalPaid;
+      finalPaid = canonicalPaid;
       remaining = 0;
     } else {
       throw ArgumentError('Unknown document type: $type');
@@ -331,7 +363,7 @@ class DocumentService {
     if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       newStatus = DocumentStatus.draft;
     } else if (isInvoice || isPurchase) {
-      newStatus = DocumentStatus.fromPayment(finalPaid, total);
+      newStatus = DocumentStatus.fromPayment(finalPaid, total, decimalDigits: decimalDigits);
     } else {
       newStatus = DocumentStatus.issued;
     }
@@ -359,7 +391,7 @@ class DocumentService {
       currencyCode: existing.currencyCode,
     );
 
-    final documentItems = items.map((item) => DocumentItem(
+    final documentItems = effectiveItems.map((item) => DocumentItem(
       documentId: documentId,
       productId: item.productId,
       description: item.description,
@@ -496,6 +528,102 @@ class DocumentService {
     return items.fold<double>(0.0, (sum, item) => sum + item.total);
   }
 
+  /// Resolves the effective business default tax rate:
+  /// - If [business.taxesEnabled] is false -> always 0.0.
+  /// - If [business.taxesEnabled] is true:
+  ///   - If [business.defaultTaxProfileId] is set, lookup profile rate if active.
+  ///   - Otherwise falls back to [business.taxRate].
+  static Future<double> resolveEffectiveTaxRate(
+    Business business, {
+    DatabaseHelper? db,
+  }) async {
+    if (!business.taxesEnabled) return 0.0;
+    final database = db ?? DatabaseHelper.instance;
+    if (business.defaultTaxProfileId != null) {
+      final profile =
+          await database.getTaxProfileById(business.defaultTaxProfileId!);
+      if (profile != null && profile.isActive) {
+        return profile.rate;
+      }
+    }
+    return business.taxRate;
+  }
+
+  /// Resolves line items' tax rates and taxable status from their linked products
+  /// and tax profiles when not explicitly provided.
+  /// - If [business.taxesEnabled] is false, all items are treated as 0% tax.
+  /// - If an item is linked to a product:
+  ///   - If the product is not taxable, [taxable] becomes false, and [taxRate] is 0.0.
+  ///   - If the product has a linked active tax profile, [taxRate] is set to the profile's rate.
+  ///   - If the product has a 0% tax profile, [taxRate] is set to 0.0 (zero-rated).
+  static Future<List<DocumentItemInput>> resolveItemsTaxRates(
+    List<DocumentItemInput> items,
+    Business business, {
+    DatabaseHelper? db,
+  }) async {
+    if (!business.taxesEnabled) {
+      return items
+          .map((item) => DocumentItemInput(
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price,
+                taxable: false,
+                productId: item.productId,
+                taxRate: 0.0,
+              ))
+          .toList();
+    }
+
+    final database = db ?? DatabaseHelper.instance;
+    final resolved = <DocumentItemInput>[];
+
+    for (final item in items) {
+      if (item.taxRate != null) {
+        // Explicit per-item rate already provided
+        resolved.add(item);
+        continue;
+      }
+
+      if (item.productId != null) {
+        final product = await database.getProductById(item.productId!);
+        if (product != null) {
+          if (!product.isTaxable) {
+            resolved.add(DocumentItemInput(
+              description: item.description,
+              quantity: item.quantity,
+              price: item.price,
+              taxable: false,
+              productId: item.productId,
+              taxRate: 0.0,
+            ));
+            continue;
+          }
+
+          if (product.taxProfileId != null) {
+            final profile =
+                await database.getTaxProfileById(product.taxProfileId!);
+            if (profile != null && profile.isActive) {
+              resolved.add(DocumentItemInput(
+                description: item.description,
+                quantity: item.quantity,
+                price: item.price,
+                taxable: true,
+                productId: item.productId,
+                taxRate: profile.rate,
+              ));
+              continue;
+            }
+          }
+        }
+      }
+
+      // No explicit product profile; keep item with null taxRate (will use business fallback)
+      resolved.add(item);
+    }
+
+    return resolved;
+  }
+
   /// Calculates invoice totals supporting per-item tax rates and inclusive/exclusive modes.
   ///
   /// [taxRate] is the business-level fallback rate used when an item has no
@@ -505,19 +633,29 @@ class DocumentService {
   /// so total = subtotal − discount (tax is extracted for display only).
   /// [pricesIncludeTax] = false → exclusive mode: tax is added on top,
   /// so total = subtotal − discount + taxAmount.
+  ///
+  /// [decimalDigits] defines the currency's canonical rounding scale (default: 2).
   static ({double subtotal, double taxAmount, double total})
       calculateInvoiceTotals({
     required List<DocumentItemInput> items,
     required double discount,
     required double taxRate,
     bool pricesIncludeTax = false,
+    int decimalDigits = 2,
   }) {
-    final subtotal = _calculateSubtotal(items);
+    final subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+    final canonicalDiscount = MoneyUtils.round(discount, decimalDigits);
     final taxAmount = _calculateTaxMultiRate(
-        items, discount, taxRate, subtotal, pricesIncludeTax);
+      items,
+      canonicalDiscount,
+      taxRate,
+      subtotal,
+      pricesIncludeTax,
+      decimalDigits: decimalDigits,
+    );
     final total = pricesIncludeTax
-        ? subtotal - discount
-        : subtotal - discount + taxAmount;
+        ? MoneyUtils.round(subtotal - canonicalDiscount, decimalDigits)
+        : MoneyUtils.round(subtotal - canonicalDiscount + taxAmount, decimalDigits);
     return (subtotal: subtotal, taxAmount: taxAmount, total: total);
   }
 
@@ -527,8 +665,9 @@ class DocumentService {
     double discount,
     double fallbackRate,
     double subtotal,
-    bool pricesIncludeTax,
-  ) {
+    bool pricesIncludeTax, {
+    int decimalDigits = 2,
+  }) {
     if (subtotal <= 0) return 0;
     final discountRatio = (subtotal - discount) / subtotal;
     var totalTax = 0.0;
@@ -541,7 +680,7 @@ class DocumentService {
           ? itemAfterDiscount * rate / (100 + rate) // extract from inclusive price
           : itemAfterDiscount * rate / 100; // add on top (exclusive)
     }
-    return totalTax < 0 ? 0 : totalTax;
+    return MoneyUtils.round(totalTax < 0 ? 0.0 : totalTax, decimalDigits);
   }
 
 }

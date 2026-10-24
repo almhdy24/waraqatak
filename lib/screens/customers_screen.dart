@@ -3,6 +3,9 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_search_bar.dart';
 import 'contact_form_screen.dart';
 import 'customer_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -19,7 +22,6 @@ class _CustomersScreenState extends State<CustomersScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
   List<Contact>? _contacts;
-  final _searchCtrl = TextEditingController();
   String _query = '';
   bool _activeOnly = false;
   String? _error;
@@ -45,7 +47,6 @@ class _CustomersScreenState extends State<CustomersScreen>
   @override
   void dispose() {
     _tabCtrl.dispose();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -141,7 +142,6 @@ class _CustomersScreenState extends State<CustomersScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -167,67 +167,54 @@ class _CustomersScreenState extends State<CustomersScreen>
           ],
         ),
       ),
-      body: ResponsiveCenter(child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
+      body: ResponsiveCenter(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AppSearchBar(
                       hintText: l10n.search,
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: _query.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear, size: 18),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                _query = '';
-                                _load();
-                              })
-                          : null,
-                      filled: true,
-                      fillColor: cs.surfaceContainerLow,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 0),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
+                      onChanged: (v) {
+                        _query = v;
+                        _load();
+                      },
+                      onClear: () {
+                        _query = '';
+                        _load();
+                      },
                     ),
-                    onChanged: (v) {
-                      _query = v;
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: Text(
+                      l10n.activeOnly,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    selected: _activeOnly,
+                    onSelected: (v) {
+                      setState(() => _activeOnly = v);
                       _load();
                     },
+                    visualDensity: VisualDensity.compact,
                   ),
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: Text(l10n.activeOnly,
-                      style: const TextStyle(fontSize: 12)),
-                  selected: _activeOnly,
-                  onSelected: (v) {
-                    setState(() => _activeOnly = v);
-                    _load();
-                  },
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabCtrl,
-              children: [
-                _buildList(context, l10n),
-                _buildList(context, l10n),
-              ],
+            Expanded(
+              child: TabBarView(
+                controller: _tabCtrl,
+                children: [
+                  _buildList(context, l10n),
+                  _buildList(context, l10n),
+                ],
+              ),
             ),
-          ),
-        ],
-      )),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'fab_customers',
         onPressed: () => _openForm(),
@@ -238,18 +225,30 @@ class _CustomersScreenState extends State<CustomersScreen>
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
+    final theme = Theme.of(context);
     if (_error != null) {
       return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-          const SizedBox(height: 12),
-          Text(
-            ErrorUtils.toFriendlyMessage(_error!, l10n),
-            textAlign: TextAlign.center,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 48, color: theme.colorScheme.error),
+              const SizedBox(height: 12),
+              Text(
+                ErrorUtils.toFriendlyMessage(_error!, l10n),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.tonalIcon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(l10n.retry),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-        ]),
+        ),
       );
     }
     if (_contacts == null) {
@@ -257,37 +256,27 @@ class _CustomersScreenState extends State<CustomersScreen>
     }
     final contacts = _contacts!;
     if (contacts.isEmpty) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(
-            _filterType == 'supplier'
-                ? Icons.store_outlined
-                : Icons.people_alt_outlined,
-            size: 72,
-            color: Colors.grey.shade300,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _filterType == 'supplier' ? l10n.noSuppliers : l10n.noCustomers,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
-          ),
-          const SizedBox(height: 24),
-          FilledButton.tonal(
-            onPressed: () => _openForm(),
-            child: Text(_filterType == 'supplier'
-                ? l10n.addSupplierNew
-                : l10n.addCustomerNew),
-          ),
-        ]),
+      if (_query.isNotEmpty) {
+        return AppEmptyState(
+          icon: Icons.search_off_rounded,
+          title: l10n.noSearchResults,
+          description: l10n.noSearchResultsHint,
+        );
+      }
+      return AppEmptyState(
+        icon: _filterType == 'supplier' ? Icons.store_outlined : Icons.people_alt_outlined,
+        title: _filterType == 'supplier' ? l10n.noSuppliers : l10n.noCustomers,
+        actionLabel: _filterType == 'supplier' ? l10n.addSupplierNew : l10n.addCustomerNew,
+        onAction: () => _openForm(),
       );
     }
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 100),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 100),
         itemCount: contacts.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 6),
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, i) => _ContactCard(
           contact: contacts[i],
           onTap: () => _openDetail(contacts[i]),
@@ -348,14 +337,14 @@ class _ContactCard extends StatelessWidget {
       opacity: contact.active ? 1.0 : 0.6,
       child: Material(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
           child: Ink(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
               border: Border.all(
                 color: contact.active
                     ? cs.outlineVariant

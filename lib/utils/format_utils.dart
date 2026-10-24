@@ -23,4 +23,13 @@ class FormatUtils {
     }
     return formatted;
   }
+
+  /// Formats a tax rate cleanly, preserving decimal precision without showing
+  /// trailing zeros (e.g. 15.0 -> "15%", 15.5 -> "15.5%", 5.25 -> "5.25%").
+  static String formatTaxRate(double rate) {
+    if (rate % 1 == 0) {
+      return '${rate.toStringAsFixed(0)}%';
+    }
+    return '${NumberFormat('#,##0.##').format(rate)}%';
+  }
 }

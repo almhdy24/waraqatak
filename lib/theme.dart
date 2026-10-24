@@ -143,6 +143,31 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: radius12),
       ),
       dividerTheme: DividerThemeData(color: scheme.outlineVariant, space: 1),
+      chipTheme: ChipThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        side: BorderSide(color: scheme.outlineVariant),
+        backgroundColor: scheme.surface,
+        selectedColor: scheme.primary.withValues(alpha: 0.15),
+        labelStyle: TextStyle(
+          fontFamily: 'Tajawal',
+          fontSize: 13,
+          color: scheme.onSurface,
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          textStyle: WidgetStateProperty.all(
+            const TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: radius12),

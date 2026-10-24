@@ -1,8 +1,10 @@
 import '../database/database_helper.dart';
+import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
+import '../utils/money_utils.dart';
 import 'inventory_service.dart';
 
 /// Single item representing a product's sales, costs, profit, and stock performance.
@@ -74,6 +76,8 @@ class ProductPerformanceSummary {
   final int unvaluedSalesCount;
   final Set<String> currencies;
 
+  bool get hasMultipleCurrencies => currencies.length > 1;
+
   const ProductPerformanceSummary({
     required this.items,
     required this.totalSalesRevenue,
@@ -114,6 +118,7 @@ class PurchaseReportSummary {
   final double totalRemaining;
   final int cancelledCount;
   final Set<String> currencies;
+  final Map<String, ({double purchases, double paid, double remaining})> totalsByCurrency;
 
   const PurchaseReportSummary({
     required this.items,
@@ -122,6 +127,7 @@ class PurchaseReportSummary {
     required this.totalRemaining,
     required this.cancelledCount,
     required this.currencies,
+    this.totalsByCurrency = const {},
   });
 }
 
@@ -224,17 +230,15 @@ class BusinessReportingService {
       'p.is_active = 1',
       "p.type = 'product'",
     ];
-    final args = <Object?>[
-      from.toIso8601String(),
-      to.toIso8601String(),
-    ];
+    final productArgs = <Object?>[];
 
     if (category != null && category.isNotEmpty && category != 'all') {
       conditions.add('p.category = ?');
-      args.add(category);
+      productArgs.add(category);
     }
 
-    final sql = '''
+    // 1. Fetch eligible active products
+    final productRows = await db.rawQuery('''
       SELECT
         p.id,
         p.name,
@@ -242,33 +246,106 @@ class BusinessReportingService {
         p.unit,
         p.stock_quantity,
         p.average_cost,
-        p.cost_status,
-        COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN di.quantity ELSE 0 END), 0) AS sales_qty,
-        COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN di.total ELSE 0 END), 0) AS sales_revenue,
-        COALESCE(SUM(CASE WHEN d.type = 'invoice' AND di.total_cost IS NOT NULL THEN di.total_cost ELSE 0 END), 0) AS known_cogs,
-        COUNT(CASE WHEN d.type = 'invoice' AND di.quantity > 0 AND di.total_cost IS NULL THEN 1 END) AS unknown_cost_sales_count,
-        COUNT(DISTINCT CASE WHEN d.type = 'invoice' THEN d.id END) AS transaction_count,
-        GROUP_CONCAT(DISTINCT d.currency_code) AS currencies
+        p.cost_status
       FROM products p
-      LEFT JOIN document_items di ON di.product_id = p.id
-      LEFT JOIN documents d ON d.id = di.document_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY p.id
+    ''', productArgs);
+
+    // 2. Fetch all line items from eligible finalized invoices in the period
+    final invoiceItemRows = await db.rawQuery('''
+      SELECT
+        di.id AS item_id,
+        di.document_id,
+        di.product_id,
+        di.quantity,
+        di.total AS line_total,
+        di.total_cost,
+        d.subtotal AS doc_subtotal,
+        d.discount AS doc_discount,
+        d.currency_code
+      FROM document_items di
+      JOIN documents d ON d.id = di.document_id
+      WHERE d.type = 'invoice'
         AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
         AND d.date >= ? AND d.date <= ?
-      WHERE ${conditions.join(' AND ')}
-      GROUP BY p.id
-    ''';
+      ORDER BY d.id, di.id
+    ''', [from.toIso8601String(), to.toIso8601String()]);
 
-    final rows = await db.rawQuery(sql, args);
+    // Group items by invoice document to allocate document-level discount across lines
+    final docItemsMap = <int, List<Map<String, Object?>>>{};
+    for (final row in invoiceItemRows) {
+      final docId = (row['document_id'] as num).toInt();
+      docItemsMap.putIfAbsent(docId, () => []).add(row);
+    }
+
+    final productAggregators = <int, _ProductSalesAggregator>{};
+    for (final p in productRows) {
+      final pid = (p['id'] as num).toInt();
+      productAggregators[pid] = _ProductSalesAggregator();
+    }
+
+    final allCurrencies = <String>{};
+
+    for (final entry in docItemsMap.entries) {
+      final docId = entry.key;
+      final docItems = entry.value;
+      if (docItems.isEmpty) continue;
+
+      final docSubtotal = (docItems.first['doc_subtotal'] as num?)?.toDouble() ?? 0.0;
+      final docDiscount = (docItems.first['doc_discount'] as num?)?.toDouble() ?? 0.0;
+      final currencyCode = (docItems.first['currency_code'] as String?)?.trim() ?? 'SDG';
+      final decimals = Currency.decimalDigitsForCode(currencyCode);
+
+      if (currencyCode.isNotEmpty) {
+        allCurrencies.add(currencyCode);
+      }
+
+      final lineAmounts = docItems
+          .map((r) => (r['line_total'] as num?)?.toDouble() ?? 0.0)
+          .toList();
+
+      final netRevenues = MoneyUtils.allocateDocumentDiscount(
+        docSubtotal: docSubtotal,
+        docDiscount: docDiscount,
+        lineAmounts: lineAmounts,
+        decimalDigits: decimals,
+      );
+
+      for (var i = 0; i < docItems.length; i++) {
+        final item = docItems[i];
+        final pid = item['product_id'] as int?;
+        if (pid == null) continue;
+        final agg = productAggregators[pid];
+        if (agg == null) continue; // product not in current category filter or inactive
+
+        final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
+        final totalCost = (item['total_cost'] as num?)?.toDouble();
+        final netRev = netRevenues[i];
+
+        agg.salesQty += qty;
+        agg.salesRevenue = MoneyUtils.round(agg.salesRevenue + netRev, decimals);
+        if (totalCost != null) {
+          agg.knownCogs = MoneyUtils.round(agg.knownCogs + totalCost, decimals);
+        }
+        if (qty > 0 && totalCost == null) {
+          agg.unknownCostSalesCount += 1;
+        }
+        agg.transactionIds.add(docId);
+        if (currencyCode.isNotEmpty) {
+          agg.currencies.add(currencyCode);
+        }
+      }
+    }
 
     double totalRevenue = 0.0;
     double totalCogs = 0.0;
     double totalTrustedGrossProfit = 0.0;
     int unvaluedSalesTotal = 0;
-    final allCurrencies = <String>{};
 
     final items = <ProductPerformanceItem>[];
 
-    for (final r in rows) {
+    for (final r in productRows) {
       final pid = (r['id'] as num).toInt();
       final name = r['name'] as String? ?? '';
       final cat = r['category'] as String?;
@@ -278,21 +355,15 @@ class BusinessReportingService {
       final costStatus = r['cost_status'] as String? ?? Product.costStatusUnknown;
       final isCostKnown = costStatus == Product.costStatusKnown && avgCost != null;
 
-      final salesQty = (r['sales_qty'] as num?)?.toDouble() ?? 0.0;
-      final revenue = (r['sales_revenue'] as num?)?.toDouble() ?? 0.0;
-      final cogs = (r['known_cogs'] as num?)?.toDouble() ?? 0.0;
-      final unknownCount = (r['unknown_cost_sales_count'] as num?)?.toInt() ?? 0;
-      final txCount = (r['transaction_count'] as num?)?.toInt() ?? 0;
-      final currenciesRaw = r['currencies'] as String?;
-
-      if (currenciesRaw != null) {
-        for (final c in currenciesRaw.split(',')) {
-          if (c.trim().isNotEmpty) allCurrencies.add(c.trim());
-        }
-      }
+      final agg = productAggregators[pid] ?? _ProductSalesAggregator();
+      final salesQty = agg.salesQty;
+      final revenue = agg.salesRevenue;
+      final cogs = agg.knownCogs;
+      final unknownCount = agg.unknownCostSalesCount;
+      final txCount = agg.transactionIds.length;
 
       final isReliable = unknownCount == 0;
-      final grossProfit = revenue - cogs;
+      final grossProfit = MoneyUtils.round(revenue - cogs);
       // Show partial margin even when unreliable so callers can disclose it;
       // isCostReliable=false signals that the cost figure is incomplete.
       final margin = revenue > 0 ? (grossProfit / revenue) * 100 : 0.0;
@@ -351,10 +422,10 @@ class BusinessReportingService {
 
     return ProductPerformanceSummary(
       items: items,
-      totalSalesRevenue: totalRevenue,
-      totalCogs: totalCogs,
-      totalGrossProfit: totalRevenue - totalCogs,
-      totalTrustedGrossProfit: totalTrustedGrossProfit,
+      totalSalesRevenue: MoneyUtils.round(totalRevenue),
+      totalCogs: MoneyUtils.round(totalCogs),
+      totalGrossProfit: MoneyUtils.round(totalRevenue - totalCogs),
+      totalTrustedGrossProfit: MoneyUtils.round(totalTrustedGrossProfit),
       hasIncompleteCosts: unvaluedSalesTotal > 0,
       unvaluedSalesCount: unvaluedSalesTotal,
       currencies: allCurrencies,
@@ -420,6 +491,8 @@ class BusinessReportingService {
     double totalRemaining = 0.0;
     int cancelledCount = 0;
     final currencies = <String>{};
+    final totalsByCurrency =
+        <String, ({double purchases, double paid, double remaining})>{};
 
     final items = <PurchaseReportItem>[];
 
@@ -437,6 +510,14 @@ class BusinessReportingService {
         totalPurchases += doc.total;
         totalPaid += doc.paid;
         totalRemaining += doc.remaining;
+
+        final prev = totalsByCurrency[doc.currencyCode] ??
+            (purchases: 0.0, paid: 0.0, remaining: 0.0);
+        totalsByCurrency[doc.currencyCode] = (
+          purchases: prev.purchases + doc.total,
+          paid: prev.paid + doc.paid,
+          remaining: prev.remaining + doc.remaining,
+        );
       }
 
       items.add(PurchaseReportItem(
@@ -456,6 +537,7 @@ class BusinessReportingService {
       totalRemaining: totalRemaining,
       cancelledCount: cancelledCount,
       currencies: currencies,
+      totalsByCurrency: totalsByCurrency,
     );
   }
 
@@ -859,5 +941,14 @@ class AdvancedInventoryMetrics {
     required this.totalInventoryValuation,
     required this.totalCogsInPeriod,
   });
+}
+
+class _ProductSalesAggregator {
+  double salesQty = 0.0;
+  double salesRevenue = 0.0;
+  double knownCogs = 0.0;
+  int unknownCostSalesCount = 0;
+  final Set<int> transactionIds = <int>{};
+  final Set<String> currencies = <String>{};
 }
 

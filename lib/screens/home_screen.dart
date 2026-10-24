@@ -5,11 +5,15 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/date_range_filter.dart';
 import '../models/document.dart';
-import '../models/document_status.dart';
 import '../models/entitlement.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_metric_card.dart';
+import '../widgets/app_section_header.dart';
 import '../widgets/pro_upgrade_sheet.dart';
+import '../widgets/status_badge.dart';
 import 'activation_screen.dart';
 import 'business_setup_screen.dart';
 import 'custom_document_screen.dart';
@@ -43,6 +47,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _freeModeBannerDismissed = false;
 
   static final _numFmt = NumberFormat('#,##0');
+  static final _dateFmt = DateFormat('dd/MM/yyyy');
 
   @override
   void initState() {
@@ -609,56 +614,66 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(height: 24),
 
                 // Recent documents
-                Text(
-                  l10n.recentDocuments,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                AppSectionHeader(
+                  title: l10n.recentDocuments,
+                  count: _recentDocuments.length,
+                  padding: const EdgeInsets.only(bottom: 8),
                 ),
-                const SizedBox(height: 8),
                 if (_recentDocuments.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text(
-                        l10n.noDocuments,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                    ),
+                  AppEmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: l10n.noDocuments,
+                    actionLabel: l10n.createInvoice,
+                    onAction: () => _openScreen(const InvoiceScreen()),
                   )
                 else
                   ..._recentDocuments.map(
-                    (doc) => Card(
-                      elevation: 0,
+                    (doc) => Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: AppDesignTokens.br12,
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6),
                         ),
+                        boxShadow: AppDesignTokens.softShadow(context),
                       ),
                       child: ListTile(
-                        leading: Icon(
-                          _iconForType(doc.type),
-                          color: primaryColor,
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.08),
+                            borderRadius: AppDesignTokens.br8,
+                          ),
+                          child: Icon(_iconForType(doc.type), color: primaryColor, size: 20),
                         ),
                         title: Text(
                           doc.documentNumber,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                         subtitle: Text(
-                          '${doc.recipientName ?? ''} · ${_numFmt.format(doc.total)} ${doc.currencySymbol}',
+                          doc.recipientName?.isNotEmpty == true
+                              ? doc.recipientName!
+                              : _dateFmt.format(doc.date),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                        trailing: doc.status == DocumentStatus.draft
-                            ? const Icon(
-                                Icons.edit_outlined,
-                                size: 16,
-                                color: Colors.grey,
-                              )
-                            : null,
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            const SizedBox(height: 3),
+                            StatusBadge(status: doc.status),
+                          ],
+                        ),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -834,52 +849,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     required Color color,
     String? subtitle,
   }) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, size: 16, color: color),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: color == Colors.grey
-                    ? Theme.of(context).colorScheme.onSurface
-                    : color,
-              ),
-            ),
-            if (subtitle != null)
-              Text(
-                subtitle,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF9CA3AF)),
-              ),
-          ],
-        ),
-      ),
+    return AppMetricCard(
+      title: title,
+      value: value,
+      icon: icon,
+      color: color == Colors.grey ? null : color,
+      subtitle: subtitle,
+      compact: true,
     );
   }
 

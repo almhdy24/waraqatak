@@ -160,6 +160,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       if (summary.hasIncompleteCosts) {
         warning = '$warning\n${l10n.unknownCostNotice} (${summary.unvaluedSalesCount} مبيعات)';
       }
+      if (summary.hasMultipleCurrencies) {
+        warning = '$warning\n${l10n.mixedCurrenciesNotice}';
+      }
     } else {
       // Product Performance
       reportTitle = l10n.productPerformance;
@@ -198,6 +201,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       warning = l10n.grossProfitNotice;
       if (summary.hasIncompleteCosts) {
         warning = '$warning\n${l10n.unknownCostNotice}';
+      }
+      if (summary.hasMultipleCurrencies) {
+        warning = '$warning\n${l10n.mixedCurrenciesNotice}';
       }
     }
 
@@ -393,6 +399,22 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                       Expanded(
                         child: Text(
                           l10n.costIncomplete,
+                          style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (summary.hasMultipleCurrencies)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 13, color: Colors.amber.shade800),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          l10n.mixedCurrenciesNotice,
                           style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
                         ),
                       ),

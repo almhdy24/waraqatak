@@ -5,6 +5,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
 import '../models/payment_method.dart';
+import '../widgets/app_design_tokens.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -121,6 +122,11 @@ class _VoucherScreenState extends State<VoucherScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -150,6 +156,11 @@ class _VoucherScreenState extends State<VoucherScreen> {
             ),
             const SizedBox(height: 16),
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -177,6 +188,11 @@ class _VoucherScreenState extends State<VoucherScreen> {
             ),
             const SizedBox(height: 16),
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -197,6 +213,11 @@ class _VoucherScreenState extends State<VoucherScreen> {
             ),
             const SizedBox(height: 16),
             Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7)),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -222,7 +243,13 @@ class _VoucherScreenState extends State<VoucherScreen> {
               height: 52,
               child: FilledButton(
                 onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(backgroundColor: primaryColor, foregroundColor: Theme.of(context).colorScheme.onPrimary),
+                style: FilledButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDesignTokens.buttonRadius),
+                  ),
+                ),
                 child: _saving
                     ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
                     : Text(l10n.save),
