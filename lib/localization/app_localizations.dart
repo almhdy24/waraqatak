@@ -508,17 +508,25 @@ class AppLocalizations {
 
   String get category => _t('الفئة', 'Category');
   String get allCategories => _t('كل الفئات', 'All Categories');
-  String get categoryHint => _t('الفئة (مثال: مواد غذائية، أجهزة)', 'Category (e.g. Groceries, Hardware)');
+  String get categoryHint => _t(
+    'الفئة (مثال: مواد غذائية، أجهزة)',
+    'Category (e.g. Groceries, Hardware)',
+  );
   String get adjustmentReasonRequired =>
       _t('سبب التعديل مطلوب لتأكيد الحركة', 'Adjustment reason is required');
-  String get stockCannotBeNegative =>
-      _t('المخزون الناتج لا يمكن أن يكون سالباً', 'Resulting stock cannot be negative');
-  String get allMovementsHistory => _t('سجل حركات المخزون', 'Stock Movement History');
+  String get stockCannotBeNegative => _t(
+    'المخزون الناتج لا يمكن أن يكون سالباً',
+    'Resulting stock cannot be negative',
+  );
+  String get allMovementsHistory =>
+      _t('سجل حركات المخزون', 'Stock Movement History');
   String get healthyStock => _t('مخزون كافٍ', 'Healthy Stock');
   String get filterByMovementType => _t('نوع الحركة', 'Movement Type');
   String get viewFullHistory => _t('عرض السجل الكامل', 'View Full History');
-  String get scanOrSearchProduct => _t('مسح أو بحث عن منتج', 'Scan or search product');
-  String get createProductWithBarcode => _t('إنشاء منتج بهذا الباركود', 'Create product with this barcode');
+  String get scanOrSearchProduct =>
+      _t('مسح أو بحث عن منتج', 'Scan or search product');
+  String get createProductWithBarcode =>
+      _t('إنشاء منتج بهذا الباركود', 'Create product with this barcode');
   String get allProducts => _t('كل المنتجات', 'All Products');
 
   // ========== PHASE 3.3 — DASHBOARD DATE FILTERS ==========
@@ -1122,8 +1130,7 @@ class AppLocalizations {
   );
   String get legacyCostSummaryTitle =>
       _t('ملخص تدقيق التكلفة التاريخية', 'Historical Cost Audit Summary');
-  String get valuedStockCount =>
-      _t('منتجات مسعرة بالتكلفة', 'Valued Products');
+  String get valuedStockCount => _t('منتجات مسعرة بالتكلفة', 'Valued Products');
   String get unvaluedStockQty =>
       _t('كمية المخزون غير المقيمة', 'Unvalued Stock Qty');
   String get close => _t('إغلاق', 'Close');
@@ -1139,12 +1146,9 @@ class AppLocalizations {
   String get outOfStockReport =>
       _t('تقرير نفاد المخزون', 'Out of Stock Report');
   String get shortageQuantity => _t('الكمية المطلوبة', 'Shortage Qty');
-  String get salesByProduct =>
-      _t('المبيعات حسب المنتج', 'Sales by Product');
-  String get profitByProduct =>
-      _t('الأرباح حسب المنتج', 'Profit by Product');
-  String get productPerformance =>
-      _t('أداء المنتجات', 'Product Performance');
+  String get salesByProduct => _t('المبيعات حسب المنتج', 'Sales by Product');
+  String get profitByProduct => _t('الأرباح حسب المنتج', 'Profit by Product');
+  String get productPerformance => _t('أداء المنتجات', 'Product Performance');
   String get sortByRevenue => _t('حسب الإيراد', 'By Revenue');
   String get sortByQuantity => _t('حسب الكمية', 'By Quantity');
   String get sortByProfit => _t('حسب الربح', 'By Profit');
@@ -1156,8 +1160,7 @@ class AppLocalizations {
   String get printOrShareReport =>
       _t('طباعة أو مشاركة التقرير', 'Print / Share Report');
   String get reportPeriod => _t('فترة التقرير', 'Report Period');
-  String get reportGeneratedAt =>
-      _t('تاريخ وتوقيت التقرير', 'Generated At');
+  String get reportGeneratedAt => _t('تاريخ وتوقيت التقرير', 'Generated At');
   String get unitsSummary =>
       _t('إجمالي الكميات حسب الوحدة', 'Quantities by Unit');
   String get grossProfitNotice => _t(
@@ -1190,10 +1193,14 @@ class AppLocalizations {
   String get issued => _t('صادرة', 'Issued');
 
   // Phase 5 — Advanced Pro Features
-  String get featureStocktake => _t('جرد وتسوية المخزون', 'Stocktake & Reconciliation');
-  String get featureBulkPriceUpdate => _t('تعديل الأسعار بالجملة', 'Bulk Price Editing');
-  String get featureCsvImportExport => _t('استيراد وتصدير CSV', 'CSV Import & Export');
-  String get featureInventoryAudit => _t('سجل تدقيق المخزون', 'Inventory Audit Log');
+  String get featureStocktake =>
+      _t('جرد وتسوية المخزون', 'Stocktake & Reconciliation');
+  String get featureBulkPriceUpdate =>
+      _t('تعديل الأسعار بالجملة', 'Bulk Price Editing');
+  String get featureCsvImportExport =>
+      _t('استيراد وتصدير CSV', 'CSV Import & Export');
+  String get featureInventoryAudit =>
+      _t('سجل تدقيق المخزون', 'Inventory Audit Log');
 
   String get stocktakeTitle => _t('جرد المخزون', 'Stocktake');
   String get startStocktake => _t('بدء جلسة جرد', 'Start Stocktake');
@@ -1202,8 +1209,10 @@ class AppLocalizations {
   String get countedQty => _t('الكمية الفعلية', 'Counted Qty');
   String get variance => _t('الفارق', 'Variance');
   String get uncounted => _t('غير مجرود', 'Uncounted');
-  String get reviewAndFinalize => _t('مراجعة وتأكيد الجرد', 'Review & Finalize');
-  String get confirmFinalizeStocktake => _t('تأكيد تسوية المخزون', 'Confirm Stock Reconciliation');
+  String get reviewAndFinalize =>
+      _t('مراجعة وتأكيد الجرد', 'Review & Finalize');
+  String get confirmFinalizeStocktake =>
+      _t('تأكيد تسوية المخزون', 'Confirm Stock Reconciliation');
   String get stocktakeDiscrepancyWarning => _t(
     'سيتم تعديل كميات المخزون في النظام لتطابق الجرد الفعلي بدقة مع تسجيل حركات التسوية',
     'System stock quantities will be updated to match physical counts with audit adjustments recorded',
@@ -1212,8 +1221,10 @@ class AppLocalizations {
     'تنبيه: حدثت حركات مخزون بعد بدء الجلسة؛ سيتم حساب التسوية بالنسبة للرصيد الحالي بدقة',
     'Notice: Stock movements occurred after session start; reconciliation will adjust against current stock accurately',
   );
-  String get stocktakeFinalizedSuccess => _t('تمت تسوية الجرد بنجاح', 'Stocktake finalized successfully');
-  String get noStocktakeSessions => _t('لا توجد جلسات جرد سابقة', 'No stocktake sessions yet');
+  String get stocktakeFinalizedSuccess =>
+      _t('تمت تسوية الجرد بنجاح', 'Stocktake finalized successfully');
+  String get noStocktakeSessions =>
+      _t('لا توجد جلسات جرد سابقة', 'No stocktake sessions yet');
   String get sessionStatusInProgress => _t('قيد الجرد', 'In Progress');
   String get sessionStatusCompleted => _t('مكتمل', 'Completed');
   String get sessionStatusCancelled => _t('ملغي', 'Cancelled');
@@ -1223,16 +1234,20 @@ class AppLocalizations {
     'Are you sure you want to cancel this stocktake session without reconciliation?',
   );
 
-  String get bulkPricingTitle => _t('تعديل الأسعار بالجملة', 'Bulk Price Editing');
+  String get bulkPricingTitle =>
+      _t('تعديل الأسعار بالجملة', 'Bulk Price Editing');
   String get selectProducts => _t('تحديد المنتجات', 'Select Products');
   String get selectAll => _t('تحديد الكل', 'Select All');
   String get deselectAll => _t('إلغاء تحديد الكل', 'Deselect All');
   String get operationType => _t('نوع العملية', 'Operation Type');
-  String get percentageIncrease => _t('زيادة بنسبة مئوية (%)', 'Percentage Increase (%)');
-  String get percentageDecrease => _t('تخفيض بنسبة مئوية (%)', 'Percentage Decrease (%)');
+  String get percentageIncrease =>
+      _t('زيادة بنسبة مئوية (%)', 'Percentage Increase (%)');
+  String get percentageDecrease =>
+      _t('تخفيض بنسبة مئوية (%)', 'Percentage Decrease (%)');
   String get fixedIncrease => _t('زيادة بمبلغ ثابت', 'Fixed Amount Increase');
   String get fixedDecrease => _t('تخفيض بمبلغ ثابت', 'Fixed Amount Decrease');
-  String get setNewPrice => _t('تحديد سعر جديد مباشر', 'Set New Price Directly');
+  String get setNewPrice =>
+      _t('تحديد سعر جديد مباشر', 'Set New Price Directly');
   String get targetPrice => _t('السعر المستهدف', 'Target Price');
   String get sellingPrice => _t('سعر البيع', 'Selling Price');
   String get bothPrices => _t('سعري البيع والشراء', 'Both Sale & Purchase');
@@ -1246,18 +1261,30 @@ class AppLocalizations {
   String get currentPrice => _t('السعر الحالي', 'Current Price');
   String get proposedPrice => _t('السعر المقترح', 'Proposed Price');
   String get priceDifference => _t('الفرق', 'Difference');
-  String get confirmPriceUpdate => _t('تأكيد تعديل أسعار المنتجات المحددة؟', 'Confirm price update for selected products?');
-  String get invalidPriceWarning => _t('تحذير: توجد أسعار مقترحة سالبة أو غير صالحة', 'Warning: Negative or invalid proposed prices detected');
-  String get pricesUpdatedSuccess => _t('تم تعديل الأسعار بنجاح', 'Prices updated successfully');
+  String get confirmPriceUpdate => _t(
+    'تأكيد تعديل أسعار المنتجات المحددة؟',
+    'Confirm price update for selected products?',
+  );
+  String get invalidPriceWarning => _t(
+    'تحذير: توجد أسعار مقترحة سالبة أو غير صالحة',
+    'Warning: Negative or invalid proposed prices detected',
+  );
+  String get pricesUpdatedSuccess =>
+      _t('تم تعديل الأسعار بنجاح', 'Prices updated successfully');
 
-  String get csvImportExportTitle => _t('استيراد وتصدير CSV', 'CSV Import & Export');
-  String get exportProductsCsv => _t('تصدير المنتجات إلى CSV', 'Export Products to CSV');
+  String get csvImportExportTitle =>
+      _t('استيراد وتصدير CSV', 'CSV Import & Export');
+  String get exportProductsCsv =>
+      _t('تصدير المنتجات إلى CSV', 'Export Products to CSV');
   String get downloadTemplate => _t('تحميل نموذج CSV', 'Download CSV Template');
-  String get importProductsCsv => _t('استيراد منتجات من CSV', 'Import Products from CSV');
+  String get importProductsCsv =>
+      _t('استيراد منتجات من CSV', 'Import Products from CSV');
   String get selectCsvFile => _t('اختر ملف CSV', 'Select CSV File');
-  String get duplicateHandling => _t('طريقة التعامل مع المنتجات المكررة', 'Duplicate Handling Strategy');
+  String get duplicateHandling =>
+      _t('طريقة التعامل مع المنتجات المكررة', 'Duplicate Handling Strategy');
   String get skipDuplicates => _t('تخطي المنتجات الموجودة', 'Skip Existing');
-  String get updateExisting => _t('تحديث بيانات المنتجات الموجودة', 'Update Existing Data');
+  String get updateExisting =>
+      _t('تحديث بيانات المنتجات الموجودة', 'Update Existing Data');
   String get previewImport => _t('معاينة الاستيراد', 'Preview Import');
   String get validRows => _t('الصفوف الصالحة', 'Valid Rows');
   String get invalidRows => _t('صفوف بها أخطاء', 'Rows with Errors');
@@ -1271,18 +1298,28 @@ class AppLocalizations {
     'Note: Stock quantities are not modified via CSV to preserve inventory integrity',
   );
 
-  String get advancedInventoryAnalytics => _t('تحليلات المخزون المتقدمة', 'Advanced Inventory Analytics');
-  String get inventoryTurnover => _t('معدل دوران المخزون', 'Inventory Turnover');
-  String get salesVelocity => _t('سرعة المبيعات (وحدة/يوم)', 'Sales Velocity (units/day)');
-  String get estimatedDaysRemaining => _t('الأيام المتبقية التقريبية', 'Est. Days Remaining');
-  String get slowMovingStock => _t('مخزون بطيء الحركة / راكد', 'Slow-Moving Stock');
+  String get advancedInventoryAnalytics =>
+      _t('تحليلات المخزون المتقدمة', 'Advanced Inventory Analytics');
+  String get inventoryTurnover =>
+      _t('معدل دوران المخزون', 'Inventory Turnover');
+  String get salesVelocity =>
+      _t('سرعة المبيعات (وحدة/يوم)', 'Sales Velocity (units/day)');
+  String get estimatedDaysRemaining =>
+      _t('الأيام المتبقية التقريبية', 'Est. Days Remaining');
+  String get slowMovingStock =>
+      _t('مخزون بطيء الحركة / راكد', 'Slow-Moving Stock');
   String get tiedUpCapital => _t('رأس المال الراكد', 'Dormant Capital');
-  String get reorderRecommendations => _t('توصيات إعادة الطلب', 'Reorder Recommendations');
-  String get negativeMarginAlert => _t('تنبيه: هامش ربح سالب', 'Negative Margin Alert');
-  String get sellingBelowCost => _t('البيع بسعر أقل من التكلفة', 'Selling Below Cost');
-  String get categoryValuationShare => _t('توزيع قيمة المخزون حسب الفئة', 'Stock Value by Category');
+  String get reorderRecommendations =>
+      _t('توصيات إعادة الطلب', 'Reorder Recommendations');
+  String get negativeMarginAlert =>
+      _t('تنبيه: هامش ربح سالب', 'Negative Margin Alert');
+  String get sellingBelowCost =>
+      _t('البيع بسعر أقل من التكلفة', 'Selling Below Cost');
+  String get categoryValuationShare =>
+      _t('توزيع قيمة المخزون حسب الفئة', 'Stock Value by Category');
 
-  String get auditHistoryTitle => _t('سجل التدقيق والمراجعة', 'Audit Log & Review');
+  String get auditHistoryTitle =>
+      _t('سجل التدقيق والمراجعة', 'Audit Log & Review');
   String get eventType => _t('نوع الحدث', 'Event Type');
   String get allEvents => _t('كل الأحداث', 'All Events');
   String get eventStocktake => _t('تسوية جرد', 'Stocktake');
@@ -1290,7 +1327,8 @@ class AppLocalizations {
   String get eventCsvImport => _t('استيراد CSV', 'CSV Import');
   String get eventStockAdjustment => _t('تعديل يدوي', 'Manual Adjustment');
   String get eventCostReconciled => _t('تسوية تكلفة', 'Cost Reconciled');
-  String get noMatchingProduct => _t('لم يتم العثور على منتج مطابق', 'No matching product');
+  String get noMatchingProduct =>
+      _t('لم يتم العثور على منتج مطابق', 'No matching product');
   String get statusMatched => _t('مطابق', 'Matched');
 
   // ========== UI/UX QUALITY ENHANCEMENTS & ACTIONS ==========
@@ -1307,7 +1345,8 @@ class AppLocalizations {
   String get editSupplier => _t('تعديل بيانات المورد', 'Edit Supplier');
   String get addCustomerNew => _t('إضافة عميل جديد', 'Add New Customer');
   String get addSupplierNew => _t('إضافة مورد جديد', 'Add New Supplier');
-  String get confirmStockAdjustment => _t('تأكيد تسوية المخزون', 'Confirm Stock Adjustment');
+  String get confirmStockAdjustment =>
+      _t('تأكيد تسوية المخزون', 'Confirm Stock Adjustment');
   String get enterAdjustmentDelta => _t(
     'يرجى تحديد كمية التعديل (قيمة غير صفرية)',
     'Please enter an adjustment quantity (non-zero)',
@@ -1330,22 +1369,62 @@ class AppLocalizations {
   String get value => _t('القيمة', 'Value');
   String get movementStockIn => _t('وارد', 'Stock In');
   String get movementStockOut => _t('منصرف', 'Stock Out');
-  String get reportCatFinancial => _t('التقارير المالية والأرباح', 'Financial & Profit Reports');
-  String get reportCatSalesPurchases => _t('المبيعات والمشتريات والمدفوعات', 'Sales, Purchases & Payments');
-  String get reportCatInventory => _t('المخزون وحركة المواد', 'Inventory & Stock Analytics');
-  String get reportCatAudit => _t('سجلات التدقيق والمراجعة', 'Audit & Activity Logs');
-  String get reportSubtitleSales => _t('ملخص الفواتير، تكلفة البضاعة المباعة ومجمل الربح', 'Invoices, COGS and gross profit summary');
-  String get reportSubtitlePurchases => _t('أوامر الشراء المسجلة ومستحقات الموردين', 'Purchase orders and supplier payables');
-  String get reportSubtitlePayments => _t('حركة المقبوضات والمدفوعات النقدية والبنكية', 'Inbound & outbound cash and bank receipts');
-  String get reportSubtitleAccounting => _t('قائمة الدخل، الميزانية العمومية ودفتر الأستاذ العام', 'Income statement, balance sheet & general ledger');
-  String get reportSubtitleCustomers => _t('أرصدة العملاء، مبيعاتهم وحالة التحصيل', 'Customer balances, revenue & receivables');
-  String get reportSubtitleSuppliers => _t('أرصدة الموردين، مشترياتهم وحالة السداد', 'Supplier balances, purchases & payables');
-  String get reportSubtitleInventory => _t('تقييم المخزون الحالي بالتكلفة وحالة توفر المواد', 'Stock valuation at cost and availability');
-  String get reportSubtitleLowStock => _t('قائمة النواقص وحساب الكميات المطلوبة لإعادة الطلب', 'Shortages and replenishment calculations');
-  String get reportSubtitleMovements => _t('سجل حركات المخزون الواردة والمنصرفة مع الأرصدة', 'Inbound and outbound movements with balances');
-  String get reportSubtitleProducts => _t('تحليل أداء المنتجات حسب المبيعات والكميات والأرباح', 'Product performance by sales, qty and profit');
-  String get reportSubtitleAdvancedAnalytics => _t('معدل دوران المخزون، الأصناف الراكدة وهامش الربح', 'Inventory turnover, slow stock & margin alerts');
-  String get reportSubtitleAudit => _t('سجل الأنشطة والتعديلات والتسويات المخزنية', 'Activity log, price changes & adjustments');
+  String get reportCatFinancial =>
+      _t('التقارير المالية والأرباح', 'Financial & Profit Reports');
+  String get reportCatSalesPurchases =>
+      _t('المبيعات والمشتريات والمدفوعات', 'Sales, Purchases & Payments');
+  String get reportCatInventory =>
+      _t('المخزون وحركة المواد', 'Inventory & Stock Analytics');
+  String get reportCatAudit =>
+      _t('سجلات التدقيق والمراجعة', 'Audit & Activity Logs');
+  String get reportSubtitleSales => _t(
+    'ملخص الفواتير، تكلفة البضاعة المباعة ومجمل الربح',
+    'Invoices, COGS and gross profit summary',
+  );
+  String get reportSubtitlePurchases => _t(
+    'أوامر الشراء المسجلة ومستحقات الموردين',
+    'Purchase orders and supplier payables',
+  );
+  String get reportSubtitlePayments => _t(
+    'حركة المقبوضات والمدفوعات النقدية والبنكية',
+    'Inbound & outbound cash and bank receipts',
+  );
+  String get reportSubtitleAccounting => _t(
+    'قائمة الدخل، الميزانية العمومية ودفتر الأستاذ العام',
+    'Income statement, balance sheet & general ledger',
+  );
+  String get reportSubtitleCustomers => _t(
+    'أرصدة العملاء، مبيعاتهم وحالة التحصيل',
+    'Customer balances, revenue & receivables',
+  );
+  String get reportSubtitleSuppliers => _t(
+    'أرصدة الموردين، مشترياتهم وحالة السداد',
+    'Supplier balances, purchases & payables',
+  );
+  String get reportSubtitleInventory => _t(
+    'تقييم المخزون الحالي بالتكلفة وحالة توفر المواد',
+    'Stock valuation at cost and availability',
+  );
+  String get reportSubtitleLowStock => _t(
+    'قائمة النواقص وحساب الكميات المطلوبة لإعادة الطلب',
+    'Shortages and replenishment calculations',
+  );
+  String get reportSubtitleMovements => _t(
+    'سجل حركات المخزون الواردة والمنصرفة مع الأرصدة',
+    'Inbound and outbound movements with balances',
+  );
+  String get reportSubtitleProducts => _t(
+    'تحليل أداء المنتجات حسب المبيعات والكميات والأرباح',
+    'Product performance by sales, qty and profit',
+  );
+  String get reportSubtitleAdvancedAnalytics => _t(
+    'معدل دوران المخزون، الأصناف الراكدة وهامش الربح',
+    'Inventory turnover, slow stock & margin alerts',
+  );
+  String get reportSubtitleAudit => _t(
+    'سجل الأنشطة والتعديلات والتسويات المخزنية',
+    'Activity log, price changes & adjustments',
+  );
 
   // ========== ACTIVATION SUPPORT & GUIDANCE ==========
   String get activationTroubleTitle =>
@@ -1354,8 +1433,10 @@ class AppLocalizations {
     'يمكنك التواصل مع الدعم عبر واتساب أو البريد الإلكتروني للمساعدة في حل المشكلة.',
     'You can contact support via WhatsApp or email for assistance with resolving activation issues.',
   );
-  String get activationSupportWhatsApp => _t('تواصل عبر واتساب', 'Contact via WhatsApp');
-  String get activationSupportEmail => _t('مراسلة عبر البريد', 'Contact via Email');
+  String get activationSupportWhatsApp =>
+      _t('تواصل عبر واتساب', 'Contact via WhatsApp');
+  String get activationSupportEmail =>
+      _t('مراسلة عبر البريد', 'Contact via Email');
   String get activationWhatsAppGreeting => _t(
     'مرحباً، أواجه صعوبة في تفعيل مفتاح الترخيص في تطبيق ورقتك وأحتاج مساعدة.',
     'Hello, I am having trouble activating my license key in Waraqatak and need help.',
@@ -1375,6 +1456,58 @@ class AppLocalizations {
   String get activationTipAttempts => _t(
     'تلميح: انتظر بضع دقائق قبل المحاولة مجدداً لتجنب الإيقاف المؤقت.',
     'Tip: Wait a few minutes before trying again to avoid temporary rate limits.',
+  );
+
+  // ========== DATABASE DIAGNOSTICS ==========
+  String get databaseDiagnosticsTitle =>
+      _t('فحص سلامة البيانات', 'Data Health & Diagnostics');
+  String get databaseDiagnosticsSubtitle => _t(
+    'تقرير قراءة فقط للتحقق من تكامل الأرصدة والقيود والمخزون',
+    'Read-only report on ledger, balance, and inventory integrity',
+  );
+  String get diagnosticsScanning =>
+      _t('جاري فحص قاعدة البيانات...', 'Scanning database...');
+  String get diagnosticsSummaryErrors => _t('أخطاء تكامل', 'Integrity Errors');
+  String get diagnosticsSummaryWarnings =>
+      _t('تنبيهات تدقيق', 'Audit Warnings');
+  String get diagnosticsSummaryInfo => _t('ملاحظات', 'Info');
+  String get diagnosticsCleanTitle =>
+      _t('قاعدة البيانات سليمة', 'Database is Clean');
+  String get diagnosticsCleanDesc => _t(
+    'تم فحص القيود والأرصدة والمخزون ولم يتم العثور على أي مشاكل أو تعارضات.',
+    'Verified records, balances, and inventory with zero discrepancies found.',
+  );
+  String get diagnosticsTotalChecks =>
+      _t('إجمالي الفحوصات المنفذة', 'Total checks executed');
+  String get diagnosticsLastScan => _t('وقت الفحص', 'Scan time');
+  String get diagnosticsCategoryAll => _t('الكل', 'All');
+  String get diagnosticsCategoryOrphaned =>
+      _t('سجلات يتيمة', 'Orphaned Records');
+  String get diagnosticsCategoryBalances => _t('تطابق الأرصدة', 'Balances');
+  String get diagnosticsCategoryStatuses =>
+      _t('حالات المستندات', 'Document Statuses');
+  String get diagnosticsCategoryPayments => _t('المدفوعات', 'Payments');
+  String get diagnosticsCategoryStock => _t('المخزون والحركات', 'Stock Ledger');
+  String get diagnosticsCategoryMissingOpeningStock =>
+      _t('رصيد افتتاحي مفقود', 'Missing Opening Stock');
+  String get diagnosticsCategoryNegativeStock =>
+      _t('رصيد سالب', 'Negative Stock');
+  String get diagnosticsCategoryCosting => _t('التكاليف', 'Costing');
+  String get diagnosticsCategoryDuplicates => _t('أرقام مكررة', 'Duplicates');
+  String get diagnosticsAffectedIds => _t('المعرفات المتأثرة', 'Affected IDs');
+  String get diagnosticsMoreIds => _t('إضافية', 'more');
+  String get diagnosticsManualReviewRequired =>
+      _t('تتطلب مراجعة يدوية', 'Requires manual review');
+  String get diagnosticsDisclaimer => _t(
+    'هذا التقرير للمعاينة فقط (قراءة فقط). لا يتم إجراء أي تعديل أو حذف تلقائي للبيانات حفاظاً على السجلات المالية.',
+    'This report is read-only. No automatic data modification or deletion occurs to preserve financial records.',
+  );
+  String get diagnosticsRefresh => _t('إعادة الفحص', 'Scan Again');
+  String get diagnosticsNoFindingsForFilter =>
+      _t('لا توجد ملاحظات في هذا التصنيف', 'No findings in this category');
+  String get diagnosticsExecutionFailed => _t(
+    'تعذر إكمال فحص قاعدة البيانات',
+    'Failed to complete database diagnostics',
   );
 
   bool get isArabic => langCode == 'ar';

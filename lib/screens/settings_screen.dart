@@ -9,6 +9,7 @@ import '../services/app_diagnostics_service.dart';
 import '../utils/url_launcher_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
+import 'database_diagnostic_screen.dart';
 import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
@@ -78,7 +79,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
-    final chevronIcon = l10n.isArabic ? Icons.chevron_left : Icons.chevron_right;
+    final chevronIcon = l10n.isArabic
+        ? Icons.chevron_left
+        : Icons.chevron_right;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings), centerTitle: true),
@@ -275,6 +278,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 }
               },
+            ),
+            ListTile(
+              leading: const Icon(Icons.health_and_safety_outlined),
+              title: Text(l10n.databaseDiagnosticsTitle),
+              subtitle: Text(l10n.databaseDiagnosticsSubtitle),
+              trailing: Icon(chevronIcon),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DatabaseDiagnosticScreen(),
+                ),
+              ),
             ),
 
             section(l10n.settingsSectionSupport),

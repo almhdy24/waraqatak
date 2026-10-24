@@ -79,19 +79,27 @@ class BackupService {
 
   /// Creates and validates an automatic safety backup of the current database.
   ///
-  /// To ensure that an existing valid safety backup is never overwritten and
-  /// that half-written files are never left in place:
-  /// 1. A unique filename candidate is determined with a monotonic sequence
-  ///    counter and existence checks, preventing same-millisecond collisions.
+  /// Safeguards against data loss and partial writes:
+  /// 1. A unique filename candidate is determined with timestamp, monotonic
+  ///    in-process sequence counter, and loop existence checks to prevent
+  ///    in-process same-millisecond collisions.
   /// 2. The backup is written to a uniquely named temporary staging file in the
   ///    same directory and flushed to disk.
   /// 3. The staging file is read back and validated for structural integrity.
-  /// 4. The staging file is promoted to its final name using [File.rename]
-  ///    after verifying that the destination does not already exist.
-  ///    (Note: while rename is atomic on POSIX filesystems within the same
-  ///    mount point, platform behaviors differ; this staged approach ensures
-  ///    that partial files are cleaned up on failure before any active database
-  ///    mutation).
+  /// 4. The destination path is checked via [File.existsSync] immediately before
+  ///    promotion. If it exists, promotion is refused, an exception is thrown,
+  ///    the temporary staging file is deleted, and the existing backup is preserved.
+  /// 5. The staging file is promoted via [File.rename].
+  ///
+  /// Platform limitation notice:
+  /// Standard `dart:io` does not expose atomic non-replacing rename flags
+  /// (e.g. Linux `renameat2(..., RENAME_NOREPLACE)`). On POSIX platforms,
+  /// [File.rename] replaces the destination if it exists at the moment of the
+  /// syscall. While the monotonic counter, timestamp, and pre-promotion existence
+  /// check prevent collisions in all standard single-process operations, a theoretical
+  /// cross-process race (TOCTOU) between `existsSync()` and `rename()` cannot be
+  /// strictly guaranteed against overwrite at the OS level without native bindings.
+  /// If promotion fails for any reason, restore is aborted before active data mutation.
   ///
   /// Throws an exception if creation, writing, validation, or promotion fails,
   /// ensuring that restore does not proceed on an unsafe state.
