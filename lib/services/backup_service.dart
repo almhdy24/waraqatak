@@ -17,6 +17,12 @@ class BackupService {
   @visibleForTesting
   static Future<String> Function()? safetyBackupOverride;
 
+  @visibleForTesting
+  static Future<void> Function(File tempFile, File targetFile)?
+  onBeforePromotion;
+
+  static int _safetyBackupSequence = 0;
+
   static const List<String> _requiredTables = [
     'businesses',
     'contacts',
@@ -72,33 +78,86 @@ class BackupService {
   // ============================================================
 
   /// Creates and validates an automatic safety backup of the current database.
-  /// Throws an exception if creation, writing, or validation fails, ensuring
-  /// that restore does not proceed on an unsafe state.
+  ///
+  /// To ensure that an existing valid safety backup is never overwritten and
+  /// that half-written files are never left in place:
+  /// 1. A unique filename candidate is determined with a monotonic sequence
+  ///    counter and existence checks, preventing same-millisecond collisions.
+  /// 2. The backup is written to a uniquely named temporary staging file in the
+  ///    same directory and flushed to disk.
+  /// 3. The staging file is read back and validated for structural integrity.
+  /// 4. The staging file is promoted to its final name using [File.rename]
+  ///    after verifying that the destination does not already exist.
+  ///    (Note: while rename is atomic on POSIX filesystems within the same
+  ///    mount point, platform behaviors differ; this staged approach ensures
+  ///    that partial files are cleaned up on failure before any active database
+  ///    mutation).
+  ///
+  /// Throws an exception if creation, writing, validation, or promotion fails,
+  /// ensuring that restore does not proceed on an unsafe state.
   static Future<String> createSafetyBackup() async {
     if (safetyBackupOverride != null) {
       return await safetyBackupOverride!();
     }
 
     final jsonStr = await _buildBackupJson();
-    final fileName =
-        'warqatek_safety_pre_restore_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
-
     final directory = await _getBackupDirectory();
-    final file = File('${directory.path}/$fileName');
-    await file.writeAsString(jsonStr, encoding: utf8, flush: true);
 
-    // Validate the safety backup immediately from disk
-    final readBackBytes = await file.readAsBytes();
-    if (readBackBytes.isEmpty) {
-      throw Exception('Created safety backup is empty');
-    }
-    final decoded = jsonDecode(utf8.decode(readBackBytes));
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception('Created safety backup has invalid format');
-    }
-    _validateBackup(decoded);
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final seq = ++_safetyBackupSequence;
 
-    return file.path;
+    var candidateName =
+        'warqatek_safety_pre_restore_${timestamp}_$seq.$backupExtension';
+    var targetFile = File('${directory.path}/$candidateName');
+    int collisionCounter = 0;
+    while (targetFile.existsSync()) {
+      collisionCounter++;
+      candidateName =
+          'warqatek_safety_pre_restore_${timestamp}_${seq}_$collisionCounter.$backupExtension';
+      targetFile = File('${directory.path}/$candidateName');
+    }
+
+    final tempName =
+        '.$candidateName.${DateTime.now().microsecondsSinceEpoch}_$seq.tmp';
+    final tempFile = File('${directory.path}/$tempName');
+
+    try {
+      await tempFile.writeAsString(jsonStr, encoding: utf8, flush: true);
+
+      // Validate the safety backup immediately from disk
+      final readBackBytes = await tempFile.readAsBytes();
+      if (readBackBytes.isEmpty) {
+        throw const FileSystemException('Created safety backup is empty');
+      }
+      final decoded = jsonDecode(utf8.decode(readBackBytes));
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Created safety backup has invalid format');
+      }
+      _validateBackup(decoded);
+
+      if (onBeforePromotion != null) {
+        await onBeforePromotion!(tempFile, targetFile);
+      }
+
+      // Safely promote to final name: refuse to overwrite an existing backup
+      if (targetFile.existsSync()) {
+        throw FileSystemException(
+          'Target safety backup already exists, will not overwrite',
+          targetFile.path,
+        );
+      }
+      await tempFile.rename(targetFile.path);
+
+      return targetFile.path;
+    } finally {
+      try {
+        if (tempFile.existsSync()) {
+          await tempFile.delete();
+        }
+      } catch (_) {
+        // Best-effort cleanup of temporary file
+      }
+    }
   }
 
   // ============================================================

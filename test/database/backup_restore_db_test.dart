@@ -472,4 +472,123 @@ void main() {
       expect(await rawDb.query('document_payments'), isEmpty);
     },
   );
+
+  test(
+    'safety-backup filename uniqueness prevents collisions on rapid invocation',
+    () async {
+      final createdPaths = <String>[];
+      try {
+        for (var i = 0; i < 10; i++) {
+          final path = await BackupService.createSafetyBackup();
+          createdPaths.add(path);
+          expect(File(path).existsSync(), isTrue);
+        }
+        expect(
+          createdPaths.toSet(),
+          hasLength(10),
+          reason: 'All 10 safety backup paths must be unique',
+        );
+      } finally {
+        for (final p in createdPaths) {
+          try {
+            if (File(p).existsSync()) File(p).deleteSync();
+          } catch (_) {}
+        }
+      }
+    },
+  );
+
+  test(
+    'safety-backup promotion never overwrites existing valid backup and cleans up temp file on failure',
+    () async {
+      File? capturedTemp;
+      File? capturedTarget;
+      const preExistingContent =
+          '{"app":"warqatek","backup_version":4,"existing":true}';
+
+      try {
+        BackupService.onBeforePromotion = (tempFile, targetFile) async {
+          capturedTemp = tempFile;
+          capturedTarget = targetFile;
+          // Pre-create the target file to simulate collision with an existing safety backup
+          await targetFile.writeAsString(preExistingContent, flush: true);
+        };
+
+        await expectLater(
+          () => BackupService.createSafetyBackup(),
+          throwsA(isA<FileSystemException>()),
+        );
+
+        // Verify target file was NOT overwritten
+        expect(capturedTarget, isNotNull);
+        expect(capturedTarget!.existsSync(), isTrue);
+        expect(await capturedTarget!.readAsString(), preExistingContent);
+
+        // Verify temporary staging file was cleaned up and did not linger
+        expect(capturedTemp, isNotNull);
+        expect(capturedTemp!.existsSync(), isFalse);
+      } finally {
+        BackupService.onBeforePromotion = null;
+        if (capturedTarget != null && capturedTarget!.existsSync()) {
+          try {
+            capturedTarget!.deleteSync();
+          } catch (_) {}
+        }
+      }
+    },
+  );
+
+  test(
+    'safety-backup promotion failure aborts restore and leaves current database intact',
+    () async {
+      final db = DatabaseHelper.instance;
+      final beforeBiz = (await db.getFirstBusiness())!;
+      File? capturedTemp;
+
+      try {
+        BackupService.onBeforePromotion = (tempFile, targetFile) async {
+          capturedTemp = tempFile;
+          throw const FileSystemException('Simulated promotion I/O failure');
+        };
+
+        final payload = {
+          'app': 'warqatek',
+          'backup_version': 4,
+          'database_version': DatabaseHelper.dbVersion,
+          'created_at': DateTime.now().toIso8601String(),
+          'data': {
+            'businesses': [
+              {
+                'id': 1,
+                'name': 'متجر لا يجب أن يُكتب',
+                'owner_name': 'سارق البيانات',
+                'phone': '000',
+                'address': 'عدم',
+              },
+            ],
+            'contacts': [],
+            'products': [],
+            'documents': [],
+            'document_items': [],
+            'document_counters': [],
+          },
+        };
+
+        await expectLater(
+          () => BackupService.restoreFromJsonMap(payload),
+          throwsA(isA<FileSystemException>()),
+        );
+
+        // Database was untouched because safety backup failed before transaction
+        final afterBiz = (await db.getFirstBusiness())!;
+        expect(afterBiz.name, beforeBiz.name);
+
+        // Temporary staging file was cleaned up
+        expect(capturedTemp, isNotNull);
+        expect(capturedTemp!.existsSync(), isFalse);
+      } finally {
+        BackupService.onBeforePromotion = null;
+      }
+    },
+  );
 }
