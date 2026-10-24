@@ -1573,6 +1573,94 @@ class AppLocalizations {
     'فشل إعداد المصادقة، يرجى التحقق من إعدادات Google Cloud وتطابق بصمة التطبيق.',
     'Authentication configuration failed. Please verify Google Cloud settings and app certificate.',
   );
+  String get googleDriveDeleteBackup => _t('حذف النسخة', 'Delete Backup');
+  String get googleDriveConfirmDeleteTitle =>
+      _t('تأكيد حذف النسخة السحابية', 'Confirm Cloud Backup Deletion');
+  String get googleDriveConfirmDeleteBody => _t(
+    'هل أنت متأكد من حذف هذه النسخة الاحتياطية من Google Drive؟ لا يمكن التراجع عن هذا الإجراء.',
+    'Are you sure you want to delete this backup from Google Drive? This action cannot be undone.',
+  );
+  String get googleDriveDeleting =>
+      _t('جاري حذف النسخة الاحتياطية...', 'Deleting backup from Google Drive...');
+  String get googleDriveDeleteSuccess => _t(
+    'تم حذف النسخة الاحتياطية من Google Drive بنجاح',
+    'Backup deleted from Google Drive successfully',
+  );
+  String get googleDriveRefresh => _t('تحديث القائمة', 'Refresh List');
+  String get googleDriveAccountConnected => _t('متصل', 'Connected');
+  String get googleDriveAccountDisconnected => _t('غير متصل', 'Disconnected');
+  String get googleDriveBackupListHeader =>
+      _t('النسخ السحابية المتاحة', 'Available Cloud Backups');
+  String get googleDriveEmptySubtitle => _t(
+    'لم يتم رفع أي نسخ احتياطية إلى Google Drive بعد.',
+    'No backups have been uploaded to Google Drive yet.',
+  );
+
+  // ========== ADVANCED REPAIR SYSTEM ==========
+  String get repairSystemTitle =>
+      _t('نظام الإصلاح المتقدم', 'Advanced Repair System');
+  String get repairSystemSubtitle => _t(
+    'فحص وتصحيح المشكلات المحاسبية والعلائقية بأمان داخل معاملات موثقة',
+    'Inspect and safely repair accounting and relational issues in verified transactions',
+  );
+  String get repairActionFixAll =>
+      _t('إصلاح جميع المشكلات الآمنة', 'Fix All Safe Issues');
+  String get repairActionFix => _t('إصلاح المشكلة', 'Fix Issue');
+  String get repairActionReview => _t('مراجعة السجلات', 'Review Records');
+  String get repairActionExport =>
+      _t('تصدير التقرير التشخيصي', 'Export Diagnostic Report');
+  String get repairSafetyBackupCreated => _t(
+    'تم إنشاء نسخة أمان محلية تلقائياً: ',
+    'Local safety backup created automatically: ',
+  );
+  String get repairConfirmTitle =>
+      _t('تأكيد عملية الإصلاح', 'Confirm Repair Action');
+  String get repairConfirmFixAllTitle =>
+      _t('إصلاح جميع المشكلات الآمنة تلقائياً', 'Auto-Repair All Safe Issues');
+  String get repairConfirmFixAllBody => _t(
+    'سيتم تنفيذ كافة الإصلاحات الحتمية والآمنة داخل معاملة قاعدة بيانات متكاملة مع إنشاء نسخة أمان محلية تلقائياً قبل البدء. لن يتم المساس بالسجلات المالية التي تتطلب قراراً يدوياً.',
+    'All safe and deterministic repairs will be executed inside an SQLite transaction with an automatic local safety backup before starting. Financial records requiring human judgment will not be modified.',
+  );
+  String get repairSuccess => _t(
+    'تم تنفيذ الإصلاح بنجاح والتحقق من سلامة البيانات',
+    'Repair executed successfully and data integrity verified',
+  );
+  String get repairPartial => _t(
+    'اكتملت بعض الإصلاحات، يرجى مراجعة المشكلات المتبقية',
+    'Some repairs completed, please review remaining issues',
+  );
+  String get repairFailed => _t(
+    'فشل الإصلاح وتم التراجع عن المعاملة بالكامل للحفاظ على البيانات',
+    'Repair failed and transaction was fully rolled back to protect data',
+  );
+  String get repairTabAll => _t('الكل', 'All');
+  String get repairTabAuto => _t('قابل للإصلاح التلقائي', 'Auto-Repairable');
+  String get repairTabReview => _t('يتطلب المراجعة', 'Requires Review');
+  String get repairRecordsCount => _t('عدد السجلات المتأثرة', 'Affected Records');
+  String get repairPlannedChange => _t('الإجراء المخطط تنفيذه', 'Planned Action');
+  String get repairRecommendedAction =>
+      _t('الإجراء الموصى به', 'Recommended Action');
+  String get repairReversible => _t('قابل للتراجع', 'Reversible');
+  String get repairPermanent => _t('تعديل مباشر', 'Direct Update');
+  String get repairReviewDialogTitle =>
+      _t('تفاصيل المراجعة اليدوية', 'Manual Review Details');
+  String get repairReviewGuidance =>
+      _t('إرشادات المعالجة اليدوية', 'Recommended Next Steps');
+  String get repairReportCopied => _t(
+    'تم نسخ التقرير التشخيصي إلى الحافظة بنجاح',
+    'Diagnostic report copied to clipboard successfully',
+  );
+  String get repairNoIssues =>
+      _t('قاعدة البيانات سليمة وخالية من المشكلات', 'Database is clean and healthy');
+  String get repairExecuting => _t(
+    'جاري تنفيذ الإصلاح والتحقق من السلامة...',
+    'Executing repair and verifying integrity...',
+  );
+  String get repairFixPreviewTitle =>
+      _t('معاينة تفاصيل الإصلاح', 'Repair Preview');
+  String get repairSafeBadge => _t('إصلاح آمن وتلقائي', 'Safe Auto-Repair');
+  String get repairReviewBadge =>
+      _t('يتطلب مراجعة يدوية', 'Requires Manual Review');
 
   bool get isArabic => langCode == 'ar';
 

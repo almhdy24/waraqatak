@@ -47,6 +47,7 @@ abstract class GoogleDriveClient {
     required String fileName,
   });
   Future<Uint8List> downloadBackup(String fileId);
+  Future<void> deleteBackup(String fileId);
 }
 
 /// HTTP client that injects fresh Google OAuth authorization headers into every request.
@@ -106,11 +107,9 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
     try {
       _account ??= await _googleSignIn.attemptLightweightAuthentication();
       return _account != null;
-    } on GoogleSignInException catch (e) {
-      debugPrint('[GoogleDrive] Lightweight sign-in exception: code=${e.code.name}, description=${e.description}');
+    } on GoogleSignInException {
       return false;
-    } catch (e) {
-      debugPrint('[GoogleDrive] Lightweight sign-in failed: ${e.runtimeType}');
+    } catch (_) {
       return false;
     }
   }
@@ -119,8 +118,8 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
     await _ensureInitialized();
     try {
       _account ??= await _googleSignIn.attemptLightweightAuthentication();
-    } catch (e) {
-      debugPrint('[GoogleDrive] Lightweight attempt before fresh headers: ${e.runtimeType}');
+    } catch (_) {
+      // Lightweight attempt failed; will trigger interactive authenticate below if needed.
     }
     _account ??= await _googleSignIn.authenticate(
       scopeHint: [drive.DriveApi.driveAppdataScope],
@@ -155,34 +154,27 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
   @override
   Future<bool> signIn() async {
     try {
-      debugPrint('[GoogleDrive] Starting sign-in flow (serverClientId configured: ${serverClientId.isNotEmpty})...');
       await _ensureInitialized();
       _account = await _googleSignIn.authenticate(
         scopeHint: [drive.DriveApi.driveAppdataScope],
       );
-      debugPrint('[GoogleDrive] Authenticate completed. Account obtained: ${_account != null}');
       if (_account != null) {
-        debugPrint('[GoogleDrive] Requesting authorization headers for scope: ${drive.DriveApi.driveAppdataScope}...');
         final headers = await _account!.authorizationClient.authorizationHeaders(
           [drive.DriveApi.driveAppdataScope],
           promptIfNecessary: true,
         );
         final hasAuthHeader = headers != null && headers.containsKey('Authorization');
-        debugPrint('[GoogleDrive] Authorization result: hasAuthHeader=$hasAuthHeader');
         if (hasAuthHeader) {
           _driveApi = drive.DriveApi(_GoogleAuthClient(_getFreshHeaders));
           return true;
         } else {
-          debugPrint('[GoogleDrive] Authorization denied or returned null headers');
           return false;
         }
       }
       return false;
-    } on GoogleSignInException catch (e) {
-      debugPrint('[GoogleDrive] GoogleSignInException: code=${e.code.name}, description=${e.description}');
+    } on GoogleSignInException {
       rethrow;
-    } catch (e, st) {
-      debugPrint('[GoogleDrive] Unexpected sign-in error: ${e.runtimeType} -> $e\n$st');
+    } catch (_) {
       rethrow;
     }
   }
@@ -298,6 +290,12 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
     }
     return bytesBuilder.takeBytes();
   }
+
+  @override
+  Future<void> deleteBackup(String fileId) async {
+    final api = await _getDriveApi();
+    await api.files.delete(fileId);
+  }
 }
 
 /// Service managing cloud backup export and restore to Google Drive appDataFolder.
@@ -328,6 +326,26 @@ class GoogleDriveBackupService {
   Future<bool> isSignedIn() => _client.isSignedIn();
   Future<bool> signIn() => _client.signIn();
   Future<void> signOut() => _client.signOut();
+  Future<void> deleteBackup(String fileId) async {
+    await _client.deleteBackup(fileId);
+    try {
+      if (logAuditEventOverride != null) {
+        await logAuditEventOverride!(
+          'google_drive_backup_deleted',
+          details: 'file_id: $fileId',
+        );
+      } else {
+        await DatabaseHelper.instance.logAuditEvent(
+          'google_drive_backup_deleted',
+          details: 'file_id: $fileId',
+        );
+      }
+    } catch (e) {
+      // Cloud deletion already succeeded on Google Drive; do not report failure
+      // if writing the local audit log entry fails.
+      debugPrint('Cloud backup deleted, but failed to log audit event: $e');
+    }
+  }
   String? get currentUserEmail => _client.currentUserEmail;
 
   /// Creates a local backup and uploads it to the appDataFolder on Google Drive.

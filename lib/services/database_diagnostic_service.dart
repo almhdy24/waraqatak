@@ -994,6 +994,31 @@ class DatabaseDiagnosticService {
       );
     }
 
+    // 7.6 Stock movement with negative unit cost
+    checks++;
+    final negativeUnitCost = await db.rawQuery('''
+      SELECT id, product_id, type, quantity, unit_cost
+      FROM stock_movements
+      WHERE unit_cost IS NOT NULL
+        AND unit_cost < -$_moneyEpsilon
+    ''');
+    if (negativeUnitCost.isNotEmpty) {
+      final ids = negativeUnitCost.map((r) => r['id'] as int).toList();
+      findings.add(
+        DiagnosticFinding(
+          code: 'movement_negative_unit_cost',
+          category: DiagnosticCategory.inventoryCosting,
+          severity: DiagnosticSeverity.error,
+          entityType: 'stock_movements',
+          affectedIds: ids,
+          title: 'Stock movement with negative unit cost',
+          explanation:
+              'Found ${ids.length} stock movement(s) with invalid negative unit cost.',
+          requiresManualReview: true,
+        ),
+      );
+    }
+
     // 7.6 Issued sales invoice line items missing cost for stocked products
     checks++;
     final uncostedSaleItems = await db.rawQuery('''

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:intl/intl.dart';
 
 import '../localization/app_localizations.dart';
 import '../services/google_drive_backup_service.dart';
@@ -17,6 +18,7 @@ class GoogleDriveBackupScreen extends StatefulWidget {
 
 class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
   final GoogleDriveBackupService _service = GoogleDriveBackupService.instance;
+  static final DateFormat _dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
   bool _loading = false;
   bool _signedIn = false;
@@ -246,13 +248,77 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     }
   }
 
+  Future<void> _confirmAndDelete(DriveBackupFile backup) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.googleDriveConfirmDeleteTitle),
+        content: Text(
+          '${l10n.googleDriveConfirmDeleteBody}\n\n${backup.name} (${backup.formattedSize})',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            child: Text(l10n.googleDriveDeleteBackup),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _loading = true;
+      _statusMessage = l10n.googleDriveDeleting;
+      _isError = false;
+    });
+
+    try {
+      await _service.deleteBackup(backup.id);
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = l10n.googleDriveDeleteSuccess;
+        _isError = false;
+      });
+      await _fetchBackups();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = _mapErrorToMessage(e, l10n);
+        _isError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.googleDriveTitle), centerTitle: true),
+      appBar: AppBar(
+        title: Text(l10n.googleDriveTitle),
+        centerTitle: true,
+        actions: [
+          if (_signedIn)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: l10n.googleDriveRefresh,
+              onPressed: _loading ? null : _fetchBackups,
+            ),
+        ],
+      ),
       body: ResponsiveCenter(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -272,10 +338,16 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                     Row(
                       children: [
                         CircleAvatar(
-                          backgroundColor: cs.primaryContainer,
+                          backgroundColor: _signedIn
+                              ? cs.primaryContainer
+                              : cs.surfaceContainerHighest,
                           child: Icon(
-                            Icons.cloud_sync_outlined,
-                            color: cs.onPrimaryContainer,
+                            _signedIn
+                                ? Icons.cloud_done_outlined
+                                : Icons.cloud_queue_outlined,
+                            color: _signedIn
+                                ? cs.onPrimaryContainer
+                                : cs.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -283,14 +355,52 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _signedIn
-                                    ? (_userEmail ?? l10n.googleDriveTitle)
-                                    : l10n.googleDriveTitle,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _signedIn
+                                          ? (_userEmail ?? l10n.googleDriveTitle)
+                                          : l10n.googleDriveTitle,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _signedIn
+                                          ? Colors.green.withValues(alpha: 0.12)
+                                          : cs.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: _signedIn
+                                            ? Colors.green.withValues(alpha: 0.4)
+                                            : cs.outlineVariant,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      _signedIn
+                                          ? l10n.googleDriveAccountConnected
+                                          : l10n.googleDriveAccountDisconnected,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: _signedIn
+                                            ? Colors.green.shade800
+                                            : cs.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -368,7 +478,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                 child: Text(
-                  l10n.googleDriveSelectBackup,
+                  l10n.googleDriveBackupListHeader,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
@@ -379,12 +489,43 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                 Card(
                   elevation: 0,
                   color: cs.surfaceContainerLowest,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: cs.outlineVariant),
+                  ),
                   child: Padding(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 32,
+                    ),
                     child: Center(
-                      child: Text(
-                        l10n.googleDriveNoBackups,
-                        style: TextStyle(color: cs.onSurfaceVariant),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.cloud_off_outlined,
+                            size: 48,
+                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            l10n.googleDriveNoBackups,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            l10n.googleDriveEmptySubtitle,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: cs.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -398,18 +539,62 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                       borderRadius: BorderRadius.circular(12),
                       side: BorderSide(color: cs.outlineVariant),
                     ),
-                    child: ListTile(
-                      leading: const Icon(Icons.inventory_2_outlined),
-                      title: Text(
-                        b.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
                       ),
-                      subtitle: Text(
-                        '${b.formattedSize} • ${b.modifiedTime.toLocal().toString().split('.').first}',
-                      ),
-                      trailing: ElevatedButton(
-                        onPressed: () => _confirmAndRestore(b),
-                        child: Text(l10n.restore),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: cs.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.inventory_2_outlined,
+                              color: cs.primary,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  b.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${b.formattedSize} • ${_dateFmt.format(b.modifiedTime.toLocal())}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton.tonal(
+                            onPressed: _loading ? null : () => _confirmAndRestore(b),
+                            child: Text(l10n.restore),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: Icon(
+                              Icons.delete_outline,
+                              color: cs.error,
+                            ),
+                            tooltip: l10n.googleDriveDeleteBackup,
+                            onPressed: _loading ? null : () => _confirmAndDelete(b),
+                          ),
+                        ],
                       ),
                     ),
                   ),

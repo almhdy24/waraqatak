@@ -85,6 +85,12 @@ class FakeGoogleDriveClient implements GoogleDriveClient {
     if (data == null) throw Exception('File not found on drive');
     return data;
   }
+
+  @override
+  Future<void> deleteBackup(String fileId) async {
+    files.removeWhere((f) => f.id == fileId);
+    storage.remove(fileId);
+  }
 }
 
 void main() {
@@ -395,6 +401,31 @@ void main() {
       await GoogleDriveBackupService.instance.signOut();
       expect(await GoogleDriveBackupService.instance.isSignedIn(), isFalse);
       expect(GoogleDriveBackupService.instance.currentUserEmail, isNull);
+    });
+
+    test('deleteBackup deletes file from drive and logs audit event', () async {
+      await GoogleDriveBackupService.instance.signIn();
+      final uploaded = await GoogleDriveBackupService.instance.uploadCurrentBackup();
+      var backups = await GoogleDriveBackupService.instance.listBackups();
+      expect(backups.any((f) => f.id == uploaded.id), isTrue);
+
+      await GoogleDriveBackupService.instance.deleteBackup(uploaded.id);
+      backups = await GoogleDriveBackupService.instance.listBackups();
+      expect(backups.any((f) => f.id == uploaded.id), isFalse);
+      expect(loggedAuditEvents.any((e) => e.startsWith('google_drive_backup_deleted')), isTrue);
+    });
+
+    test('deleteBackup completes cloud deletion even if audit logging throws an exception', () async {
+      await GoogleDriveBackupService.instance.signIn();
+      final uploaded = await GoogleDriveBackupService.instance.uploadCurrentBackup();
+      GoogleDriveBackupService.logAuditEventOverride = (event, {details}) async {
+        throw Exception('Database lock or audit log failure');
+      };
+
+      // Must complete without rethrowing because cloud deletion succeeded
+      await GoogleDriveBackupService.instance.deleteBackup(uploaded.id);
+      final backups = await GoogleDriveBackupService.instance.listBackups();
+      expect(backups.any((f) => f.id == uploaded.id), isFalse);
     });
 
     test('localization messages support cancellation and config errors', () {
