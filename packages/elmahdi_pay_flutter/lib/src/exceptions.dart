@@ -23,8 +23,13 @@ class ElmahdiPayApiException extends ElmahdiPayException {
 }
 
 class ElmahdiPayUnauthorizedException extends ElmahdiPayApiException {
-  const ElmahdiPayUnauthorizedException({String message = 'Unauthorized'})
-      : super(statusCode: 401, message: message);
+  final String? errorCode;
+
+  const ElmahdiPayUnauthorizedException({
+    String message = 'Unauthorized',
+    this.errorCode,
+    Map<String, dynamic>? rawBody,
+  }) : super(statusCode: 401, message: message, errors: rawBody);
 }
 
 /// Thrown for 403 responses — license revoked, expired, or device limit reached.

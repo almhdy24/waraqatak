@@ -75,9 +75,9 @@ void main() {
     expect(captured!.headers['accept'], contains('application/json'));
 
     final body = jsonDecode(captured!.body) as Map<String, dynamic>;
-    expect(body.keys.toSet(), {'license_key', 'machine_id'});
     expect(body['license_key'], validKey);
     expect(body['machine_id'], deviceId);
+    expect(body['product'], 'waraqatak');
   });
 
   // ── outcome mapping ───────────────────────────────────────────────────────

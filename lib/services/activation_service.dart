@@ -2,6 +2,7 @@ import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/foundation.dart';
 
 import 'license_key.dart';
+import 'license_notification_service.dart';
 import 'license_service.dart';
 
 /// Deterministic result of an activation attempt.
@@ -155,8 +156,15 @@ class ActivationService {
 
     ActivateLicenseResult? result;
     try {
+      final deviceModel = await LicenseService.instance.getDeviceModel();
       result = await _sdk.public.activateLicense(
-        ActivateLicenseRequest(licenseKey: serverKey, machineId: deviceId),
+        ActivateLicenseRequest(
+          licenseKey: serverKey,
+          machineId: deviceId,
+          deviceName: deviceModel,
+          deviceModel: deviceModel,
+          product: 'waraqatak',
+        ),
       );
     } on ElmahdiPayRateLimitException {
       return ActivationOutcome.tooManyAttempts;
@@ -202,6 +210,10 @@ class ActivationService {
       licenseType: licenseType,
       activationToken: result?.effectiveToken,
     );
+    await LicenseNotificationService.instance.onLicenseActivated(
+      expiresAt: expiresAt,
+      licenseType: licenseType,
+    );
     return ActivationOutcome.success;
   }
 
@@ -220,12 +232,66 @@ class ActivationService {
         DeactivateLicenseRequest(
           licenseKey: serverKey,
           machineId: deviceId,
+          product: 'waraqatak',
           reason: 'user_removed',
         ),
       );
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Verifies license status authoritatively with the server.
+  static Future<VerifyLicenseResult?> verifyLicenseOnline({
+    required String tokenOrKey,
+    required String deviceId,
+  }) async {
+    try {
+      return await _sdk.public.verifyLicense(
+        VerifyLicenseRequest(
+          tokenOrKey: tokenOrKey,
+          machineId: deviceId,
+          product: 'waraqatak',
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Claims one-time free trial on the server.
+  static Future<TrialClaimResult?> claimTrial({
+    required String deviceId,
+    String? deviceModel,
+  }) async {
+    try {
+      return await _sdk.public.claimTrial(
+        TrialClaimRequest(
+          product: 'waraqatak',
+          machineId: deviceId,
+          deviceName: deviceModel,
+          deviceModel: deviceModel,
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Checks server-side trial status.
+  static Future<TrialStatusResult?> checkTrialStatus({
+    required String deviceId,
+  }) async {
+    try {
+      return await _sdk.public.getTrialStatus(
+        TrialStatusRequest(
+          product: 'waraqatak',
+          machineId: deviceId,
+        ),
+      );
+    } catch (_) {
+      return null;
     }
   }
 

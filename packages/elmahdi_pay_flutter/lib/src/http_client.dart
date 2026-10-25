@@ -104,7 +104,11 @@ class HttpClient {
 
     switch (response.statusCode) {
       case 401:
-        throw ElmahdiPayUnauthorizedException(message: message);
+        throw ElmahdiPayUnauthorizedException(
+          message: message,
+          errorCode: body['error'] as String?,
+          rawBody: body,
+        );
       case 403:
         throw ElmahdiPayForbiddenException(
           message: message,

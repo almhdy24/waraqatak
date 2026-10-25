@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/entitlement.dart';
+import 'activation_service.dart';
 import 'license_key.dart';
+import 'license_notification_service.dart';
 
 /// Key/value storage used by [LicenseService]. Production uses
 /// [SecureLicenseStorage]; tests inject an in-memory fake.
@@ -81,15 +83,37 @@ class LicenseService {
   static const _kLicenseType      = 'wq_license_type';
   static const _kLastSeen         = 'wq_last_seen';
   static const _kActivationToken  = 'wq_activation_token';
+  static const _kTrialServerStart = 'wq_trial_server_start';
+  static const _kTrialServerExpiry = 'wq_trial_server_expiry';
+  static const _kTrialServerStatus = 'wq_trial_server_status';
+  static const _kDeviceModelCache = 'wq_device_model_cache';
 
   static const int _trialDays = 14;
 
   /// In-memory cache so entitlement is only computed once per session.
   EntitlementState? _cached;
 
-  // ── Device ID ──────────────────────────────────────────────────────────────
+  // ── Device ID & Model ──────────────────────────────────────────────────────
 
   static const _deviceChannel = MethodChannel('com.elmahdi.waraqatak/device');
+
+  /// Hardware device name / model (e.g. "Samsung Galaxy A16").
+  /// Informational metadata for display only — not used as an identity secret.
+  Future<String> getDeviceModel() async {
+    final cached = await _store.read(key: _kDeviceModelCache);
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+    String model = 'Android Device';
+    try {
+      final res = await _deviceChannel.invokeMethod<String>('getDeviceModel');
+      if (res != null && res.trim().isNotEmpty) {
+        model = res.trim();
+      }
+    } catch (_) {}
+    await _store.write(key: _kDeviceModelCache, value: model);
+    return model;
+  }
 
   /// Device identifier sent to the licensing server as `machine_id`.
   ///
@@ -218,6 +242,37 @@ class LicenseService {
     // ── Trial ─────────────────────────────────────────────────────────────────
     final trialStart = await _getOrInitTrialStart(now);
     final effective = await _effectiveNow(now);
+
+    // 1. Authoritative server-side trial status check
+    final serverStatus = await _store.read(key: _kTrialServerStatus);
+    if (serverStatus == 'expired') {
+      return EntitlementState(
+        status: EntitlementStatus.trialExpired,
+        deviceId: deviceId,
+      );
+    }
+
+    final serverExpiryStr = await _store.read(key: _kTrialServerExpiry);
+    if (serverExpiryStr != null && serverExpiryStr.isNotEmpty) {
+      final serverExpiry = DateTime.tryParse(serverExpiryStr);
+      if (serverExpiry != null) {
+        final serverRemaining = serverExpiry.difference(effective);
+        if (serverRemaining.isNegative) {
+          await _store.write(key: _kTrialServerStatus, value: 'expired');
+          return EntitlementState(
+            status: EntitlementStatus.trialExpired,
+            deviceId: deviceId,
+          );
+        }
+        return EntitlementState(
+          status: EntitlementStatus.trialActive,
+          deviceId: deviceId,
+          trialDaysRemaining: (serverRemaining.inDays + 1).clamp(0, _trialDays),
+        );
+      }
+    }
+
+    // 2. Local fallback if server trial not yet retrieved
     final remaining =
         trialStart.add(const Duration(days: _trialDays)).difference(effective);
 
@@ -325,6 +380,114 @@ class LicenseService {
   }
 
   Future<String?> get licenseKey => _store.read(key: _kLicenseKey);
+
+  /// Authoritatively syncs free trial status with the licensing API.
+  Future<void> syncTrialWithServer({bool force = false}) async {
+    try {
+      final deviceId = await getOrCreateDeviceId();
+      final model = await getDeviceModel();
+
+      final result = await ActivationService.claimTrial(
+        deviceId: deviceId,
+        deviceModel: model,
+      );
+
+      if (result == null || !result.success) return;
+
+      if (result.startedAt != null) {
+        await _store.write(
+          key: _kTrialServerStart,
+          value: result.startedAt!.toIso8601String(),
+        );
+      }
+      if (result.expiresAt != null) {
+        await _store.write(
+          key: _kTrialServerExpiry,
+          value: result.expiresAt!.toIso8601String(),
+        );
+      }
+      await _store.write(
+        key: _kTrialServerStatus,
+        value: result.status,
+      );
+
+      invalidateCache();
+
+      // Dispatch in-app notifications
+      if (result.status == 'expired' || result.daysRemaining <= 0) {
+        await LicenseNotificationService.instance.onTrialExpired();
+      } else if (result.status == 'active') {
+        if (result.daysRemaining <= 3) {
+          await LicenseNotificationService.instance.onTrialExpiring(
+            daysRemaining: result.daysRemaining,
+          );
+        } else if (result.eligible) {
+          await LicenseNotificationService.instance.onTrialStarted(
+            daysRemaining: result.daysRemaining,
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Authoritatively re-verifies stored license against the server.
+  ///
+  /// Prevents bypass via stale offline state or local tampering.
+  /// If the server revoked or expired the key/device, entitlement fails closed.
+  /// If the server is offline or unreachable, legitimate paying customers are NOT locked out.
+  Future<void> verifyLicenseOnline() async {
+    try {
+      final key = await _store.read(key: _kLicenseKey);
+      if (key == null || key.isEmpty) return;
+
+      final token = await _store.read(key: _kActivationToken);
+      final tokenOrKey = (token != null && token.isNotEmpty) ? token : key;
+      final deviceId = await getOrCreateDeviceId();
+
+      final result = await ActivationService.verifyLicenseOnline(
+        tokenOrKey: tokenOrKey,
+        deviceId: deviceId,
+      );
+
+      if (result == null) {
+        // Network/connectivity failure — preserve offline use, never revoke
+        return;
+      }
+
+      if (!result.valid) {
+        final err = result.error ?? '';
+        if (err.contains('expired')) {
+          await _store.write(key: _kLicenseStatus, value: 'expired');
+          invalidateCache();
+          await LicenseNotificationService.instance.onLicenseExpired();
+        } else {
+          // Fail closed for any explicit rejection (revoked, deactivated,
+          // device_not_registered, device_mismatch, license_not_found, etc.)
+          await _store.write(key: _kLicenseStatus, value: 'revoked');
+          invalidateCache();
+          await LicenseNotificationService.instance
+              .onLicenseRevoked(reason: err);
+        }
+      } else {
+        // Confirmed valid by server
+        await _store.write(key: _kLicenseStatus, value: 'active');
+        final data = result.data;
+        if (data != null && data['expires_at'] != null) {
+          final expStr = data['expires_at'].toString();
+          await _store.write(key: _kLicenseExpiry, value: expStr);
+          final expDate = DateTime.tryParse(expStr);
+          if (expDate != null) {
+            final days = expDate.difference(DateTime.now()).inDays;
+            if (days > 0 && days <= 7) {
+              await LicenseNotificationService.instance
+                  .onLicenseExpiring(daysRemaining: days);
+            }
+          }
+        }
+        invalidateCache();
+      }
+    } catch (_) {}
+  }
 
   /// Deletes the stored license from this device.
   ///
