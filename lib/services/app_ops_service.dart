@@ -263,11 +263,13 @@ class AppOpsService {
     }
   }
 
-  /// Synchronize remote configuration, announcements, and consented diagnostics.
+  /// Synchronize remote configuration, announcements, license status, trial, and consented diagnostics.
   Future<void> syncAll({bool force = false}) async {
     await Future.wait([
       syncRemoteConfig(force: force),
       syncInbox(force: force),
+      LicenseService.instance.verifyLicenseOnline(),
+      LicenseService.instance.syncTrialWithServer(force: force),
       AppDiagnosticsService.instance.syncDiagnostics(force: force),
     ]);
   }

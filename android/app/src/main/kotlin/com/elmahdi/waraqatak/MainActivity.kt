@@ -1,20 +1,23 @@
 package com.elmahdi.waraqatak
 
+import android.os.Build
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.security.MessageDigest
+import java.util.Locale
 
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL)
             .setMethodCallHandler { call, result ->
-                if (call.method == "stableIdHash") {
-                    result.success(stableIdHash())
-                } else {
-                    result.notImplemented()
+                when (call.method) {
+                    "stableIdHash" -> result.success(stableIdHash())
+                    "getDeviceModel" -> result.success(getDeviceModel())
+                    "getDeviceInfo" -> result.success(getDeviceInfo())
+                    else -> result.notImplemented()
                 }
             }
     }
@@ -32,6 +35,37 @@ class MainActivity : FlutterActivity() {
         val digest = MessageDigest.getInstance("SHA-256")
             .digest("$packageName:$trimmed".toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Informational hardware device name (e.g. "Samsung Galaxy A16").
+     * Treated strictly as non-security display metadata.
+     */
+    private fun getDeviceModel(): String {
+        val manufacturer = Build.MANUFACTURER?.trim()?.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+        } ?: ""
+        val model = Build.MODEL?.trim() ?: ""
+
+        return when {
+            model.isEmpty() && manufacturer.isEmpty() -> "Android Device"
+            model.isEmpty() -> manufacturer
+            manufacturer.isEmpty() -> model
+            model.startsWith(manufacturer, ignoreCase = true) -> {
+                model.replaceFirstChar {
+                    if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+                }
+            }
+            else -> "$manufacturer $model".trim()
+        }
+    }
+
+    private fun getDeviceInfo(): Map<String, String> {
+        return mapOf(
+            "manufacturer" to (Build.MANUFACTURER ?: ""),
+            "model" to (Build.MODEL ?: ""),
+            "formattedName" to getDeviceModel()
+        )
     }
 
     private companion object {

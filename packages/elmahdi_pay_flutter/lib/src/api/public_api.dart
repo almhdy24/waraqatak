@@ -1,3 +1,4 @@
+import '../exceptions.dart';
 import '../http_client.dart';
 import '../models/license_activation.dart';
 
@@ -47,8 +48,35 @@ class PublicApi {
   Future<VerifyLicenseResult> verifyLicense(
     VerifyLicenseRequest request,
   ) async {
+    try {
+      final json =
+          await _http.post('/pay/licenses/verify', body: request.toJson());
+      return VerifyLicenseResult.fromJson(json);
+    } on ElmahdiPayUnauthorizedException catch (e) {
+      return VerifyLicenseResult(
+        success: false,
+        valid: false,
+        error: e.errorCode ?? 'invalid_or_expired',
+        message: e.message,
+      );
+    }
+  }
+
+  /// Atomically claims or retrieves free trial eligibility for this device.
+  Future<TrialClaimResult> claimTrial(
+    TrialClaimRequest request,
+  ) async {
     final json =
-        await _http.post('/pay/licenses/verify', body: request.toJson());
-    return VerifyLicenseResult.fromJson(json);
+        await _http.post('/pay/trial/claim', body: request.toJson());
+    return TrialClaimResult.fromJson(json);
+  }
+
+  /// Checks current trial status on the server.
+  Future<TrialStatusResult> getTrialStatus(
+    TrialStatusRequest request,
+  ) async {
+    final json =
+        await _http.post('/pay/trial/status', body: request.toJson());
+    return TrialStatusResult.fromJson(json);
   }
 }

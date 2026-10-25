@@ -8,6 +8,9 @@ class ActivateLicenseRequest {
   /// Friendly device name (optional).
   final String? deviceName;
 
+  /// Hardware device model (optional).
+  final String? deviceModel;
+
   /// Target product slug (optional).
   final String? product;
 
@@ -15,6 +18,7 @@ class ActivateLicenseRequest {
     required this.licenseKey,
     required this.machineId,
     this.deviceName,
+    this.deviceModel,
     this.product,
   });
 
@@ -22,6 +26,7 @@ class ActivateLicenseRequest {
         'license_key': licenseKey,
         'machine_id': machineId,
         if (deviceName != null) 'device_name': deviceName,
+        if (deviceModel != null) 'device_model': deviceModel,
         if (product != null) 'product': product,
       };
 }
@@ -186,6 +191,122 @@ class VerifyLicenseResult {
       error: json['error'] as String?,
       message: json['message'] as String?,
       data: json['data'] as Map<String, dynamic>?,
+    );
+  }
+}
+
+/// Request body for POST /api/v1/pay/trial/claim.
+class TrialClaimRequest {
+  final String product;
+  final String machineId;
+  final String? deviceName;
+  final String? deviceModel;
+
+  const TrialClaimRequest({
+    required this.product,
+    required this.machineId,
+    this.deviceName,
+    this.deviceModel,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'product': product,
+        'machine_id': machineId,
+        if (deviceName != null) 'device_name': deviceName,
+        if (deviceModel != null) 'device_model': deviceModel,
+      };
+}
+
+/// Result of POST /api/v1/pay/trial/claim.
+class TrialClaimResult {
+  final bool success;
+  final bool eligible;
+  final String status;
+  final DateTime? startedAt;
+  final DateTime? expiresAt;
+  final int daysRemaining;
+  final DateTime? serverTime;
+  final String? product;
+
+  const TrialClaimResult({
+    required this.success,
+    required this.eligible,
+    required this.status,
+    this.startedAt,
+    this.expiresAt,
+    this.daysRemaining = 0,
+    this.serverTime,
+    this.product,
+  });
+
+  factory TrialClaimResult.fromJson(Map<String, dynamic> json) {
+    final trial = json['trial'] is Map<String, dynamic>
+        ? json['trial'] as Map<String, dynamic>
+        : json;
+    return TrialClaimResult(
+      success: json['success'] == true,
+      eligible: json['eligible'] == true,
+      status: trial['status']?.toString() ?? 'expired',
+      startedAt: DateTime.tryParse(trial['started_at']?.toString() ?? ''),
+      expiresAt: DateTime.tryParse(trial['expires_at']?.toString() ?? ''),
+      daysRemaining: (trial['days_remaining'] as num?)?.toInt() ?? 0,
+      serverTime: DateTime.tryParse(trial['server_time']?.toString() ?? ''),
+      product: trial['product']?.toString(),
+    );
+  }
+}
+
+/// Request body for POST /api/v1/pay/trial/status.
+class TrialStatusRequest {
+  final String product;
+  final String machineId;
+
+  const TrialStatusRequest({
+    required this.product,
+    required this.machineId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'product': product,
+        'machine_id': machineId,
+      };
+}
+
+/// Result of POST /api/v1/pay/trial/status.
+class TrialStatusResult {
+  final bool success;
+  final bool hasTrial;
+  final bool eligible;
+  final String status;
+  final DateTime? startedAt;
+  final DateTime? expiresAt;
+  final int daysRemaining;
+  final DateTime? serverTime;
+
+  const TrialStatusResult({
+    required this.success,
+    required this.hasTrial,
+    required this.eligible,
+    required this.status,
+    this.startedAt,
+    this.expiresAt,
+    this.daysRemaining = 0,
+    this.serverTime,
+  });
+
+  factory TrialStatusResult.fromJson(Map<String, dynamic> json) {
+    final trial = json['trial'] is Map<String, dynamic>
+        ? json['trial'] as Map<String, dynamic>
+        : null;
+    return TrialStatusResult(
+      success: json['success'] == true,
+      hasTrial: json['has_trial'] == true,
+      eligible: json['eligible'] == true,
+      status: trial?['status']?.toString() ?? 'none',
+      startedAt: DateTime.tryParse(trial?['started_at']?.toString() ?? ''),
+      expiresAt: DateTime.tryParse(trial?['expires_at']?.toString() ?? ''),
+      daysRemaining: (trial?['days_remaining'] as num?)?.toInt() ?? 0,
+      serverTime: DateTime.tryParse(json['server_time']?.toString() ?? ''),
     );
   }
 }

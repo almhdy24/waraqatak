@@ -863,6 +863,7 @@ class AppLocalizations {
     'Tip: Ensure system services are active or run the app on a supported device.',
   );
   String get pasteKey => _t('لصق', 'Paste');
+  String get deviceModelLabel => _t('موديل الجهاز', 'Device Model');
   String get deviceIdLabel => _t('معرّف الجهاز', 'Device Identifier');
   String get copyDeviceId => _t('نسخ معرّف الجهاز', 'Copy device identifier');
   String get deviceIdCopied =>

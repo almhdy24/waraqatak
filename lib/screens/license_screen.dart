@@ -26,6 +26,7 @@ class LicenseScreen extends StatefulWidget {
 
 class _LicenseScreenState extends State<LicenseScreen> {
   EntitlementState? _state;
+  String? _deviceModel;
   bool _busy = false;
 
   @override
@@ -36,8 +37,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
 
   Future<void> _reload() async {
     final s = await LicenseService.instance.checkEntitlement(force: true);
+    final model = await LicenseService.instance.getDeviceModel();
     if (!mounted) return;
-    setState(() => _state = s);
+    setState(() {
+      _state = s;
+      _deviceModel = model;
+    });
   }
 
   bool get _hasStoredKey {
@@ -153,6 +158,10 @@ class _LicenseScreenState extends State<LicenseScreen> {
                         _row(l10n.licenseTypeLabel, _typeLabel(l10n)),
                         const Divider(height: 1),
                         _row(l10n.licenseExpiryLabel, _expiryLabel(l10n)),
+                        if (_deviceModel != null && _deviceModel!.isNotEmpty) ...[
+                          const Divider(height: 1),
+                          _row(l10n.deviceModelLabel, _deviceModel!),
+                        ],
                         if (_state?.deviceId != null && _state!.deviceId.isNotEmpty) ...[
                           const Divider(height: 1),
                           _rowWithCopy(
@@ -326,7 +335,9 @@ class _LicenseScreenState extends State<LicenseScreen> {
           Directionality(
             textDirection: TextDirection.ltr,
             child: Text(
-              value.length > 18 ? '${value.substring(0, 16)}…' : value,
+              value.length > 14
+                  ? '${value.substring(0, 8)}…${value.substring(value.length - 4)}'
+                  : value,
               style: const TextStyle(
                 fontFamily: 'monospace',
                 fontSize: 12,
