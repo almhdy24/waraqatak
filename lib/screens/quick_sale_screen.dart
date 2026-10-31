@@ -1009,8 +1009,14 @@ class _QtyStepper extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            constraints: const BoxConstraints(
+              minWidth: AppDesignTokens.minTouchTarget,
+              minHeight: AppDesignTokens.minTouchTarget,
+            ),
             icon: Icon(quantity <= 1 ? Icons.delete_outline : Icons.remove, size: 20),
+            tooltip: quantity <= 1
+                ? AppLocalizations.of(context).delete
+                : null,
             onPressed: onMinus,
           ),
           Padding(
@@ -1021,7 +1027,10 @@ class _QtyStepper extends StatelessWidget {
             ),
           ),
           IconButton(
-            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            constraints: const BoxConstraints(
+              minWidth: AppDesignTokens.minTouchTarget,
+              minHeight: AppDesignTokens.minTouchTarget,
+            ),
             icon: const Icon(Icons.add, size: 20),
             onPressed: onPlus,
           ),

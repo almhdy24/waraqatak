@@ -446,6 +446,7 @@ class AppLocalizations {
   String get productActivated => _t('تم تفعيل المنتج', 'Product activated');
   String get scanBarcode => _t('مسح الباركود', 'Scan Barcode');
   String get barcodeScanner => _t('ماسح الباركود', 'Barcode Scanner');
+  String get flashlight => _t('الفلاش', 'Flashlight');
   String get barcodeNotFound => _t(
     'لم يُعثر على منتج بهذا الباركود',
     'No product found for this barcode',

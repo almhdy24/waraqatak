@@ -869,11 +869,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit_outlined, size: 18),
+                                tooltip: l10n.edit,
                                 onPressed: () => _showUnitDialog(u, idx),
                               ),
                               IconButton(
                                 icon:
                                     const Icon(Icons.delete_outline, size: 18),
+                                tooltip: l10n.delete,
                                 onPressed: () {
                                   setState(() => _productUnits.removeAt(idx));
                                 },

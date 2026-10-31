@@ -151,6 +151,14 @@ class AppTheme {
           ),
         ),
       ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(
+            AppDesignTokens.minTouchTarget,
+            AppDesignTokens.minTouchTarget,
+          ),
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surface,

@@ -63,3 +63,9 @@ Format per decision:
 - **Alternatives:** Leaving raw unstyled `AlertDialog` widgets with inconsistent buttons and allowing accidental single-tap disabling of wholesale pricing without explaining the impact on new documents.
 - **Why Safest:** Protects users against accidental data overwrites and configuration changes without altering any underlying database or backup logic.
 - **How to Reverse:** Revert `lib/screens/settings_screen.dart`, `lib/screens/financial_settings_screen.dart`, and `lib/screens/home_screen.dart`.
+
+### Decision 10 (Batch 9): App-Wide IconButton Minimum Touch Target (48dp) and Semantics Sweep
+- **Decision:** Added `iconButtonTheme` to `AppTheme` with `minimumSize: const Size(48, 48)` (`AppDesignTokens.minTouchTarget`), enlarged custom icon constraints to 48dp in `DocumentItemForm` and `_QtyStepper`, localized search clear tooltips, and added tooltips to bare icon buttons across product form and scanner.
+- **Alternatives:** Manually wrapping hundreds of `IconButton` callsites in `SizedBox(width: 48, height: 48)` or leaving small touch targets (<48dp) which fail WCAG AA accessibility standards.
+- **Why Safest:** Applying the standard touch constraint through Flutter Material 3's `iconButtonTheme` globally enforces accessibility standards across all current and future screens without changing widget tree semantics, layout hierarchies, or business logic.
+- **How to Reverse:** In `lib/theme.dart`, remove `iconButtonTheme` from `_build()`.

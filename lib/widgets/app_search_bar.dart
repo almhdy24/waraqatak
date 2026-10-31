@@ -90,7 +90,7 @@ class _AppSearchBarState extends State<AppSearchBar> {
           suffixIcon: _controller.text.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear_rounded, size: 18),
-                  tooltip: 'Clear',
+                  tooltip: MaterialLocalizations.of(context).closeButtonLabel,
                   color: cs.onSurfaceVariant,
                   onPressed: _clear,
                 )

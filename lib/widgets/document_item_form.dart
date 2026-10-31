@@ -8,6 +8,7 @@ import '../screens/barcode_scanner_screen.dart';
 import '../screens/product_form_screen.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
+import 'app_design_tokens.dart';
 import 'product_autocomplete_field.dart';
 
 class DocumentItemForm extends StatefulWidget {
@@ -617,7 +618,10 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                   tooltip: l10n.delete,
                   onPressed: widget.onDelete,
                   padding: const EdgeInsets.all(8),
-                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                  constraints: const BoxConstraints(
+                    minWidth: AppDesignTokens.minTouchTarget,
+                    minHeight: AppDesignTokens.minTouchTarget,
+                  ),
                 ),
               ],
             ),

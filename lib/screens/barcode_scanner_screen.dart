@@ -48,6 +48,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             valueListenable: _controller,
             builder: (_, state, __) {
               return IconButton(
+                tooltip: l10n.flashlight,
                 icon: Icon(
                   state.torchState == TorchState.on
                       ? Icons.flash_on

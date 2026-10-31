@@ -364,6 +364,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     if (_query.isNotEmpty)
                       IconButton(
                         icon: const Icon(Icons.clear, size: 18),
+                        tooltip: MaterialLocalizations.of(context).closeButtonLabel,
                         onPressed: () {
                           _debounceTimer?.cancel();
                           _searchCtrl.clear();
