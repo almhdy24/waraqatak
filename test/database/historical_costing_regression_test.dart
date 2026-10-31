@@ -1474,6 +1474,14 @@ void main() {
         timestamp TEXT NOT NULL
       )
     ''');
+    await db.execute('''
+      CREATE TABLE document_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL
+      )
+    ''');
 
     // Product with 15 units remaining:
     // Opening 10 @ 50 = 500

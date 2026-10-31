@@ -483,6 +483,14 @@ class DatabaseHelper {
       return columns.any((c) => c['name'] == column);
     }
 
+    Future<bool> tableExists(String table) async {
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+        [table],
+      );
+      return tables.isNotEmpty;
+    }
+
     if (oldVersion < 2) {
       if (!await columnExists('documents', 'payment_method')) {
         await db.execute(
@@ -997,14 +1005,16 @@ class DatabaseHelper {
     }
 
     if (oldVersion < 19 && newVersion >= 19) {
-      if (!await columnExists('document_payments', 'payment_origin')) {
+      if (await tableExists('document_payments')) {
+        if (!await columnExists('document_payments', 'payment_origin')) {
+          await db.execute(
+            'ALTER TABLE document_payments ADD COLUMN payment_origin TEXT',
+          );
+        }
         await db.execute(
-          'ALTER TABLE document_payments ADD COLUMN payment_origin TEXT',
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_origin ON document_payments(payment_origin)',
         );
       }
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_document_payments_origin ON document_payments(payment_origin)',
-      );
     }
 
     if (oldVersion < 20 && newVersion >= 20) {
