@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:printing/printing.dart';
 
 import '../database/database_helper.dart';
@@ -19,6 +19,10 @@ import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/print_settings.dart';
+import '../widgets/app_amount_text.dart';
+import '../widgets/app_confirm_dialog.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_loading_view.dart';
 import 'barcode_scanner_screen.dart';
 import 'document_detail_screen.dart';
 
@@ -172,21 +176,29 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     setState(() => _query = '');
   }
 
+  Future<bool> _onWillPop() async {
+    if (_cart.isEmpty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
   Future<void> _clearCart() async {
     final l10n = AppLocalizations.of(context);
     if (_cart.isEmpty) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.posClearCart),
-        content: Text(l10n.posClearCartConfirm),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.posClearCart)),
-        ],
-      ),
+    final ok = await AppConfirmDialog.show(
+      context,
+      title: l10n.posClearCart,
+      message: l10n.posClearCartConfirm,
+      confirmLabel: l10n.posClearCart,
+      isDestructive: true,
     );
-    if (ok == true) _resetSale();
+    if (ok) _resetSale();
   }
 
   void _resetSale() {
@@ -309,41 +321,51 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final l10n = AppLocalizations.of(context);
     final wide = MediaQuery.sizeOf(context).width >= 840;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.posQuickSale),
-        actions: [
-          IconButton(
-            tooltip: l10n.scanBarcode,
-            icon: const Icon(Icons.qr_code_scanner),
-            onPressed: _scan,
-          ),
-          IconButton(
-            tooltip: l10n.posClearCart,
-            icon: const Icon(Icons.remove_shopping_cart_outlined),
-            onPressed: _cart.isEmpty ? null : _clearCart,
-          ),
-        ],
+    return PopScope(
+      canPop: _cart.isEmpty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.posQuickSale),
+          actions: [
+            IconButton(
+              tooltip: l10n.scanBarcode,
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: _scan,
+            ),
+            IconButton(
+              tooltip: l10n.posClearCart,
+              icon: const Icon(Icons.remove_shopping_cart_outlined),
+              onPressed: _cart.isEmpty ? null : _clearCart,
+            ),
+          ],
+        ),
+        body: _loading
+            ? const AppLoadingView()
+            : _business == null
+                ? Center(child: Text(l10n.posSetupBusinessFirst))
+                : wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: _productPicker(l10n)),
+                          const VerticalDivider(width: 1),
+                          SizedBox(width: 400, child: _cartPanel(l10n)),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          Expanded(child: _productPicker(l10n)),
+                          _cartBar(l10n),
+                        ],
+                      ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _business == null
-              ? Center(child: Text(l10n.posSetupBusinessFirst))
-              : wide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: _productPicker(l10n)),
-                        const VerticalDivider(width: 1),
-                        SizedBox(width: 400, child: _cartPanel(l10n)),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        Expanded(child: _productPicker(l10n)),
-                        _cartBar(l10n),
-                      ],
-                    ),
     );
   }
 
@@ -389,22 +411,28 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     ),
                   ),
                 )
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 190,
-                    mainAxisExtent: 112,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: products.length,
-                  itemBuilder: (_, i) => _ProductTile(
-                    product: products[i],
-                    inCart: products[i].id == null ? 0 : _cart.quantityOf(products[i].id!),
-                    price: _fmt(products[i].salePrice),
-                    l10n: l10n,
-                    onTap: () => _addProduct(products[i]),
-                  ),
+              : Builder(
+                  builder: (context) {
+                    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+                    final tileHeight = (116.0 * textScale.clamp(1.0, 1.6)).roundToDouble();
+                    return GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 190,
+                        mainAxisExtent: tileHeight,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemCount: products.length,
+                      itemBuilder: (_, i) => _ProductTile(
+                        product: products[i],
+                        inCart: products[i].id == null ? 0 : _cart.quantityOf(products[i].id!),
+                        price: _fmt(products[i].salePrice),
+                        l10n: l10n,
+                        onTap: () => _addProduct(products[i]),
+                      ),
+                    );
+                  },
                 ),
         ),
       ],
@@ -414,33 +442,46 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   Widget _cartBar(AppLocalizations l10n) {
     final cs = Theme.of(context).colorScheme;
     final total = _totals.total;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.posItemsCount(_money.format(_cart.itemCount)),
-                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-                  Text(_fmt(total),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                ],
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border(top: BorderSide(color: cs.outlineVariant)),
+          boxShadow: AppDesignTokens.softShadow(context),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.posItemsCount(_money.format(_cart.itemCount)),
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                    ),
+                    AppAmountText(
+                      amount: total,
+                      currencySymbol: _business?.currencySymbol ?? '',
+                      fontSize: 19,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            FilledButton.icon(
-              onPressed: _cart.isEmpty ? null : () => _openCartSheet(l10n),
-              icon: const Icon(Icons.shopping_cart_outlined),
-              label: Text(l10n.posViewCart),
-            ),
-          ],
+              FilledButton.icon(
+                onPressed: _cart.isEmpty ? null : () => _openCartSheet(l10n),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(130, AppDesignTokens.minTouchTarget),
+                ),
+                icon: const Icon(Icons.shopping_cart_outlined),
+                label: Text(l10n.posViewCart),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -811,7 +852,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               if (t.taxAmount > 0) _totalRow(l10n.tax, _fmt(t.taxAmount)),
               _totalRow(l10n.grandTotal, _fmt(t.total), big: true),
               if (change > 0)
-                _totalRow(l10n.posChange, _fmt(change), color: Colors.green.shade700),
+                _totalRow(
+                  l10n.posChange,
+                  _fmt(change),
+                  color: AppDesignTokens.semanticSuccess(context),
+                ),
               const SizedBox(height: 10),
               SizedBox(
                 height: 54,
@@ -886,6 +931,7 @@ class _ProductTile extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -916,20 +962,26 @@ class _ProductTile extends StatelessWidget {
                     ),
                 ],
               ),
-              const Spacer(),
-              Text(price,
-                  style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary)),
-              const SizedBox(height: 2),
-              Text(
-                !tracks
-                    ? l10n.posService
-                    : soldOut
-                        ? l10n.outOfStock
-                        : l10n.posInStock(FormatUtils.formatQuantity(available)),
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: soldOut ? cs.error : cs.onSurfaceVariant,
-                ),
+              const SizedBox(height: 4),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(price,
+                      style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary)),
+                  const SizedBox(height: 2),
+                  Text(
+                    !tracks
+                        ? l10n.posService
+                        : soldOut
+                            ? l10n.outOfStock
+                            : l10n.posInStock(FormatUtils.formatQuantity(available)),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: soldOut ? cs.error : cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -957,15 +1009,20 @@ class _QtyStepper extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            visualDensity: VisualDensity.compact,
-            icon: Icon(quantity <= 1 ? Icons.delete_outline : Icons.remove, size: 18),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            icon: Icon(quantity <= 1 ? Icons.delete_outline : Icons.remove, size: 20),
             onPressed: onMinus,
           ),
-          Text(NumberFormat('#,##0.##').format(quantity),
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              NumberFormat('#,##0.##').format(quantity),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
           IconButton(
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.add, size: 18),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+            icon: const Icon(Icons.add, size: 20),
             onPressed: onPlus,
           ),
         ],

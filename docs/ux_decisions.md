@@ -39,3 +39,9 @@ Format per decision:
 - **Alternatives:** Requiring users to scroll through lengthy item lists to reach the save button and totals card at the very bottom.
 - **Why Safest:** Retains the full scrollable form and existing totals card inside the body while exposing the sticky totals and save actions at the viewport bottom for quick thumb access. Uses `_isDirty` checks before popping so existing save/issue flow parameters remain completely untouched.
 - **How to Reverse:** Remove `bottomNavigationBar` and `PopScope` wrapper, restoring the full-width buttons inside the list.
+
+### Decision 6 (Batch 5): Dynamic POS Grid Height and PopScope Cart Guard
+- **Decision:** Computed dynamic `mainAxisExtent` based on `MediaQuery.textScalerOf(context)` in `QuickSaleScreen`'s product grid, enlarged `_QtyStepper` touch targets to >= 44x44dp, and added `PopScope` to prompt confirmation before discarding an active cart.
+- **Alternatives:** Keeping fixed 112dp tile height (clips on large accessibility font scales) and letting back gesture discard cart silently.
+- **Why Safest:** Dynamically adapts grid tiles to user font preferences without altering grid column sizing (`maxCrossAxisExtent: 190`), and prevents accidental loss of in-progress cashier cart sessions.
+- **How to Reverse:** Revert `_productPicker`, `_QtyStepper`, and `build` in `lib/screens/quick_sale_screen.dart`.
