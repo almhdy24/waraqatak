@@ -38,7 +38,7 @@ class LicenseNotificationService {
         ? 'بدء الفترة التجريبية المجانية'
         : 'Free Trial Started';
     final body = isAr
-        ? 'مرحباً بك في تطبيق ورقك! استمتع بكافة الميزات الاحترافية خلال فترتك التجريبية المتبقي منها $daysRemaining يوماً.'
+        ? 'مرحباً بك في تطبيق ورقتك! استمتع بكافة الميزات الاحترافية خلال فترتك التجريبية المتبقي منها $daysRemaining يوماً.'
         : 'Welcome to Waraqatak! Enjoy full Pro features during your 14-day free trial ($daysRemaining days remaining).';
 
     await _upsert(
@@ -79,7 +79,7 @@ class LicenseNotificationService {
         ? 'انتهت الفترة التجريبية المجانية'
         : 'Free Trial Expired';
     final body = isAr
-        ? 'انتهت الفترة التجريبية المجانية لتطبيق ورقك. لا تزال المستندات والفواتير السابقة محفوظة ومتاحة. فعّل رمز الترخيص للاستمرار بالاستفادة من ميزات Pro.'
+        ? 'انتهت الفترة التجريبية المجانية لتطبيق ورقتك. لا تزال المستندات والفواتير السابقة محفوظة ومتاحة. فعّل رمز الترخيص للاستمرار بالاستفادة من ميزات Pro.'
         : 'Your free trial has ended. Existing invoices and documents remain safe. Enter an activation key to unlock Pro features.';
 
     await _upsert(
@@ -111,8 +111,8 @@ class LicenseNotificationService {
         : 'License Activated Successfully';
     final body = isAr
         ? (isPerpetual
-            ? 'تم تفعيل ترخيص ورقك بنجاح على هذا الجهاز (ترخيص دائم). جميع الميزات الاحترافية متاحة الآن.'
-            : 'تم تفعيل ترخيص ورقك بنجاح على هذا الجهاز حتى $expStr.')
+            ? 'تم تفعيل ترخيص ورقتك بنجاح على هذا الجهاز (ترخيص دائم). جميع الميزات الاحترافية متاحة الآن.'
+            : 'تم تفعيل ترخيص ورقتك بنجاح على هذا الجهاز حتى $expStr.')
         : (isPerpetual
             ? 'Waraqatak license activated successfully on this device (Lifetime/Perpetual). Full Pro features unlocked.'
             : 'Waraqatak license activated successfully on this device until $expStr.');
@@ -133,7 +133,7 @@ class LicenseNotificationService {
         ? 'تنبيه: اقتراب موعد انتهاء الترخيص'
         : 'Notice: License Expiring Soon';
     final body = isAr
-        ? 'سينتهي ترخيص ورقك خلال $daysRemaining يوماً. يرجى تجديد الترخيص لضمان استمرار المزامنة والميزات الاحترافية.'
+        ? 'سينتهي ترخيص ورقتك خلال $daysRemaining يوماً. يرجى تجديد الترخيص لضمان استمرار المزامنة والميزات الاحترافية.'
         : 'Your Waraqatak license will expire in $daysRemaining days. Please renew to ensure continued access to Pro features.';
 
     await _upsert(
@@ -152,7 +152,7 @@ class LicenseNotificationService {
         ? 'انتهت صلاحية الترخيص'
         : 'License Expired';
     final body = isAr
-        ? 'انتهت صلاحية ترخيص ورقك على هذا الجهاز. يمكنك مراجعة فواتيرك وطباعتها في أي وقت، ولإعادة تفعيل الميزات المتقدمة قم بتجديد الترخيص.'
+        ? 'انتهت صلاحية ترخيص ورقتك على هذا الجهاز. يمكنك مراجعة فواتيرك وطباعتها في أي وقت، ولإعادة تفعيل الميزات المتقدمة قم بتجديد الترخيص.'
         : 'Your Waraqatak license on this device has expired. You can still view and print existing documents; renew to unlock Pro features.';
 
     await _upsert(

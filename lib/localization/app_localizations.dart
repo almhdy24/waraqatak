@@ -236,7 +236,7 @@ class AppLocalizations {
   // ========== BACKUP / RESTORE ==========
   String get backupDescription =>
       _t('إنشاء نسخة احتياطية من بياناتك', 'Create a backup of your data');
-  String get saveBackupTo => _t('حفظ نسخة إلى...', 'Save Backup to...');
+  String get saveBackupTo => _t('حفظ نسخة إلى…', 'Save Backup to…');
   String get backupSavedTo => _t(
     'تم حفظ النسخة في الموقع المحدد',
     'Backup saved to the selected location',
@@ -348,10 +348,10 @@ class AppLocalizations {
 
   // ========== DOCUMENT STATUS ==========
   String get statusDraft => _t('مسودة', 'Draft');
-  String get statusIssued => _t('صادرة', 'Issued');
-  String get statusPartiallyPaid => _t('مدفوعة جزئياً', 'Partially Paid');
-  String get statusPaid => _t('مدفوعة', 'Paid');
-  String get statusCancelled => _t('ملغاة', 'Cancelled');
+  String get statusIssued => _t('صادر', 'Issued');
+  String get statusPartiallyPaid => _t('مدفوع جزئياً', 'Partially Paid');
+  String get statusPaid => _t('مدفوع', 'Paid');
+  String get statusCancelled => _t('ملغي', 'Cancelled');
 
   // ========== PAYMENT RECORDING ==========
   String get recordPayment => _t('تسجيل دفعة', 'Record Payment');
@@ -579,7 +579,7 @@ class AppLocalizations {
   String get totalOutstanding => _t('إجمالي المتبقي', 'Total Outstanding');
   String get invoiceCount => _t('عدد الفواتير', 'Invoices');
   String get purchaseCount => _t('عدد الطلبات', 'Orders');
-  String get cancelledCount => _t('ملغاة', 'Cancelled');
+  String get cancelledCount => _t('ملغي', 'Cancelled');
   String get finalized => _t('مكتملة', 'Finalized');
   String get receivedPayments => _t('مدفوعات واردة', 'Received Payments');
   String get madePayments => _t('مدفوعات صادرة', 'Made Payments');
@@ -792,7 +792,7 @@ class AppLocalizations {
   String get taxLivePreview =>
       _t('معاينة توضيحية لاحتساب الضريبة', 'Tax Calculation Preview');
   String get taxLivePreviewDesc => _t(
-    'مثال توضيحي لصنف بقيمة 100 مع خصم 10%',
+    'مثال توضيحي لمنتج بقيمة 100 مع خصم 10%',
     'Example for an item of 100 with 10% discount',
   );
   String get disableMethodAction => _t('تعطيل الطريقة', 'Disable Method');
@@ -805,15 +805,15 @@ class AppLocalizations {
   String get taxesDisabledInactive =>
       _t('الضريبة معطلة (0%)', 'Taxes Disabled (0%)');
   String get productTaxOverrideNote => _t(
-    'يمكن تخصيص ملف ضريبي مختلف لكل منتج على حدة من شاشة تفاصيل المنتج (مثل: الأصناف المعفاة أو الخاضعة لنسبة صفرية).',
+    'يمكن تخصيص ملف ضريبي مختلف لكل منتج على حدة من شاشة تفاصيل المنتج (مثل: المنتجات المعفاة أو الخاضعة لنسبة صفرية).',
     'Individual products can override this default with their own tax profile (e.g. zero-rated or exempt items).',
   );
   String get taxExclusiveExplained => _t(
-    'الأسعار المدخلة غير شاملة: تُضاف الضريبة كقيمة إضافية فوق سعر الصنف.',
+    'الأسعار المدخلة غير شاملة: تُضاف الضريبة كقيمة إضافية فوق سعر المنتج.',
     'Prices exclude tax: tax is added on top of the item price.',
   );
   String get taxInclusiveExplained => _t(
-    'الأسعار المدخلة شاملة: يتم استخراج الضريبة من داخل سعر الصنف دون زيادة المجموع.',
+    'الأسعار المدخلة شاملة: يتم استخراج الضريبة من داخل سعر المنتج دون زيادة المجموع.',
     'Prices include tax: tax is extracted from the item price without increasing the total.',
   );
   String get taxSampleEnteredPrice =>
@@ -824,7 +824,7 @@ class AppLocalizations {
   String get taxSampleTotalPayable =>
       _t('الإجمالي النهائي المستحق', 'Total Payable');
   String get taxZeroRatedVsDisabled => _t(
-    'الفرق بين تعطيل الضريبة والنسبة الصفرية: تعطيل الضريبة يلغي احتساب الضرائب نهائياً، بينما النسبة الصفرية (0%) تعامل الصنف كخاضع للضريبة رسمياً بنسبة 0%.',
+    'الفرق بين تعطيل الضريبة والنسبة الصفرية: تعطيل الضريبة يلغي احتساب الضرائب نهائياً، بينما النسبة الصفرية (0%) تعامل المنتج كخاضع للضريبة رسمياً بنسبة 0%.',
     'Difference: Disabling tax turns off calculation entirely, while zero-rated (0%) records the item under tax regulations with 0% tax.',
   );
   String get basicInfo =>
@@ -853,7 +853,7 @@ class AppLocalizations {
     'Check for new versions on Google Play',
   );
   String get checkingForUpdates =>
-      _t('جاري التحقق من التحديثات...', 'Checking for updates...');
+      _t('جارٍ التحقق من التحديثات…', 'Checking for updates…');
   String get appUpToDate => _t(
     'أنت تستخدم أحدث إصدار من التطبيق',
     'You are using the latest version',
@@ -1094,7 +1094,7 @@ class AppLocalizations {
   );
   String posNotEnoughStock(String name) =>
       _t('الكمية المتوفرة من "$name" لا تكفي', 'Not enough stock for "$name"');
-  String posItemsCount(String n) => _t('$n صنف', '$n items');
+  String posItemsCount(String n) => _t('$n منتج', '$n items');
   String posInStock(String n) => _t('متوفر: $n', 'In stock: $n');
 
   // ========== ABOUT & SUPPORT ==========
@@ -1386,7 +1386,7 @@ class AppLocalizations {
   String get currentInventoryReport =>
       _t('تقرير المخزون الحالي', 'Current Inventory Report');
   String get searchProductsHint =>
-      _t('بحث بالاسم أو الباركود...', 'Search by name or barcode...');
+      _t('بحث بالاسم أو الباركود…', 'Search by name or barcode…');
   String get activeFilterAll => _t('الكل', 'All');
   String get noReplenishmentNeeded => _t(
     'لا توجد منتجات تحتاج لإعادة طلب حالياً',
@@ -1395,7 +1395,7 @@ class AppLocalizations {
   String get product => _t('المنتج', 'Product');
   String get totalCost => _t('إجمالي التكلفة', 'Total Cost');
   String get status => _t('الحالة', 'Status');
-  String get issued => _t('صادرة', 'Issued');
+  String get issued => _t('صادر', 'Issued');
 
   // Phase 5 — Advanced Pro Features
   String get featureStocktake =>
@@ -1557,7 +1557,7 @@ class AppLocalizations {
     'Please enter an adjustment quantity (non-zero)',
   );
   String get openingStockHelp => _t(
-    'الكمية الابتدائية المتوفرة في المخزن لبدء متابعة حركة الصنف بدقة.',
+    'الكمية الابتدائية المتوفرة في المخزون لبدء متابعة حركة المنتج بدقة.',
     'Initial physical quantity on hand to begin inventory tracking.',
   );
   String get purchasePriceCostHelp => _t(
@@ -1565,7 +1565,7 @@ class AppLocalizations {
     'Unit purchase cost used for stock valuation and profit calculations.',
   );
   String get pleaseAddItems => _t(
-    'يرجى إضافة صنف واحد على الأقل للمستند',
+    'يرجى إضافة بند واحد على الأقل للمستند',
     'Please add at least one item to the document',
   );
   String get supplierStatement => _t('كشف حساب مورد', 'Supplier Statement');
@@ -1623,7 +1623,7 @@ class AppLocalizations {
     'Product performance by sales, qty and profit',
   );
   String get reportSubtitleAdvancedAnalytics => _t(
-    'معدل دوران المخزون، الأصناف الراكدة وهامش الربح',
+    'معدل دوران المخزون، المنتجات الراكدة وهامش الربح',
     'Inventory turnover, slow stock & margin alerts',
   );
   String get reportSubtitleAudit => _t(
@@ -1671,7 +1671,7 @@ class AppLocalizations {
     'Read-only report on ledger, balance, and inventory integrity',
   );
   String get diagnosticsScanning =>
-      _t('جاري فحص قاعدة البيانات...', 'Scanning database...');
+      _t('جارٍ فحص قاعدة البيانات…', 'Scanning database…');
   String get diagnosticsSummaryErrors => _t('أخطاء تكامل', 'Integrity Errors');
   String get diagnosticsSummaryWarnings =>
       _t('تنبيهات تدقيق', 'Audit Warnings');
@@ -1800,12 +1800,12 @@ class AppLocalizations {
     'No backups found in Google Drive',
   );
   String get googleDriveUploading => _t(
-    'جاري رفع النسخة إلى Google Drive...',
-    'Uploading backup to Google Drive...',
+    'جارٍ رفع النسخة إلى Google Drive…',
+    'Uploading backup to Google Drive…',
   );
   String get googleDriveDownloading => _t(
-    'جاري تنزيل النسخة والتحقق منها...',
-    'Downloading and verifying backup...',
+    'جارٍ تنزيل النسخة والتحقق منها…',
+    'Downloading and verifying backup…',
   );
   String get googleDriveUploadSuccess => _t(
     'تم رفع النسخة الاحتياطية بنجاح إلى Google Drive',
@@ -1851,8 +1851,8 @@ class AppLocalizations {
     'Are you sure you want to delete this backup from Google Drive? This action cannot be undone.',
   );
   String get googleDriveDeleting => _t(
-    'جاري حذف النسخة الاحتياطية...',
-    'Deleting backup from Google Drive...',
+    'جارٍ حذف النسخة الاحتياطية…',
+    'Deleting backup from Google Drive…',
   );
   String get googleDriveDeleteSuccess => _t(
     'تم حذف النسخة الاحتياطية من Google Drive بنجاح',
@@ -1929,8 +1929,8 @@ class AppLocalizations {
     'Database is clean and healthy',
   );
   String get repairExecuting => _t(
-    'جاري تنفيذ الإصلاح والتحقق من السلامة...',
-    'Executing repair and verifying integrity...',
+    'جارٍ تنفيذ الإصلاح والتحقق من السلامة…',
+    'Executing repair and verifying integrity…',
   );
   String get repairFixPreviewTitle =>
       _t('معاينة تفاصيل الإصلاح', 'Repair Preview');
