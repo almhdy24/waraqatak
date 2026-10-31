@@ -697,6 +697,14 @@ class AppLocalizations {
   String get linePriceRetail => _t('تجزئة', 'Retail');
   String get linePriceWholesale => _t('جملة', 'Wholesale');
   String get linePriceManual => _t('مخصص', 'Custom');
+  String get itemTierWholesaleBadge => _t('سعر جملة', 'Wholesale Tier');
+  String get itemTierRetailBadge => _t('سعر تجزئة', 'Retail Tier');
+  String get bulkPricingCustomUnitsWarning => _t(
+        'تنبيه: التعديل الجماعي للأسعار ينطبق على الوحدة الأساسية فقط ولا يغير أسعار وحدات البيع الإضافية.',
+        'Notice: Bulk price adjustment applies to base units only and does not change additional sales unit prices.',
+      );
+  String get duplicateUnitNameError =>
+      _t('اسم الوحدة موجود بالفعل لهذا المنتج', 'Unit name already exists for this product');
   String get reset => _t('إعادة ضبط', 'Reset');
   String get additionalSalesUnits =>
       _t('وحدات البيع الإضافية', 'Additional Sales Units');
