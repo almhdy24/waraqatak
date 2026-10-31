@@ -1013,8 +1013,11 @@ class DatabaseHelper {
   }
 
   static Future<void> _reconcileLegacyOpeningStock(DatabaseExecutor db) async {
+    final columns = await db.rawQuery('PRAGMA table_info(products)');
+    final hasCreatedAt = columns.any((c) => c['name'] == 'created_at');
+    final createdAtCol = hasCreatedAt ? 'p.created_at' : 'NULL AS created_at';
     final productsWithMissingOpening = await db.rawQuery('''
-      SELECT p.id, p.stock_quantity, p.created_at
+      SELECT p.id, p.stock_quantity, $createdAtCol
       FROM products p
       LEFT JOIN stock_movements sm ON sm.product_id = p.id
       WHERE (p.type = 'product' OR p.type IS NULL)

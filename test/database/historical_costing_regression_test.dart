@@ -1431,7 +1431,8 @@ void main() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         type TEXT DEFAULT 'product',
-        stock_quantity REAL DEFAULT 0
+        stock_quantity REAL DEFAULT 0,
+        created_at TEXT
       )
     ''');
     await db.execute('''
