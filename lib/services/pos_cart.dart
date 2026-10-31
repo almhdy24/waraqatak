@@ -27,12 +27,16 @@ class PosCartLine {
   /// Automatically resolves price according to tier/unit/quantity rules,
   /// or returns [priceOverride] if manually modified by user.
   double get unitPrice {
-    if (priceOverride != null) return priceOverride!;
-    return DocumentService.resolveItemPrice(
+    return DocumentService.resolveLinePrice(
       product: product,
       unit: unit,
+      saleUnit: unit?.unitName,
+      unitConversionFactor: unit?.conversionFactor,
+      pricingCategory: pricingCategory ?? Contact.categoryRetail,
       targetCategory: pricingCategory ?? Contact.categoryRetail,
       quantity: quantity,
+      currentPrice: priceOverride,
+      isManualPrice: priceOverride != null,
       wholesalePricingEnabled: wholesalePricingEnabled,
     );
   }

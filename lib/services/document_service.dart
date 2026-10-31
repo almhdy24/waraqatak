@@ -771,4 +771,86 @@ class DocumentService {
 
     return effectiveRetailPrice;
   }
+
+  /// Authoritative single entry point for line-level repricing across all document screens.
+  ///
+  /// Takes the full line state (product, current price, saleUnit, unitConversionFactor,
+  /// current pricingCategory, manual override flag) along with [availableUnits] and [targetCategory].
+  ///
+  /// Rules:
+  /// 1. Manual price overrides ([isManualPrice] == true) are NEVER overwritten.
+  /// 2. Legacy lines with null [pricingCategory] and an existing [currentPrice] are NEVER overwritten.
+  /// 3. If [saleUnit] is specified but does not match any unit in [availableUnits] (or product base unit),
+  ///    history wins and [currentPrice] is preserved.
+  /// 4. If the line's snapshot [unitConversionFactor] differs from the current unit's conversion factor,
+  ///    history wins and [currentPrice] is preserved.
+  /// 5. Otherwise, resolves price with the matching [ProductUnit] and [targetCategory] via [resolveItemPrice].
+  static double resolveLinePrice({
+    required Product product,
+    Iterable<ProductUnit> availableUnits = const [],
+    required double quantity,
+    double? currentPrice,
+    String? saleUnit,
+    double? unitConversionFactor,
+    String? pricingCategory,
+    required String? targetCategory,
+    bool isManualPrice = false,
+    bool wholesalePricingEnabled = false,
+    ProductUnit? unit,
+  }) {
+    if (isManualPrice && currentPrice != null) {
+      return currentPrice;
+    }
+    if (pricingCategory == null && currentPrice != null) {
+      return currentPrice;
+    }
+
+    ProductUnit? matchingUnit = unit;
+    if (matchingUnit == null) {
+      final isBaseUnit = saleUnit == null ||
+          saleUnit.trim().isEmpty ||
+          saleUnit.trim() == product.unit?.trim();
+
+      if (isBaseUnit) {
+        if (unitConversionFactor != null &&
+            (unitConversionFactor - 1.0).abs() > 0.0001) {
+          // Base unit factor mismatch with history
+          if (currentPrice != null) return currentPrice;
+        }
+        matchingUnit = null;
+      } else {
+        ProductUnit? found;
+        for (final u in availableUnits) {
+          if (u.unitName.trim() == saleUnit.trim()) {
+            found = u;
+            break;
+          }
+        }
+        if (found == null) {
+          // Unit no longer exists; preserve historical price
+          if (currentPrice != null) return currentPrice;
+        } else {
+          if (unitConversionFactor != null &&
+              (unitConversionFactor - found.conversionFactor).abs() > 0.0001) {
+            // Unit conversion factor changed since document line was created; preserve historical price
+            if (currentPrice != null) return currentPrice;
+          }
+          matchingUnit = found;
+        }
+      }
+    } else {
+      if (unitConversionFactor != null &&
+          (unitConversionFactor - matchingUnit.conversionFactor).abs() > 0.0001) {
+        if (currentPrice != null) return currentPrice;
+      }
+    }
+
+    return resolveItemPrice(
+      product: product,
+      targetCategory: targetCategory,
+      quantity: quantity,
+      wholesalePricingEnabled: wholesalePricingEnabled,
+      unit: matchingUnit,
+    );
+  }
 }

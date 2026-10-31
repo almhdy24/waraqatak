@@ -7,6 +7,7 @@ import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/payment_method.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_confirm_dialog.dart';
@@ -46,6 +47,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   final List<Product?> _cachedProducts = [];
   final List<String?> _saleUnits = [];
   final List<double> _conversionFactors = [];
+  final Map<int, List<ProductUnit>> _unitsCache = {};
 
   Business? _business;
   Document? _document;
@@ -393,30 +395,46 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                         initialContact: _selectedContact,
                         label: isSupplier ? l10n.supplier : l10n.customer,
                         type: isSupplier ? 'supplier' : 'customer',
-                        onContactChanged: (contact) {
+                        onContactChanged: (contact) async {
                           setState(() {
                             _selectedContact = contact;
                             _contactName = contact?.name;
                             _phoneController.text = contact?.phone ?? '';
                             _addressController.text = contact?.address ?? '';
-                            if (_business?.wholesalePricingEnabled == true && !isPurchase) {
-                              final newCat =
-                                  contact?.pricingCategory ?? Contact.categoryRetail;
-                              for (int i = 0; i < _descriptionControllers.length; i++) {
-                                if (!_isManualPriceList[i] && _cachedProducts[i] != null) {
-                                  _pricingCategories[i] = newCat;
-                                  final q = double.tryParse(_quantityControllers[i].text) ?? 1.0;
-                                  final resolved = DocumentService.resolveItemPrice(
-                                    product: _cachedProducts[i]!,
-                                    targetCategory: newCat,
-                                    quantity: q,
-                                    wholesalePricingEnabled: true,
-                                  );
-                                  _priceControllers[i].text = resolved.toStringAsFixed(2);
+                          });
+                          if (_business?.wholesalePricingEnabled == true && !isPurchase) {
+                            final newCat =
+                                contact?.pricingCategory ?? Contact.categoryRetail;
+                            for (int i = 0; i < _descriptionControllers.length; i++) {
+                              final p = _cachedProducts[i];
+                              if (!_isManualPriceList[i] && p != null) {
+                                _pricingCategories[i] = newCat;
+                                final q = double.tryParse(_quantityControllers[i].text) ?? 1.0;
+                                final currentP = double.tryParse(_priceControllers[i].text);
+                                List<ProductUnit> units = _unitsCache[p.id] ?? const [];
+                                if (units.isEmpty && p.id != null) {
+                                  try {
+                                    units = await DatabaseHelper.instance.getProductUnits(p.id!);
+                                    _unitsCache[p.id!] = units;
+                                  } catch (_) {}
                                 }
+                                final resolved = DocumentService.resolveLinePrice(
+                                  product: p,
+                                  availableUnits: units,
+                                  quantity: q,
+                                  currentPrice: currentP,
+                                  saleUnit: _saleUnits[i],
+                                  unitConversionFactor: _conversionFactors[i],
+                                  pricingCategory: _pricingCategories[i],
+                                  targetCategory: newCat,
+                                  isManualPrice: _isManualPriceList[i],
+                                  wholesalePricingEnabled: true,
+                                );
+                                _priceControllers[i].text = resolved.toStringAsFixed(2);
                               }
                             }
-                          });
+                            if (mounted) setState(() {});
+                          }
                         },
                         onTextChanged: (value) {
                           if (_selectedContact?.name != value) {
@@ -559,6 +577,11 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                   },
                   onProductSelected: (p) {
                     setState(() => _cachedProducts[index] = p);
+                    if (p?.id != null) {
+                      DatabaseHelper.instance.getProductUnits(p!.id!).then((u) {
+                        _unitsCache[p.id!] = u;
+                      });
+                    }
                   },
                   onTaxableChanged: (value) {
                     setState(() => _taxableList[index] = value ?? true);

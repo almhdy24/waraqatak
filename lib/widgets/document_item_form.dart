@@ -138,8 +138,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
       }
       widget.onManualPriceChanged?.call(false);
       final q = double.tryParse(widget.quantityController.text) ?? 1.0;
-      price = DocumentService.resolveItemPrice(
+      price = DocumentService.resolveLinePrice(
         product: product,
+        availableUnits: _availableUnits,
         targetCategory: tier,
         quantity: q,
         wholesalePricingEnabled: widget.wholesalePricingEnabled,
@@ -169,8 +170,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         _selectedProduct != null) {
       final q = double.tryParse(widget.quantityController.text) ?? 1.0;
       final tier = widget.pricingCategory ?? widget.customerPricingCategory;
-      final resolved = DocumentService.resolveItemPrice(
+      final resolved = DocumentService.resolveLinePrice(
         product: _selectedProduct!,
+        availableUnits: _availableUnits,
         targetCategory: tier,
         quantity: q,
         wholesalePricingEnabled: widget.wholesalePricingEnabled,
@@ -200,8 +202,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     widget.onPricingCategoryChanged?.call(tier);
     if (_selectedProduct != null) {
       final q = double.tryParse(widget.quantityController.text) ?? 1.0;
-      final resolved = DocumentService.resolveItemPrice(
+      final resolved = DocumentService.resolveLinePrice(
         product: _selectedProduct!,
+        availableUnits: _availableUnits,
         targetCategory: tier,
         quantity: q,
         wholesalePricingEnabled: true,
@@ -218,8 +221,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         _selectedProduct != null) {
       final q = double.tryParse(value) ?? 0.0;
       final tier = widget.pricingCategory ?? widget.customerPricingCategory;
-      final resolved = DocumentService.resolveItemPrice(
+      final resolved = DocumentService.resolveLinePrice(
         product: _selectedProduct!,
+        availableUnits: _availableUnits,
         targetCategory: tier,
         quantity: q,
         wholesalePricingEnabled: widget.wholesalePricingEnabled,

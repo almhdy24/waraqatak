@@ -549,8 +549,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               selectedUnit = null;
                               if (!isCustomPrice) {
                                 final resPrice =
-                                    DocumentService.resolveItemPrice(
+                                    DocumentService.resolveLinePrice(
                                   product: p,
+                                  availableUnits: units,
                                   unit: null,
                                   targetCategory: selectedCategory,
                                   quantity: line.quantity,
@@ -573,8 +574,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                 selectedUnit = u;
                                 if (!isCustomPrice) {
                                   final resPrice =
-                                    DocumentService.resolveItemPrice(
+                                    DocumentService.resolveLinePrice(
                                     product: p,
+                                    availableUnits: units,
                                     unit: u,
                                     targetCategory: selectedCategory,
                                     quantity: line.quantity,
@@ -607,8 +609,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               selectedCategory = Contact.categoryRetail;
                               if (!isCustomPrice) {
                                 final resPrice =
-                                    DocumentService.resolveItemPrice(
+                                    DocumentService.resolveLinePrice(
                                   product: p,
+                                  availableUnits: units,
                                   unit: selectedUnit,
                                   targetCategory: selectedCategory,
                                   quantity: line.quantity,
@@ -629,8 +632,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               selectedCategory = Contact.categoryWholesale;
                               if (!isCustomPrice) {
                                 final resPrice =
-                                    DocumentService.resolveItemPrice(
+                                    DocumentService.resolveLinePrice(
                                   product: p,
+                                  availableUnits: units,
                                   unit: selectedUnit,
                                   targetCategory: selectedCategory,
                                   quantity: line.quantity,
@@ -665,8 +669,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               setDialog(() {
                                 isCustomPrice = false;
                                 final resPrice =
-                                    DocumentService.resolveItemPrice(
+                                    DocumentService.resolveLinePrice(
                                   product: p,
+                                  availableUnits: units,
                                   unit: selectedUnit,
                                   targetCategory: selectedCategory,
                                   quantity: line.quantity,

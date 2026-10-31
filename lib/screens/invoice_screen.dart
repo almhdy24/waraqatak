@@ -5,6 +5,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
@@ -43,6 +44,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   final List<Product?> _cachedProducts = [];
   final List<String?> _saleUnits = [];
   final List<double> _conversionFactors = [];
+  final Map<int, List<ProductUnit>> _unitsCache = {};
   Map<int, double> _profileRates = {};
 
   Business? _business;
@@ -390,30 +392,47 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 label: l10n.customer,
                 type: 'customer',
                 initialContact: _selectedContact,
-                onContactChanged: (contact) {
-                  setState(() {
-                    _selectedContact = contact;
-                    if (_business?.wholesalePricingEnabled == true) {
-                      final newCat =
-                          contact?.pricingCategory ?? Contact.categoryRetail;
-                      for (int i = 0; i < _descriptionControllers.length; i++) {
-                        if (!_isManualPriceList[i] && _cachedProducts[i] != null) {
-                          _pricingCategories[i] = newCat;
-                          final q =
-                              double.tryParse(_quantityControllers[i].text) ??
-                              1.0;
-                          final resolved = DocumentService.resolveItemPrice(
-                            product: _cachedProducts[i]!,
-                            targetCategory: newCat,
-                            quantity: q,
-                            wholesalePricingEnabled: true,
-                          );
-                          _priceControllers[i].text =
-                              resolved.toStringAsFixed(2);
+                onContactChanged: (contact) async {
+                  setState(() => _selectedContact = contact);
+                  if (_business?.wholesalePricingEnabled == true) {
+                    final newCat =
+                        contact?.pricingCategory ?? Contact.categoryRetail;
+                    for (int i = 0; i < _descriptionControllers.length; i++) {
+                      final p = _cachedProducts[i];
+                      if (!_isManualPriceList[i] && p != null) {
+                        _pricingCategories[i] = newCat;
+                        final q =
+                            double.tryParse(_quantityControllers[i].text) ??
+                            1.0;
+                        final currentP =
+                            double.tryParse(_priceControllers[i].text);
+                        List<ProductUnit> units =
+                            _unitsCache[p.id] ?? const [];
+                        if (units.isEmpty && p.id != null) {
+                          try {
+                            units = await DatabaseHelper.instance
+                                .getProductUnits(p.id!);
+                            _unitsCache[p.id!] = units;
+                          } catch (_) {}
                         }
+                        final resolved = DocumentService.resolveLinePrice(
+                          product: p,
+                          availableUnits: units,
+                          quantity: q,
+                          currentPrice: currentP,
+                          saleUnit: _saleUnits[i],
+                          unitConversionFactor: _conversionFactors[i],
+                          pricingCategory: _pricingCategories[i],
+                          targetCategory: newCat,
+                          isManualPrice: _isManualPriceList[i],
+                          wholesalePricingEnabled: true,
+                        );
+                        _priceControllers[i].text =
+                            resolved.toStringAsFixed(2);
                       }
                     }
-                  });
+                    if (mounted) setState(() {});
+                  }
                 },
               ),
               const SizedBox(height: 16),
@@ -469,6 +488,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                         _taxRates[index] = null;
                       }
                     });
+                    if (product?.id != null) {
+                      DatabaseHelper.instance
+                          .getProductUnits(product!.id!)
+                          .then((u) {
+                        _unitsCache[product.id!] = u;
+                      });
+                    }
                   },
                   onTaxableChanged: (value) {
                     setState(() => _taxableList[index] = value ?? true);
