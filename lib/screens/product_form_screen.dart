@@ -9,6 +9,7 @@ import '../services/license_service.dart';
 import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
@@ -428,29 +429,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
 
     if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.confirmDelete),
-        content: Text(l10n.deleteProductMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            ),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.confirmDelete,
+      message: l10n.deleteProductMessage,
+      confirmLabel: l10n.delete,
+      isDestructive: true,
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       try {
         await DatabaseHelper.instance.deleteProduct(id);
         if (!mounted) return;
@@ -464,6 +451,49 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  bool get _isDirty {
+    if (widget.product == null) {
+      return _nameController.text.isNotEmpty ||
+          _codeController.text.isNotEmpty ||
+          _barcodeController.text.isNotEmpty ||
+          _unitController.text.isNotEmpty ||
+          _categoryController.text.isNotEmpty ||
+          _salePriceController.text.isNotEmpty ||
+          _wholesalePriceController.text.isNotEmpty ||
+          _purchasePriceController.text.isNotEmpty ||
+          _stockController.text != '0' ||
+          _minStockController.text != '0' ||
+          _notesController.text.isNotEmpty ||
+          _productUnits.isNotEmpty;
+    }
+    final p = widget.product!;
+    return _nameController.text != p.name ||
+        _type != p.type ||
+        _codeController.text != (p.code ?? '') ||
+        _barcodeController.text != (p.barcode ?? '') ||
+        _unitController.text != (p.unit ?? '') ||
+        _categoryController.text != (p.category ?? '') ||
+        _salePriceController.text != p.salePrice.toString() ||
+        _wholesalePriceController.text != (p.wholesalePrice?.toString() ?? '') ||
+        _purchasePriceController.text != p.purchasePrice.toString() ||
+        _taxable != p.isTaxable ||
+        _taxProfileId != p.taxProfileId ||
+        _isActive != p.isActive ||
+        _notesController.text != (p.notes ?? '');
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -474,20 +504,29 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         ? (isService ? l10n.addService : l10n.addProduct)
         : (isService ? l10n.editService : l10n.editProduct);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        centerTitle: true,
-        actions: [
-          if (!isNew)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: l10n.delete,
-              onPressed: _handleDelete,
-            ),
-        ],
-      ),
-      body: ResponsiveCenter(child: Form(
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(title),
+          centerTitle: true,
+          actions: [
+            if (!isNew)
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: l10n.delete,
+                onPressed: _handleDelete,
+              ),
+          ],
+        ),
+        body: ResponsiveCenter(child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
@@ -999,6 +1038,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ],
         ),
       )),
+      ),
     );
   }
 }

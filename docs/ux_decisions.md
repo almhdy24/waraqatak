@@ -45,3 +45,9 @@ Format per decision:
 - **Alternatives:** Keeping fixed 112dp tile height (clips on large accessibility font scales) and letting back gesture discard cart silently.
 - **Why Safest:** Dynamically adapts grid tiles to user font preferences without altering grid column sizing (`maxCrossAxisExtent: 190`), and prevents accidental loss of in-progress cashier cart sessions.
 - **How to Reverse:** Revert `_productPicker`, `_QtyStepper`, and `build` in `lib/screens/quick_sale_screen.dart`.
+
+### Decision 7 (Batch 6): Unsaved Form Protection and Contact Phone/Email Tap Affordance
+- **Decision:** Added comprehensive `_isDirty` checkers and `PopScope` navigation guards on `ProductFormScreen` and `ContactFormScreen`, replaced raw delete dialogs with `AppConfirmDialog`, added tap-to-call/email in `CustomerDetailScreen` using `UrlLauncherUtils`, and standardized list error/loading views across products and customers screens.
+- **Alternatives:** Letting users lose typed product details or contact edits on accidental swipe-to-back, and keeping phone/email as non-interactive static text.
+- **Why Safest:** Preserves every database and service call parameter exactly as written, while preventing catastrophic data entry loss on mobile gestures and making customer contact details immediately actionable.
+- **How to Reverse:** Revert `_isDirty`, `PopScope`, and `_InfoChip.onTap` in `lib/screens/product_form_screen.dart`, `lib/screens/contact_form_screen.dart`, and `lib/screens/customer_detail_screen.dart`.

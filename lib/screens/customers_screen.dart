@@ -5,6 +5,8 @@ import '../models/contact.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_error_state.dart';
+import '../widgets/app_loading_view.dart';
 import '../widgets/app_search_bar.dart';
 import 'contact_form_screen.dart';
 import 'customer_detail_screen.dart';
@@ -225,34 +227,14 @@ class _CustomersScreenState extends State<CustomersScreen>
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
-    final theme = Theme.of(context);
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline_rounded, size: 48, color: theme.colorScheme.error),
-              const SizedBox(height: 12),
-              Text(
-                ErrorUtils.toFriendlyMessage(_error!, l10n),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.tonalIcon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(l10n.retry),
-              ),
-            ],
-          ),
-        ),
+      return AppErrorState(
+        message: ErrorUtils.toFriendlyMessage(_error!, l10n),
+        onRetry: _load,
       );
     }
     if (_contacts == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingView();
     }
     final contacts = _contacts!;
     if (contacts.isEmpty) {

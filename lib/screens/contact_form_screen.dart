@@ -3,6 +3,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/responsive.dart';
 
 class ContactFormScreen extends StatefulWidget {
@@ -26,6 +27,37 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
   bool _wholesalePricingEnabled = false;
   bool _active = true;
   bool _saving = false;
+
+  bool get _isDirty {
+    if (widget.contact == null) {
+      return _nameController.text.isNotEmpty ||
+          _phoneController.text.isNotEmpty ||
+          _emailController.text.isNotEmpty ||
+          _addressController.text.isNotEmpty ||
+          _notesController.text.isNotEmpty;
+    }
+    final c = widget.contact!;
+    return _nameController.text != c.name ||
+        _phoneController.text != (c.phone ?? '') ||
+        _emailController.text != (c.email ?? '') ||
+        _addressController.text != (c.address ?? '') ||
+        _notesController.text != (c.notes ?? '') ||
+        _type != c.type ||
+        _pricingCategory != c.pricingCategory ||
+        _active != c.active;
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
 
   @override
   void initState() {
@@ -109,17 +141,26 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
         ? (isSupplier ? l10n.editSupplier : l10n.editCustomer)
         : (isSupplier ? l10n.addSupplier : l10n.addCustomer);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        centerTitle: true,
-      ),
-      body: ResponsiveCenter(child: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(title),
+          centerTitle: true,
+        ),
+        body: ResponsiveCenter(child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -246,6 +287,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
           ],
         ),
       )),
+      ),
     );
   }
 }
