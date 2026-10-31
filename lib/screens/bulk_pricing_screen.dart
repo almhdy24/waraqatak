@@ -25,6 +25,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
   String _searchQuery = '';
 
   final Set<int> _selectedProductIds = {};
+  Set<int> _productIdsWithCustomUnits = {};
   BulkPriceOpType _opType = BulkPriceOpType.percentageIncrease;
   BulkPriceTarget _target = BulkPriceTarget.sellingPrice;
   BulkPriceRounding _rounding = BulkPriceRounding.none;
@@ -75,6 +76,14 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
         orderBy: 'name ASC',
       );
       _allProducts = prodRows.map((r) => Product.fromMap(r)).toList();
+
+      final unitRows = await db.rawQuery(
+        'SELECT DISTINCT product_id FROM product_units',
+      );
+      _productIdsWithCustomUnits = {
+        for (final r in unitRows)
+          if (r['product_id'] != null) r['product_id'] as int,
+      };
 
       // Default select all products
       _selectedProductIds.clear();
@@ -128,6 +137,10 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
 
     if (_previewItems.isEmpty) return;
 
+    final hasCustomUnits = _previewItems.any(
+      (it) => it.product.id != null && _productIdsWithCustomUnits.contains(it.product.id!),
+    );
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -135,7 +148,8 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
         content: Text(
           '${l10n.selectProducts}: ${_previewItems.length}\n'
           '${l10n.operationType}: ${_getOpLabel(_opType, l10n)} ($val)\n'
-          '${l10n.targetPrice}: ${_getTargetLabel(_target, l10n)}',
+          '${l10n.targetPrice}: ${_getTargetLabel(_target, l10n)}'
+          '${hasCustomUnits ? '\n\n${l10n.bulkPricingCustomUnitsWarning}' : ''}',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
@@ -441,6 +455,38 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
             ),
 
             const Divider(height: 1),
+
+            if (_selectedProductIds.any((id) => _productIdsWithCustomUnits.contains(id)))
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        l10n.bulkPricingCustomUnitsWarning,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             // Preview List
             Expanded(
