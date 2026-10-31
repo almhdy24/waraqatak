@@ -4,6 +4,8 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
+import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../widgets/app_amount_text.dart';
 import '../widgets/app_confirm_dialog.dart';
@@ -34,6 +36,12 @@ class _QuotationScreenState extends State<QuotationScreen> {
   final List<bool> _taxable = [];
   final List<int?> _productIds = [];
   final List<double?> _taxRates = [];
+  final List<String?> _pricingCategories = [];
+  final List<bool> _isManualPriceList = [];
+  final List<Product?> _cachedProducts = [];
+  final List<String?> _saleUnits = [];
+  final List<double> _conversionFactors = [];
+  final Map<int, List<ProductUnit>> _unitsCache = {};
   Map<int, double> _profileRates = {};
 
   Business? _business;
@@ -85,6 +93,11 @@ class _QuotationScreenState extends State<QuotationScreen> {
       _taxable.add(true);
       _productIds.add(null);
       _taxRates.add(null);
+      _pricingCategories.add(null);
+      _isManualPriceList.add(false);
+      _cachedProducts.add(null);
+      _saleUnits.add(null);
+      _conversionFactors.add(1.0);
     });
   }
 
@@ -132,6 +145,11 @@ class _QuotationScreenState extends State<QuotationScreen> {
       _taxable.removeAt(index);
       _productIds.removeAt(index);
       _taxRates.removeAt(index);
+      _pricingCategories.removeAt(index);
+      _isManualPriceList.removeAt(index);
+      _cachedProducts.removeAt(index);
+      _saleUnits.removeAt(index);
+      _conversionFactors.removeAt(index);
     });
   }
 
@@ -156,14 +174,23 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
   List<DocumentItemInput> _buildItems() => List.generate(
     _desc.length,
-    (i) => DocumentItemInput(
-      description: _desc[i].text.trim(),
-      quantity: double.tryParse(_qty[i].text) ?? 1,
-      price: double.tryParse(_price[i].text) ?? 0,
-      taxable: _taxable[i],
-      productId: _productIds[i],
-      taxRate: _taxRates[i],
-    ),
+    (i) {
+      final q = double.tryParse(_qty[i].text) ?? 1;
+      final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
+      final unit = i < _saleUnits.length ? _saleUnits[i] : null;
+      return DocumentItemInput(
+        description: _desc[i].text.trim(),
+        quantity: q,
+        price: double.tryParse(_price[i].text) ?? 0,
+        taxable: _taxable[i],
+        productId: _productIds[i],
+        taxRate: _taxRates[i],
+        pricingCategory: i < _pricingCategories.length ? _pricingCategories[i] : null,
+        saleUnit: unit,
+        unitConversionFactor: factor,
+        baseQuantity: q * factor,
+      );
+    },
   );
 
   Future<void> _save({bool isDraft = false}) async {
@@ -298,7 +325,43 @@ class _QuotationScreenState extends State<QuotationScreen> {
                 ContactAutocompleteField(
                   label: l10n.customer,
                   type: 'customer',
-                  onContactChanged: (c) => _contact = c,
+                  initialContact: _contact,
+                  onContactChanged: (contact) async {
+                    setState(() => _contact = contact);
+                    if (_business?.wholesalePricingEnabled == true) {
+                      final newCat =
+                          contact?.pricingCategory ?? Contact.categoryRetail;
+                      for (int i = 0; i < _desc.length; i++) {
+                        final p = i < _cachedProducts.length ? _cachedProducts[i] : null;
+                        if (i < _isManualPriceList.length && !_isManualPriceList[i] && p != null) {
+                          _pricingCategories[i] = newCat;
+                          final q = double.tryParse(_qty[i].text) ?? 1.0;
+                          final currentP = double.tryParse(_price[i].text);
+                          List<ProductUnit> units = _unitsCache[p.id] ?? const [];
+                          if (units.isEmpty && p.id != null) {
+                            try {
+                              units = await DatabaseHelper.instance.getProductUnits(p.id!);
+                              _unitsCache[p.id!] = units;
+                            } catch (_) {}
+                          }
+                          final resolved = DocumentService.resolveLinePrice(
+                            product: p,
+                            availableUnits: units,
+                            quantity: q,
+                            currentPrice: currentP,
+                            saleUnit: _saleUnits[i],
+                            unitConversionFactor: _conversionFactors[i],
+                            pricingCategory: _pricingCategories[i],
+                            targetCategory: newCat,
+                            isManualPrice: _isManualPriceList[i],
+                            wholesalePricingEnabled: true,
+                          );
+                          _price[i].text = resolved.toStringAsFixed(2);
+                        }
+                      }
+                      if (mounted) setState(() {});
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
                 AppSectionHeader(title: l10n.items, count: _desc.length),
@@ -312,11 +375,33 @@ class _QuotationScreenState extends State<QuotationScreen> {
                     taxable: _taxable[i],
                     taxRate: _taxRates[i],
                     productId: _productIds[i],
+                    wholesalePricingEnabled:
+                        _business?.wholesalePricingEnabled ?? false,
+                    pricingCategory: _pricingCategories[i],
+                    onPricingCategoryChanged: (cat) {
+                      setState(() => _pricingCategories[i] = cat);
+                    },
+                    customerPricingCategory:
+                        _contact?.pricingCategory ??
+                        Contact.categoryRetail,
+                    isManualPrice: _isManualPriceList[i],
+                    onManualPriceChanged: (manual) {
+                      setState(() => _isManualPriceList[i] = manual);
+                    },
+                    saleUnit: _saleUnits[i],
+                    onSaleUnitChanged: (unit) {
+                      setState(() => _saleUnits[i] = unit);
+                    },
+                    unitConversionFactor: _conversionFactors[i],
+                    onConversionFactorChanged: (factor) {
+                      setState(() => _conversionFactors[i] = factor);
+                    },
                     onProductChanged: (productId) {
                       setState(() => _productIds[i] = productId);
                     },
                     onProductSelected: (product) {
                       setState(() {
+                        _cachedProducts[i] = product;
                         if (product == null) {
                           _taxRates[i] = null;
                         } else if (!product.isTaxable) {
@@ -328,6 +413,13 @@ class _QuotationScreenState extends State<QuotationScreen> {
                           _taxRates[i] = null;
                         }
                       });
+                      if (product?.id != null) {
+                        DatabaseHelper.instance
+                            .getProductUnits(product!.id!)
+                            .then((u) {
+                          _unitsCache[product.id!] = u;
+                        });
+                      }
                     },
                     onTaxableChanged: (value) {
                       setState(() => _taxable[i] = value ?? true);
