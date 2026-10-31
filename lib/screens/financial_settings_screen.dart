@@ -7,6 +7,7 @@ import '../models/tax_profile.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import 'tax_profiles_screen.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/responsive.dart';
 
 class FinancialSettingsScreen extends StatefulWidget {
@@ -449,8 +450,19 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
                         ),
                       ),
                       contentPadding: EdgeInsets.zero,
-                      onChanged: (v) =>
-                          setState(() => _wholesalePricingEnabled = v),
+                      onChanged: (v) async {
+                        if (!v && _wholesalePricingEnabled) {
+                          final proceed = await AppConfirmDialog.show(
+                            context,
+                            title: l10n.wholesalePricing,
+                            message: l10n.wholesalePricingDisableWarning,
+                            confirmLabel: l10n.disableAction,
+                            isDestructive: false,
+                          );
+                          if (!proceed) return;
+                        }
+                        setState(() => _wholesalePricingEnabled = v);
+                      },
                     ),
                   ],
                 ),

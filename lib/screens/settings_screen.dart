@@ -17,6 +17,7 @@ import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
 import 'pdf_customize_screen.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
@@ -307,22 +308,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: const Icon(Icons.save_outlined),
                       title: Text(l10n.saveBackupTo),
                       onTap: () async {
-                        final proceed = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: Text(l10n.backupUnencryptedTitle),
-                            content: Text(l10n.backupUnencryptedWarning),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: Text(l10n.cancel),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: Text(l10n.continueAction),
-                              ),
-                            ],
-                          ),
+                        final proceed = await AppConfirmDialog.show(
+                          context,
+                          title: l10n.backupUnencryptedTitle,
+                          message: l10n.backupUnencryptedWarning,
+                          confirmLabel: l10n.continueAction,
+                          cancelLabel: l10n.cancel,
+                          isDestructive: false,
                         );
                         if (proceed != true) return;
                         try {
@@ -347,30 +339,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: const Icon(Icons.restore),
                       title: Text(l10n.restore),
                       onTap: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text(l10n.confirmRestore),
-                            content: Text(l10n.restoreWarning),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text(l10n.cancel),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.error,
-                                  foregroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimary,
-                                ),
-                                child: Text(l10n.restore),
-                              ),
-                            ],
-                          ),
+                        final confirmed = await AppConfirmDialog.show(
+                          context,
+                          title: l10n.confirmRestore,
+                          message: l10n.restoreWarning,
+                          confirmLabel: l10n.restore,
+                          cancelLabel: l10n.cancel,
+                          isDestructive: true,
                         );
                         if (confirmed == true) {
                           try {

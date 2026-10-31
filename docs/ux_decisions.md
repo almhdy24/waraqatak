@@ -57,3 +57,9 @@ Format per decision:
 - **Alternatives:** Letting narrow phone screens truncate account codes or squish debit/credit numbers.
 - **Why Safest:** Preserves every ledger calculation, query, and aggregation rule untouched, while providing readable tabular figures across all screen form factors.
 - **How to Reverse:** Remove `SingleChildScrollView` from `_TrialBalanceView` in `lib/screens/reports/accounting_screen.dart`.
+
+### Decision 9 (Batch 8): Settings Confirmation Guards, Backup/Restore Dialogs, and Onboarding Polish
+- **Decision:** Standardized backup export warning and database restore confirmation using `AppConfirmDialog.show` with clear destructive styling for restore; added a confirmation dialog before disabling wholesale pricing in financial settings; polished the first-run empty home state with primary brand iconography, Tajawal typography, and an accessible call-to-action button.
+- **Alternatives:** Leaving raw unstyled `AlertDialog` widgets with inconsistent buttons and allowing accidental single-tap disabling of wholesale pricing without explaining the impact on new documents.
+- **Why Safest:** Protects users against accidental data overwrites and configuration changes without altering any underlying database or backup logic.
+- **How to Reverse:** Revert `lib/screens/settings_screen.dart`, `lib/screens/financial_settings_screen.dart`, and `lib/screens/home_screen.dart`.

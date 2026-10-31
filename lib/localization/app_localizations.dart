@@ -671,6 +671,11 @@ class AppLocalizations {
         'تفعيل أسعار الجملة والتجزئة للمنتجات والعملاء',
         'Enable wholesale and retail prices for products and customers',
       );
+  String get wholesalePricingDisableWarning => _t(
+        'عند تعطيل تسعير الجملة، ستعتمد الفواتير الجديدة سعر التجزئة الافتراضي.',
+        'When wholesale pricing is disabled, new documents will use standard retail pricing.',
+      );
+  String get disableAction => _t('تعطيل', 'Disable');
   String get wholesalePrice => _t('سعر الجملة', 'Wholesale Price');
   String get wholesaleMinQuantity =>
       _t('الحد الأدنى للجملة', 'Wholesale Min Quantity');
