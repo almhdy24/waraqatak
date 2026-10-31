@@ -55,3 +55,11 @@ Format per decision:
 - **Alternatives:** Re-sorting getters and methods alphabetically or by domain (which would create a massive 2000-line diff and destroy git blame/history).
 - **Why Safest:** Comment-only edit; zero code changes; exactly 0 members removed or re-ordered; API diff confirmed 1003/1003 members stable.
 - **How to Reverse:** Revert comment lines back in `lib/localization/app_localizations.dart`.
+
+---
+
+### Decision 7 (Batch L8): Automated Comprehensive Quality Test Suite
+- **Decision:** Implemented `test/localization/localization_quality_test.dart` asserting 10 automated test suites: locale identification, brand consistency ("ورقتك" / "Waraqatak"), non-empty getter checks, masculine status agreement, 6-form Arabic plural categories (0, 1, 2, 3..10, 11..99, 100+), days remaining plurals, presentation Bidi isolation in UI and WhatsApp, strict isolate exclusion in PDF labels, absence of deprecated terminology ("صنف", "جاري", "..."), and absence of legacy phase comments.
+- **Alternatives:** Relying solely on manual inspection (prone to regressions in future PRs).
+- **Why Safest:** Adds automated regression prevention suite that runs in <6 seconds on Termux with zero new external dependencies.
+- **How to Reverse:** Delete `test/localization/localization_quality_test.dart`.
