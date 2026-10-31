@@ -17,6 +17,8 @@ import '../services/license_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_error_state.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/customer_statement_dialog.dart';
 import '../widgets/pro_upgrade_sheet.dart';
@@ -754,11 +756,9 @@ class _DocumentTile extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Icon(
-                AppLocalizations.of(context).isArabic
-                    ? Icons.chevron_left
-                    : Icons.chevron_right,
+                AppIcons.chevronForward(context),
                 size: 18,
-                color: Colors.grey.shade400,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
               ),
             ],
           ),
@@ -783,19 +783,8 @@ class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.error_outline, size: 48, color: Colors.red),
-        const SizedBox(height: 12),
-        Text(message),
-        const SizedBox(height: 12),
-        FilledButton.tonal(
-          onPressed: onRetry,
-          child: Text(AppLocalizations.of(context).retry),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) => AppErrorState(
+        message: message,
+        onRetry: onRetry,
+      );
 }

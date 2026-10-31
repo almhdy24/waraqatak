@@ -10,6 +10,8 @@ import '../services/business_reporting_service.dart';
 import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
 import '../utils/format_utils.dart';
+import '../widgets/app_empty_state.dart';
+import '../widgets/app_error_state.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'reports/report_date_filter.dart';
@@ -370,34 +372,16 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
-            const SizedBox(height: 12),
-            Text(l10n.operationFailed),
-            const SizedBox(height: 12),
-            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-          ],
-        ),
+      return AppErrorState(
+        message: _error!,
+        onRetry: _load,
       );
     }
     final items = _reportSummary?.items ?? [];
     if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.history_outlined, size: 64, color: Colors.grey.shade300),
-              const SizedBox(height: 12),
-              Text(l10n.noMovements,
-                  style: TextStyle(color: Colors.grey.shade500, fontSize: 15)),
-            ],
-          ),
-        ),
+      return AppEmptyState(
+        icon: Icons.history_outlined,
+        title: l10n.noMovements,
       );
     }
 

@@ -21,3 +21,9 @@ Format per decision:
 - **Alternatives:** Hardcoding light colors everywhere or forcing all screens to manually check `Theme.of(context).brightness`.
 - **Why Safest:** Preserves original light palette constants untouched while providing accessible (>4.5:1 contrast) dark mode variants through safe helper methods.
 - **How to Reverse:** Remove dark tokens and helper methods from `lib/widgets/app_design_tokens.dart`.
+
+### Decision 3 (Batch 2): In-Place Extension of StatusBadge with AppStatusBadge Alias
+- **Decision:** Extended the existing `StatusBadge` to support semantic icons alongside status labels, and provided `typedef AppStatusBadge = StatusBadge;`.
+- **Alternatives:** Creating an entirely separate `AppStatusBadge` widget and leaving existing `StatusBadge` invocations text-only.
+- **Why Safest:** Preserves the exact existing constructor `StatusBadge({super.key, required this.status})` so zero existing callsites break, while immediately solving finding D-5 (color-only status indicators) across every document list.
+- **How to Reverse:** Revert `lib/widgets/status_badge.dart` to the original 43-line implementation.
