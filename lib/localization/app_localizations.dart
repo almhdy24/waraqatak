@@ -514,10 +514,14 @@ class AppLocalizations {
   String get lowStockAlert => _t('تنبيه مخزون منخفض', 'Low Stock Alert');
   String get insufficientStockFor =>
       _t('مخزون غير كافٍ لـ', 'Insufficient stock for');
-  String insufficientStock(String name, double available, double required) =>
-      langCode == 'ar'
-      ? 'مخزون غير كافٍ لـ "$name": المتاح ${FormatUtils.formatQuantity(available)}، المطلوب ${FormatUtils.formatQuantity(required)}'
-      : 'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(available)}, required ${FormatUtils.formatQuantity(required)}';
+  String insufficientStock(String name, double available, double required) {
+    final availStr = FormatUtils.formatQuantity(available);
+    final reqStr = FormatUtils.formatQuantity(required);
+    return _t(
+      'مخزون غير كافٍ لـ "${_iso(name)}": المتاح ${_iso(availStr)}، المطلوب ${_iso(reqStr)}',
+      'Insufficient stock for "$name": available $availStr, required $reqStr',
+    );
+  }
 
   String get category => _t('الفئة', 'Category');
   String get allCategories => _t('كل الفئات', 'All Categories');
@@ -786,7 +790,7 @@ class AppLocalizations {
   String get currencyConfirmTitle =>
       _t('تأكيد اختيار العملة الأساسية', 'Confirm Base Currency');
   String currencyConfirmMessage(String currency) => _t(
-    'لقد اخترت عملة ($currency). بمجرد تسجيل أول فاتورة أو إيصال أو إضافة مخزون، ستصبح هذه العملة دائمة ولا يمكن تغييرها مطلقاً من الإعدادات. هل تريد المتابعة؟',
+    'لقد اخترت عملة (${_iso(currency)}). بمجرد تسجيل أول فاتورة أو إيصال أو إضافة مخزون، ستصبح هذه العملة دائمة ولا يمكن تغييرها مطلقاً من الإعدادات. هل تريد المتابعة؟',
     'You have selected ($currency). Once your first invoice, receipt, or stock movement is recorded, this currency becomes permanent and cannot be changed. Do you want to proceed?',
   );
   String get taxLivePreview =>
@@ -1093,9 +1097,25 @@ class AppLocalizations {
     'Complete your business profile in Settings first',
   );
   String posNotEnoughStock(String name) =>
-      _t('الكمية المتوفرة من "$name" لا تكفي', 'Not enough stock for "$name"');
-  String posItemsCount(String n) => _t('$n منتج', '$n items');
-  String posInStock(String n) => _t('متوفر: $n', 'In stock: $n');
+      _t('الكمية المتوفرة من "${_iso(name)}" لا تكفي', 'Not enough stock for "$name"');
+  String posItemsCount(String n) {
+    final parsed = num.tryParse(n.replaceAll(',', '').trim());
+    if (parsed == null) {
+      return _t('$n بند', '$n items');
+    }
+    return _plural(
+      parsed,
+      zero: _t('لا توجد بنود', '0 items'),
+      one: _t('بند واحد', '1 item'),
+      two: _t('بندان', '2 items'),
+      few: _t('$n بنود', '$n items'),
+      many: _t('$n بنداً', '$n items'),
+      other: _t('$n بند', '$n items'),
+      enOne: '1 item',
+      enOther: '$n items',
+    );
+  }
+  String posInStock(String n) => _t('متوفر: ${_iso(n)}', 'In stock: $n');
 
   // ========== ABOUT & SUPPORT ==========
   String get supportAndContact => _t('الدعم والتواصل', 'Support & contact');
@@ -1214,7 +1234,7 @@ class AppLocalizations {
   String get balancedLabel => _t('متوازن', 'Balanced');
   String get notBalancedLabel => _t('غير متوازن', 'Not balanced');
   String get noEntriesYet => _t('لا توجد قيود بعد', 'No entries yet');
-  String asOfDate(String d) => _t('كما في $d', 'As of $d');
+  String asOfDate(String d) => _t('كما في ${_iso(d)}', 'As of $d');
   String get accountingNote => _t(
     'تُنشأ القيود تلقائياً بنظام القيد المزدوج من مستنداتك، ولا تُرحَّل المسودات والمستندات الملغاة. يُقيَّم المخزون بطريقة المتوسط المرجح.',
     'Double-entry records are created automatically from your documents; drafts and cancelled documents are not posted. Stock is valued at weighted-average cost.',
@@ -1269,7 +1289,7 @@ class AppLocalizations {
     'Warning: Statement contains reconciliation adjustments',
   );
   String statementWarningDetail(String inv, String amount, String symbol) => _t(
-    'الفاتورة #$inv تتضمن فارقاً محاسبياً بمقدار $amount $symbol ناتجاً عن تعديل يدوي سابق.',
+    'الفاتورة #${_iso(inv)} تتضمن فارقاً محاسبياً بمقدار ${_iso(amount)} ${_iso(symbol)} ناتجاً عن تعديل يدوي سابق.',
     'Invoice #$inv has a discrepancy of $amount $symbol due to an earlier manual edit.',
   );
   String get cancelledReceiptsTitle => _t(
@@ -1303,7 +1323,7 @@ class AppLocalizations {
     String balance,
     String symbol,
   ) => _t(
-    'السلام عليكم يا $customer،\nمرفق كشف حسابكم المالي الصادر من $business.\nالفترة: من $from إلى $to\nالرصيد المستحق: $balance $symbol\nشاكرين ومقدرين حسن تعاملكم معنا.',
+    'السلام عليكم يا ${_iso(customer)}،\nمرفق كشف حسابكم المالي الصادر من ${_iso(business)}.\nالفترة: من ${_iso(from)} إلى ${_iso(to)}\nالرصيد المستحق: ${_iso(balance)} ${_iso(symbol)}\nشاكرين ومقدرين حسن تعاملكم معنا.',
     'Hello $customer,\nAttached is your account statement from $business.\nPeriod: from $from to $to\nOutstanding balance: $balance $symbol\nThank you for your business.',
   );
 
@@ -1966,15 +1986,38 @@ class AppLocalizations {
   String get newProductTag => _t('منتج جديد', 'New product');
 
   String get perDaySuffix => _t('/يوم', '/day');
-  String daysRemainingCount(int days) => _t('~$days يوم', '~$days days');
-  String reorderSuggestionTag(String qty) => _t('طلب: $qty', 'Order: $qty');
+  String daysRemainingCount(int days) {
+    return _plural(
+      days,
+      zero: _t('أقل من يوم', 'Less than a day'),
+      one: _t('~يوم واحد', '~1 day'),
+      two: _t('~يومان', '~2 days'),
+      few: _t('~$days أيام', '~$days days'),
+      many: _t('~$days يوماً', '~$days days'),
+      other: _t('~$days يوم', '~$days days'),
+      enOne: '~1 day',
+      enOther: '~$days days',
+    );
+  }
+  String reorderSuggestionTag(String qty) => _t('طلب: ${_iso(qty)}', 'Order: $qty');
   String get noProductsBelowCost => _t(
     'ممتاز! لا توجد منتجات تباع بأقل من متوسط التكلفة',
     'Great! No products sold below average cost',
   );
-  String lossAmount(String amount) => _t('خسارة: -$amount', 'Loss: -$amount');
-  String unvaluedSalesNotice(int count) =>
-      _t('($count مبيعات)', '($count sales)');
+  String lossAmount(String amount) => _t('خسارة: -${_iso(amount)}', 'Loss: -$amount');
+  String unvaluedSalesNotice(int count) {
+    return _plural(
+      count,
+      zero: _t('(لا توجد مبيعات)', '(0 sales)'),
+      one: _t('(عملية بيع واحدة)', '(1 sale)'),
+      two: _t('(عمليتا بيع)', '(2 sales)'),
+      few: _t('($count عمليات بيع)', '($count sales)'),
+      many: _t('($count عملية بيع)', '($count sales)'),
+      other: _t('($count عملية بيع)', '($count sales)'),
+      enOne: '(1 sale)',
+      enOther: '($count sales)',
+    );
+  }
 
   String get financialSummaryCardTitle =>
       _t('الملخص المالي والحسابات', 'Financial Summary & Balance');
@@ -2016,4 +2059,58 @@ class AppLocalizations {
   bool get isArabic => langCode == 'ar';
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
+
+  /// Private Bidi First Strong Isolate (U+2068 .. U+2069) helper.
+  /// Applied exclusively to dynamic presentation tokens displayed in Flutter widgets
+  /// and WhatsApp/share messages to prevent RTL/LTR layout reversals.
+  static String _iso(Object? s) => '\u2068$s\u2069';
+
+  /// Arabic plural category according to CLDR rules
+  static String _arabicPluralCategory(num count) {
+    final int n = count.abs().toInt();
+    if (n == 0) return 'zero';
+    if (n == 1) return 'one';
+    if (n == 2) return 'two';
+    final int rem100 = n % 100;
+    if (rem100 >= 3 && rem100 <= 10) return 'few';
+    if (rem100 >= 11 && rem100 <= 99) return 'many';
+    return 'other';
+  }
+
+  /// Zero-dependency plural helper for Arabic and English.
+  String _plural(
+    num count, {
+    required String zero,
+    required String one,
+    String? two,
+    required String few,
+    String? many,
+    required String other,
+    String? enOne,
+    String? enOther,
+  }) {
+    if (langCode == 'ar') {
+      final cat = _arabicPluralCategory(count);
+      switch (cat) {
+        case 'zero':
+          return zero;
+        case 'one':
+          return one;
+        case 'two':
+          return two ?? few;
+        case 'few':
+          return few;
+        case 'many':
+          return many ?? other;
+        case 'other':
+        default:
+          return other;
+      }
+    } else {
+      if (count == 1) {
+        return enOne ?? other;
+      }
+      return enOther ?? other;
+    }
+  }
 }
