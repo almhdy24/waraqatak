@@ -2,8 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/models/business.dart';
+import 'package:warqatek/models/contact.dart';
 import 'package:warqatek/models/document.dart';
 import 'package:warqatek/models/document_item.dart';
+import 'package:warqatek/models/document_status.dart';
+import 'package:warqatek/services/customer_statement_service.dart';
+import 'package:warqatek/services/pdf/pdf_customer_statement_builder.dart';
 import 'package:warqatek/services/pdf/pdf_document_builder.dart';
 import 'package:warqatek/services/pdf/pdf_text_utils.dart';
 import 'package:warqatek/utils/pdf_settings.dart';
@@ -122,6 +126,143 @@ void main() {
       expect(s.fontScale, 1.0);
       expect(s.showNotes, isFalse);
       expect(s.showCustomer, isTrue);
+    });
+  });
+
+  group('PdfTextUtils.stripBidiIsolates', () {
+    test('removes all U+2066..U+2069 isolate control characters', () {
+      const input = '\u2066LRI\u2069 \u2067RLI\u2069 \u2068FSI\u2069';
+      expect(PdfTextUtils.stripBidiIsolates(input), 'LRI RLI FSI');
+    });
+
+    test('preserves strings without isolates', () {
+      const plain = 'فاتورة مبيعات #INV-101 بقيمة 500 SDG';
+      expect(PdfTextUtils.stripBidiIsolates(plain), plain);
+    });
+
+    test('handles empty string cleanly', () {
+      expect(PdfTextUtils.stripBidiIsolates(''), '');
+    });
+
+    test('handles mixed Arabic and Latin text with isolates', () {
+      const mixed = 'المنتج: \u2068iPhone 15 Pro\u2069 - السعر: \u20681,200\u2069 SDG';
+      expect(
+        PdfTextUtils.stripBidiIsolates(mixed),
+        'المنتج: iPhone 15 Pro - السعر: 1,200 SDG',
+      );
+    });
+
+    test('preserves whitespace and other control characters', () {
+      const formatted = 'سطر أول\nسطر ثانٍ\tمفصول بمسافة\r\n';
+      expect(PdfTextUtils.stripBidiIsolates(formatted), formatted);
+    });
+  });
+
+  group('PdfTextUtils bidi isolate PDF safety', () {
+    final font = pw.Font.helvetica();
+    final isolateRegex = RegExp(r'[\u2066-\u2069]');
+
+    test('directionalText sanitizes isolates in child pw.Text', () {
+      final w = PdfTextUtils.directionalText(
+        'الفاتورة #\u2068INV-100\u2069 ناتجة عن تسوية',
+        font: font,
+      );
+      final textWidget = (w as pw.Directionality).child as pw.Text;
+      final textSpan = textWidget.text as pw.TextSpan;
+      expect(isolateRegex.hasMatch(textSpan.text!), isFalse);
+      expect(textSpan.text, 'الفاتورة #INV-100 ناتجة عن تسوية');
+    });
+
+    test('statementWarningDetail isolates are stripped when passed to directionalText', () {
+      final l10nAr = AppLocalizations('ar');
+      final warningRaw = l10nAr.statementWarningDetail('INV-001', '350.00', 'SDG');
+      // Raw string MUST contain isolates for on-screen Bidi rendering
+      expect(isolateRegex.hasMatch(warningRaw), isTrue);
+
+      // But when handed to PDF directionalText, all isolates MUST be stripped
+      final w = PdfTextUtils.directionalText('• $warningRaw', font: font);
+      final textWidget = (w as pw.Directionality).child as pw.Text;
+      final textSpan = textWidget.text as pw.TextSpan;
+      expect(isolateRegex.hasMatch(textSpan.text!), isFalse);
+      expect(textSpan.text, contains('• الفاتورة #INV-001 تتضمن فارقاً محاسبياً بمقدار 350.00 SDG'));
+    });
+
+    test('PdfCustomerStatementBuilder builds statement with discrepancy warning without isolates reaching text', () async {
+      final l10nAr = AppLocalizations('ar');
+      const business = Business(
+        name: 'متجر النيل',
+        ownerName: 'أحمد',
+        phone: '+249912345678',
+        address: 'الخرطوم',
+      );
+      const customer = Contact(id: 1, name: 'العميل محمد', phone: '0912345678', type: 'customer');
+      final day1 = DateTime(2026, 1, 1);
+      final day31 = DateTime(2026, 1, 31);
+
+      // Documents producing a discrepancy: invoice stored paid=200, receipt=500
+      final docs = [
+        Document(
+          id: 1,
+          type: 'invoice',
+          documentNumber: 'INV-1',
+          date: day1,
+          contactId: 1,
+          subtotal: 1000,
+          discount: 0,
+          taxRate: 0,
+          taxAmount: 0,
+          total: 1000,
+          paid: 200,
+          remaining: 800,
+          status: DocumentStatus.issued,
+          currencyCode: 'SDG',
+        ),
+        Document(
+          id: 2,
+          type: 'payment_receipt',
+          documentNumber: 'REC-1',
+          date: DateTime(2026, 1, 5),
+          contactId: 1,
+          relatedDocumentId: 1,
+          subtotal: 500,
+          discount: 0,
+          taxRate: 0,
+          taxAmount: 0,
+          total: 500,
+          paid: 500,
+          remaining: 0,
+          status: DocumentStatus.issued,
+          currencyCode: 'SDG',
+        ),
+      ];
+
+      final statement = CustomerStatementService.generateStatement(
+        contact: customer,
+        documents: docs,
+        from: day1,
+        to: day31,
+      );
+
+      expect(statement.hasDiscrepancy, isTrue);
+      expect(statement.warnings.isNotEmpty, isTrue);
+
+      // Verify that statement warning detail is sanitized by PdfTextUtils
+      final warningText = l10nAr.statementWarningDetail(
+        statement.warnings.first.invoiceNumber,
+        statement.warnings.first.discrepancy.toStringAsFixed(2),
+        statement.currencySymbol,
+      );
+      final sanitized = PdfTextUtils.stripBidiIsolates(warningText);
+      expect(isolateRegex.hasMatch(sanitized), isFalse);
+
+      // Build customer statement PDF byte stream
+      final pdfBytes = await PdfCustomerStatementBuilder.build(
+        statement: statement,
+        business: business,
+        l10n: l10nAr,
+      );
+      expect(pdfBytes, isNotNull);
+      expect(pdfBytes.isNotEmpty, isTrue);
     });
   });
 }

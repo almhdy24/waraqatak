@@ -3,6 +3,15 @@ import 'package:pdf/widgets.dart' as pw;
 
 class PdfTextUtils {
   static final _arabic = RegExp(r'[\u0600-\u06FF]');
+  static final _bidiIsolates = RegExp(r'[\u2066-\u2069]');
+
+  /// Removes Unicode Bidi isolates (U+2066 LRI, U+2067 RLI, U+2068 FSI, U+2069 PDI).
+  /// PDF fonts (such as Tajawal) lack glyphs for isolate control characters,
+  /// causing PDF renderers to produce missing-glyph replacement boxes.
+  static String stripBidiIsolates(String text) {
+    if (text.isEmpty) return text;
+    return text.replaceAll(_bidiIsolates, '');
+  }
 
   static bool hasArabic(String text) => _arabic.hasMatch(text);
 
@@ -24,17 +33,18 @@ class PdfTextUtils {
     PdfColor? color,
     pw.TextDirection? fallbackDirection,
   }) {
+    final cleanText = stripBidiIsolates(text);
     // Arabic must always be laid out RTL: forcing LTR embeds unshaped
     // letters, which renders them disconnected and reversed (and can corrupt
     // the font subset when the same document also contains shaped Arabic).
     // [fallbackDirection] only applies to text without Arabic letters.
-    final direction = hasArabic(text)
+    final direction = hasArabic(cleanText)
         ? pw.TextDirection.rtl
         : (fallbackDirection ?? pw.TextDirection.ltr);
     return pw.Directionality(
       textDirection: direction,
       child: pw.Text(
-        text,
+        cleanText,
         style: pw.TextStyle(
           font: font,
           fontSize: fontSize,

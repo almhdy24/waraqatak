@@ -63,3 +63,12 @@ Format per decision:
 - **Alternatives:** Relying solely on manual inspection (prone to regressions in future PRs).
 - **Why Safest:** Adds automated regression prevention suite that runs in <6 seconds on Termux with zero new external dependencies.
 - **How to Reverse:** Delete `test/localization/localization_quality_test.dart`.
+
+---
+
+### Decision 8: Neutralize Unicode Bidi Isolates at Central PDF Choke Point
+- **Finding:** Read-only verification found that `statementWarningDetail` (which wraps invoice number, discrepancy amount, and currency symbol in `_iso` isolates `\u2068` / `\u2069`) was rendered in customer statement PDFs via `PdfTextUtils.directionalText` in `lib/services/pdf/pdf_customer_statement_builder.dart:391`. This leaked isolate control characters into the PDF text layer, which could cause missing-glyph replacement boxes in fonts like Tajawal.
+- **Decision:** Added `PdfTextUtils.stripBidiIsolates(String)` to `lib/services/pdf/pdf_text_utils.dart` stripping all Unicode Bidi isolates (`U+2066..U+2069`) and integrated it into `PdfTextUtils.directionalText`. Because all directional text in customer statements, reports, items tables, and headers routes through `directionalText`, this provides a single central choke point ensuring zero isolate control characters reach `pw.Text` in the PDF layer.
+- **Alternatives:** Stripping isolates in `statementWarningDetail` within `app_localizations.dart` (rejected: would strip isolates from on-screen UI Text and WhatsApp captions where they are necessary), or adding custom sanitization in each individual PDF builder (rejected: duplicative and prone to omissions).
+- **Why Safest:** Sanitizer targets only `U+2066..U+2069`, preserving all printable characters, whitespace, control codes (`\n`, `\t`), and punctuation. Zero changes to on-screen UI, numbers, totals, or business logic. 31/31 PDF tests and 11/11 customer statement tests pass cleanly.
+- **How to Reverse:** Remove `stripBidiIsolates` call inside `PdfTextUtils.directionalText`.
