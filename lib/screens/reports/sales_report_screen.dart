@@ -11,6 +11,8 @@ import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_error_state.dart';
+import '../../widgets/app_loading_view.dart';
 import '../document_detail_screen.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
@@ -609,17 +611,12 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(l10n.operationFailed),
-            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-          ],
-        ),
+      return AppErrorState(
+        message: l10n.operationFailed,
+        onRetry: _load,
       );
     }
-    if (_sales == null) return const Center(child: CircularProgressIndicator());
+    if (_sales == null) return const AppLoadingView();
     if (_sales!.isEmpty) {
       return AppEmptyState(
         icon: Icons.trending_up_rounded,

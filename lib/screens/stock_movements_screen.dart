@@ -10,8 +10,10 @@ import '../services/business_reporting_service.dart';
 import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
 import '../utils/format_utils.dart';
+import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
+import '../widgets/app_loading_view.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'reports/report_date_filter.dart';
@@ -369,7 +371,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
 
   Widget _buildBody(BuildContext context, AppLocalizations l10n, ColorScheme cs) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingView();
     }
     if (_error != null) {
       return AppErrorState(
@@ -395,7 +397,11 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
           final item = items[i];
           final m = item.movement;
           final isIn = m.quantity > 0;
-          final color = isIn ? Colors.green : (m.quantity < 0 ? Colors.red : Colors.grey);
+          final color = isIn
+              ? AppDesignTokens.semanticSuccess(context)
+              : (m.quantity < 0
+                  ? AppDesignTokens.semanticDanger(context)
+                  : cs.onSurfaceVariant);
           final typeBadgeColor = _typeColor(m.type, cs);
           final sign = isIn ? '+' : (m.quantity < 0 ? '-' : '');
 

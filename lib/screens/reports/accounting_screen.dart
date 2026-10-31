@@ -5,6 +5,9 @@ import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../services/accounting/ledger.dart';
 import '../../services/accounting/ledger_service.dart';
+import '../../widgets/app_design_tokens.dart';
+import '../../widgets/app_error_state.dart';
+import '../../widgets/app_loading_view.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -92,19 +95,13 @@ class _AccountingScreenState extends State<AccountingScreen> {
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
     if (_failed) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(l10n.operationFailed),
-            const SizedBox(height: 8),
-            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-          ],
-        ),
+      return AppErrorState(
+        message: l10n.operationFailed,
+        onRetry: _load,
       );
     }
     final book = _book;
-    if (book == null) return const Center(child: CircularProgressIndicator());
+    if (book == null) return const AppLoadingView();
 
     final symbol = Currency.symbolForCode(book.currencyCode);
     final entries = book.entries;
@@ -428,7 +425,7 @@ class _IncomeStatementView extends StatelessWidget {
           textValue: s.hasIncompleteCostOfSales ? '—' : null,
           color: s.hasIncompleteCostOfSales
               ? Colors.amber.shade900
-              : (profit ? Colors.green.shade700 : scheme.error),
+              : (profit ? AppDesignTokens.semanticSuccess(context) : scheme.error),
         ),
         const SizedBox(height: 12),
         if (s.hasIncompleteCostOfSales)
@@ -588,32 +585,43 @@ class _TrialBalanceView extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Column(
-              children: [
-                line(
-                  l10n.accountCode,
-                  l10n.accountColumn,
-                  l10n.debit,
-                  l10n.credit,
-                  style: bold.copyWith(color: scheme.primary),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: MediaQuery.of(context).size.width - 48,
                 ),
-                const Divider(height: 1),
-                for (final r in rows)
-                  line(
-                    r.$1.code,
-                    l10n.accountName(r.$1.code),
-                    r.$2 > 0 ? formatAmount(r.$2) : '',
-                    r.$2 < 0 ? formatAmount(-r.$2) : '',
+                child: SizedBox(
+                  width: 440,
+                  child: Column(
+                    children: [
+                      line(
+                        l10n.accountCode,
+                        l10n.accountColumn,
+                        l10n.debit,
+                        l10n.credit,
+                        style: bold.copyWith(color: scheme.primary),
+                      ),
+                      const Divider(height: 1),
+                      for (final r in rows)
+                        line(
+                          r.$1.code,
+                          l10n.accountName(r.$1.code),
+                          r.$2 > 0 ? formatAmount(r.$2) : '',
+                          r.$2 < 0 ? formatAmount(-r.$2) : '',
+                        ),
+                      const Divider(height: 1),
+                      line(
+                        '',
+                        l10n.total,
+                        formatAmount(totalDebit),
+                        formatAmount(totalCredit),
+                        style: bold,
+                      ),
+                    ],
                   ),
-                const Divider(height: 1),
-                line(
-                  '',
-                  l10n.total,
-                  formatAmount(totalDebit),
-                  formatAmount(totalCredit),
-                  style: bold,
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -761,8 +769,8 @@ class AccountLedgerScreen extends StatelessWidget {
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: line.debit > 0
-                              ? Colors.green.shade700
-                              : Colors.orange.shade800,
+                              ? AppDesignTokens.semanticSuccess(context)
+                              : AppDesignTokens.semanticWarning(context),
                         ),
                       ),
                       Text(
