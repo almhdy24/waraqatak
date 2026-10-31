@@ -87,6 +87,7 @@ class AppLocalizations {
   String get all => _t('الكل', 'All');
   String get save => _t('حفظ', 'Save');
   String get cancel => _t('إلغاء', 'Cancel');
+  String get confirm => _t('تأكيد', 'Confirm');
   String get delete => _t('حذف', 'Delete');
   String get edit => _t('تعديل', 'Edit');
   String get open => _t('فتح', 'Open');
@@ -653,6 +654,50 @@ class AppLocalizations {
       _t('الأسعار شاملة الضريبة', 'Prices include tax (inclusive)');
   String get pricesIncludeTaxDesc =>
       _t('سعر الوحدة يشمل الضريبة بالفعل', 'Unit price already includes tax');
+  String get wholesalePricing =>
+      _t('تسعير الجملة والتجزئة', 'Wholesale & Retail Pricing');
+  String get wholesalePricingDesc => _t(
+        'تفعيل أسعار الجملة والتجزئة للمنتجات والعملاء',
+        'Enable wholesale and retail prices for products and customers',
+      );
+  String get wholesalePrice => _t('سعر الجملة', 'Wholesale Price');
+  String get wholesaleMinQuantity =>
+      _t('الحد الأدنى للجملة', 'Wholesale Min Quantity');
+  String get wholesaleMinQuantityHelp => _t(
+        'أقل كمية لتطبيق سعر الجملة تلقائياً',
+        'Minimum quantity to automatically apply wholesale price',
+      );
+  String get pricingCategory => _t('فئة التسعير', 'Pricing Category');
+  String get retail => _t('تجزئة', 'Retail');
+  String get wholesale => _t('جملة', 'Wholesale');
+  String get pricingCategoryCustomerDesc =>
+      _t('فئة السعر الافتراضية لهذا العميل', 'Default pricing tier for this customer');
+  String get pricingTier => _t('فئة السعر', 'Pricing Tier');
+  String get linePriceRetail => _t('تجزئة', 'Retail');
+  String get linePriceWholesale => _t('جملة', 'Wholesale');
+  String get linePriceManual => _t('مخصص', 'Custom');
+  String get reset => _t('إعادة ضبط', 'Reset');
+  String get additionalSalesUnits =>
+      _t('وحدات البيع الإضافية', 'Additional Sales Units');
+  String get addSalesUnit => _t('إضافة وحدة بيع', 'Add Sales Unit');
+  String get editSalesUnit => _t('تعديل وحدة البيع', 'Edit Sales Unit');
+  String get salesUnitName => _t('اسم الوحدة', 'Unit Name');
+  String get conversionFactor => _t('معامل التحويل', 'Conversion Factor');
+  String get conversionFactorHelp => _t(
+        'عدد الوحدات الأساسية التي تعادل وحدة البيع هذه (مثال: 1 كرتونة = 10 قطع)',
+        'How many base units equal 1 of this sales unit (e.g., 1 carton = 10 pieces)',
+      );
+  String get invalidConversionFactor => _t(
+        'يجب أن يكون معامل التحويل أكبر من صفر',
+        'Conversion factor must be greater than zero',
+      );
+  String get salesUnit => _t('وحدة البيع', 'Sales Unit');
+  String get baseUnit => _t('الوحدة الأساسية', 'Base Unit');
+  String get defaultSaleUnit =>
+      _t('الوحدة الافتراضية للبيع', 'Default Sales Unit');
+  String get optional => _t('اختياري', 'Optional');
+  String get noUnits =>
+      _t('لا توجد وحدات بيع إضافية', 'No additional units yet');
   String get defaultTaxProfile =>
       _t('ملف ضريبي افتراضي', 'Default Tax Profile');
   String get noDefaultProfile =>
@@ -712,6 +757,20 @@ class AppLocalizations {
   String get currencyScopeNote => _t(
     'العملة الافتراضية تنطبق على المستندات والمنتجات الجديدة. تحتفظ المعاملات السابقة بالعملة التي سُجلت بها.',
     'Default currency applies to new documents and products. Existing transactions retain their recorded currency.',
+  );
+  String get currencyLockedNote => _t(
+    'العملة الأساسية مقفلة بشكل دائم لوجود معاملات مالية أو حركات مخزون مسجلة.',
+    'Base currency is permanently locked because financial transactions or stock movements exist.',
+  );
+  String get currencyInitialWarningNote => _t(
+    'تنبيه: تصبح هذه العملة دائمة ولا يمكن تغييرها بمجرد تسجيل أول فاتورة أو إيصال أو حركة مخزون.',
+    'Notice: Currency becomes permanent and cannot be changed once the first transaction or stock movement is recorded.',
+  );
+  String get currencyConfirmTitle =>
+      _t('تأكيد اختيار العملة الأساسية', 'Confirm Base Currency');
+  String currencyConfirmMessage(String currency) => _t(
+    'لقد اخترت عملة ($currency). بمجرد تسجيل أول فاتورة أو إيصال أو إضافة مخزون، ستصبح هذه العملة دائمة ولا يمكن تغييرها مطلقاً من الإعدادات. هل تريد المتابعة؟',
+    'You have selected ($currency). Once your first invoice, receipt, or stock movement is recorded, this currency becomes permanent and cannot be changed. Do you want to proceed?',
   );
   String get taxLivePreview =>
       _t('معاينة توضيحية لاحتساب الضريبة', 'Tax Calculation Preview');

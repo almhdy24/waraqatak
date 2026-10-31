@@ -10,6 +10,10 @@ class DocumentItem {
   final double? taxRate; // snapshot at creation; null = use business default
   final double? unitCost; // snapshot cost per unit at document issuance
   final double? totalCost; // quantity * unitCost (COGS for invoice items)
+  final String? pricingCategory; // snapshot at creation: 'retail' | 'wholesale' | null (legacy/manual)
+  final String? saleUnit; // name of selected sales unit, e.g. 'carton'
+  final double unitConversionFactor; // 1 sale_unit = X base units; default 1.0
+  final double? baseQuantity; // effective physical quantity in product's base unit
 
   const DocumentItem({
     this.id,
@@ -23,7 +27,14 @@ class DocumentItem {
     this.taxRate,
     this.unitCost,
     this.totalCost,
+    this.pricingCategory,
+    this.saleUnit,
+    this.unitConversionFactor = 1.0,
+    this.baseQuantity,
   });
+
+  double get effectiveBaseQuantity =>
+      baseQuantity ?? (quantity * unitConversionFactor);
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -37,6 +48,10 @@ class DocumentItem {
         'tax_rate': taxRate,
         'unit_cost': unitCost,
         'total_cost': totalCost,
+        'pricing_category': pricingCategory,
+        'sale_unit': saleUnit,
+        'unit_conversion_factor': unitConversionFactor,
+        'base_quantity': effectiveBaseQuantity,
       };
 
   factory DocumentItem.fromMap(Map<String, dynamic> map) => DocumentItem(
@@ -51,5 +66,10 @@ class DocumentItem {
         taxRate: (map['tax_rate'] as num?)?.toDouble(),
         unitCost: (map['unit_cost'] as num?)?.toDouble(),
         totalCost: (map['total_cost'] as num?)?.toDouble(),
+        pricingCategory: map['pricing_category'] as String?,
+        saleUnit: map['sale_unit'] as String?,
+        unitConversionFactor:
+            (map['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0,
+        baseQuantity: (map['base_quantity'] as num?)?.toDouble(),
       );
 }

@@ -24,6 +24,16 @@ class ProductPerformanceItem {
   final double currentStock;
   final double? averageCost;
   final double? currentValuation;
+  final String? currencyCode;
+  final Map<String, ({
+    double qty,
+    double revenue,
+    double cogs,
+    double grossProfit,
+    double profitMargin,
+    bool isReliable,
+    int unknownCount,
+  })> salesByCurrency;
 
   const ProductPerformanceItem({
     required this.productId,
@@ -41,6 +51,8 @@ class ProductPerformanceItem {
     required this.currentStock,
     this.averageCost,
     this.currentValuation,
+    this.currencyCode,
+    this.salesByCurrency = const {},
   });
 
   /// Gross profit only when cost is fully known; null otherwise.
@@ -75,6 +87,14 @@ class ProductPerformanceSummary {
   final bool hasIncompleteCosts;
   final int unvaluedSalesCount;
   final Set<String> currencies;
+  final Map<String, ({
+    double revenue,
+    double cogs,
+    double grossProfit,
+    double trustedProfit,
+    bool hasIncompleteCost,
+    int unvaluedSalesCount,
+  })> totalsByCurrency;
 
   bool get hasMultipleCurrencies => currencies.length > 1;
 
@@ -87,6 +107,7 @@ class ProductPerformanceSummary {
     required this.hasIncompleteCosts,
     required this.unvaluedSalesCount,
     required this.currencies,
+    this.totalsByCurrency = const {},
   }) : totalTrustedGrossProfit = totalTrustedGrossProfit ??
             (hasIncompleteCosts ? 0.0 : totalGrossProfit);
 }
@@ -270,7 +291,7 @@ class BusinessReportingService {
         di.id AS item_id,
         di.document_id,
         di.product_id,
-        di.quantity,
+        COALESCE(di.base_quantity, di.quantity) AS quantity,
         di.total AS line_total,
         di.total_cost,
         d.subtotal AS doc_subtotal,
@@ -289,6 +310,9 @@ class BusinessReportingService {
       docItemsMap.putIfAbsent(docId, () => []).add(row);
     }
 
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    final baseCurrency = business?.currencyCode ?? 'SDG';
+
     final productAggregators = <int, _ProductSalesAggregator>{};
     for (final p in productRows) {
       final pid = (p['id'] as num).toInt();
@@ -304,12 +328,11 @@ class BusinessReportingService {
 
       final docSubtotal = (docItems.first['doc_subtotal'] as num?)?.toDouble() ?? 0.0;
       final docDiscount = (docItems.first['doc_discount'] as num?)?.toDouble() ?? 0.0;
-      final currencyCode = (docItems.first['currency_code'] as String?)?.trim() ?? 'SDG';
-      final decimals = Currency.decimalDigitsForCode(currencyCode);
+      final docCurrency = (docItems.first['currency_code'] as String?)?.trim() ?? 'SDG';
+      final currency = docCurrency.isNotEmpty ? docCurrency : 'SDG';
+      final decimals = Currency.decimalDigitsForCode(currency);
 
-      if (currencyCode.isNotEmpty) {
-        allCurrencies.add(currencyCode);
-      }
+      allCurrencies.add(currency);
 
       final lineAmounts = docItems
           .map((r) => (r['line_total'] as num?)?.toDouble() ?? 0.0)
@@ -333,25 +356,33 @@ class BusinessReportingService {
         final totalCost = (item['total_cost'] as num?)?.toDouble();
         final netRev = netRevenues[i];
 
-        agg.salesQty += qty;
-        agg.salesRevenue = MoneyUtils.round(agg.salesRevenue + netRev, decimals);
-        if (totalCost != null) {
-          agg.knownCogs = MoneyUtils.round(agg.knownCogs + totalCost, decimals);
-        }
-        if (qty > 0 && totalCost == null) {
-          agg.unknownCostSalesCount += 1;
-        }
-        agg.transactionIds.add(docId);
-        if (currencyCode.isNotEmpty) {
-          agg.currencies.add(currencyCode);
+        agg.totalSalesQty += qty;
+        agg.allTransactionIds.add(docId);
+
+        final curAgg = agg.byCurrency.putIfAbsent(currency, () => _PerCurrencySales());
+        curAgg.salesQty += qty;
+        curAgg.salesRevenue = MoneyUtils.round(curAgg.salesRevenue + netRev, decimals);
+        curAgg.transactionIds.add(docId);
+
+        // COGS currency safety:
+        // Inventory costs (average_cost / purchase price) are recorded in baseCurrency.
+        // We only attribute known COGS against sales in the same currency (baseCurrency).
+        if (currency == baseCurrency) {
+          if (totalCost != null) {
+            curAgg.knownCogs = MoneyUtils.round(curAgg.knownCogs + totalCost, decimals);
+          }
+          if (qty > 0 && totalCost == null) {
+            curAgg.unknownCostSalesCount += 1;
+          }
+        } else {
+          // Cross-currency sale: subtracting base-currency COGS directly from
+          // foreign-currency revenue without conversion is financially invalid.
+          // Flag as unconvertible cross-currency cost (incomplete for this currency).
+          curAgg.isCrossCurrencyCost = true;
+          curAgg.unknownCostSalesCount += 1;
         }
       }
     }
-
-    double totalRevenue = 0.0;
-    double totalCogs = 0.0;
-    double totalTrustedGrossProfit = 0.0;
-    int unvaluedSalesTotal = 0;
 
     final items = <ProductPerformanceItem>[];
 
@@ -366,34 +397,84 @@ class BusinessReportingService {
       final isCostKnown = costStatus == Product.costStatusKnown && avgCost != null;
 
       final agg = productAggregators[pid] ?? _ProductSalesAggregator();
-      final salesQty = agg.salesQty;
-      final revenue = agg.salesRevenue;
-      final cogs = agg.knownCogs;
-      final unknownCount = agg.unknownCostSalesCount;
-      final txCount = agg.transactionIds.length;
+      final totalSalesQty = agg.totalSalesQty;
+      final txCount = agg.allTransactionIds.length;
 
-      final isReliable = unknownCount == 0;
-      final grossProfit = MoneyUtils.round(revenue - cogs);
-      // Show partial margin even when unreliable so callers can disclose it;
-      // isCostReliable=false signals that the cost figure is incomplete.
-      final margin = revenue > 0 ? (grossProfit / revenue) * 100 : 0.0;
+      final itemSalesByCurrency = <String, ({
+        double qty,
+        double revenue,
+        double cogs,
+        double grossProfit,
+        double profitMargin,
+        bool isReliable,
+        int unknownCount,
+      })>{};
+
+      for (final entry in agg.byCurrency.entries) {
+        final c = entry.key;
+        final d = entry.value;
+        final isRel = d.unknownCostSalesCount == 0 && !d.isCrossCurrencyCost;
+        final gp = MoneyUtils.round(d.salesRevenue - d.knownCogs);
+        final margin = d.salesRevenue > 0 ? (gp / d.salesRevenue) * 100 : 0.0;
+        itemSalesByCurrency[c] = (
+          qty: d.salesQty,
+          revenue: d.salesRevenue,
+          cogs: d.knownCogs,
+          grossProfit: gp,
+          profitMargin: margin,
+          isReliable: isRel,
+          unknownCount: d.unknownCostSalesCount,
+        );
+      }
+
+      // Backward-compatible scalars for ProductPerformanceItem
+      double salesRevenue = 0.0;
+      double cogs = 0.0;
+      double grossProfit = 0.0;
+      double margin = 0.0;
+      bool isReliable = true;
+      int unknownCount = 0;
+      String? itemCurrency;
+
+      if (currencyCode != null && currencyCode.isNotEmpty) {
+        itemCurrency = currencyCode;
+        final currData = itemSalesByCurrency[currencyCode];
+        if (currData != null) {
+          salesRevenue = currData.revenue;
+          cogs = currData.cogs;
+          grossProfit = currData.grossProfit;
+          margin = currData.profitMargin;
+          isReliable = currData.isReliable;
+          unknownCount = currData.unknownCount;
+        }
+      } else if (itemSalesByCurrency.length == 1) {
+        final entry = itemSalesByCurrency.entries.first;
+        itemCurrency = entry.key;
+        salesRevenue = entry.value.revenue;
+        cogs = entry.value.cogs;
+        grossProfit = entry.value.grossProfit;
+        margin = entry.value.profitMargin;
+        isReliable = entry.value.isReliable;
+        unknownCount = entry.value.unknownCount;
+      } else if (itemSalesByCurrency.length > 1) {
+        // Multi-currency product activity: NEVER sum nominally across currencies
+        itemCurrency = null;
+        isReliable = false;
+        unknownCount = itemSalesByCurrency.values.fold(0, (s, e) => s + e.unknownCount);
+      } else {
+        itemCurrency = baseCurrency;
+      }
 
       final currentValuation = isCostKnown ? (stockQty > 0 ? stockQty * avgCost : 0.0) : null;
-
-      totalRevenue += revenue;
-      totalCogs += cogs;
-      // Only accumulate into the trusted total when cost is fully known.
-      if (isReliable) totalTrustedGrossProfit += grossProfit;
-      unvaluedSalesTotal += unknownCount;
 
       items.add(ProductPerformanceItem(
         productId: pid,
         productName: name,
         category: cat,
         unit: unit,
-        salesQty: salesQty,
+        salesQty: totalSalesQty,
         transactionCount: txCount,
-        salesRevenue: revenue,
+        salesRevenue: salesRevenue,
         cogs: cogs,
         grossProfit: grossProfit,
         profitMargin: margin,
@@ -402,6 +483,8 @@ class BusinessReportingService {
         currentStock: stockQty,
         averageCost: avgCost,
         currentValuation: currentValuation,
+        currencyCode: itemCurrency,
+        salesByCurrency: itemSalesByCurrency,
       ));
     }
 
@@ -430,15 +513,87 @@ class BusinessReportingService {
       items.sort((a, b) => b.salesRevenue.compareTo(a.salesRevenue));
     }
 
+    final summaryTotalsByCurrency = <String, ({
+      double revenue,
+      double cogs,
+      double grossProfit,
+      double trustedProfit,
+      bool hasIncompleteCost,
+      int unvaluedSalesCount,
+    })>{};
+
+    for (final c in allCurrencies) {
+      double cRev = 0.0;
+      double cCogs = 0.0;
+      double cTrustedProfit = 0.0;
+      int cUnvalued = 0;
+
+      for (final item in items) {
+        final cData = item.salesByCurrency[c];
+        if (cData == null) continue;
+        cRev += cData.revenue;
+        cCogs += cData.cogs;
+        if (cData.isReliable) {
+          cTrustedProfit += cData.grossProfit;
+        }
+        cUnvalued += cData.unknownCount;
+      }
+
+      summaryTotalsByCurrency[c] = (
+        revenue: MoneyUtils.round(cRev),
+        cogs: MoneyUtils.round(cCogs),
+        grossProfit: MoneyUtils.round(cRev - cCogs),
+        trustedProfit: MoneyUtils.round(cTrustedProfit),
+        hasIncompleteCost: cUnvalued > 0,
+        unvaluedSalesCount: cUnvalued,
+      );
+    }
+
+    double totalRevenue = 0.0;
+    double totalCogs = 0.0;
+    double totalGrossProfit = 0.0;
+    double totalTrustedGrossProfit = 0.0;
+    bool hasIncompleteCosts = false;
+    int unvaluedSalesTotal = 0;
+
+    if (currencyCode != null && currencyCode.isNotEmpty) {
+      final curTotals = summaryTotalsByCurrency[currencyCode];
+      if (curTotals != null) {
+        totalRevenue = curTotals.revenue;
+        totalCogs = curTotals.cogs;
+        totalGrossProfit = curTotals.grossProfit;
+        totalTrustedGrossProfit = curTotals.trustedProfit;
+        hasIncompleteCosts = curTotals.hasIncompleteCost;
+        unvaluedSalesTotal = curTotals.unvaluedSalesCount;
+      }
+    } else if (summaryTotalsByCurrency.length == 1) {
+      final single = summaryTotalsByCurrency.values.first;
+      totalRevenue = single.revenue;
+      totalCogs = single.cogs;
+      totalGrossProfit = single.grossProfit;
+      totalTrustedGrossProfit = single.trustedProfit;
+      hasIncompleteCosts = single.hasIncompleteCost;
+      unvaluedSalesTotal = single.unvaluedSalesCount;
+    } else if (summaryTotalsByCurrency.length > 1) {
+      // Multi-currency without filter: never sum nominally across currencies
+      hasIncompleteCosts = summaryTotalsByCurrency.values.any((e) => e.hasIncompleteCost);
+      unvaluedSalesTotal = summaryTotalsByCurrency.values.fold(0, (s, e) => s + e.unvaluedSalesCount);
+      totalRevenue = 0.0;
+      totalCogs = 0.0;
+      totalGrossProfit = 0.0;
+      totalTrustedGrossProfit = 0.0;
+    }
+
     return ProductPerformanceSummary(
       items: items,
       totalSalesRevenue: MoneyUtils.round(totalRevenue),
       totalCogs: MoneyUtils.round(totalCogs),
-      totalGrossProfit: MoneyUtils.round(totalRevenue - totalCogs),
+      totalGrossProfit: MoneyUtils.round(totalGrossProfit),
       totalTrustedGrossProfit: MoneyUtils.round(totalTrustedGrossProfit),
-      hasIncompleteCosts: unvaluedSalesTotal > 0,
+      hasIncompleteCosts: hasIncompleteCosts,
       unvaluedSalesCount: unvaluedSalesTotal,
       currencies: allCurrencies,
+      totalsByCurrency: summaryTotalsByCurrency,
     );
   }
 
@@ -762,7 +917,7 @@ class BusinessReportingService {
     final toStr = to.toIso8601String();
 
     final salesRows = await db.rawQuery('''
-      SELECT di.product_id, di.quantity, di.unit_cost, di.total_cost
+      SELECT di.product_id, COALESCE(di.base_quantity, di.quantity) AS quantity, di.unit_cost, di.total_cost
       FROM document_items di
       INNER JOIN documents d ON d.id = di.document_id
       WHERE d.type = 'invoice'
@@ -953,12 +1108,18 @@ class AdvancedInventoryMetrics {
   });
 }
 
-class _ProductSalesAggregator {
+class _PerCurrencySales {
   double salesQty = 0.0;
   double salesRevenue = 0.0;
   double knownCogs = 0.0;
   int unknownCostSalesCount = 0;
+  bool isCrossCurrencyCost = false;
   final Set<int> transactionIds = <int>{};
-  final Set<String> currencies = <String>{};
+}
+
+class _ProductSalesAggregator {
+  double totalSalesQty = 0.0;
+  final Set<int> allTransactionIds = <int>{};
+  final Map<String, _PerCurrencySales> byCurrency = <String, _PerCurrencySales>{};
 }
 

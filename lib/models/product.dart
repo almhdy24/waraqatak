@@ -12,6 +12,8 @@ class Product {
   final String? barcode;
   final String? unit;
   final double salePrice;
+  final double? wholesalePrice;
+  final double? wholesaleMinQuantity;
   final double purchasePrice;
   final double stockQuantity;
   final double minStock;
@@ -37,6 +39,8 @@ class Product {
     this.barcode,
     this.unit,
     required this.salePrice,
+    this.wholesalePrice,
+    this.wholesaleMinQuantity,
     this.purchasePrice = 0,
     this.stockQuantity = 0,
     this.minStock = 0,
@@ -59,6 +63,8 @@ class Product {
     String? barcode,
     String? unit,
     double? salePrice,
+    double? wholesalePrice,
+    double? wholesaleMinQuantity,
     double? purchasePrice,
     double? stockQuantity,
     double? minStock,
@@ -80,6 +86,8 @@ class Product {
         barcode: barcode ?? this.barcode,
         unit: unit ?? this.unit,
         salePrice: salePrice ?? this.salePrice,
+        wholesalePrice: wholesalePrice ?? this.wholesalePrice,
+        wholesaleMinQuantity: wholesaleMinQuantity ?? this.wholesaleMinQuantity,
         purchasePrice: purchasePrice ?? this.purchasePrice,
         stockQuantity: stockQuantity ?? this.stockQuantity,
         minStock: minStock ?? this.minStock,
@@ -102,6 +110,8 @@ class Product {
         'barcode': barcode,
         'unit': unit,
         'sale_price': salePrice,
+        'wholesale_price': wholesalePrice,
+        'wholesale_min_quantity': wholesaleMinQuantity,
         'purchase_price': purchasePrice,
         'stock_quantity': stockQuantity,
         'min_stock': minStock,
@@ -124,6 +134,9 @@ class Product {
         barcode: map['barcode'] as String?,
         unit: map['unit'] as String?,
         salePrice: (map['sale_price'] as num?)?.toDouble() ?? 0,
+        wholesalePrice: (map['wholesale_price'] as num?)?.toDouble(),
+        wholesaleMinQuantity:
+            (map['wholesale_min_quantity'] as num?)?.toDouble(),
         purchasePrice: (map['purchase_price'] as num?)?.toDouble() ?? 0,
         stockQuantity: (map['stock_quantity'] as num?)?.toDouble() ?? 0,
         minStock: (map['min_stock'] as num?)?.toDouble() ?? 0,

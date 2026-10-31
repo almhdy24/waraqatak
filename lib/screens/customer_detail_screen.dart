@@ -539,7 +539,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           ..._documents!.map(
             (doc) => _DocumentTile(
               doc: doc,
-              currency: currency,
+              currency: doc.currencySymbol,
               fmt: _fmt,
               dateFmt: _dateFmt,
               onTap: () => Navigator.push(
@@ -742,7 +742,7 @@ class _DocumentTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '${fmt.format(doc.total)} $currency',
+                    '${fmt.format(doc.total)} ${doc.currencySymbol}',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,

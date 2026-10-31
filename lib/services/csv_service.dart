@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../database/database_helper.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
 
 enum CsvDuplicateStrategy {
   skip,
@@ -19,6 +20,9 @@ class CsvParsedRow {
   final String? unit;
   final double salePrice;
   final double purchasePrice;
+  final double? wholesalePrice;
+  final double? wholesaleMinQty;
+  final List<ProductUnit>? salesUnits;
   final double minStock;
   final bool isActive;
   final bool isValid;
@@ -36,6 +40,9 @@ class CsvParsedRow {
     this.unit,
     required this.salePrice,
     this.purchasePrice = 0.0,
+    this.wholesalePrice,
+    this.wholesaleMinQty,
+    this.salesUnits,
     this.minStock = 0.0,
     this.isActive = true,
     required this.isValid,
@@ -90,6 +97,9 @@ class CsvService {
     'Unit',
     'SalePrice',
     'PurchasePrice',
+    'WholesalePrice',
+    'WholesaleMinQty',
+    'SalesUnits',
     'MinStock',
     'CurrentStock_ReadOnly',
     'IsActive',
@@ -144,6 +154,9 @@ class CsvService {
         sanitizeCell('كيس'),
         '45000',
         '38000',
+        '42000',
+        '10',
+        sanitizeCell('كرتونة:10:410000:390000'),
         '5',
         '0', // Informational only
         '1',
@@ -153,8 +166,21 @@ class CsvService {
 
     final db = await DatabaseHelper.instance.database;
     final products = await db.query('products', orderBy: 'name ASC');
+    final allUnits = await DatabaseHelper.instance.getAllProductUnits();
 
     for (final row in products) {
+      final pid = row['id'] as int;
+      final units = allUnits[pid] ?? const <ProductUnit>[];
+      final unitsStr = units.map((u) {
+        final buf = StringBuffer('${u.unitName}:${u.conversionFactor}');
+        if (u.salePrice != null) buf.write(':${u.salePrice}');
+        if (u.wholesalePrice != null) {
+          if (u.salePrice == null) buf.write(':');
+          buf.write(':${u.wholesalePrice}');
+        }
+        return buf.toString();
+      }).join(';');
+
       buffer.writeln([
         sanitizeCell(row['name'] as String? ?? ''),
         sanitizeCell(row['barcode'] as String? ?? ''),
@@ -164,6 +190,13 @@ class CsvService {
         sanitizeCell(row['unit'] as String? ?? ''),
         ((row['sale_price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
         ((row['purchase_price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
+        (row['wholesale_price'] as num?) != null
+            ? ((row['wholesale_price'] as num).toDouble()).toStringAsFixed(2)
+            : '',
+        (row['wholesale_min_quantity'] as num?) != null
+            ? ((row['wholesale_min_quantity'] as num).toDouble()).toStringAsFixed(2)
+            : '',
+        sanitizeCell(unitsStr),
         ((row['min_stock'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
         ((row['stock_quantity'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
         (row['is_active'] as int? ?? 1).toString(),
@@ -291,6 +324,9 @@ class CsvService {
     final unitIdx = headerRow.indexOf('unit');
     final salePriceIdx = headerRow.indexOf('saleprice');
     final purchPriceIdx = headerRow.indexOf('purchaseprice');
+    final wholesalePriceIdx = headerRow.indexOf('wholesaleprice');
+    final wholesaleMinQtyIdx = headerRow.indexOf('wholesaleminqty');
+    final salesUnitsIdx = headerRow.indexOf('salesunits');
     final minStockIdx = headerRow.indexOf('minstock');
     final isActiveIdx = headerRow.indexOf('isactive');
 
@@ -363,6 +399,15 @@ class CsvService {
       final rawPurch = purchPriceIdx != -1 && purchPriceIdx < row.length
           ? row[purchPriceIdx].trim()
           : '0';
+      final rawWholesale = wholesalePriceIdx != -1 && wholesalePriceIdx < row.length
+          ? row[wholesalePriceIdx].trim()
+          : '';
+      final rawWholesaleMin = wholesaleMinQtyIdx != -1 && wholesaleMinQtyIdx < row.length
+          ? row[wholesaleMinQtyIdx].trim()
+          : '';
+      final rawSalesUnits = salesUnitsIdx != -1 && salesUnitsIdx < row.length
+          ? unescapeFormulaPrefix(row[salesUnitsIdx].trim())
+          : '';
       final rawMin = minStockIdx != -1 && minStockIdx < row.length
           ? row[minStockIdx].trim()
           : '0';
@@ -408,6 +453,84 @@ class CsvService {
         continue;
       }
 
+      double? wholesalePrice;
+      if (rawWholesale.isNotEmpty) {
+        wholesalePrice = double.tryParse(rawWholesale);
+        if (wholesalePrice == null || wholesalePrice < 0) {
+          error++;
+          parsedRows.add(CsvParsedRow(
+            rowNumber: r + 1,
+            name: rawName,
+            salePrice: salePrice,
+            isValid: false,
+            errorMessage: 'سعر الجملة لا يمكن أن يكون سالباً',
+          ));
+          continue;
+        }
+      }
+
+      double? wholesaleMinQty;
+      if (rawWholesaleMin.isNotEmpty) {
+        wholesaleMinQty = double.tryParse(rawWholesaleMin);
+        if (wholesaleMinQty == null || wholesaleMinQty < 0) {
+          error++;
+          parsedRows.add(CsvParsedRow(
+            rowNumber: r + 1,
+            name: rawName,
+            salePrice: salePrice,
+            isValid: false,
+            errorMessage: 'الحد الأدنى للجملة لا يمكن أن يكون سالباً',
+          ));
+          continue;
+        }
+      }
+
+      List<ProductUnit>? parsedUnits;
+      if (rawSalesUnits.isNotEmpty) {
+        parsedUnits = [];
+        bool unitError = false;
+        final tokens = rawSalesUnits.split(';');
+        for (final token in tokens) {
+          final t = token.trim();
+          if (t.isEmpty) continue;
+          final parts = t.split(':');
+          if (parts.length < 2) {
+            unitError = true;
+            break;
+          }
+          final uName = parts[0].trim();
+          final factor = double.tryParse(parts[1].trim());
+          if (uName.isEmpty || factor == null || factor <= 0) {
+            unitError = true;
+            break;
+          }
+          final uSalePrice = parts.length > 2 && parts[2].trim().isNotEmpty
+              ? double.tryParse(parts[2].trim())
+              : null;
+          final uWholesalePrice = parts.length > 3 && parts[3].trim().isNotEmpty
+              ? double.tryParse(parts[3].trim())
+              : null;
+          parsedUnits.add(ProductUnit(
+            productId: 0,
+            unitName: uName,
+            conversionFactor: factor,
+            salePrice: uSalePrice,
+            wholesalePrice: uWholesalePrice,
+          ));
+        }
+        if (unitError) {
+          error++;
+          parsedRows.add(CsvParsedRow(
+            rowNumber: r + 1,
+            name: rawName,
+            salePrice: salePrice,
+            isValid: false,
+            errorMessage: 'وحدات البيع أو معامل التحويل غير صالح',
+          ));
+          continue;
+        }
+      }
+
       final minStock = double.tryParse(rawMin) ?? 0.0;
       final isActive = rawActive == '1' || rawActive.toLowerCase() == 'true';
       final type = rawType == Product.typeService ? Product.typeService : Product.typeProduct;
@@ -434,6 +557,9 @@ class CsvService {
           unit: rawUnit?.isEmpty == true ? null : rawUnit,
           salePrice: salePrice,
           purchasePrice: purchasePrice,
+          wholesalePrice: wholesalePrice,
+          wholesaleMinQty: wholesaleMinQty,
+          salesUnits: parsedUnits,
           minStock: minStock,
           isActive: isActive,
           isValid: true,
@@ -452,6 +578,9 @@ class CsvService {
           unit: rawUnit?.isEmpty == true ? null : rawUnit,
           salePrice: salePrice,
           purchasePrice: purchasePrice,
+          wholesalePrice: wholesalePrice,
+          wholesaleMinQty: wholesaleMinQty,
+          salesUnits: parsedUnits,
           minStock: minStock,
           isActive: isActive,
           isValid: true,
@@ -517,6 +646,12 @@ class CsvService {
             if (r.unit != null && r.unit!.isNotEmpty) {
               updateValues['unit'] = r.unit;
             }
+            if (r.wholesalePrice != null) {
+              updateValues['wholesale_price'] = r.wholesalePrice;
+            }
+            if (r.wholesaleMinQty != null) {
+              updateValues['wholesale_min_quantity'] = r.wholesaleMinQty;
+            }
 
             await txn.update(
               'products',
@@ -524,12 +659,39 @@ class CsvService {
               where: 'id = ?',
               whereArgs: [r.existingProductId],
             );
+
+            // Safe unit addition: only insert units that don't already exist for this product
+            if (r.salesUnits != null &&
+                r.salesUnits!.isNotEmpty &&
+                r.existingProductId != null) {
+              final existingUnits = await txn.query(
+                'product_units',
+                where: 'product_id = ?',
+                whereArgs: [r.existingProductId],
+              );
+              final existingNames = existingUnits
+                  .map((u) => (u['unit_name'] as String).trim().toLowerCase())
+                  .toSet();
+              for (final u in r.salesUnits!) {
+                if (!existingNames.contains(u.unitName.trim().toLowerCase())) {
+                  await txn.insert('product_units', {
+                    'product_id': r.existingProductId,
+                    'unit_name': u.unitName.trim(),
+                    'conversion_factor': u.conversionFactor,
+                    'sale_price': u.salePrice,
+                    'wholesale_price': u.wholesalePrice,
+                    'is_default_sale': u.isDefaultSale ? 1 : 0,
+                  });
+                }
+              }
+            }
+
             updated++;
           }
         } else {
           // Insert new product record. Initial stock is 0.
           // Stock additions must go through opening stock, adjustments, or purchases.
-          await txn.insert('products', {
+          final newPid = await txn.insert('products', {
             'name': r.name,
             'barcode': r.barcode,
             'code': r.code,
@@ -538,6 +700,8 @@ class CsvService {
             'unit': r.unit,
             'sale_price': r.salePrice,
             'purchase_price': r.purchasePrice,
+            'wholesale_price': r.wholesalePrice,
+            'wholesale_min_quantity': r.wholesaleMinQty,
             'stock_quantity': 0.0,
             'min_stock': r.minStock,
             'is_taxable': 1,
@@ -546,6 +710,20 @@ class CsvService {
             'created_at': now,
             'updated_at': now,
           });
+
+          if (r.salesUnits != null && r.salesUnits!.isNotEmpty) {
+            for (final u in r.salesUnits!) {
+              await txn.insert('product_units', {
+                'product_id': newPid,
+                'unit_name': u.unitName.trim(),
+                'conversion_factor': u.conversionFactor,
+                'sale_price': u.salePrice,
+                'wholesale_price': u.wholesalePrice,
+                'is_default_sale': u.isDefaultSale ? 1 : 0,
+              });
+            }
+          }
+
           imported++;
         }
       }

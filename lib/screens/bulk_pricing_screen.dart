@@ -195,6 +195,8 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
         return l10n.sellingPrice;
       case BulkPriceTarget.purchasePrice:
         return l10n.purchasePrice;
+      case BulkPriceTarget.wholesalePrice:
+        return l10n.wholesalePrice;
       case BulkPriceTarget.both:
         return l10n.bothPrices;
     }
@@ -451,12 +453,18 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                         final item = _previewItems[idx];
                         final isSelected = _selectedProductIds.contains(item.product.id);
 
-                        final oldDisplayPrice = _target == BulkPriceTarget.purchasePrice
-                            ? item.currentPurchasePrice
-                            : item.currentSalePrice;
-                        final newDisplayPrice = _target == BulkPriceTarget.purchasePrice
-                            ? item.proposedPurchasePrice
-                            : item.proposedSalePrice;
+                        final double oldDisplayPrice;
+                        final double newDisplayPrice;
+                        if (_target == BulkPriceTarget.purchasePrice) {
+                          oldDisplayPrice = item.currentPurchasePrice;
+                          newDisplayPrice = item.proposedPurchasePrice;
+                        } else if (_target == BulkPriceTarget.wholesalePrice) {
+                          oldDisplayPrice = item.currentWholesalePrice ?? 0.0;
+                          newDisplayPrice = item.proposedWholesalePrice ?? 0.0;
+                        } else {
+                          oldDisplayPrice = item.currentSalePrice;
+                          newDisplayPrice = item.proposedSalePrice;
+                        }
                         final delta = newDisplayPrice - oldDisplayPrice;
 
                         return CheckboxListTile(

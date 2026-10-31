@@ -48,8 +48,15 @@ class PdfItemsTableBuilder {
         children: ordered([
           _cell('${i + 1}', regular, theme.mutedTextColor, theme, center: true),
           _cell(item.description, regular, theme.textColor, theme),
-          _cell(_qty.format(item.quantity), regular, theme.textColor, theme,
-              center: true),
+          _cell(
+            item.saleUnit != null && item.saleUnit!.isNotEmpty
+                ? '${_qty.format(item.quantity)} ${item.saleUnit}'
+                : _qty.format(item.quantity),
+            regular,
+            theme.textColor,
+            theme,
+            center: true,
+          ),
           _cell(_money.format(item.price), regular, theme.textColor, theme,
               numeric: true, isArabic: isArabic),
           _cell(_money.format(item.total), bold, theme.textColor, theme,

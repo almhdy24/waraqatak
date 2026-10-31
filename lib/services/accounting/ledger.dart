@@ -412,7 +412,7 @@ class LedgerBuilder {
 
   static bool _isStocked(DocumentItem it, Map<int, Product> products) {
     final p = it.productId == null ? null : products[it.productId];
-    return p != null && p.type == Product.typeProduct && it.quantity > 0;
+    return p != null && p.type == Product.typeProduct && it.effectiveBaseQuantity > 0;
   }
 
   /// Item's share of the document's net amount (after discount, before tax).
@@ -438,8 +438,8 @@ class LedgerBuilder {
             _StockEvent(
               d.date,
               it.productId!,
-              it.quantity,
-              unitCost: _allocatedNet(d, it) / it.quantity,
+              it.effectiveBaseQuantity,
+              unitCost: _allocatedNet(d, it) / it.effectiveBaseQuantity,
               doc: d,
             ),
           );
@@ -448,7 +448,7 @@ class LedgerBuilder {
             _StockEvent(
               d.date,
               it.productId!,
-              -it.quantity,
+              -it.effectiveBaseQuantity,
               doc: d,
               unitCost: it.unitCost,
             ),

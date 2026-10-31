@@ -355,7 +355,7 @@ class InventoryCostingService {
         p.stock_quantity,
         p.average_cost,
         p.cost_status,
-        COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN di.quantity ELSE 0 END), 0) AS sales_qty,
+        COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN COALESCE(di.base_quantity, di.quantity) ELSE 0 END), 0) AS sales_qty,
         COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN di.total ELSE 0 END), 0) AS sales_revenue,
         COALESCE(SUM(CASE WHEN d.type = 'invoice' AND di.total_cost IS NOT NULL THEN di.total_cost ELSE 0 END), 0) AS known_cogs,
         COUNT(CASE WHEN d.type = 'invoice' AND di.quantity > 0 AND di.total_cost IS NULL THEN 1 END) AS unknown_cost_sales_count

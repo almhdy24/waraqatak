@@ -6,10 +6,12 @@ import 'package:printing/printing.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
+import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/payment_method.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../services/pos_cart.dart';
@@ -39,6 +41,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   Business? _business;
   List<Product> _products = [];
+  Map<int, List<ProductUnit>> _productUnits = {};
   List<PaymentMethod> _methods = [];
   String? _method;
   bool _loading = true;
@@ -67,13 +70,18 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       db.getFirstBusiness(),
       ProductService.getAllProducts(activeOnly: true),
       db.getEnabledPaymentMethods(),
+      db.getAllProductUnits(),
     ]);
     if (!mounted) return;
+    final business = results[0] as Business?;
     final methods = results[2] as List<PaymentMethod>;
+    final units = results[3] as Map<int, List<ProductUnit>>;
     setState(() {
-      _business = results[0] as Business?;
+      _business = business;
       _products = results[1] as List<Product>;
       _methods = methods;
+      _productUnits = units;
+      _cart.setWholesalePricingEnabled(business?.wholesalePricingEnabled ?? false);
       _method ??= methods
               .where((m) => m.isDefault)
               .map((m) => m.key)
@@ -111,7 +119,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   void _addProduct(Product p) {
     final l10n = AppLocalizations.of(context);
-    final err = _cart.add(p);
+    final units = p.id != null ? (_productUnits[p.id!] ?? const <ProductUnit>[]) : const <ProductUnit>[];
+    final defaultUnit = units.where((u) => u.isDefaultSale).firstOrNull;
+    final err = _cart.add(p, unit: defaultUnit);
     if (err == PosCartError.outOfStock) {
       _toast(l10n.posNotEnoughStock(p.name));
       return;
@@ -207,6 +217,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         discount: _cart.discount,
         date: DateTime.now(),
         payNowMethod: _method,
+        contact: _cart.customer,
       );
       if (!mounted) return;
       final change = received == null ? 0.0 : PosCart.changeFor(total: total, received: received);
@@ -456,6 +467,219 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
   }
 
+  Future<void> _editLine(int index, void Function(VoidCallback) update) async {
+    final l10n = AppLocalizations.of(context);
+    final line = _cart.lines[index];
+    final p = line.product;
+    final units = p.id != null
+        ? (_productUnits[p.id!] ?? const <ProductUnit>[])
+        : const <ProductUnit>[];
+    final wholesaleEnabled = _business?.wholesalePricingEnabled ?? false;
+
+    ProductUnit? selectedUnit = line.unit;
+    String selectedCategory = line.pricingCategory ?? Contact.categoryRetail;
+    final priceCtrl = TextEditingController(text: line.unitPrice.toString());
+    bool isCustomPrice = line.priceOverride != null;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: Text(p.name),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (units.isNotEmpty) ...[
+                  Text(l10n.salesUnit,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: Text(p.unit ?? l10n.baseUnit),
+                        selected: selectedUnit == null,
+                        onSelected: (sel) {
+                          if (sel) {
+                            setDialog(() {
+                              selectedUnit = null;
+                              if (!isCustomPrice) {
+                                final resPrice =
+                                    DocumentService.resolveItemPrice(
+                                  product: p,
+                                  unit: null,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              }
+                            });
+                          }
+                        },
+                      ),
+                      for (final u in units)
+                        ChoiceChip(
+                          label: Text(u.unitName),
+                          selected: selectedUnit?.id == u.id &&
+                              selectedUnit?.unitName == u.unitName,
+                          onSelected: (sel) {
+                            if (sel) {
+                              setDialog(() {
+                                selectedUnit = u;
+                                if (!isCustomPrice) {
+                                  final resPrice =
+                                    DocumentService.resolveItemPrice(
+                                    product: p,
+                                    unit: u,
+                                    targetCategory: selectedCategory,
+                                    quantity: line.quantity,
+                                    wholesalePricingEnabled: wholesaleEnabled,
+                                  );
+                                  priceCtrl.text = resPrice.toString();
+                                }
+                              });
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (wholesaleEnabled) ...[
+                  Text(l10n.pricingCategory,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: Text(l10n.retail),
+                        selected: selectedCategory == Contact.categoryRetail,
+                        onSelected: (sel) {
+                          if (sel) {
+                            setDialog(() {
+                              selectedCategory = Contact.categoryRetail;
+                              if (!isCustomPrice) {
+                                final resPrice =
+                                    DocumentService.resolveItemPrice(
+                                  product: p,
+                                  unit: selectedUnit,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              }
+                            });
+                          }
+                        },
+                      ),
+                      ChoiceChip(
+                        label: Text(l10n.wholesale),
+                        selected: selectedCategory == Contact.categoryWholesale,
+                        onSelected: (sel) {
+                          if (sel) {
+                            setDialog(() {
+                              selectedCategory = Contact.categoryWholesale;
+                              if (!isCustomPrice) {
+                                final resPrice =
+                                    DocumentService.resolveItemPrice(
+                                  product: p,
+                                  unit: selectedUnit,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              }
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                Text(l10n.unitPrice,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    suffixText: _business?.currencySymbol ?? '',
+                    suffixIcon: isCustomPrice
+                        ? IconButton(
+                            tooltip: l10n.reset,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            onPressed: () {
+                              setDialog(() {
+                                isCustomPrice = false;
+                                final resPrice =
+                                    DocumentService.resolveItemPrice(
+                                  product: p,
+                                  unit: selectedUnit,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              });
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (val) {
+                    final entered = double.tryParse(val.trim());
+                    if (entered != null) {
+                      isCustomPrice = true;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.save),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      final overridePrice =
+          isCustomPrice ? double.tryParse(priceCtrl.text.trim()) : null;
+      update(() {
+        final err = _cart.updateLine(
+          index,
+          unit: selectedUnit,
+          clearUnit: selectedUnit == null,
+          pricingCategory: selectedCategory,
+          priceOverride: overridePrice,
+          clearPriceOverride: !isCustomPrice,
+        );
+        if (err == PosCartError.outOfStock) {
+          _toast(l10n.posNotEnoughStock(p.name));
+        }
+      });
+    }
+  }
+
   Widget _cartPanel(AppLocalizations l10n, {VoidCallback? refresh}) {
     final cs = Theme.of(context).colorScheme;
     void update(VoidCallback f) {
@@ -488,6 +712,27 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     return Column(
       children: [
+        if (_business?.wholesalePricingEnabled == true)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text(l10n.retail),
+                  selected: _cart.pricingCategory == Contact.categoryRetail,
+                  onSelected: (_) =>
+                      update(() => _cart.setPricingCategory(Contact.categoryRetail)),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text(l10n.wholesale),
+                  selected: _cart.pricingCategory == Contact.categoryWholesale,
+                  onSelected: (_) => update(
+                      () => _cart.setPricingCategory(Contact.categoryWholesale)),
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -495,12 +740,21 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final line = _cart.lines[i];
+              final unitLabel =
+                  line.unit?.unitName ?? line.product.unit ?? '';
+              final tierLabel = (_business?.wholesalePricingEnabled == true &&
+                      line.pricingCategory == Contact.categoryWholesale)
+                  ? ' (${l10n.wholesalePricing})'
+                  : '';
               return ListTile(
                 dense: true,
+                onTap: () => _editLine(i, update),
                 title: Text(line.product.name,
-                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${_fmt(line.product.salePrice)} × ${_money.format(line.quantity)} = ${_fmt(line.total)}'),
+                subtitle: Text(
+                    '${_fmt(line.unitPrice)} × ${_money.format(line.quantity)} $unitLabel$tierLabel = ${_fmt(line.total)}'),
                 trailing: _QtyStepper(
                   quantity: line.quantity,
                   onMinus: () => update(() => _setQty(i, line.quantity - 1)),

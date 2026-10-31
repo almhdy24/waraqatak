@@ -239,6 +239,17 @@ class BackupService {
     final db = await DatabaseHelper.instance.database;
 
     await db.transaction((txn) async {
+      Future<Set<String>> getTableCols(String table) async {
+        final info = await txn.rawQuery('PRAGMA table_info($table)');
+        return info.map((c) => c['name'] as String).toSet();
+      }
+
+      Map<String, dynamic> sanitizeRow(
+        Map<String, dynamic> row,
+        Set<String> cols,
+      ) =>
+          Map.fromEntries(row.entries.where((e) => cols.contains(e.key)));
+
       await txn.delete('document_payments');
       await txn.delete('document_items');
       await txn.delete('stocktake_items');
@@ -246,28 +257,43 @@ class BackupService {
       await txn.delete('stock_movements');
       await txn.delete('documents');
       await txn.delete('contacts');
+      await txn.delete('product_units');
       await txn.delete('products');
       await txn.delete('businesses');
       await txn.delete('document_counters');
 
+      final businessCols = await getTableCols('businesses');
+      final contactCols = await getTableCols('contacts');
+      final productCols = await getTableCols('products');
+      final docCols = await getTableCols('documents');
+      final itemCols = await getTableCols('document_items');
+      final counterCols = await getTableCols('document_counters');
+
       for (final row in _convertRows(data['businesses'])) {
-        await txn.insert('businesses', row);
+        await txn.insert('businesses', sanitizeRow(row, businessCols));
       }
       for (final row in _convertRows(data['contacts'])) {
-        await txn.insert('contacts', row);
+        await txn.insert('contacts', sanitizeRow(row, contactCols));
       }
       for (final row in _convertRows(data['products'])) {
-        await txn.insert('products', row);
+        await txn.insert('products', sanitizeRow(row, productCols));
+      }
+      if (data.containsKey('product_units') &&
+          data['product_units'] is List) {
+        final puCols = await getTableCols('product_units');
+        for (final row in _convertRows(data['product_units'])) {
+          await txn.insert('product_units', sanitizeRow(row, puCols));
+        }
       }
 
       final docs = _convertRows(data['documents']);
       for (final row in docs) {
-        final docRow = Map<String, dynamic>.from(row);
+        final docRow = sanitizeRow(row, docCols);
         docRow['related_document_id'] = null;
         await txn.insert('documents', docRow);
       }
       for (final row in _convertRows(data['document_items'])) {
-        await txn.insert('document_items', row);
+        await txn.insert('document_items', sanitizeRow(row, itemCols));
       }
       for (final row in docs) {
         final docId = row['id'];
@@ -282,58 +308,67 @@ class BackupService {
         }
       }
       for (final row in _convertRows(data['document_counters'])) {
-        await txn.insert('document_counters', row);
+        await txn.insert('document_counters', sanitizeRow(row, counterCols));
       }
       // document_payments is optional (absent in backups created before Phase 1)
       if (data.containsKey('document_payments') &&
           data['document_payments'] is List) {
+        final payCols = await getTableCols('document_payments');
         for (final row in _convertRows(data['document_payments'])) {
-          await txn.insert('document_payments', row);
+          await txn.insert('document_payments', sanitizeRow(row, payCols));
         }
       }
       // stock_movements is optional (absent in backups created before Phase 3.4)
       if (data.containsKey('stock_movements') &&
           data['stock_movements'] is List) {
+        final smCols = await getTableCols('stock_movements');
         for (final row in _convertRows(data['stock_movements'])) {
-          await txn.insert('stock_movements', row);
+          await txn.insert('stock_movements', sanitizeRow(row, smCols));
         }
       }
       // tax_profiles is optional (absent in backups created before Phase 3.5)
       if (data.containsKey('tax_profiles') && data['tax_profiles'] is List) {
         await txn.delete('tax_profiles');
+        final taxCols = await getTableCols('tax_profiles');
         for (final row in _convertRows(data['tax_profiles'])) {
-          await txn.insert('tax_profiles', row);
+          await txn.insert('tax_profiles', sanitizeRow(row, taxCols));
         }
       }
       // payment_methods is optional (absent in backups created before Phase 3.6)
       if (data.containsKey('payment_methods') &&
           data['payment_methods'] is List) {
         await txn.delete('payment_methods');
+        final pmCols = await getTableCols('payment_methods');
         for (final row in _convertRows(data['payment_methods'])) {
-          await txn.insert('payment_methods', row);
+          await txn.insert('payment_methods', sanitizeRow(row, pmCols));
         }
       }
       // stocktake_sessions is optional (absent in backups created before v16)
       if (data.containsKey('stocktake_sessions') &&
           data['stocktake_sessions'] is List) {
+        final ssCols = await getTableCols('stocktake_sessions');
         for (final row in _convertRows(data['stocktake_sessions'])) {
-          await txn.insert('stocktake_sessions', row);
+          await txn.insert('stocktake_sessions', sanitizeRow(row, ssCols));
         }
       }
       // stocktake_items is optional (absent in backups created before v16)
       if (data.containsKey('stocktake_items') &&
           data['stocktake_items'] is List) {
+        final siCols = await getTableCols('stocktake_items');
         for (final row in _convertRows(data['stocktake_items'])) {
-          await txn.insert('stocktake_items', row);
+          await txn.insert('stocktake_items', sanitizeRow(row, siCols));
         }
       }
       // audit_log is optional (absent in older backups)
       if (data.containsKey('audit_log') && data['audit_log'] is List) {
         await txn.delete('audit_log');
+        final alCols = await getTableCols('audit_log');
         for (final row in _convertRows(data['audit_log'])) {
-          await txn.insert('audit_log', row);
+          await txn.insert('audit_log', sanitizeRow(row, alCols));
         }
       }
+
+      await DatabaseHelper.backfillCurrencyLockIfNeeded(txn);
     });
 
     await _restoreLogoIfNeeded(jsonMap);
@@ -423,6 +458,7 @@ class BackupService {
         'businesses': businesses,
         'contacts': await db.query('contacts'),
         'products': await db.query('products'),
+        'product_units': await db.query('product_units'),
         'documents': await db.query('documents'),
         'document_items': await db.query('document_items'),
         'document_counters': await db.query('document_counters'),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
 import '../core/theme_mode_scope.dart';
+import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/backup_service.dart';
@@ -29,12 +30,21 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   EntitlementState? _entitlement;
   bool _diagnosticConsent = false;
+  bool _wholesalePricingEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _loadEntitlement();
     _loadConsent();
+    _loadWholesaleStatus();
+  }
+
+  Future<void> _loadWholesaleStatus() async {
+    final b = await DatabaseHelper.instance.getFirstBusiness();
+    if (mounted) {
+      setState(() => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false);
+    }
   }
 
   Future<void> _loadConsent() async {
@@ -191,6 +201,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           builder: (_) => const PdfCustomizeScreen(),
                         ),
                       ),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.storefront_outlined),
+                      title: Text(l10n.wholesalePricing),
+                      subtitle: Text(l10n.wholesalePricingDesc),
+                      value: _wholesalePricingEnabled,
+                      onChanged: (v) async {
+                        setState(() => _wholesalePricingEnabled = v);
+                        final b = await DatabaseHelper.instance.getFirstBusiness();
+                        if (b != null) {
+                          await DatabaseHelper.instance.updateBusiness(
+                            b.copyWith(wholesalePricingEnabled: v),
+                          );
+                        }
+                      },
                     ),
                   ],
                 ),

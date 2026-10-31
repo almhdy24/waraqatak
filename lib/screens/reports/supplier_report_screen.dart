@@ -12,6 +12,32 @@ import '../../widgets/responsive.dart';
 class SupplierReportScreen extends StatefulWidget {
   const SupplierReportScreen({super.key});
 
+  static List<String> buildPdfRow(Map<String, dynamic> r, NumberFormat numFmt) {
+    return [
+      r['name'] as String? ?? '—',
+      r['phone'] as String? ?? '—',
+      numFmt.format(((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble()),
+      numFmt.format(((r['total_paid'] ?? r['paid'] ?? 0) as num).toDouble()),
+      numFmt.format(((r['outstanding'] ?? 0) as num).toDouble()),
+    ];
+  }
+
+  static List<String> buildTotalsRow({
+    required double totalAmount,
+    required double totalPaid,
+    required double totalPayable,
+    required String totalLabel,
+    required NumberFormat numFmt,
+  }) {
+    return [
+      totalLabel,
+      '',
+      numFmt.format(totalAmount),
+      numFmt.format(totalPaid),
+      numFmt.format(totalPayable),
+    ];
+  }
+
   @override
   State<SupplierReportScreen> createState() => _SupplierReportScreenState();
 }
@@ -53,8 +79,12 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
     final business = await DatabaseHelper.instance.getFirstBusiness();
     if (business == null || _rows == null) return;
 
+    final totalAmount = _rows!.fold(0.0,
+        (s, r) => s + ((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble());
+    final totalPaid = _rows!.fold(0.0,
+        (s, r) => s + ((r['total_paid'] ?? r['paid'] ?? 0) as num).toDouble());
     final totalPayable = _rows!.fold(0.0,
-        (s, r) => s + (r['outstanding'] as num).toDouble());
+        (s, r) => s + ((r['outstanding'] ?? 0) as num).toDouble());
 
     final columns = [
       PdfReportColumn(title: l10n.supplier, flex: 2.2),
@@ -64,15 +94,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
       PdfReportColumn(title: l10n.remaining, flex: 1.3, align: pw.TextAlign.right),
     ];
 
-    final rows = _rows!.map((r) {
-      return [
-        r['name'] as String? ?? '—',
-        r['phone'] as String? ?? '—',
-        _numFmt.format((r['total'] as num).toDouble()),
-        _numFmt.format((r['paid'] as num).toDouble()),
-        _numFmt.format((r['outstanding'] as num).toDouble()),
-      ];
-    }).toList();
+    final rows = _rows!.map((r) => SupplierReportScreen.buildPdfRow(r, _numFmt)).toList();
 
     final data = PdfReportData(
       title: l10n.supplierReport,
@@ -85,13 +107,13 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
       ],
       columns: columns,
       rows: rows,
-      totalsRow: [
-        l10n.total,
-        '',
-        '',
-        '',
-        _numFmt.format(totalPayable),
-      ],
+      totalsRow: SupplierReportScreen.buildTotalsRow(
+        totalAmount: totalAmount,
+        totalPaid: totalPaid,
+        totalPayable: totalPayable,
+        totalLabel: l10n.total,
+        numFmt: _numFmt,
+      ),
     );
 
     try {

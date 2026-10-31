@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
+import '../models/product.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
@@ -35,6 +36,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   final List<bool> _taxableList = [];
   final List<int?> _productIds = [];
   final List<double?> _taxRates = [];
+  final List<String?> _pricingCategories = [];
+  final List<bool> _isManualPriceList = [];
+  final List<Product?> _cachedProducts = [];
+  final List<String?> _saleUnits = [];
+  final List<double> _conversionFactors = [];
   Map<int, double> _profileRates = {};
 
   Business? _business;
@@ -94,6 +100,15 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       _taxableList.add(true);
       _productIds.add(null);
       _taxRates.add(null);
+      _pricingCategories.add(
+        _business?.wholesalePricingEnabled == true
+            ? (_selectedContact?.pricingCategory ?? Contact.categoryRetail)
+            : null,
+      );
+      _isManualPriceList.add(false);
+      _cachedProducts.add(null);
+      _saleUnits.add(null);
+      _conversionFactors.add(1.0);
     });
   }
 
@@ -109,6 +124,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       _taxableList.removeAt(index);
       _productIds.removeAt(index);
       _taxRates.removeAt(index);
+      _pricingCategories.removeAt(index);
+      _isManualPriceList.removeAt(index);
+      _cachedProducts.removeAt(index);
+      _saleUnits.removeAt(index);
+      _conversionFactors.removeAt(index);
     });
   }
 
@@ -141,14 +161,23 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   List<DocumentItemInput> _buildItems() => List.generate(
     _descriptionControllers.length,
-    (i) => DocumentItemInput(
-      description: _descriptionControllers[i].text.trim(),
-      quantity: double.tryParse(_quantityControllers[i].text) ?? 0,
-      price: double.tryParse(_priceControllers[i].text) ?? 0,
-      taxable: _taxableList[i],
-      productId: _productIds[i],
-      taxRate: _taxRates[i],
-    ),
+    (i) {
+      final q = double.tryParse(_quantityControllers[i].text) ?? 0;
+      final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
+      final unit = i < _saleUnits.length ? _saleUnits[i] : null;
+      return DocumentItemInput(
+        description: _descriptionControllers[i].text.trim(),
+        quantity: q,
+        price: double.tryParse(_priceControllers[i].text) ?? 0,
+        taxable: _taxableList[i],
+        productId: _productIds[i],
+        taxRate: _taxRates[i],
+        pricingCategory: _pricingCategories[i],
+        saleUnit: unit,
+        unitConversionFactor: factor,
+        baseQuantity: q * factor,
+      );
+    },
   );
 
   Future<void> _save({bool isDraft = false}) async {
@@ -254,7 +283,31 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 label: l10n.customer,
                 type: 'customer',
                 initialContact: _selectedContact,
-                onContactChanged: (contact) => _selectedContact = contact,
+                onContactChanged: (contact) {
+                  setState(() {
+                    _selectedContact = contact;
+                    if (_business?.wholesalePricingEnabled == true) {
+                      final newCat =
+                          contact?.pricingCategory ?? Contact.categoryRetail;
+                      for (int i = 0; i < _descriptionControllers.length; i++) {
+                        if (!_isManualPriceList[i] && _cachedProducts[i] != null) {
+                          _pricingCategories[i] = newCat;
+                          final q =
+                              double.tryParse(_quantityControllers[i].text) ??
+                              1.0;
+                          final resolved = DocumentService.resolveItemPrice(
+                            product: _cachedProducts[i]!,
+                            targetCategory: newCat,
+                            quantity: q,
+                            wholesalePricingEnabled: true,
+                          );
+                          _priceControllers[i].text =
+                              resolved.toStringAsFixed(2);
+                        }
+                      }
+                    }
+                  });
+                },
               ),
               const SizedBox(height: 16),
               AppSectionHeader(
@@ -271,11 +324,33 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   taxable: _taxableList[index],
                   taxRate: _taxRates[index],
                   productId: _productIds[index],
+                  wholesalePricingEnabled:
+                      _business?.wholesalePricingEnabled ?? false,
+                  pricingCategory: _pricingCategories[index],
+                  onPricingCategoryChanged: (cat) {
+                    setState(() => _pricingCategories[index] = cat);
+                  },
+                  customerPricingCategory:
+                      _selectedContact?.pricingCategory ??
+                      Contact.categoryRetail,
+                  isManualPrice: _isManualPriceList[index],
+                  onManualPriceChanged: (manual) {
+                    setState(() => _isManualPriceList[index] = manual);
+                  },
+                  saleUnit: _saleUnits[index],
+                  onSaleUnitChanged: (unit) {
+                    setState(() => _saleUnits[index] = unit);
+                  },
+                  unitConversionFactor: _conversionFactors[index],
+                  onConversionFactorChanged: (factor) {
+                    setState(() => _conversionFactors[index] = factor);
+                  },
                   onProductChanged: (productId) {
                     setState(() => _productIds[index] = productId);
                   },
                   onProductSelected: (product) {
                     setState(() {
+                      _cachedProducts[index] = product;
                       if (product == null) {
                         _taxRates[index] = null;
                       } else if (!product.isTaxable) {

@@ -537,10 +537,13 @@ class PdfDocumentBuilder {
           child: pw.Text(item.description,
               style: pw.TextStyle(font: bold, fontSize: fontSize, color: theme.textColor))));
       final lineTotal = item.quantity * item.price;
+      final unitSuffix = item.saleUnit != null && item.saleUnit!.isNotEmpty
+          ? ' ${item.saleUnit}'
+          : '';
       widgets.add(pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          txt('${numFmt.format(item.quantity)} × ${numFmt.format(item.price)}', size: smallSize),
+          txt('${numFmt.format(item.quantity)}$unitSuffix × ${numFmt.format(item.price)}', size: smallSize),
           txt('${numFmt.format(lineTotal)} $currency', size: smallSize),
         ],
       ));

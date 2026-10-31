@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
+import '../models/contact.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../screens/barcode_scanner_screen.dart';
 import '../screens/product_form_screen.dart';
+import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import 'product_autocomplete_field.dart';
 
@@ -20,6 +23,16 @@ class DocumentItemForm extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback? onChanged;
   final bool usePurchasePrice;
+  final bool wholesalePricingEnabled;
+  final String? pricingCategory;
+  final ValueChanged<String?>? onPricingCategoryChanged;
+  final String customerPricingCategory;
+  final bool isManualPrice;
+  final ValueChanged<bool>? onManualPriceChanged;
+  final String? saleUnit;
+  final ValueChanged<String?>? onSaleUnitChanged;
+  final double unitConversionFactor;
+  final ValueChanged<double>? onConversionFactorChanged;
 
   const DocumentItemForm({
     super.key,
@@ -35,6 +48,16 @@ class DocumentItemForm extends StatefulWidget {
     required this.onDelete,
     this.onChanged,
     this.usePurchasePrice = false,
+    this.wholesalePricingEnabled = false,
+    this.pricingCategory,
+    this.onPricingCategoryChanged,
+    this.customerPricingCategory = Contact.categoryRetail,
+    this.isManualPrice = false,
+    this.onManualPriceChanged,
+    this.saleUnit,
+    this.onSaleUnitChanged,
+    this.unitConversionFactor = 1.0,
+    this.onConversionFactorChanged,
   });
 
   @override
@@ -43,11 +66,17 @@ class DocumentItemForm extends StatefulWidget {
 
 class _DocumentItemFormState extends State<DocumentItemForm> {
   int? _selectedProductId;
+  Product? _selectedProduct;
+  List<ProductUnit> _availableUnits = [];
+  ProductUnit? _selectedUnit;
 
   @override
   void initState() {
     super.initState();
     _selectedProductId = widget.productId;
+    if (widget.productId != null) {
+      _loadProduct(widget.productId!);
+    }
   }
 
   @override
@@ -55,29 +84,151 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.productId != widget.productId) {
       _selectedProductId = widget.productId;
+      if (widget.productId != null) {
+        _loadProduct(widget.productId!);
+      } else {
+        _selectedProduct = null;
+        _availableUnits = [];
+        _selectedUnit = null;
+      }
     }
   }
 
-  void _onProductSelected(Product? product) {
+  Future<void> _loadProduct(int id) async {
+    final p = await DatabaseHelper.instance.getProductById(id);
+    final units = await DatabaseHelper.instance.getProductUnits(id);
+    if (mounted && _selectedProductId == id) {
+      ProductUnit? matchedUnit;
+      if (widget.saleUnit != null && widget.saleUnit!.isNotEmpty) {
+        matchedUnit =
+            units.where((u) => u.unitName == widget.saleUnit).firstOrNull;
+      }
+      setState(() {
+        _selectedProduct = p;
+        _availableUnits = units;
+        _selectedUnit = matchedUnit;
+      });
+    }
+  }
+
+  void _onProductSelected(Product? product) async {
     if (product == null) return;
-    final price = widget.usePurchasePrice
-        ? product.purchasePrice
-        : product.salePrice;
-    setState(() {
-      _selectedProductId = product.id;
-      widget.descriptionController.text = product.name;
-      widget.priceController.text = price.toStringAsFixed(2);
-      widget.onTaxableChanged(product.isTaxable);
-    });
+    _selectedProduct = product;
+    final units = await DatabaseHelper.instance.getProductUnits(product.id!);
+    final defaultUnit = units.where((u) => u.isDefaultSale).firstOrNull;
+    _availableUnits = units;
+    _selectedUnit = defaultUnit;
+
+    if (defaultUnit != null) {
+      widget.onSaleUnitChanged?.call(defaultUnit.unitName);
+      widget.onConversionFactorChanged?.call(defaultUnit.conversionFactor);
+    } else {
+      widget.onSaleUnitChanged?.call(product.unit);
+      widget.onConversionFactorChanged?.call(1.0);
+    }
+
+    double price;
+    if (widget.usePurchasePrice) {
+      price = product.purchasePrice;
+    } else {
+      final tier = widget.pricingCategory ?? widget.customerPricingCategory;
+      if (widget.wholesalePricingEnabled) {
+        widget.onPricingCategoryChanged?.call(tier);
+      }
+      widget.onManualPriceChanged?.call(false);
+      final q = double.tryParse(widget.quantityController.text) ?? 1.0;
+      price = DocumentService.resolveItemPrice(
+        product: product,
+        targetCategory: tier,
+        quantity: q,
+        wholesalePricingEnabled: widget.wholesalePricingEnabled,
+        unit: _selectedUnit,
+      );
+    }
+
+    if (mounted) {
+      setState(() {
+        _selectedProductId = product.id;
+        widget.descriptionController.text = product.name;
+        widget.priceController.text = price.toStringAsFixed(2);
+        widget.onTaxableChanged(product.isTaxable);
+      });
+    }
     widget.onProductChanged(product.id);
     widget.onProductSelected?.call(product);
     widget.onChanged?.call();
   }
 
+  void _onUnitSelected(ProductUnit? unit) {
+    setState(() => _selectedUnit = unit);
+    widget.onSaleUnitChanged?.call(unit?.unitName ?? _selectedProduct?.unit);
+    widget.onConversionFactorChanged?.call(unit?.conversionFactor ?? 1.0);
+    if (!widget.usePurchasePrice &&
+        !widget.isManualPrice &&
+        _selectedProduct != null) {
+      final q = double.tryParse(widget.quantityController.text) ?? 1.0;
+      final tier = widget.pricingCategory ?? widget.customerPricingCategory;
+      final resolved = DocumentService.resolveItemPrice(
+        product: _selectedProduct!,
+        targetCategory: tier,
+        quantity: q,
+        wholesalePricingEnabled: widget.wholesalePricingEnabled,
+        unit: unit,
+      );
+      widget.priceController.text = resolved.toStringAsFixed(2);
+    }
+    widget.onChanged?.call();
+  }
+
   void _clearProduct() {
-    setState(() => _selectedProductId = null);
+    setState(() {
+      _selectedProductId = null;
+      _selectedProduct = null;
+      _availableUnits = [];
+      _selectedUnit = null;
+    });
     widget.onProductChanged(null);
     widget.onProductSelected?.call(null);
+    widget.onSaleUnitChanged?.call(null);
+    widget.onConversionFactorChanged?.call(1.0);
+    widget.onChanged?.call();
+  }
+
+  void _applyTier(String tier) {
+    widget.onManualPriceChanged?.call(false);
+    widget.onPricingCategoryChanged?.call(tier);
+    if (_selectedProduct != null) {
+      final q = double.tryParse(widget.quantityController.text) ?? 1.0;
+      final resolved = DocumentService.resolveItemPrice(
+        product: _selectedProduct!,
+        targetCategory: tier,
+        quantity: q,
+        wholesalePricingEnabled: true,
+        unit: _selectedUnit,
+      );
+      widget.priceController.text = resolved.toStringAsFixed(2);
+    }
+    widget.onChanged?.call();
+  }
+
+  void _onQuantityChanged(String value) {
+    if (!widget.usePurchasePrice &&
+        !widget.isManualPrice &&
+        _selectedProduct != null) {
+      final q = double.tryParse(value) ?? 0.0;
+      final tier = widget.pricingCategory ?? widget.customerPricingCategory;
+      final resolved = DocumentService.resolveItemPrice(
+        product: _selectedProduct!,
+        targetCategory: tier,
+        quantity: q,
+        wholesalePricingEnabled: widget.wholesalePricingEnabled,
+        unit: _selectedUnit,
+      );
+      final currentP = double.tryParse(widget.priceController.text) ?? 0.0;
+      if ((resolved - currentP).abs() > 0.0001) {
+        widget.priceController.text = resolved.toStringAsFixed(2);
+      }
+    }
     widget.onChanged?.call();
   }
 
@@ -177,30 +328,27 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
               )
             else
               Container(
-                margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                  horizontal: 12,
+                  vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: cs.outlineVariant.withValues(alpha: 0.5),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.inventory_2_outlined,
-                      size: 16,
-                      color: cs.primary,
-                    ),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.inventory_2_outlined, size: 18),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        widget.descriptionController.text,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
+                        widget.descriptionController.text.isNotEmpty
+                            ? widget.descriptionController.text
+                            : l10n.item,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -215,6 +363,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                   ],
                 ),
               ),
+            const SizedBox(height: 8),
             TextFormField(
               controller: widget.descriptionController,
               decoration: InputDecoration(
@@ -228,6 +377,103 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
               validator: (v) => v == null || v.isEmpty ? l10n.required : null,
               onChanged: (_) => widget.onChanged?.call(),
             ),
+            if (widget.wholesalePricingEnabled && !widget.usePurchasePrice) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '${l10n.pricingTier}:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: Text(l10n.linePriceRetail, style: const TextStyle(fontSize: 11)),
+                    selected: widget.pricingCategory == Contact.categoryRetail && !widget.isManualPrice,
+                    onSelected: (selected) {
+                      if (selected) {
+                        _applyTier(Contact.categoryRetail);
+                      }
+                    },
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  const SizedBox(width: 6),
+                  ChoiceChip(
+                    label: Text(l10n.linePriceWholesale, style: const TextStyle(fontSize: 11)),
+                    selected: widget.pricingCategory == Contact.categoryWholesale && !widget.isManualPrice,
+                    onSelected: (selected) {
+                      if (selected) {
+                        _applyTier(Contact.categoryWholesale);
+                      }
+                    },
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  if (widget.isManualPrice || widget.pricingCategory == null) ...[
+                    const SizedBox(width: 6),
+                    Chip(
+                      label: Text(l10n.linePriceManual, style: const TextStyle(fontSize: 11)),
+                      backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ],
+                ],
+              ),
+            ],
+            if (_selectedProduct != null && _availableUnits.isNotEmpty && !widget.usePurchasePrice) ...[
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    Text(
+                      '${l10n.salesUnit}:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: Text(
+                        _selectedProduct!.unit?.isNotEmpty == true
+                            ? _selectedProduct!.unit!
+                            : l10n.baseUnit,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      selected: _selectedUnit == null,
+                      onSelected: (selected) {
+                        if (selected) _onUnitSelected(null);
+                      },
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    ..._availableUnits.map((u) {
+                      final isSel = _selectedUnit?.id == u.id ||
+                          (_selectedUnit != null && _selectedUnit!.unitName == u.unitName);
+                      return Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 6),
+                        child: ChoiceChip(
+                          label: Text(u.unitName, style: const TextStyle(fontSize: 11)),
+                          selected: isSel,
+                          onSelected: (selected) {
+                            if (selected) _onUnitSelected(u);
+                          },
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             Row(
               children: [
@@ -251,7 +497,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       if (q == null || q <= 0) return l10n.invalidQuantity;
                       return null;
                     },
-                    onChanged: (_) => widget.onChanged?.call(),
+                    onChanged: _onQuantityChanged,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -275,7 +521,10 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       if (p == null || p < 0) return l10n.invalidAmount;
                       return null;
                     },
-                    onChanged: (_) => widget.onChanged?.call(),
+                    onChanged: (val) {
+                      widget.onManualPriceChanged?.call(true);
+                      widget.onChanged?.call();
+                    },
                   ),
                 ),
               ],

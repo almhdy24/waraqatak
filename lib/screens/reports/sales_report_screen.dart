@@ -18,6 +18,47 @@ import '../../widgets/responsive.dart';
 class SalesReportScreen extends StatefulWidget {
   const SalesReportScreen({super.key});
 
+  /// Aggregates sales, COGS, trusted profit, paid, and remaining amounts by currency.
+  /// Cancelled documents are ignored.
+  static Map<String, ({
+    double sales,
+    double cogs,
+    double trustedProfit,
+    double paid,
+    double remaining,
+    bool hasIncompleteCost,
+  })> aggregateByCurrency(List<SaleProfitSummary> sales) {
+    final result = <String, ({
+      double sales,
+      double cogs,
+      double trustedProfit,
+      double paid,
+      double remaining,
+      bool hasIncompleteCost,
+    })>{};
+    for (final s in sales) {
+      if (s.document.status == DocumentStatus.cancelled) continue;
+      final code = s.document.currencyCode;
+      final prev = result[code] ?? (
+        sales: 0.0,
+        cogs: 0.0,
+        trustedProfit: 0.0,
+        paid: 0.0,
+        remaining: 0.0,
+        hasIncompleteCost: false,
+      );
+      result[code] = (
+        sales: prev.sales + s.document.total,
+        cogs: prev.cogs + s.cogs,
+        trustedProfit: prev.trustedProfit + (s.trustedGrossProfit ?? 0.0),
+        paid: prev.paid + s.document.paid,
+        remaining: prev.remaining + s.document.remaining,
+        hasIncompleteCost: prev.hasIncompleteCost || !s.isCostReliable,
+      );
+    }
+    return result;
+  }
+
   @override
   State<SalesReportScreen> createState() => _SalesReportScreenState();
 }
@@ -65,18 +106,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         .where((s) => s.document.status != DocumentStatus.cancelled)
         .toList();
     final currencies = finalized.map((s) => s.document.currencyCode).toSet();
-    final salesByCurrency =
-        <String, ({double sales, double paid, double remaining})>{};
-    for (final s in finalized) {
-      final code = s.document.currencyCode;
-      final prev =
-          salesByCurrency[code] ?? (sales: 0.0, paid: 0.0, remaining: 0.0);
-      salesByCurrency[code] = (
-        sales: prev.sales + s.document.total,
-        paid: prev.paid + s.document.paid,
-        remaining: prev.remaining + s.document.remaining,
-      );
-    }
+    final salesByCurrency = SalesReportScreen.aggregateByCurrency(finalized);
 
     final totalSales = finalized.fold(
       0.0,
@@ -156,14 +186,25 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         ),
         PdfReportSummaryCard(
           label: l10n.cogs,
-          value: _numFmt.format(totalCogs),
+          value: currencies.length > 1
+              ? salesByCurrency.entries
+                    .map((e) => '${_numFmt.format(e.value.cogs)} ${e.key}')
+                    .join(' · ')
+              : _numFmt.format(totalCogs),
         ),
         PdfReportSummaryCard(
           label: l10n.grossProfit,
           // Only sum gross profit from fully-costed invoices.
-          value: hasIncompleteCost
-              ? '${_numFmt.format(totalTrustedProfit)}*'
-              : _numFmt.format(totalTrustedProfit),
+          value: currencies.length > 1
+              ? salesByCurrency.entries
+                    .map(
+                      (e) =>
+                          '${_numFmt.format(e.value.trustedProfit)}${e.value.hasIncompleteCost ? '*' : ''} ${e.key}',
+                    )
+                    .join(' · ')
+              : (hasIncompleteCost
+                    ? '${_numFmt.format(totalTrustedProfit)}*'
+                    : _numFmt.format(totalTrustedProfit)),
         ),
         PdfReportSummaryCard(
           label: l10n.totalPaid,
@@ -185,10 +226,21 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   .map((e) => '${_numFmt.format(e.value.sales)} ${e.key}')
                   .join('\n')
             : _numFmt.format(totalSales),
-        _numFmt.format(totalCogs),
-        hasIncompleteCost
-            ? '${_numFmt.format(totalTrustedProfit)}*'
-            : _numFmt.format(totalTrustedProfit),
+        currencies.length > 1
+            ? salesByCurrency.entries
+                  .map((e) => '${_numFmt.format(e.value.cogs)} ${e.key}')
+                  .join('\n')
+            : _numFmt.format(totalCogs),
+        currencies.length > 1
+            ? salesByCurrency.entries
+                  .map(
+                    (e) =>
+                        '${_numFmt.format(e.value.trustedProfit)}${e.value.hasIncompleteCost ? '*' : ''} ${e.key}',
+                  )
+                  .join('\n')
+            : (hasIncompleteCost
+                  ? '${_numFmt.format(totalTrustedProfit)}*'
+                  : _numFmt.format(totalTrustedProfit)),
         currencies.length > 1
             ? salesByCurrency.entries
                   .map((e) => '${_numFmt.format(e.value.paid)} ${e.key}')
@@ -231,18 +283,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             .toList() ??
         [];
     final currencies = finalized.map((s) => s.document.currencyCode).toSet();
-    final salesByCurrency =
-        <String, ({double sales, double paid, double remaining})>{};
-    for (final s in finalized) {
-      final code = s.document.currencyCode;
-      final prev =
-          salesByCurrency[code] ?? (sales: 0.0, paid: 0.0, remaining: 0.0);
-      salesByCurrency[code] = (
-        sales: prev.sales + s.document.total,
-        paid: prev.paid + s.document.paid,
-        remaining: prev.remaining + s.document.remaining,
-      );
-    }
+    final salesByCurrency = SalesReportScreen.aggregateByCurrency(finalized);
     final totalSales = finalized.fold(
       0.0,
       (s, item) => s + item.document.total,
@@ -448,7 +489,17 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          '${l10n.paid}: ${_numFmt.format(e.value.paid)} • ${l10n.totalOutstanding}: ${_numFmt.format(e.value.remaining)}',
+                                          '${l10n.cogs}: ${_numFmt.format(e.value.cogs)} $sym • ${l10n.grossProfit}: ${_numFmt.format(e.value.trustedProfit)}${e.value.hasIncompleteCost ? '*' : ''} $sym',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${l10n.paid}: ${_numFmt.format(e.value.paid)} $sym • ${l10n.totalOutstanding}: ${_numFmt.format(e.value.remaining)} $sym',
                                           style: TextStyle(
                                             fontSize: 11,
                                             color: Theme.of(

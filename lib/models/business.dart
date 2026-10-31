@@ -22,10 +22,12 @@ class Business {
   final bool taxesEnabled;
   final bool pricesIncludeTax;
   final int? defaultTaxProfileId;
+  final bool wholesalePricingEnabled;
 
   // Document settings
   final String? invoiceTitle;
   final String? legalFooter;
+  final String? currencyLockedAt;
 
   const Business({
     this.id,
@@ -45,11 +47,16 @@ class Business {
     this.taxesEnabled = false,
     this.pricesIncludeTax = false,
     this.defaultTaxProfileId,
+    this.wholesalePricingEnabled = false,
     this.invoiceTitle,
     this.legalFooter,
+    this.currencyLockedAt,
   });
 
   String get currencySymbol => Currency.symbolForCode(currencyCode);
+
+  bool get isCurrencyLocked =>
+      currencyLockedAt != null && currencyLockedAt!.isNotEmpty;
 
   /// The effective fallback tax rate, respecting the [taxesEnabled] master toggle.
   double get effectiveTaxRate => taxesEnabled ? taxRate : 0.0;
@@ -72,8 +79,10 @@ class Business {
         'taxes_enabled': taxesEnabled ? 1 : 0,
         'prices_include_tax': pricesIncludeTax ? 1 : 0,
         'default_tax_profile_id': defaultTaxProfileId,
+        'wholesale_pricing_enabled': wholesalePricingEnabled ? 1 : 0,
         'invoice_title': invoiceTitle,
         'legal_footer': legalFooter,
+        'currency_locked_at': currencyLockedAt,
       };
 
   Business copyWith({
@@ -94,8 +103,10 @@ class Business {
     bool? taxesEnabled,
     bool? pricesIncludeTax,
     int? defaultTaxProfileId,
+    bool? wholesalePricingEnabled,
     String? invoiceTitle,
     String? legalFooter,
+    String? currencyLockedAt,
   }) =>
       Business(
         id: id ?? this.id,
@@ -115,8 +126,11 @@ class Business {
         taxesEnabled: taxesEnabled ?? this.taxesEnabled,
         pricesIncludeTax: pricesIncludeTax ?? this.pricesIncludeTax,
         defaultTaxProfileId: defaultTaxProfileId ?? this.defaultTaxProfileId,
+        wholesalePricingEnabled:
+            wholesalePricingEnabled ?? this.wholesalePricingEnabled,
         invoiceTitle: invoiceTitle ?? this.invoiceTitle,
         legalFooter: legalFooter ?? this.legalFooter,
+        currencyLockedAt: currencyLockedAt ?? this.currencyLockedAt,
       );
 
   factory Business.fromMap(Map<String, dynamic> map) => Business(
@@ -137,7 +151,10 @@ class Business {
         taxesEnabled: (map['taxes_enabled'] as int? ?? 0) == 1,
         pricesIncludeTax: (map['prices_include_tax'] as int? ?? 0) == 1,
         defaultTaxProfileId: map['default_tax_profile_id'] as int?,
+        wholesalePricingEnabled:
+            (map['wholesale_pricing_enabled'] as int? ?? 0) == 1,
         invoiceTitle: map['invoice_title'] as String?,
         legalFooter: map['legal_footer'] as String?,
+        currencyLockedAt: map['currency_locked_at'] as String?,
       );
 }

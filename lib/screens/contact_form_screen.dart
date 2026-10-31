@@ -22,6 +22,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
   final _addressController = TextEditingController();
   final _notesController = TextEditingController();
   String _type = 'customer';
+  String _pricingCategory = Contact.categoryRetail;
+  bool _wholesalePricingEnabled = false;
   bool _active = true;
   bool _saving = false;
 
@@ -35,9 +37,18 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
       _addressController.text = widget.contact!.address ?? '';
       _notesController.text = widget.contact!.notes ?? '';
       _type = widget.contact!.type;
+      _pricingCategory = widget.contact!.pricingCategory;
       _active = widget.contact!.active;
     } else if (widget.initialType != null) {
       _type = widget.initialType!;
+    }
+    _loadWholesaleStatus();
+  }
+
+  Future<void> _loadWholesaleStatus() async {
+    final b = await DatabaseHelper.instance.getFirstBusiness();
+    if (mounted) {
+      setState(() => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false);
     }
   }
 
@@ -64,6 +75,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
       address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
       type: _type,
+      pricingCategory:
+          _type == 'customer' ? _pricingCategory : Contact.categoryRetail,
       active: _active,
     );
 
@@ -169,6 +182,31 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
+                    if (_type == 'customer' && _wholesalePricingEnabled) ...[
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        initialValue: _pricingCategory,
+                        decoration: InputDecoration(
+                          labelText: l10n.pricingCategory,
+                          helperText: l10n.pricingCategoryCustomerDesc,
+                          prefixIcon: const Icon(Icons.price_change_outlined),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: Contact.categoryRetail,
+                            child: Text(l10n.retail),
+                          ),
+                          DropdownMenuItem(
+                            value: Contact.categoryWholesale,
+                            child: Text(l10n.wholesale),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) setState(() => _pricingCategory = val);
+                        },
+                      ),
+                    ],
                     if (isEdit) ...[
                       const SizedBox(height: 12),
                       SwitchListTile(

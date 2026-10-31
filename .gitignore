@@ -79,3 +79,6 @@ key.properties
 android/key.properties
 upload-keystore.base64
 waraqatak-upload-cert.pem
+
+# Generated demo data
+output/

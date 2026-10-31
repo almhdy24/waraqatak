@@ -12,6 +12,7 @@ enum BulkPriceOpType {
 enum BulkPriceTarget {
   sellingPrice,
   purchasePrice,
+  wholesalePrice,
   both,
 }
 
@@ -30,6 +31,9 @@ class BulkPricePreviewItem {
   final double currentPurchasePrice;
   final double proposedPurchasePrice;
   final double? purchasePriceDelta;
+  final double? currentWholesalePrice;
+  final double? proposedWholesalePrice;
+  final double? wholesalePriceDelta;
   final bool isValid;
   final String? errorMessage;
 
@@ -41,6 +45,9 @@ class BulkPricePreviewItem {
     required this.currentPurchasePrice,
     required this.proposedPurchasePrice,
     this.purchasePriceDelta,
+    this.currentWholesalePrice,
+    this.proposedWholesalePrice,
+    this.wholesalePriceDelta,
     required this.isValid,
     this.errorMessage,
   });
@@ -113,6 +120,7 @@ class BulkPricingService {
     for (final p in products) {
       double newSale = p.salePrice;
       double newPurchase = p.purchasePrice;
+      double? newWholesale = p.wholesalePrice;
 
       if (target == BulkPriceTarget.sellingPrice || target == BulkPriceTarget.both) {
         newSale = _applyOperation(p.salePrice, opType, opValue, rounding);
@@ -120,6 +128,10 @@ class BulkPricingService {
 
       if (target == BulkPriceTarget.purchasePrice || target == BulkPriceTarget.both) {
         newPurchase = _applyOperation(p.purchasePrice, opType, opValue, rounding);
+      }
+
+      if (target == BulkPriceTarget.wholesalePrice && p.wholesalePrice != null) {
+        newWholesale = _applyOperation(p.wholesalePrice!, opType, opValue, rounding);
       }
 
       bool valid = true;
@@ -130,6 +142,9 @@ class BulkPricingService {
       } else if (newPurchase < 0) {
         valid = false;
         error = 'سعر الشراء لا يمكن أن يكون سالباً';
+      } else if (newWholesale != null && newWholesale < 0) {
+        valid = false;
+        error = 'سعر الجملة لا يمكن أن يكون سالباً';
       }
 
       previewList.add(BulkPricePreviewItem(
@@ -140,6 +155,11 @@ class BulkPricingService {
         currentPurchasePrice: p.purchasePrice,
         proposedPurchasePrice: newPurchase,
         purchasePriceDelta: newPurchase - p.purchasePrice,
+        currentWholesalePrice: p.wholesalePrice,
+        proposedWholesalePrice: newWholesale,
+        wholesalePriceDelta: (newWholesale != null && p.wholesalePrice != null)
+            ? (newWholesale - p.wholesalePrice!)
+            : null,
         isValid: valid,
         errorMessage: error,
       ));
@@ -178,6 +198,11 @@ class BulkPricingService {
         }
         if (target == BulkPriceTarget.purchasePrice || target == BulkPriceTarget.both) {
           updateValues['purchase_price'] = item.proposedPurchasePrice;
+        }
+        if (target == BulkPriceTarget.wholesalePrice) {
+          if (item.proposedWholesalePrice != null) {
+            updateValues['wholesale_price'] = item.proposedWholesalePrice;
+          }
         }
 
         // Strictly updates catalog prices only — never stock_quantity,
