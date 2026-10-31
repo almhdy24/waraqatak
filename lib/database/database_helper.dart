@@ -908,15 +908,19 @@ class DatabaseHelper {
       await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_stocktake_items_product ON stocktake_items(product_id)',
       );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
-      );
+      if (await columnExists('audit_log', 'action')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)',
+        );
+      }
+      if (await columnExists('audit_log', 'timestamp')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
+        );
+      }
     }
 
-    if (oldVersion < 17) {
+    if (oldVersion < 17 && newVersion >= 17) {
       // v1.1.3 hotfix: Re-run the historical invoice item costing repair for
       // databases that were upgraded to v15/v16 before step 6 of
       // _migrateLegacyCosting (invoice item cost reconstruction) was
@@ -932,45 +936,67 @@ class DatabaseHelper {
       await _repairInvoiceItemCosts(db);
     }
 
-    if (oldVersion < 18) {
+    if (oldVersion < 18 && newVersion >= 18) {
       // Performance indexes for foreign keys, cascading deletes, and common queries
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_documents_contact ON documents(contact_id)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_documents_related ON documents(related_document_id)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_documents_type_status_date ON documents(type, status, date)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_document_items_doc ON document_items(document_id)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_document_items_prod ON document_items(product_id)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_document_payments_doc ON document_payments(document_id)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_document_payments_receipt ON document_payments(receipt_document_id)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_document_payments_date ON document_payments(date)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_stock_movements_ref_doc ON stock_movements(reference_document_id)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_stock_movements_date ON stock_movements(date)',
-      );
+      if (await columnExists('documents', 'contact_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_documents_contact ON documents(contact_id)',
+        );
+      }
+      if (await columnExists('documents', 'related_document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_documents_related ON documents(related_document_id)',
+        );
+      }
+      if (await columnExists('documents', 'type') &&
+          await columnExists('documents', 'status') &&
+          await columnExists('documents', 'date')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_documents_type_status_date ON documents(type, status, date)',
+        );
+      }
+      if (await columnExists('document_items', 'document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_items_doc ON document_items(document_id)',
+        );
+      }
+      if (await columnExists('document_items', 'product_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_items_prod ON document_items(product_id)',
+        );
+      }
+      if (await columnExists('document_payments', 'document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_doc ON document_payments(document_id)',
+        );
+      }
+      if (await columnExists('document_payments', 'receipt_document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_receipt ON document_payments(receipt_document_id)',
+        );
+      }
+      if (await columnExists('document_payments', 'date')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_date ON document_payments(date)',
+        );
+      }
+      if (await columnExists('stock_movements', 'reference_document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_stock_movements_ref_doc ON stock_movements(reference_document_id)',
+        );
+      }
+      if (await columnExists('stock_movements', 'date')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_stock_movements_date ON stock_movements(date)',
+        );
+      }
 
       // Safe legacy stock reconciliation: create opening movement only for clean legacy
       // products that have stock > 0 but ZERO stock movements recorded in history.
       await _reconcileLegacyOpeningStock(db);
     }
 
-    if (oldVersion < 19) {
+    if (oldVersion < 19 && newVersion >= 19) {
       if (!await columnExists('document_payments', 'payment_origin')) {
         await db.execute(
           'ALTER TABLE document_payments ADD COLUMN payment_origin TEXT',
@@ -981,7 +1007,7 @@ class DatabaseHelper {
       );
     }
 
-    if (oldVersion < 20) {
+    if (oldVersion < 20 && newVersion >= 20) {
       await _repairLegacyCostingReplay(db);
     }
   }

@@ -1463,6 +1463,16 @@ void main() {
         date TEXT NOT NULL
       )
     ''');
+    await db.execute('''
+      CREATE TABLE audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id INTEGER,
+        details TEXT,
+        timestamp TEXT NOT NULL
+      )
+    ''');
 
     // Product with 15 units remaining:
     // Opening 10 @ 50 = 500
