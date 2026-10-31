@@ -160,7 +160,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       ];
       warning = l10n.grossProfitNotice;
       if (summary.hasIncompleteCosts) {
-        warning = '$warning\n${l10n.unknownCostNotice} (${summary.unvaluedSalesCount} مبيعات)';
+        warning = '$warning\n${l10n.unknownCostNotice} ${l10n.unvaluedSalesNotice(summary.unvaluedSalesCount)}';
       }
       if (summary.hasMultipleCurrencies) {
         warning = '$warning\n${l10n.mixedCurrenciesNotice}';

@@ -108,11 +108,11 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
   String _formatActionLabel(String action, AppLocalizations l10n) {
     switch (action) {
       case 'stocktake_started':
-        return '${l10n.eventStocktake} (بدء)';
+        return l10n.eventStocktakeStarted;
       case 'stocktake_finalized':
-        return '${l10n.eventStocktake} (تسوية)';
+        return l10n.eventStocktakeFinalized;
       case 'stocktake_cancelled':
-        return '${l10n.eventStocktake} (إلغاء)';
+        return l10n.eventStocktakeCancelled;
       case 'bulk_pricing':
         return l10n.eventBulkPricing;
       case 'csv_import':

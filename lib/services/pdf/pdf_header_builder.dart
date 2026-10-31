@@ -2,6 +2,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/business.dart';
+import '../../localization/app_localizations.dart';
 import '../../utils/pdf_settings.dart';
 import 'pdf_text_utils.dart';
 import 'pdf_theme.dart';
@@ -14,7 +15,9 @@ class PdfHeaderBuilder {
     required PdfTheme theme,
     pw.MemoryImage? logoImage,
     required bool isArabic,
+    AppLocalizations? l10n,
   }) {
+    final localizations = l10n ?? AppLocalizations(isArabic ? 'ar' : 'en');
     final style = theme.style;
     final modern = style.template == PdfTemplate.modern;
     final fallbackDir =
@@ -56,7 +59,7 @@ class PdfHeaderBuilder {
           ),
         if (showTax)
           PdfTextUtils.directionalText(
-            '${isArabic ? 'الرقم الضريبي:' : 'Tax ID:'} ${business.taxId!}',
+            '${localizations.pdfTaxIdLabel} ${business.taxId!}',
             font: regular,
             fontSize: theme.fs(10),
             color: infoColor,
@@ -64,7 +67,7 @@ class PdfHeaderBuilder {
           ),
         if (showTaxReg)
           PdfTextUtils.directionalText(
-            '${isArabic ? 'رقم التسجيل الضريبي:' : 'Tax Reg:'} ${business.taxReg!}',
+            '${localizations.pdfTaxRegLabel} ${business.taxReg!}',
             font: regular,
             fontSize: theme.fs(10),
             color: infoColor,
@@ -72,7 +75,7 @@ class PdfHeaderBuilder {
           ),
         if (showCR)
           PdfTextUtils.directionalText(
-            '${isArabic ? 'السجل التجاري:' : 'CR:'} ${business.commercialReg!}',
+            '${localizations.pdfCommercialRegLabel} ${business.commercialReg!}',
             font: regular,
             fontSize: theme.fs(10),
             color: infoColor,
@@ -80,7 +83,7 @@ class PdfHeaderBuilder {
           ),
         if (showBranch)
           PdfTextUtils.directionalText(
-            '${isArabic ? 'الفرع:' : 'Branch:'} ${business.branch!}',
+            '${localizations.pdfBranchLabel} ${business.branch!}',
             font: regular,
             fontSize: theme.fs(10),
             color: infoColor,

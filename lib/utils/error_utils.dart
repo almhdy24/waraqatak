@@ -27,30 +27,22 @@ class ErrorUtils {
 
     // SKU / code duplicate
     if (lower.contains('unique constraint failed: products.code')) {
-      return l10n.isArabic
-          ? 'رمز المنتج (SKU) مسجل مسبقاً لمنتج آخر'
-          : 'Product SKU is already in use by another product';
+      return l10n.errorDuplicateSku;
     }
 
     // General unique constraint
     if (lower.contains('unique constraint failed')) {
-      return l10n.isArabic
-          ? 'هذا السجل مسجل مسبقاً في النظام، يرجى التحقق من عدم التكرار'
-          : 'This record already exists in the system';
+      return l10n.errorDuplicateRecord;
     }
 
     // Foreign key constraint (item in use)
     if (lower.contains('foreign key constraint failed')) {
-      return l10n.isArabic
-          ? 'لا يمكن إتمام العملية لوجود مستندات أو سجلات مرتبطة بهذا العنصر'
-          : 'Cannot complete operation because this item is referenced by existing records';
+      return l10n.errorForeignKeyConstraint;
     }
 
     // Insufficient stock
     if (lower.contains('insufficient stock')) {
-      return l10n.isArabic
-          ? 'الكمية المتوفرة في المخزن غير كافية لإتمام العملية'
-          : 'Insufficient stock to complete this transaction';
+      return l10n.errorInsufficientStockGeneral;
     }
 
     // Stock cannot be negative
@@ -66,23 +58,17 @@ class ErrorUtils {
         lower.contains('connection refused') ||
         lower.contains('connection reset') ||
         lower.contains('handshakeexception')) {
-      return l10n.isArabic
-          ? 'تعذّر الاتصال بالإنترنت، يرجى التحقق من الشبكة ثم إعادة المحاولة'
-          : 'Could not connect to the network. Please check your internet connection';
+      return l10n.errorNetworkConnectivity;
     }
 
     // Timeout
     if (lower.contains('timeoutexception') || lower.contains('timed out')) {
-      return l10n.isArabic
-          ? 'استغرقت العملية وقتاً أطول من المتوقع، يرجى إعادة المحاولة'
-          : 'The operation timed out. Please try again';
+      return l10n.errorOperationTimeout;
     }
 
     // Format exception / invalid number
     if (lower.contains('formatexception')) {
-      return l10n.isArabic
-          ? 'يرجى التأكد من كتابة الأرقام والمبالغ بشكل صحيح'
-          : 'Please enter valid numbers';
+      return l10n.errorInvalidNumberFormat;
     }
 
     // Purchase cannot be edited with subsequent movements

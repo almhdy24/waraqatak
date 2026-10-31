@@ -1946,6 +1946,73 @@ class AppLocalizations {
   );
   String get financialOverview => _t('الملخص المالي', 'Financial Overview');
 
+  // ========== BATCH L2: COVERAGE ADDITIONS ==========
+  String get eventStocktakeStarted =>
+      _t('جرد المخزون (بدء)', 'Stocktake (Started)');
+  String get eventStocktakeFinalized =>
+      _t('جرد المخزون (تسوية)', 'Stocktake (Reconciled)');
+  String get eventStocktakeCancelled =>
+      _t('جرد المخزون (إلغاء)', 'Stocktake (Cancelled)');
+
+  String get paymentMethodHintAr =>
+      _t('مثال: بنكك، محفظة إلكترونية', 'e.g., Bankak, E-Wallet');
+  String get paymentMethodHintEn =>
+      _t('مثال: تحويل بنكي، محفظة إلكترونية', 'e.g., Bank Transfer, E-Wallet');
+
+  String get selectedFileEmpty =>
+      _t('الملف المحدد فارغ', 'Selected file is empty');
+  String get invalidRow => _t('(صف غير صالح)', '(Invalid row)');
+  String get existingProductTag => _t('منتج موجود', 'Existing product');
+  String get newProductTag => _t('منتج جديد', 'New product');
+
+  String get perDaySuffix => _t('/يوم', '/day');
+  String daysRemainingCount(int days) => _t('~$days يوم', '~$days days');
+  String reorderSuggestionTag(String qty) => _t('طلب: $qty', 'Order: $qty');
+  String get noProductsBelowCost => _t(
+    'ممتاز! لا توجد منتجات تباع بأقل من متوسط التكلفة',
+    'Great! No products sold below average cost',
+  );
+  String lossAmount(String amount) => _t('خسارة: -$amount', 'Loss: -$amount');
+  String unvaluedSalesNotice(int count) =>
+      _t('($count مبيعات)', '($count sales)');
+
+  String get financialSummaryCardTitle =>
+      _t('الملخص المالي والحسابات', 'Financial Summary & Balance');
+
+  String get errorDuplicateSku => _t(
+    'رمز المنتج (SKU) مسجل مسبقاً لمنتج آخر',
+    'Product SKU is already in use by another product',
+  );
+  String get errorDuplicateRecord => _t(
+    'هذا السجل مسجل مسبقاً في النظام، يرجى التحقق من عدم التكرار',
+    'This record already exists in the system',
+  );
+  String get errorForeignKeyConstraint => _t(
+    'لا يمكن إتمام العملية لوجود مستندات أو سجلات مرتبطة بهذا العنصر',
+    'Cannot complete operation because this item is referenced by existing records',
+  );
+  String get errorInsufficientStockGeneral => _t(
+    'الكمية المتوفرة في المخزون غير كافية لإتمام العملية',
+    'Insufficient stock to complete this transaction',
+  );
+  String get errorNetworkConnectivity => _t(
+    'تعذّر الاتصال بالإنترنت، يرجى التحقق من الشبكة ثم إعادة المحاولة',
+    'Could not connect to the network. Please check your internet connection',
+  );
+  String get errorOperationTimeout => _t(
+    'استغرقت العملية وقتاً أطول من المتوقع، يرجى إعادة المحاولة',
+    'The operation timed out. Please try again',
+  );
+  String get errorInvalidNumberFormat => _t(
+    'يرجى التأكد من كتابة الأرقام والمبالغ بشكل صحيح',
+    'Please enter valid numbers',
+  );
+
+  String get pdfTaxIdLabel => _t('الرقم الضريبي:', 'Tax ID:');
+  String get pdfTaxRegLabel => _t('رقم التسجيل الضريبي:', 'Tax Reg:');
+  String get pdfCommercialRegLabel => _t('السجل التجاري:', 'CR:');
+  String get pdfBranchLabel => _t('الفرع:', 'Branch:');
+
   bool get isArabic => langCode == 'ar';
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;

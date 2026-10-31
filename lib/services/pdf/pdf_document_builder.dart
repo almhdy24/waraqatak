@@ -131,6 +131,7 @@ class PdfDocumentBuilder {
                 theme: theme,
                 logoImage: logoImage,
                 isArabic: isArabic,
+                l10n: l10n,
               )
             : pw.SizedBox(),
         footer: hasFooter

@@ -63,7 +63,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 controller: arCtrl,
                 decoration: InputDecoration(
                   labelText: l10n.methodLabelAr,
-                  hintText: 'مثال: بنكك، محفظة إلكترونية',
+                  hintText: l10n.paymentMethodHintAr,
                   errorText: errorText,
                   border: const OutlineInputBorder(),
                 ),
@@ -80,7 +80,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 controller: enCtrl,
                 decoration: InputDecoration(
                   labelText: l10n.methodLabelEn,
-                  hintText: 'e.g., Bank Transfer, E-Wallet',
+                  hintText: l10n.paymentMethodHintEn,
                   border: const OutlineInputBorder(),
                 ),
               ),
