@@ -31,3 +31,11 @@ Format per decision:
 - **Alternatives:** Introducing Arabic-Indic digits (١، ٢، ٣) (explicitly forbidden by instructions) or mass-editing date formatting patterns across PDF files (would risk breaking receipt/document printer layout).
 - **Why Safest:** Leaves existing callers and PDF layout completely intact while providing clean, reusable formatting methods backed by unit tests.
 - **How to Reverse:** Revert added helper methods in `lib/utils/format_utils.dart`.
+
+---
+
+### Decision 4 (Batch L5): Android String Resources & Dynamic MaterialApp Title
+- **Decision:** Configured `res/values/strings.xml` ("Waraqatak") and `res/values-ar/strings.xml` ("ورقتك") with `android:label="@string/app_name"` in `AndroidManifest.xml` so Android system launchers display the correct name matching the OS device locale. Updated `MaterialApp` in `lib/main.dart` with `onGenerateTitle: (context) => AppLocalizations.of(context).appTitle` for in-app task switching title localization.
+- **Alternatives:** Leaving the hardcoded Arabic label in `AndroidManifest.xml` (leads to Arabic title on English devices) or hardcoding English (leads to English title on Arabic devices).
+- **Why Safest:** Zero impact on Flutter business logic; passes `tool/check_play_compliance.sh` and widget tests cleanly.
+- **How to Reverse:** Restore `android:label="ورقتك"` in `AndroidManifest.xml` and delete the added resource files.
