@@ -170,6 +170,27 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
+
+    final baseUnitName = _unitController.text.trim().toLowerCase();
+    final seenUnitNames = <String>{};
+    if (baseUnitName.isNotEmpty) {
+      seenUnitNames.add(baseUnitName);
+    }
+    for (final u in _productUnits) {
+      final name = u.unitName.trim().toLowerCase();
+      if (seenUnitNames.contains(name)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context).duplicateUnitNameError}: ${u.unitName}',
+            ),
+          ),
+        );
+        return;
+      }
+      seenUnitNames.add(name);
+    }
+
     setState(() => _saving = true);
 
     final isNew = widget.product == null;
@@ -291,8 +312,23 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       labelText: l10n.salesUnitName,
                       border: const OutlineInputBorder(),
                     ),
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? l10n.required : null,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return l10n.required;
+                      final trimmed = v.trim().toLowerCase();
+                      final baseUnit =
+                          _unitController.text.trim().toLowerCase();
+                      if (baseUnit.isNotEmpty && trimmed == baseUnit) {
+                        return l10n.duplicateUnitNameError;
+                      }
+                      for (int i = 0; i < _productUnits.length; i++) {
+                        if (index != null && i == index) continue;
+                        if (_productUnits[i].unitName.trim().toLowerCase() ==
+                            trimmed) {
+                          return l10n.duplicateUnitNameError;
+                        }
+                      }
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
