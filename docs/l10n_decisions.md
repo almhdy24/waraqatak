@@ -23,3 +23,11 @@ Format per decision:
 - **Alternatives:** Adding external packages like `intl_translation` (violates constraint 4 against heavy dependencies) or doing naive string concatenations without plural forms (results in broken Arabic grammar such as "5 صنف" or reversed Latin tokens).
 - **Why Safest:** Self-contained within `AppLocalizations` with zero new external dependencies; verified by dedicated unit tests in `test/localization/plural_test.dart`; preserves exact method signatures and backward compatibility.
 - **How to Reverse:** In `lib/localization/app_localizations.dart`, revert `_plural` and `_iso` helpers and restore the simple string templates.
+
+---
+
+### Decision 3 (Batch L4): Centralized Date and Number Formatting Preserving Western Digits
+- **Decision:** Standardized date presentation via centralized helpers in `FormatUtils` (`formatDate`, `formatDateTime`, `formatTimestamp`) defaulting to standard format `dd/MM/yyyy` (and `HH:mm` / `HH:mm:ss`) with Western digits (0-9) strictly preserved everywhere per user instruction. No changes were made to `MoneyUtils` or financial calculations.
+- **Alternatives:** Introducing Arabic-Indic digits (١، ٢، ٣) (explicitly forbidden by instructions) or mass-editing date formatting patterns across PDF files (would risk breaking receipt/document printer layout).
+- **Why Safest:** Leaves existing callers and PDF layout completely intact while providing clean, reusable formatting methods backed by unit tests.
+- **How to Reverse:** Revert added helper methods in `lib/utils/format_utils.dart`.
