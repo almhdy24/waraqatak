@@ -252,7 +252,6 @@ void main() {
         throwsA(isA<StateError>()),
       );
     },
-    skip: 'BUG-1: strictStock pre-check in insertDocumentWithItems checks lines individually against DB stock without aggregating effectiveBaseQuantity per product across lines; when stock=28, line1 (24) and line2 (5) each pass individually, causing negative stock (-1)',
   );
 
   // ---------------------------------------------------------------------------

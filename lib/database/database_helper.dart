@@ -2417,6 +2417,87 @@ class DatabaseHelper {
   }
 
   // ========== Stock Movements ==========
+  /// Validates that sufficient physical inventory is available for sale items.
+  ///
+  /// Aggregates required base quantities across all lines by product ID.
+  /// If [documentId] is provided (e.g. during an update), any existing sale
+  /// movements previously deducted by that document are added back to current
+  /// stock to calculate true available stock before new writes occur.
+  Future<void> _assertSaleStockAvailable(
+    DatabaseExecutor txn,
+    Iterable<dynamic> items, {
+    int? documentId,
+  }) async {
+    final Map<int, double> requiredBaseQtyByProduct = {};
+    for (final raw in items) {
+      final int? productId;
+      final double qty;
+      final double effectiveBaseQty;
+      if (raw is DocumentItem) {
+        productId = raw.productId;
+        qty = raw.quantity;
+        effectiveBaseQty = raw.effectiveBaseQuantity;
+      } else if (raw is Map<String, dynamic>) {
+        productId = raw['product_id'] as int?;
+        qty = (raw['quantity'] as num?)?.toDouble() ?? 0.0;
+        effectiveBaseQty = (raw['base_quantity'] as num?)?.toDouble() ??
+            (qty * ((raw['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0));
+      } else {
+        continue;
+      }
+
+      if (productId == null || qty <= 0 || effectiveBaseQty <= 0) continue;
+      requiredBaseQtyByProduct[productId] =
+          (requiredBaseQtyByProduct[productId] ?? 0.0) + effectiveBaseQty;
+    }
+
+    if (requiredBaseQtyByProduct.isEmpty) return;
+
+    final Map<int, double> previouslyDeductedByProduct = {};
+    if (documentId != null) {
+      final oldMovements = await txn.query(
+        'stock_movements',
+        where: 'reference_document_id = ? AND type = ?',
+        whereArgs: [documentId, StockMovement.typeSale],
+      );
+      for (final m in oldMovements) {
+        final pId = m['product_id'] as int?;
+        final mQty = (m['quantity'] as num?)?.toDouble() ?? 0.0;
+        if (pId != null && mQty < 0) {
+          previouslyDeductedByProduct[pId] =
+              (previouslyDeductedByProduct[pId] ?? 0.0) + (-mQty);
+        }
+      }
+    }
+
+    for (final entry in requiredBaseQtyByProduct.entries) {
+      final productId = entry.key;
+      final requiredBaseQty = entry.value;
+
+      final pRows = await txn.query(
+        'products',
+        columns: ['name', 'type', 'stock_quantity'],
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+      if (pRows.isEmpty) continue;
+      final pType = pRows.first['type'] as String? ?? 'product';
+      if (pType != 'product') continue;
+
+      final currentStock =
+          (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+      final previouslyDeducted = previouslyDeductedByProduct[productId] ?? 0.0;
+      final availableStock = currentStock + previouslyDeducted;
+
+      if (availableStock < requiredBaseQty) {
+        final name = pRows.first['name'] as String? ?? '';
+        throw StateError(
+          'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(availableStock)}, required ${FormatUtils.formatQuantity(requiredBaseQty)}',
+        );
+      }
+    }
+  }
+
   Future<void> _insertStockMovement(
     DatabaseExecutor txn, {
     required int productId,
@@ -2614,27 +2695,7 @@ class DatabaseHelper {
 
       // Pre-check stock availability for non-draft invoices
       if (doc.type == 'invoice' && !isDraft && strictStock) {
-        for (final item in items) {
-          if (item.productId == null || item.quantity <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['name', 'type', 'stock_quantity'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty &&
-              (pRows.first['type'] as String? ?? 'product') == 'product') {
-            final stock =
-                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-            final effectiveBaseQty = item.effectiveBaseQuantity;
-            if (stock < effectiveBaseQty) {
-              final name = pRows.first['name'] as String? ?? '';
-              throw StateError(
-                'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(effectiveBaseQty)}',
-              );
-            }
-          }
-        }
+        await _assertSaleStockAvailable(txn, items);
       }
 
       for (final item in items) {
@@ -2916,6 +2977,11 @@ class DatabaseHelper {
       }
       if (!newIsDraft || doc.paid > 0) {
         await _lockCurrencyTxn(txn);
+      }
+
+      // Authoritative stock availability check before any writes or reversals occur
+      if (doc.type == 'invoice' && !newIsDraft && strictStock) {
+        await _assertSaleStockAvailable(txn, newItems, documentId: doc.id);
       }
 
       final affectsStock =
@@ -3438,31 +3504,6 @@ class DatabaseHelper {
         where: 'document_id = ?',
         whereArgs: [doc.id],
       );
-
-      // Pre-check stock availability for non-draft invoices
-      if (doc.type == 'invoice' && !newIsDraft && strictStock) {
-        for (final item in newItems) {
-          if (item.productId == null || item.quantity <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['name', 'type', 'stock_quantity'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty &&
-              (pRows.first['type'] as String? ?? 'product') == 'product') {
-            final stock =
-                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-            final effectiveBaseQty = item.effectiveBaseQuantity;
-            if (stock < effectiveBaseQty) {
-              final name = pRows.first['name'] as String? ?? '';
-              throw StateError(
-                'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(effectiveBaseQty)}',
-              );
-            }
-          }
-        }
-      }
 
       for (final item in newItems) {
         double? itemUnitCost;
@@ -4678,31 +4719,8 @@ class DatabaseHelper {
 
       if (doc.type == 'invoice') {
         if (strictStock) {
-          // Validate stock availability first
-          for (final item in items) {
-            final productId = item['product_id'] as int?;
-            final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-            if (productId == null || qty <= 0) continue;
-            final effectiveQty = (item['base_quantity'] as num?)?.toDouble() ??
-                (qty * ((item['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0));
-            final pRows = await txn.query(
-              'products',
-              columns: ['name', 'type', 'stock_quantity'],
-              where: 'id = ?',
-              whereArgs: [productId],
-            );
-            if (pRows.isNotEmpty &&
-                (pRows.first['type'] as String? ?? 'product') == 'product') {
-              final stock =
-                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-              if (stock < effectiveQty) {
-                final name = pRows.first['name'] as String? ?? '';
-                throw StateError(
-                  'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(effectiveQty)}',
-                );
-              }
-            }
-          }
+          // Authoritative stock availability check
+          await _assertSaleStockAvailable(txn, items);
         }
         for (final item in items) {
           final productId = item['product_id'] as int?;
