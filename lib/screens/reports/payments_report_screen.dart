@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../models/payment_method.dart';
 import '../../utils/currency_utils.dart';
@@ -54,10 +55,20 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    final invoicePayments = _rows?.where((r) => r['doc_type'] == 'invoice').toList() ?? [];
-    final purchasePayments = _rows?.where((r) => r['doc_type'] == 'purchase').toList() ?? [];
-    final totalIn = invoicePayments.fold(0.0, (s, r) => s + (r['amount'] as num).toDouble());
-    final totalOut = purchasePayments.fold(0.0, (s, r) => s + (r['amount'] as num).toDouble());
+    final totalsByCurrency = <String, ({double inAmount, double outAmount})>{};
+    if (_rows != null) {
+      for (final r in _rows!) {
+        final c = (r['currency_code'] as String?)?.trim() ?? 'SDG';
+        final code = c.isNotEmpty ? c : 'SDG';
+        final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+        final isIn = r['doc_type'] == 'invoice';
+        final prev = totalsByCurrency[code] ?? (inAmount: 0.0, outAmount: 0.0);
+        totalsByCurrency[code] = (
+          inAmount: prev.inAmount + (isIn ? amt : 0.0),
+          outAmount: prev.outAmount + (!isIn ? amt : 0.0),
+        );
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.paymentsReport), centerTitle: true),
@@ -67,15 +78,26 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             range: _range,
             onChanged: (r) { setState(() => _range = r); _load(); },
           ),
-          if (_rows != null && _rows!.isNotEmpty)
+          if (totalsByCurrency.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Row(
-                children: [
-                  _chip(l10n.receivedPayments, totalIn, Colors.green),
-                  const SizedBox(width: 8),
-                  _chip(l10n.madePayments, totalOut, Colors.orange),
-                ],
+              child: Column(
+                children: totalsByCurrency.entries.map((entry) {
+                  final code = entry.key;
+                  final symbol = Currency.symbolForCode(code);
+                  final inAmt = entry.value.inAmount;
+                  final outAmt = entry.value.outAmount;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        _chip('${l10n.receivedPayments} ($symbol)', inAmt, Colors.green),
+                        const SizedBox(width: 8),
+                        _chip('${l10n.madePayments} ($symbol)', outAmt, Colors.orange),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
             ),
           Expanded(child: _buildList(context, l10n)),
@@ -133,6 +155,8 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         final isIn = row['doc_type'] == 'invoice';
         final color = isIn ? Colors.green : Colors.orange;
         final method = row['payment_method'] as String?;
+        final cCode = (row['currency_code'] as String?)?.trim() ?? '';
+        final sym = cCode.isNotEmpty ? ' ${Currency.symbolForCode(cCode)}' : '';
 
         return Card(
           elevation: 0,
@@ -164,7 +188,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(_numFmt.format(amount),
+              Text('${_numFmt.format(amount)}$sym',
                   style: TextStyle(fontWeight: FontWeight.w600, color: color)),
             ]),
             subtitle: Row(children: [

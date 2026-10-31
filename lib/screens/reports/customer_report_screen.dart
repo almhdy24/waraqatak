@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../models/currency.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
@@ -18,6 +19,7 @@ class CustomerReportScreen extends StatefulWidget {
 class _CustomerReportScreenState extends State<CustomerReportScreen> {
   List<Map<String, dynamic>>? _rows;
   String? _error;
+  String _currencySymbol = '';
 
   static final _numFmt = NumberFormat('#,##0.##');
 
@@ -30,7 +32,14 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
   Future<void> _load() async {
     setState(() { _rows = null; _error = null; });
     try {
-      final rows = await DatabaseHelper.instance.getContactBalances('customer', 'invoice');
+      final business = await DatabaseHelper.instance.getFirstBusiness();
+      final currency = business?.currencyCode ?? 'SDG';
+      _currencySymbol = Currency.symbolForCode(currency);
+      final rows = await DatabaseHelper.instance.getContactBalances(
+        'customer',
+        'invoice',
+        currencyCode: currency,
+      );
       if (!mounted) return;
       setState(() => _rows = rows);
     } catch (e) {
@@ -138,7 +147,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                       Text(l10n.totalOutstanding,
                           style: TextStyle(fontSize: 10,
                               color: Theme.of(context).colorScheme.error)),
-                      Text(_numFmt.format(totalOutstanding),
+                      Text('${_numFmt.format(totalOutstanding)} $_currencySymbol',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.error)),
                     ]),

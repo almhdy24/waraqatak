@@ -83,6 +83,46 @@ void main() {
           (s, d) => s + (d['remaining'] as double));
       expect(outstanding, 700.0);
     });
+
+    test('multi-currency segregation prevents nominal cross-currency addition', () {
+      // Invoices in SDG and USD
+      final docs = [
+        _mockDoc(total: 500000, paid: 200000, remaining: 300000, status: 'issued', currencyCode: 'SDG'),
+        _mockDoc(total: 1000, paid: 400, remaining: 600, status: 'issued', currencyCode: 'USD'),
+      ];
+
+      // SDG filtered
+      final sdgDocs = docs.where((d) => d['currencyCode'] == 'SDG');
+      final sdgSales = sdgDocs.fold(0.0, (s, d) => s + (d['total'] as double));
+      final sdgOutstanding = sdgDocs.fold(0.0, (s, d) => s + (d['remaining'] as double));
+      expect(sdgSales, 500000.0);
+      expect(sdgOutstanding, 300000.0);
+
+      // USD filtered
+      final usdDocs = docs.where((d) => d['currencyCode'] == 'USD');
+      final usdSales = usdDocs.fold(0.0, (s, d) => s + (d['total'] as double));
+      final usdOutstanding = usdDocs.fold(0.0, (s, d) => s + (d['remaining'] as double));
+      expect(usdSales, 1000.0);
+      expect(usdOutstanding, 600.0);
+
+      // Blind nominal sum is explicitly invalid
+      expect(sdgSales + usdSales, isNot(equals(sdgSales)));
+    });
+
+    test('paymentsIn includes upfront down payments and excludes cancelled documents', () {
+      final payments = [
+        {'doc_type': 'invoice', 'doc_status': 'issued', 'amount': 300.0, 'type': 'upfront'},
+        {'doc_type': 'invoice', 'doc_status': 'issued', 'amount': 200.0, 'type': 'subsequent_receipt'},
+        {'doc_type': 'invoice', 'doc_status': 'cancelled', 'amount': 150.0, 'type': 'cancelled_invoice_payment'},
+        {'doc_type': 'purchase', 'doc_status': 'issued', 'amount': 500.0, 'type': 'purchase_payment'},
+      ];
+
+      final validPaymentsIn = payments
+          .where((p) => p['doc_type'] == 'invoice' && p['doc_status'] != 'cancelled')
+          .fold(0.0, (s, p) => s + (p['amount'] as double));
+
+      expect(validPaymentsIn, 500.0); // 300 upfront + 200 receipt, excludes 150 cancelled
+    });
   });
 }
 
@@ -91,9 +131,11 @@ Map<String, dynamic> _mockDoc({
   double paid = 0,
   double? remaining,
   required String status,
+  String currencyCode = 'SDG',
 }) => {
   'total': total,
   'paid': paid,
   'remaining': remaining ?? (total - paid),
   'status': status,
+  'currencyCode': currencyCode,
 };

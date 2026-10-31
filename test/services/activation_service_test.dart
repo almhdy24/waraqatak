@@ -77,7 +77,7 @@ void main() {
     final body = jsonDecode(captured!.body) as Map<String, dynamic>;
     expect(body['license_key'], validKey);
     expect(body['machine_id'], deviceId);
-    expect(body['product'], 'waraqatak');
+    expect(body['product'], ActivationService.appSlug);
   });
 
   // ── outcome mapping ───────────────────────────────────────────────────────

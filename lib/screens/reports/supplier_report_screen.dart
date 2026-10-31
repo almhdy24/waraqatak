@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../models/currency.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
@@ -18,6 +19,7 @@ class SupplierReportScreen extends StatefulWidget {
 class _SupplierReportScreenState extends State<SupplierReportScreen> {
   List<Map<String, dynamic>>? _rows;
   String? _error;
+  String _currencySymbol = '';
 
   static final _numFmt = NumberFormat('#,##0.##');
 
@@ -30,7 +32,14 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
   Future<void> _load() async {
     setState(() { _rows = null; _error = null; });
     try {
-      final rows = await DatabaseHelper.instance.getContactBalances('supplier', 'purchase');
+      final business = await DatabaseHelper.instance.getFirstBusiness();
+      final currency = business?.currencyCode ?? 'SDG';
+      _currencySymbol = Currency.symbolForCode(currency);
+      final rows = await DatabaseHelper.instance.getContactBalances(
+        'supplier',
+        'purchase',
+        currencyCode: currency,
+      );
       if (!mounted) return;
       setState(() => _rows = rows);
     } catch (e) {
@@ -135,7 +144,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                           style: const TextStyle(fontSize: 10, color: Colors.orange)),
                       Text(l10n.payable,
                           style: const TextStyle(fontSize: 10, color: Colors.orange)),
-                      Text(_numFmt.format(totalPayable),
+                      Text('${_numFmt.format(totalPayable)} $_currencySymbol',
                           style: const TextStyle(fontSize: 14,
                               fontWeight: FontWeight.bold, color: Colors.orange)),
                     ]),

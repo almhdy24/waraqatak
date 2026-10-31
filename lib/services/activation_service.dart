@@ -163,7 +163,7 @@ class ActivationService {
           machineId: deviceId,
           deviceName: deviceModel,
           deviceModel: deviceModel,
-          product: 'waraqatak',
+          product: appSlug,
         ),
       );
     } on ElmahdiPayRateLimitException {
@@ -232,7 +232,7 @@ class ActivationService {
         DeactivateLicenseRequest(
           licenseKey: serverKey,
           machineId: deviceId,
-          product: 'waraqatak',
+          product: appSlug,
           reason: 'user_removed',
         ),
       );
@@ -252,7 +252,7 @@ class ActivationService {
         VerifyLicenseRequest(
           tokenOrKey: tokenOrKey,
           machineId: deviceId,
-          product: 'waraqatak',
+          product: appSlug,
         ),
       );
     } catch (_) {
@@ -268,7 +268,7 @@ class ActivationService {
     try {
       return await _sdk.public.claimTrial(
         TrialClaimRequest(
-          product: 'waraqatak',
+          product: appSlug,
           machineId: deviceId,
           deviceName: deviceModel,
           deviceModel: deviceModel,
@@ -286,7 +286,7 @@ class ActivationService {
     try {
       return await _sdk.public.getTrialStatus(
         TrialStatusRequest(
-          product: 'waraqatak',
+          product: appSlug,
           machineId: deviceId,
         ),
       );

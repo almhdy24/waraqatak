@@ -141,6 +141,28 @@ class InventoryCostingService {
     return (currentValue + incomingValue) / newStock;
   }
 
+  /// Calculates the new perpetual moving weighted-average cost after removing or cancelling a purchase.
+  /// Throws [StateError] if subsequent transactions have consumed the purchase value
+  /// (i.e. remaining total inventory value would be negative).
+  static double? calculateReversedWeightedAverage({
+    required double currentStock,
+    required double? currentAvgCost,
+    required double removedQty,
+    required double removedCost,
+  }) {
+    final newStock = currentStock - removedQty;
+    if (newStock <= 0) return null;
+    if (currentAvgCost == null) return null;
+    final prevVal = currentStock * currentAvgCost;
+    if (prevVal - removedCost < -0.001) {
+      throw StateError(
+        'Cannot reverse purchase because subsequent sales or movements consumed this stock',
+      );
+    }
+    final remainVal = (prevVal - removedCost).clamp(0.0, double.infinity);
+    return remainVal / newStock;
+  }
+
   /// Hook called when a product is created with opening stock.
   static Future<void> onProductCreatedWithStock(
     DatabaseExecutor txn, {

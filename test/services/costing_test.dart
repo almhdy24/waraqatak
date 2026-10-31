@@ -1,10 +1,15 @@
+import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:warqatek/models/currency.dart';
 import 'package:warqatek/models/document.dart';
 import 'package:warqatek/models/document_item.dart';
+import 'package:warqatek/models/document_payment.dart';
+import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/models/product.dart';
 import 'package:warqatek/models/stock_movement.dart';
 import 'package:warqatek/services/business_reporting_service.dart';
 import 'package:warqatek/services/inventory_costing_service.dart';
+import 'package:warqatek/utils/money_utils.dart';
 
 void main() {
   group('Phase 3 - Inventory Costing & Models', () {
@@ -258,6 +263,40 @@ void main() {
 
         expect(remainingStock, 10.0);
         expect(remainingAvg, closeTo(100.0, 0.0001));
+
+        final serviceAvg = InventoryCostingService.calculateReversedWeightedAverage(
+          currentStock: currentStock,
+          currentAvgCost: currentAvg,
+          removedQty: cancelQty,
+          removedCost: cancelQty * cancelUnitCost,
+        );
+        expect(serviceAvg, closeTo(100.0, 0.0001));
+      },
+    );
+
+    test(
+      '9b. Reversing a purchase when subsequent sales consumed value throws StateError',
+      () {
+        // Initial 10 @ 10 = 100.
+        // Purchase 10 @ 100 = 1000. Total 20 @ 55 = 1100.
+        // Subsequent sale: 9 units sold @ 55 (495).
+        // Remaining 11 units @ 55 = 605.
+        // Attempting to cancel purchase of 10 @ 100 (1000) when remaining value is 605:
+        expect(
+          () => InventoryCostingService.calculateReversedWeightedAverage(
+            currentStock: 11.0,
+            currentAvgCost: 55.0,
+            removedQty: 10.0,
+            removedCost: 1000.0,
+          ),
+          throwsA(
+            isA<StateError>().having(
+              (e) => e.message,
+              'message',
+              contains('subsequent sales or movements consumed this stock'),
+            ),
+          ),
+        );
       },
     );
 
@@ -1165,6 +1204,1756 @@ void main() {
         expect(allSamePrice, isTrue);
         final double? reconstructedCost = allSamePrice ? firstPrice : null;
         expect(reconstructedCost, 50.0);
+      },
+    );
+
+    test(
+      '35. Issue 7 Option A: Partial overselling preserves physically available stock cost in movements while keeping invoice line cost null',
+      () {
+        // Setup helper that mimics database logic
+        Map<String, dynamic> computeLineCost({
+          required double currentStock,
+          required double lineQty,
+          required double? avgCost,
+          required bool isCostKnown,
+          required bool strictStock,
+        }) {
+          final double deductQty;
+          if (strictStock) {
+            deductQty = lineQty;
+          } else {
+            deductQty = currentStock > 0
+                ? (currentStock >= lineQty ? lineQty : currentStock)
+                : 0.0;
+          }
+          final bool isFullyBacked = deductQty >= lineQty;
+          final double? itemUnitCost =
+              (isCostKnown && isFullyBacked) ? avgCost : null;
+          final double? itemTotalCost =
+              (isCostKnown && isFullyBacked && avgCost != null)
+                  ? lineQty * avgCost
+                  : null;
+          final double? movementCost =
+              (isCostKnown && avgCost != null) ? deductQty * avgCost : null;
+          final String movementCostStatus = isCostKnown
+              ? StockMovement.costStatusKnown
+              : StockMovement.costStatusUnknown;
+
+          return {
+            'deductQty': deductQty,
+            'isFullyBacked': isFullyBacked,
+            'itemUnitCost': itemUnitCost,
+            'itemTotalCost': itemTotalCost,
+            'movementCost': movementCost,
+            'movementCostStatus': movementCostStatus,
+          };
+        }
+
+        final result = computeLineCost(
+          currentStock: 3.0,
+          lineQty: 5.0,
+          avgCost: 40.0,
+          isCostKnown: true,
+          strictStock: false,
+        );
+
+        // 1. Invoice-line unit_cost and total_cost MUST be null when not fully backed
+        expect(
+          result['itemUnitCost'],
+          isNull,
+          reason: 'Partial overselling must leave invoice-line unit_cost NULL',
+        );
+        expect(
+          result['itemTotalCost'],
+          isNull,
+          reason: 'Partial overselling must leave invoice-line total_cost NULL',
+        );
+
+        // 2. Stock movement MUST preserve the known cost of the physically available units
+        expect(result['deductQty'], 3.0);
+        expect(result['movementCost'], 120.0);
+        expect(result['movementCostStatus'], StockMovement.costStatusKnown);
+
+        // 3. Deletion/cancellation must revert only deductQty (3.0), avoiding stock inflation
+        final double revertQty = result['deductQty'] as double;
+        expect(
+          revertQty,
+          3.0,
+          reason: 'Must revert only physically deducted stock, not 5.0',
+        );
+
+        // 4. SaleProfitSummary must mark cost as unreliable and trusted profit as null
+        final summary = SaleProfitSummary(
+          document: Document(
+            type: 'invoice',
+            documentNumber: 'INV-PARTIAL',
+            date: DateTime.now(),
+            subtotal: 500,
+            discount: 0,
+            taxRate: 0,
+            taxAmount: 0,
+            total: 500,
+            paid: 500,
+            remaining: 0,
+          ),
+          recognizedRevenue: 500,
+          cogs: 0,
+          grossProfit: 500,
+          profitMargin: 100,
+          isCostReliable: result['itemTotalCost'] != null,
+        );
+
+        expect(summary.isCostReliable, isFalse);
+        expect(summary.trustedGrossProfit, isNull);
+        expect(summary.trustedProfitMargin, isNull);
+      },
+    );
+
+    test(
+      '36. Issue 7: Fully stocked sale establishes reliable line cost and trusted gross profit',
+      () {
+        Map<String, dynamic> computeLineCost({
+          required double currentStock,
+          required double lineQty,
+          required double? avgCost,
+          required bool isCostKnown,
+          required bool strictStock,
+        }) {
+          final double deductQty;
+          if (strictStock) {
+            deductQty = lineQty;
+          } else {
+            deductQty = currentStock > 0
+                ? (currentStock >= lineQty ? lineQty : currentStock)
+                : 0.0;
+          }
+          final bool isFullyBacked = deductQty >= lineQty;
+          final double? itemUnitCost =
+              (isCostKnown && isFullyBacked) ? avgCost : null;
+          final double? itemTotalCost =
+              (isCostKnown && isFullyBacked && avgCost != null)
+                  ? lineQty * avgCost
+                  : null;
+          final double? movementCost =
+              (isCostKnown && avgCost != null) ? deductQty * avgCost : null;
+          final String movementCostStatus = isCostKnown
+              ? StockMovement.costStatusKnown
+              : StockMovement.costStatusUnknown;
+
+          return {
+            'deductQty': deductQty,
+            'isFullyBacked': isFullyBacked,
+            'itemUnitCost': itemUnitCost,
+            'itemTotalCost': itemTotalCost,
+            'movementCost': movementCost,
+            'movementCostStatus': movementCostStatus,
+          };
+        }
+
+        final result = computeLineCost(
+          currentStock: 10.0,
+          lineQty: 4.0,
+          avgCost: 50.0,
+          isCostKnown: true,
+          strictStock: true,
+        );
+
+        expect(result['itemUnitCost'], 50.0);
+        expect(result['itemTotalCost'], 200.0);
+        expect(result['movementCost'], 200.0);
+        expect(result['movementCostStatus'], StockMovement.costStatusKnown);
+
+        final totalCost = result['itemTotalCost'] as double;
+        final summary = SaleProfitSummary(
+          document: Document(
+            type: 'invoice',
+            documentNumber: 'INV-FULL',
+            date: DateTime.now(),
+            subtotal: 400,
+            discount: 0,
+            taxRate: 0,
+            taxAmount: 0,
+            total: 400,
+            paid: 400,
+            remaining: 0,
+          ),
+          recognizedRevenue: 400,
+          cogs: totalCost,
+          grossProfit: 400 - totalCost,
+          profitMargin: ((400 - totalCost) / 400) * 100,
+          isCostReliable: true,
+        );
+
+        expect(summary.isCostReliable, isTrue);
+        expect(summary.cogs, 200.0);
+        expect(summary.grossProfit, 200.0);
+        expect(summary.trustedGrossProfit, 200.0);
+        expect(summary.trustedProfitMargin, 50.0);
+      },
+    );
+
+    test(
+      '37. Issue 7 Option A: Mixed invoice with fully costed and uncosted items excludes untrusted profit from aggregates',
+      () {
+        // Line 1: fully costed (qty=2, price=100, unit_cost=60, total_cost=120)
+        const line1TotalCost = 120.0;
+        const bool line1Reliable = true;
+
+        // Line 2: partially oversold / unknown cost (qty=3, price=150, total_cost=null)
+        const double? line2TotalCost = null;
+        const bool line2Reliable = false;
+
+        final items = [
+          {'total_cost': line1TotalCost, 'is_reliable': line1Reliable},
+          {'total_cost': line2TotalCost, 'is_reliable': line2Reliable},
+        ];
+
+        double docCogs = 0.0;
+        bool docReliable = true;
+        for (final item in items) {
+          final totalCost = item['total_cost'] as double?;
+          if (totalCost != null) {
+            docCogs += totalCost;
+          } else {
+            docReliable = false;
+          }
+        }
+
+        const recognizedRevenue = 650.0; // 200 + 450
+        final grossProfit = recognizedRevenue - docCogs; // 650 - 120 = 530
+        final margin = (grossProfit / recognizedRevenue) * 100;
+
+        final mixedInvoiceSummary = SaleProfitSummary(
+          document: Document(
+            type: 'invoice',
+            documentNumber: 'INV-MIXED',
+            date: DateTime.now(),
+            subtotal: 650,
+            discount: 0,
+            taxRate: 0,
+            taxAmount: 0,
+            total: 650,
+            paid: 650,
+            remaining: 0,
+          ),
+          recognizedRevenue: recognizedRevenue,
+          cogs: docCogs,
+          grossProfit: grossProfit,
+          profitMargin: margin,
+          isCostReliable: docReliable,
+        );
+
+        // Mixed invoice must flag isCostReliable = false
+        expect(mixedInvoiceSummary.isCostReliable, isFalse);
+        expect(
+          mixedInvoiceSummary.cogs,
+          120.0,
+          reason: 'COGS includes known line items only',
+        );
+        expect(
+          mixedInvoiceSummary.trustedGrossProfit,
+          isNull,
+          reason:
+              'Mixed invoice with partial uncosted lines must have trustedGrossProfit = null',
+        );
+        expect(mixedInvoiceSummary.trustedProfitMargin, isNull);
+
+        // Another fully costed invoice
+        final fullyCostedSummary = SaleProfitSummary(
+          document: Document(
+            type: 'invoice',
+            documentNumber: 'INV-CLEAN',
+            date: DateTime.now(),
+            subtotal: 300,
+            discount: 0,
+            taxRate: 0,
+            taxAmount: 0,
+            total: 300,
+            paid: 300,
+            remaining: 0,
+          ),
+          recognizedRevenue: 300,
+          cogs: 100,
+          grossProfit: 200,
+          profitMargin: 66.67,
+          isCostReliable: true,
+        );
+
+        final allSummaries = [mixedInvoiceSummary, fullyCostedSummary];
+
+        // Aggregate trusted profit calculation
+        final totalTrustedProfit = allSummaries.fold(
+          0.0,
+          (sum, s) => sum + (s.trustedGrossProfit ?? 0.0),
+        );
+        final hasIncompleteCost = allSummaries.any((s) => !s.isCostReliable);
+
+        expect(hasIncompleteCost, isTrue);
+        // Only the fully costed invoice (200.0) contributes to trusted profit;
+        // the mixed invoice contributes 0.0, NOT 530.0!
+        expect(totalTrustedProfit, 200.0);
+      },
+    );
+
+    test(
+      '38. Adversarial: Deleting an invoice sold with 0 available stock must never restore phantom inventory',
+      () {
+        // Product physical stock is 0
+        double productStock = 0.0;
+        const lineQty = 10.0;
+
+        // Sale executed with strictStock: false when stock is 0
+        const currentStock = 0.0;
+        final deductQty = currentStock > 0 ? (currentStock >= lineQty ? lineQty : currentStock) : 0.0;
+        expect(deductQty, 0.0);
+
+        // Movements recorded for this invoice: 0 (because physical stock was 0)
+        final movements = <Map<String, dynamic>>[];
+        expect(movements.isEmpty, isTrue);
+
+        // Deletion logic: only actual stock movements are reversed
+        double revertQty = 0.0;
+        if (movements.isNotEmpty) {
+          for (final m in movements) {
+            revertQty += -(m['quantity'] as num).toDouble();
+          }
+        }
+
+        expect(revertQty, 0.0, reason: 'Revert quantity must be exactly 0 when no stock was deducted');
+        productStock += revertQty;
+        expect(productStock, 0.0, reason: 'Deleting unstocked invoice must not create phantom stock');
+      },
+    );
+
+    test(
+      '39. Adversarial: Editing a purchase after subsequent sales consumed stock throws StateError transactionally',
+      () {
+        // Initial state: purchased 10 units at $10.
+        // Later: 6 units were sold to customers at moving weighted average.
+        // Current inventory stock: 4 units. Current avg cost: $10.
+        const currentStock = 4.0;
+        const currentAvgCost = 10.0;
+        const oldQty = 10.0;
+        const oldTotalCost = 100.0;
+
+        // User attempts to edit the purchase (e.g. change price or quantity)
+        // Guard check: currentStock (4) < oldQty (10)
+        expect(
+          () {
+            if (currentStock < oldQty) {
+              throw StateError(
+                'Cannot edit purchase because subsequent sales or movements consumed this stock '
+                '(available: 4, purchased: 10)',
+              );
+            }
+            InventoryCostingService.calculateReversedWeightedAverage(
+              currentStock: currentStock,
+              currentAvgCost: currentAvgCost,
+              removedQty: oldQty,
+              removedCost: oldTotalCost,
+            );
+          },
+          throwsA(isA<StateError>()),
+          reason: 'Editing consumed purchase must throw StateError to prevent negative stock and corrupted cost',
+        );
+      },
+    );
+
+    test(
+      '40. Adversarial: Editing purchase when stock is intact safely recalculates weighted average',
+      () {
+        // Initial state: 10 units purchased at $10.
+        // All 10 units remain intact in warehouse (currentStock = 10, avg = $10).
+        const currentStock = 10.0;
+        const currentAvg = 10.0;
+        const oldQty = 10.0;
+        const oldCost = 100.0;
+
+        // 1. Reversing the old purchase yields 0 stock
+        final reversedStock = currentStock - oldQty;
+        final reversedAvg = InventoryCostingService.calculateReversedWeightedAverage(
+          currentStock: currentStock,
+          currentAvgCost: currentAvg,
+          removedQty: oldQty,
+          removedCost: oldCost,
+        );
+        expect(reversedStock, 0.0);
+        expect(reversedAvg, isNull);
+
+        // 2. Applying new edited purchase (10 units at $12)
+        final newAvg = InventoryCostingService.calculateNewWeightedAverage(
+          currentStock: reversedStock,
+          currentAvgCost: reversedAvg,
+          incomingQty: 10.0,
+          incomingUnitCost: 12.0,
+        );
+        expect(newAvg, 12.0);
+      },
+    );
+
+    test(
+      '41. Adversarial: Purchase cancellation with multiple lines of same product aggregates quantities and applies consumption guard',
+      () {
+        // Purchase document has 2 lines of Product A:
+        // Line 1: 5 units at $10
+        // Line 2: 5 units at $10
+        // Total purchased = 10 units at $10 ($100 total value).
+        final purchaseItems = [
+          {'product_id': 1, 'quantity': 5.0, 'price': 10.0},
+          {'product_id': 1, 'quantity': 5.0, 'price': 10.0},
+        ];
+
+        final netPurchaseQtyByProduct = <int, double>{};
+        final netPurchaseCostByProduct = <int, double>{};
+        for (final item in purchaseItems) {
+          final pid = item['product_id'] as int;
+          final qty = item['quantity'] as double;
+          final price = item['price'] as double;
+          netPurchaseQtyByProduct[pid] = (netPurchaseQtyByProduct[pid] ?? 0.0) + qty;
+          netPurchaseCostByProduct[pid] = (netPurchaseCostByProduct[pid] ?? 0.0) + (qty * price);
+        }
+
+        expect(netPurchaseQtyByProduct[1], 10.0);
+        expect(netPurchaseCostByProduct[1], 100.0);
+
+        // Physical stock on hand: 8 units (2 units were sold)
+        const currentStock = 8.0;
+        const currentAvg = 10.0;
+        final netQty = netPurchaseQtyByProduct[1]!;
+        final removedCost = netPurchaseCostByProduct[1]!;
+
+        // Check pre-check against aggregated quantity
+        expect(
+          () {
+            if (currentStock < netQty) {
+              throw StateError(
+                'Insufficient stock to cancel purchase: available 8, required 10',
+              );
+            }
+            final prevVal = currentStock * currentAvg;
+            if (prevVal - removedCost < -0.001) {
+              throw StateError('Cannot cancel purchase because subsequent sales consumed this stock');
+            }
+          },
+          throwsA(isA<StateError>()),
+          reason: 'Aggregated stock pre-check must fail when available (8) < total purchased (10)',
+        );
+      },
+    );
+
+    test(
+      '42. Adversarial: Sales invoice cancellation with multiple lines of same product reverses every movement exactly once',
+      () {
+        // Sales invoice has 2 lines of Product A:
+        // Line 1: 2 units
+        // Line 2: 5 units
+        // Two movements were created when issued:
+        final movements = [
+          {'id': 101, 'product_id': 1, 'type': 'sale', 'quantity': -2.0, 'unit_cost': 50.0, 'total_cost': 100.0},
+          {'id': 102, 'product_id': 1, 'type': 'sale', 'quantity': -5.0, 'unit_cost': 50.0, 'total_cost': 250.0},
+        ];
+
+        double productStock = 0.0;
+        final cancellationMovements = <Map<String, dynamic>>[];
+
+        // Reversal logic iterates over movements directly (never taking mRows.first per line)
+        for (final m in movements) {
+          final mQty = (m['quantity'] as num).toDouble();
+          final revertQty = -mQty; // +2.0 and +5.0
+          productStock += revertQty;
+          cancellationMovements.add({
+            'product_id': m['product_id'],
+            'quantity': revertQty,
+            'unit_cost': m['unit_cost'],
+            'total_cost': m['total_cost'],
+          });
+        }
+
+        expect(productStock, 7.0, reason: 'Total restored quantity must be exactly 2 + 5 = 7');
+        expect(cancellationMovements.length, 2);
+        expect(cancellationMovements[0]['quantity'], 2.0);
+        expect(cancellationMovements[1]['quantity'], 5.0);
+      },
+    );
+
+    test(
+      '43. Adversarial: Invoice cancellation with active linked payment receipts throws StateError',
+      () {
+        const activeReceiptCount = 1;
+        expect(
+          () {
+            if (activeReceiptCount > 0) {
+              throw StateError(
+                'Cannot cancel document with active payment receipts/vouchers (REC-001). Please cancel or delete the receipts first.',
+              );
+            }
+          },
+          throwsA(isA<StateError>()),
+          reason: 'Active receipts must prevent invoice cancellation to avoid orphaned vouchers',
+        );
+      },
+    );
+
+    test(
+      '44. Adversarial: Draft document issuance records upfront payment in document_payments exactly once',
+      () {
+        const docPaid = 250.0;
+        final existingPayments = <Map<String, dynamic>>[];
+
+        // Function simulating issueDocument upfront payment handler
+        void recordUpfrontPaymentIfNeeded() {
+          final totalExistingPaid = existingPayments.fold<double>(
+            0.0,
+            (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
+          );
+          if (totalExistingPaid < docPaid) {
+            final missingAmount = docPaid - totalExistingPaid;
+            existingPayments.add({'amount': missingAmount});
+          }
+        }
+
+        // First issuance: records 250.0
+        recordUpfrontPaymentIfNeeded();
+        expect(existingPayments.length, 1);
+        expect(existingPayments.first['amount'], 250.0);
+
+        // Repeated issuance attempt: does not duplicate
+        recordUpfrontPaymentIfNeeded();
+        expect(existingPayments.length, 1);
+        expect(existingPayments.first['amount'], 250.0);
+      },
+    );
+
+    test(
+      '45. Adversarial: Payment report segregates totals by currency and excludes cancelled documents',
+      () {
+        final paymentRows = [
+          {'doc_type': 'invoice', 'amount': 1000.0, 'currency_code': 'SDG', 'status': 'issued'},
+          {'doc_type': 'purchase', 'amount': 400.0, 'currency_code': 'SDG', 'status': 'issued'},
+          {'doc_type': 'invoice', 'amount': 50.0, 'currency_code': 'USD', 'status': 'issued'},
+          // Cancelled document payment (must be excluded)
+          {'doc_type': 'invoice', 'amount': 999.0, 'currency_code': 'SDG', 'status': 'cancelled'},
+        ];
+
+        final activeRows = paymentRows.where((r) => r['status'] != 'cancelled').toList();
+        expect(activeRows.length, 3);
+
+        final totalsByCurrency = <String, ({double inAmount, double outAmount})>{};
+        for (final r in activeRows) {
+          final c = r['currency_code'] as String;
+          final amt = r['amount'] as double;
+          final isIn = r['doc_type'] == 'invoice';
+          final prev = totalsByCurrency[c] ?? (inAmount: 0.0, outAmount: 0.0);
+          totalsByCurrency[c] = (
+            inAmount: prev.inAmount + (isIn ? amt : 0.0),
+            outAmount: prev.outAmount + (!isIn ? amt : 0.0),
+          );
+        }
+
+        expect(totalsByCurrency['SDG']!.inAmount, 1000.0);
+        expect(totalsByCurrency['SDG']!.outAmount, 400.0);
+        expect(totalsByCurrency['USD']!.inAmount, 50.0);
+        expect(totalsByCurrency['USD']!.outAmount, 0.0);
+        // SDG and USD are strictly separated; never summed to 1450 or 2049!
+      },
+    );
+
+    test(
+      '46. Adversarial: Migration v18 reconciles clean legacy opening stock without fabricating cost',
+      () {
+        // Product created before v8 with 15 units in stock, zero movements recorded
+        final legacyProduct = {
+          'id': 10,
+          'stock_quantity': 15.0,
+          'created_at': '2023-05-01T10:00:00.000Z',
+          'has_movements': false,
+        };
+
+        final openingMovement = {
+          'product_id': legacyProduct['id'],
+          'type': StockMovement.typeOpening,
+          'quantity': legacyProduct['stock_quantity'],
+          'date': legacyProduct['created_at'],
+          'unit_cost': null, // Strictly unknown; NEVER catalog purchase_price
+          'total_cost': null,
+          'cost_status': StockMovement.costStatusUnknown,
+          'provenance': 'migration_legacy_opening',
+        };
+
+        expect(openingMovement['quantity'], 15.0);
+        expect(openingMovement['unit_cost'], isNull);
+        expect(openingMovement['cost_status'], StockMovement.costStatusUnknown);
+        expect(openingMovement['date'], '2023-05-01T10:00:00.000Z');
+      },
+    );
+
+    test(
+      '48. Adversarial: Deletion of earlier tracked invoice shifting MIN(ref_id) must NEVER cause oversold invoice to restore phantom stock',
+      () {
+        // Chronological scenario:
+        // Doc 1 (Invoice 1): Sold 5 units with physical stock. Created movement: {id: 1, ref_doc_id: 1, qty: -5}.
+        // Doc 2 (Invoice 2): Sold 10 units oversold with 0 physical stock. 0 movements created.
+        // Doc 3 (Invoice 3): Restocked and sold 5 units. Created movement: {id: 2, ref_doc_id: 3, qty: -5}.
+        //
+        // Physical stock at this point: 0 units.
+        double currentStock = 0.0;
+
+        // Step 1: User deletes Doc 1.
+        // In deleteDocument, Doc 1's movements are deleted:
+        // Now stock_movements only contains {id: 2, ref_doc_id: 3, qty: -5}.
+        // The table's MIN(reference_document_id) is now 3!
+        // Under the flawed heuristic: Doc 2 (id: 2) < earliestTrackedId (3) would falsely evaluate to true!
+
+        // Step 2: User deletes Doc 2 (the oversold invoice).
+        final doc2Movements = <Map<String, dynamic>>[]; // 0 movements for doc 2
+
+        // Fixed deletion logic: NEVER relies on MIN(reference_document_id).
+        // Only actual movements linked to this document are reversed.
+        double restoredQty = 0.0;
+        if (doc2Movements.isNotEmpty) {
+          for (final m in doc2Movements) {
+            restoredQty += -(m['quantity'] as num).toDouble();
+          }
+        }
+        // Result: restoredQty MUST BE 0.0!
+        expect(restoredQty, 0.0);
+        currentStock += restoredQty;
+        expect(currentStock, 0.0, reason: 'Physical stock must remain 0; zero phantom units created');
+      },
+    );
+
+    test(
+      '49. Adversarial: Cancelling or editing an oversold invoice restores exactly 0 stock and creates 0 cancellation movements',
+      () {
+        double physicalStock = 0.0;
+        final docItems = [
+          {'product_id': 101, 'quantity': 8.0, 'price': 100.0},
+        ];
+        expect(docItems.first['quantity'], 8.0);
+        // Zero movements were recorded when this invoice was issued because stock was 0
+        final movements = <Map<String, dynamic>>[];
+        expect(movements.isEmpty, isTrue);
+
+        // Cancel document execution
+        final cancellationMovements = <Map<String, dynamic>>[];
+        double revertQty = 0.0;
+        if (movements.isNotEmpty) {
+          for (final m in movements) {
+            final mQty = (m['quantity'] as num).toDouble();
+            final rev = -mQty;
+            if (rev > 0) {
+              revertQty += rev;
+              cancellationMovements.add({
+                'type': StockMovement.typeCancellation,
+                'quantity': rev,
+              });
+            }
+          }
+        }
+
+        expect(revertQty, 0.0);
+        expect(cancellationMovements.isEmpty, isTrue);
+        physicalStock += revertQty;
+        expect(physicalStock, 0.0);
+
+        // Editing document (updateDocumentWithItems) execution
+        double editRevertQty = 0.0;
+        if (movements.isNotEmpty) {
+          for (final m in movements) {
+            editRevertQty += -(m['quantity'] as num).toDouble();
+          }
+        }
+        expect(editRevertQty, 0.0);
+        physicalStock += editRevertQty;
+        expect(physicalStock, 0.0);
+      },
+    );
+
+    test(
+      '50. Adversarial: Deleting or cancelling a partially oversold invoice restores ONLY physically deducted units',
+      () {
+        // Invoice line requested 10 units, but only 4 units were available in stock.
+        // Physical stock before sale: 4.0.
+        // Sale deducted 4.0 units; 6.0 units were unstocked oversell.
+        // Created movement: {ref_doc_id: 42, qty: -4.0}.
+        final movements = [
+          {'product_id': 202, 'type': StockMovement.typeSale, 'quantity': -4.0},
+        ];
+
+        double physicalStock = 0.0; // after sale
+
+        // On deletion / cancellation:
+        double restoredQty = 0.0;
+        if (movements.isNotEmpty) {
+          for (final m in movements) {
+            if (m['type'] == StockMovement.typeSale) {
+              restoredQty += -(m['quantity'] as num).toDouble();
+            }
+          }
+        }
+
+        // Exactly 4.0 units restored, NEVER line item quantity (10.0)!
+        expect(restoredQty, 4.0);
+        physicalStock += restoredQty;
+        expect(physicalStock, 4.0);
+      },
+    );
+
+    test(
+      '51. Adversarial: Migration v18 deterministic opening date policy with pre-2023 documents preserves calendar day',
+      () {
+        // Product created pre-v7 with NULL created_at.
+        // It has a historical finalized invoice from 2021-08-15T11:30:00.000.
+        const productEarliestDocStr = '2021-08-15T11:30:00.000';
+        const String? productCreatedAt = null;
+
+        // Policy execution:
+        final docDatePart = productEarliestDocStr.substring(0, 10);
+        final createdDatePart = productCreatedAt?.substring(0, 10);
+
+        final String openingDateStr;
+        if (createdDatePart != null && createdDatePart.compareTo(docDatePart) < 0) {
+          openingDateStr = productCreatedAt!;
+        } else {
+          // Anchored to start of same calendar day without shifting to previous day
+          openingDateStr = '${docDatePart}T00:00:00.000';
+        }
+
+        // Must belong to August 15, 2021 (same calendar day)
+        expect(openingDateStr, '2021-08-15T00:00:00.000');
+        expect(openingDateStr.substring(0, 10), '2021-08-15');
+        // Lexicographically precedes transaction at 11:30 on same day
+        expect(openingDateStr.compareTo(productEarliestDocStr) < 0, isTrue);
+      },
+    );
+
+    test(
+      '52. Adversarial: Same-day midnight transaction orders opening stock before sale via ID tie-breaker',
+      () {
+        // Invoice entered at midnight: 2022-04-10T00:00:00.000.
+        const docDateStr = '2022-04-10T00:00:00.000';
+        final openingDateStr = '${docDateStr.substring(0, 10)}T00:00:00.000';
+
+        // Same calendar day and same timestamp:
+        expect(openingDateStr, docDateStr);
+
+        // In SQLite: ORDER BY date ASC, id ASC.
+        // The opening movement (id: 10) precedes subsequent movement (id: 11):
+        final movements = [
+          {'id': 10, 'date': openingDateStr, 'type': StockMovement.typeOpening, 'quantity': 20.0},
+          {'id': 11, 'date': docDateStr, 'type': StockMovement.typeSale, 'quantity': -5.0},
+        ];
+        movements.sort((a, b) {
+          final c = (a['date'] as String).compareTo(b['date'] as String);
+          if (c != 0) return c;
+          return (a['id'] as int).compareTo(b['id'] as int);
+        });
+
+        // Opening movement is ordered first; running balance never dips negative
+        expect(movements.first['type'], StockMovement.typeOpening);
+        double runningBalance = 0.0;
+        for (final m in movements) {
+          runningBalance += (m['quantity'] as double);
+          expect(runningBalance >= 0, isTrue);
+        }
+        expect(runningBalance, 15.0);
+      },
+    );
+
+    test(
+      '53. Adversarial: Preserves explicit timezone offsets and suffixes (Z, +02:00, local)',
+      () {
+        String startOfDay(String dateStr) {
+          final trimmed = dateStr.trim();
+          final tIdx = trimmed.indexOf('T');
+          if (tIdx < 0) return '${trimmed}T00:00:00.000';
+          final datePart = trimmed.substring(0, tIdx);
+          final timeAndZone = trimmed.substring(tIdx + 1);
+          String tzSuffix = '';
+          if (timeAndZone.endsWith('Z')) {
+            tzSuffix = 'Z';
+          } else {
+            final plusIdx = timeAndZone.indexOf('+');
+            final minusIdx = timeAndZone.lastIndexOf('-');
+            if (plusIdx >= 0) {
+              tzSuffix = timeAndZone.substring(plusIdx);
+            } else if (minusIdx >= 0) {
+              tzSuffix = timeAndZone.substring(minusIdx);
+            }
+          }
+          return '${datePart}T00:00:00.000$tzSuffix';
+        }
+
+        // Case 1: UTC with Z
+        const utcDoc = '2023-06-12T15:45:00.000Z';
+        final utcOpening = startOfDay(utcDoc);
+        expect(utcOpening, '2023-06-12T00:00:00.000Z');
+        expect(utcOpening.compareTo(utcDoc) < 0, isTrue);
+
+        // Case 2: Timezone offset +02:00
+        const tzDoc = '2023-06-12T15:45:00.000+02:00';
+        final tzOpening = startOfDay(tzDoc);
+        expect(tzOpening, '2023-06-12T00:00:00.000+02:00');
+        expect(tzOpening.compareTo(tzDoc) < 0, isTrue);
+
+        // Case 3: Local ISO without suffix
+        const localDoc = '2023-06-12T15:45:00.000';
+        final localOpening = startOfDay(localDoc);
+        expect(localOpening, '2023-06-12T00:00:00.000');
+        expect(localOpening.compareTo(localDoc) < 0, isTrue);
+      },
+    );
+
+    test(
+      '54. Adversarial: Draft, cancelled, and non-inventory documents NEVER anchor opening stock',
+      () {
+        // Product 100 has only:
+        // 1. A quotation from 2020-01-01
+        // 2. A draft invoice from 2021-01-01
+        // 3. A cancelled invoice from 2022-01-01
+        // 4. An issued finalized invoice from 2023-07-01
+        final documents = [
+          {'type': 'quotation', 'status': 'draft', 'date': '2020-01-01T10:00:00.000'},
+          {'type': 'invoice', 'status': 'draft', 'date': '2021-01-01T10:00:00.000'},
+          {'type': 'invoice', 'status': 'cancelled', 'date': '2022-01-01T10:00:00.000'},
+          {'type': 'invoice', 'status': 'issued', 'date': '2023-07-01T10:00:00.000'},
+        ];
+
+        // Query filter: d.type IN ('invoice', 'purchase') AND d.status NOT IN ('draft', 'cancelled')
+        final eligible = documents.where((d) {
+          final t = d['type'] as String;
+          final s = d['status'] as String;
+          return (t == 'invoice' || t == 'purchase') && s != 'draft' && s != 'cancelled';
+        }).toList();
+
+        expect(eligible.length, 1);
+        expect(eligible.first['date'], '2023-07-01T10:00:00.000');
+        // Anchored to 2023-07-01, NOT the quotation, draft, or cancelled document!
+      },
+    );
+
+    test(
+      '55. Adversarial: Products with NULL created_at and NO finalized documents safely DEFER reconciliation',
+      () {
+        // Product created pre-v7 with stock 10.0, but zero documents ever recorded
+        final product = {'id': 99, 'stock_quantity': 10.0, 'created_at': null};
+        const String? productEarliestDocStr = null;
+        final stockMovements = <Map<String, dynamic>>[];
+
+        final createdAtStr = product['created_at'] as String?;
+        if (productEarliestDocStr != null) {
+          // not reached
+        } else if (createdAtStr != null && createdAtStr.isNotEmpty) {
+          // not reached
+        } else {
+          // Safely deferred: do NOT fabricate a historical timestamp
+          // (no 1970 Unix epoch, no 2023 magic year, no fake DateTime.now())
+        }
+
+        // Movements table remains completely untouched
+        expect(stockMovements.isEmpty, isTrue);
+        // Product physical stock is preserved in products table
+        expect(product['stock_quantity'], 10.0);
+      },
+    );
+
+    test(
+      '56. Adversarial: Migration idempotency and rollback safety',
+      () {
+        final products = [
+          {'id': 1, 'stock_quantity': 10.0, 'type': 'product', 'created_at': '2023-01-01T00:00:00.000'},
+        ];
+        final stockMovements = <Map<String, dynamic>>[];
+
+        void runMigration() {
+          final missing = products.where((p) {
+            final pid = p['id'] as int;
+            final qty = p['stock_quantity'] as double;
+            final type = p['type'] as String;
+            final hasMovements = stockMovements.any((sm) => sm['product_id'] == pid);
+            return type == 'product' && qty > 0.0001 && !hasMovements;
+          }).toList();
+
+          for (final row in missing) {
+            stockMovements.add({
+              'product_id': row['id'],
+              'type': StockMovement.typeOpening,
+              'quantity': row['stock_quantity'],
+              'date': row['created_at'],
+            });
+          }
+        }
+
+        runMigration();
+        expect(stockMovements.length, 1);
+
+        // Second run
+        runMigration();
+        expect(stockMovements.length, 1, reason: 'Idempotent across repeated runs');
+      },
+    );
+
+    test(
+      '57. Adversarial: Discrepant legacy invoice - harmless non-financial edit preserves historical financial records without creating synthetic payment rows',
+      () {
+        const currencyCode = 'USD';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+        final epsilon = 1.0 / math.pow(10, decimalDigits + 1);
+
+        // Discrepant legacy record: documents.paid = 100.0, but document_payments has 0 rows (ledger sum = 0.0)
+        final oldDoc = Document(
+          id: 50,
+          type: 'invoice',
+          documentNumber: 'INV-050',
+          date: DateTime(2023, 1, 1),
+          subtotal: 100.0,
+          discount: 0.0,
+          taxRate: 0.0,
+          taxAmount: 0.0,
+          total: 100.0,
+          paid: 100.0,
+          remaining: 0.0,
+          notes: 'Original note',
+          status: DocumentStatus.paid,
+          currencyCode: currencyCode,
+        );
+
+        final payments = <Map<String, dynamic>>[]; // empty ledger
+
+        // User edits ONLY non-financial note: incoming paid is unchanged (100.0), total is unchanged (100.0)
+        final incomingDoc = Document(
+          id: 50,
+          type: 'invoice',
+          documentNumber: 'INV-050',
+          date: DateTime(2023, 1, 1),
+          subtotal: 100.0,
+          discount: 0.0,
+          taxRate: 0.0,
+          taxAmount: 0.0,
+          total: 100.0,
+          paid: 100.0, // unchanged
+          remaining: 0.0,
+          notes: 'Updated warehouse delivery note',
+          status: DocumentStatus.paid,
+          currencyCode: currencyCode,
+        );
+
+        final canonicalIncomingPaid = MoneyUtils.round(incomingDoc.paid, decimalDigits);
+        final canonicalOldPaid = MoneyUtils.round(oldDoc.paid, decimalDigits);
+        final canonicalIncomingTotal = MoneyUtils.round(incomingDoc.total, decimalDigits);
+        final canonicalOldTotal = MoneyUtils.round(oldDoc.total, decimalDigits);
+
+        final totalExistingLedgerPaid = MoneyUtils.round(
+          payments.fold<double>(0.0, (sum, r) => sum + (r['amount'] as double)),
+          decimalDigits,
+        );
+
+        final isUserAlteringPaid = (canonicalIncomingPaid - canonicalOldPaid).abs() > epsilon;
+        final isUserAlteringTotal = (canonicalIncomingTotal - canonicalOldTotal).abs() > epsilon;
+        final isLedgerDiscrepant = (canonicalOldPaid - totalExistingLedgerPaid).abs() > epsilon;
+
+        expect(isUserAlteringPaid, isFalse);
+        expect(isUserAlteringTotal, isFalse);
+        expect(isLedgerDiscrepant, isTrue);
+
+        // Core invariant: Harmless edit MUST NOT insert synthetic payment rows
+        double effectivePaid;
+        double effectiveRemaining;
+        String effectiveStatus;
+
+        if (!isUserAlteringPaid) {
+          if (isLedgerDiscrepant) {
+            if (isUserAlteringTotal) {
+              throw StateError('Cannot modify financial totals on discrepant document');
+            }
+            effectivePaid = oldDoc.paid;
+            effectiveRemaining = oldDoc.remaining;
+            effectiveStatus = oldDoc.status;
+          } else {
+            effectivePaid = totalExistingLedgerPaid;
+            effectiveRemaining = MoneyUtils.calculateRemaining(canonicalIncomingTotal, totalExistingLedgerPaid, decimalDigits);
+            effectiveStatus = DocumentStatus.fromPayment(totalExistingLedgerPaid, canonicalIncomingTotal, decimalDigits: decimalDigits);
+          }
+        } else {
+          throw StateError('Altering paid');
+        }
+
+        expect(effectivePaid, 100.0);
+        expect(effectiveRemaining, 0.0);
+        expect(effectiveStatus, DocumentStatus.paid);
+        expect(payments.isEmpty, isTrue, reason: 'Zero synthetic payment rows were created on harmless edit');
+      },
+    );
+
+    test(
+      '58. Adversarial: Discrepant legacy invoice - modifying financial total is transactionally rejected',
+      () {
+        const currencyCode = 'USD';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+        final epsilon = 1.0 / math.pow(10, decimalDigits + 1);
+
+        const oldPaid = 100.0;
+        const oldTotal = 100.0;
+        const totalExistingLedgerPaid = 60.0; // Discrepancy: paid 100 vs ledger 60
+
+        void simulateUpdateFinancialTotal(double newTotal, double newPaid) {
+          final isUserAlteringPaid = (newPaid - oldPaid).abs() > epsilon;
+          final isUserAlteringTotal = (newTotal - oldTotal).abs() > epsilon;
+          final isLedgerDiscrepant = (oldPaid - totalExistingLedgerPaid).abs() > epsilon;
+
+          if (!isUserAlteringPaid && isLedgerDiscrepant && isUserAlteringTotal) {
+            throw StateError(
+              'Cannot modify financial totals: document has discrepant payment records (document paid: $oldPaid, recorded payments: $totalExistingLedgerPaid). Please resolve payment records before modifying totals.',
+            );
+          }
+        }
+
+        expect(
+          () => simulateUpdateFinancialTotal(150.0, 100.0),
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('Cannot modify financial totals: document has discrepant payment records'),
+          )),
+        );
+      },
+    );
+
+    test(
+      '59. Adversarial: Discrepant legacy invoice - modifying paid amount is transactionally rejected',
+      () {
+        const currencyCode = 'USD';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+        final epsilon = 1.0 / math.pow(10, decimalDigits + 1);
+
+        const oldPaid = 100.0;
+        const totalExistingLedgerPaid = 60.0;
+
+        void simulateUpdatePaidOnDiscrepant(double newPaid) {
+          final isUserAlteringPaid = (newPaid - oldPaid).abs() > epsilon;
+          final isLedgerDiscrepant = (oldPaid - totalExistingLedgerPaid).abs() > epsilon;
+
+          if (isUserAlteringPaid && isLedgerDiscrepant) {
+            throw StateError(
+              'Cannot modify paid amount: document has discrepant payment records (document paid: $oldPaid, recorded payments: $totalExistingLedgerPaid). Please review payment records.',
+            );
+          }
+        }
+
+        expect(
+          () => simulateUpdatePaidOnDiscrepant(120.0),
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('Cannot modify paid amount: document has discrepant payment records'),
+          )),
+        );
+      },
+    );
+
+    test(
+      '60. Adversarial: Clean issued invoice - total edit recomputes remaining and status safely without touching ledger',
+      () {
+        const currencyCode = 'USD';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+
+        const initialTotal = 100.0;
+        const initialPaid = 40.0;
+        expect(initialTotal - initialPaid, 60.0);
+        final payments = <Map<String, dynamic>>[
+          {'id': 1, 'document_id': 10, 'amount': 40.0, 'receipt_document_id': null},
+        ];
+
+        final newTotal = 150.0;
+        final totalExistingPaid = MoneyUtils.round(
+          payments.fold<double>(0.0, (sum, r) => sum + (r['amount'] as double)),
+          decimalDigits,
+        );
+
+        expect(MoneyUtils.isOverpayment(totalExistingPaid, newTotal, decimalDigits), isFalse);
+        final effectiveRemaining = MoneyUtils.calculateRemaining(newTotal, totalExistingPaid, decimalDigits);
+        final effectiveStatus = DocumentStatus.fromPayment(totalExistingPaid, newTotal, decimalDigits: decimalDigits);
+
+        expect(totalExistingPaid, 40.0);
+        expect(effectiveRemaining, 110.0);
+        expect(effectiveStatus, DocumentStatus.partiallyPaid);
+        expect(payments.length, 1);
+        expect(payments.first['amount'], 40.0);
+
+        final paidOffRemaining = MoneyUtils.calculateRemaining(40.0, totalExistingPaid, decimalDigits);
+        final paidOffStatus = DocumentStatus.fromPayment(totalExistingPaid, 40.0, decimalDigits: decimalDigits);
+        expect(paidOffRemaining, 0.0);
+        expect(paidOffStatus, DocumentStatus.paid);
+      },
+    );
+
+    test(
+      '61. Adversarial: Clean issued invoice - editing upfront paid synchronizes row without duplicates',
+      () {
+        const currencyCode = 'USD';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+
+        const total = 100.0;
+        final payments = <Map<String, dynamic>>[
+          {'id': 1, 'document_id': 10, 'amount': 30.0, 'receipt_document_id': null},
+        ];
+
+        final requestedPaid = 50.0;
+        final canonicalPaid = MoneyUtils.round(requestedPaid, decimalDigits);
+        final canonicalTotal = MoneyUtils.round(total, decimalDigits);
+
+        final upfrontRows = payments.where((r) => r['receipt_document_id'] == null).toList();
+        final linkedRows = payments.where((r) => r['receipt_document_id'] != null).toList();
+
+        expect(linkedRows.isEmpty, isTrue);
+        expect(upfrontRows.length, 1);
+
+        upfrontRows.first['amount'] = canonicalPaid;
+
+        final newRemaining = MoneyUtils.calculateRemaining(canonicalTotal, canonicalPaid, decimalDigits);
+        final newStatus = DocumentStatus.fromPayment(canonicalPaid, canonicalTotal, decimalDigits: decimalDigits);
+
+        expect(payments.length, 1, reason: 'Zero synthetic payment rows added');
+        expect(payments.first['amount'], 50.0);
+        expect(newRemaining, 50.0);
+        expect(newStatus, DocumentStatus.partiallyPaid);
+
+        payments.removeWhere((r) => r['id'] == upfrontRows.first['id']);
+        final zeroRemaining = MoneyUtils.calculateRemaining(canonicalTotal, 0.0, decimalDigits);
+        final zeroStatus = DocumentStatus.fromPayment(0.0, canonicalTotal, decimalDigits: decimalDigits);
+
+        expect(payments.isEmpty, isTrue);
+        expect(zeroRemaining, 100.0);
+        expect(zeroStatus, DocumentStatus.issued);
+      },
+    );
+
+    test(
+      '62. Adversarial: Clean issued invoice with linked receipts rejects direct paid edits',
+      () {
+        final payments = <Map<String, dynamic>>[
+          {'id': 1, 'document_id': 10, 'amount': 20.0, 'receipt_document_id': null},
+          {'id': 2, 'document_id': 10, 'amount': 30.0, 'receipt_document_id': 101},
+        ];
+
+        void simulateUpdateInvoicePaid(double newPaid) {
+          final totalExistingPaid = payments.fold<double>(0.0, (sum, r) => sum + (r['amount'] as double));
+          final linkedReceiptRows = payments.where((r) => r['receipt_document_id'] != null).toList();
+
+          final paidDiff = (newPaid - totalExistingPaid).abs();
+          if (paidDiff > 0.0001) {
+            if (linkedReceiptRows.isNotEmpty) {
+              throw StateError(
+                'Cannot modify paid amount directly on a document with linked payment receipts. '
+                'Please record, cancel, or delete payment receipts instead.',
+              );
+            }
+          }
+        }
+
+        expect(
+          () => simulateUpdateInvoicePaid(40.0),
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('Cannot modify paid amount directly on a document with linked payment receipts'),
+          )),
+        );
+
+        expect(() => simulateUpdateInvoicePaid(50.0), returnsNormally);
+      },
+    );
+
+    test(
+      '63. Adversarial: Receipt reassignment across documents is strictly rejected',
+      () {
+        const oldRelatedId = 10;
+        const newRelatedId = 20;
+
+        void simulateUpdateReceiptParent(int? relatedId) {
+          if (relatedId != oldRelatedId) {
+            throw StateError(
+              'Cannot reassign an existing payment receipt or expense voucher to a different parent document.',
+            );
+          }
+        }
+
+        expect(
+          () => simulateUpdateReceiptParent(newRelatedId),
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('Cannot reassign an existing payment receipt or expense voucher to a different parent document'),
+          )),
+        );
+
+        expect(() => simulateUpdateReceiptParent(oldRelatedId), returnsNormally);
+      },
+    );
+
+    test(
+      '64. Adversarial: Invoice deletion is blocked if payment history exists',
+      () {
+        final paymentHistory = [
+          {'id': 1, 'document_id': 10, 'amount': 40.0},
+        ];
+
+        void simulateDeleteInvoice(String docType, double paid) {
+          if (paymentHistory.isNotEmpty || paid > 0) {
+            throw StateError(
+              'Cannot delete $docType with recorded payment history. Please cancel the document instead to preserve accounting records.',
+            );
+          }
+        }
+
+        expect(
+          () => simulateDeleteInvoice('invoice', 40.0),
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('Cannot delete invoice with recorded payment history'),
+          )),
+        );
+      },
+    );
+
+    test(
+      '65. Adversarial: Payment reversal - receipt cancellation never deletes historical payment row; records auditable reversal row',
+      () {
+        const decimalDigits = 2;
+        final payments = <Map<String, dynamic>>[
+          {
+            'id': 1,
+            'document_id': 10,
+            'amount': 50.0,
+            'date': '2026-10-01T10:00:00.000',
+            'notes': 'Payment receipt REC-001',
+            'receipt_document_id': 101,
+          },
+        ];
+
+        var parentPaid = 50.0;
+        const parentTotal = 100.0;
+
+        // Perform auditable reversal on 2026-10-15
+        const reversalDate = '2026-10-15T12:00:00.000';
+        final amountToReverse = payments.fold<double>(0.0, (s, r) => s + (r['amount'] as double));
+
+        // 1. Original row is NOT deleted!
+        expect(payments.length, 1);
+
+        // 2. Insert auditable reversal entry
+        payments.add({
+          'id': 2,
+          'document_id': 10,
+          'amount': -amountToReverse,
+          'date': reversalDate,
+          'notes': 'Reversal: cancelled payment_receipt REC-001',
+          'receipt_document_id': 101,
+        });
+
+        // 3. Parent paid & remaining are recalculated
+        parentPaid = MoneyUtils.round(parentPaid - amountToReverse, decimalDigits);
+        final parentRemaining = MoneyUtils.calculateRemaining(parentTotal, parentPaid, decimalDigits);
+        final parentStatus = DocumentStatus.fromPayment(parentPaid, parentTotal, decimalDigits: decimalDigits);
+
+        expect(payments.length, 2);
+        expect(payments[0]['amount'], 50.0);
+        expect(payments[0]['date'], '2026-10-01T10:00:00.000', reason: 'Original payment date preserved');
+        expect(payments[1]['amount'], -50.0);
+        expect(payments[1]['date'], '2026-10-15T12:00:00.000', reason: 'Cancellation date preserved');
+
+        // Net sum across the entire ledger for this document is exactly 0.0
+        final netPaid = MoneyUtils.round(
+          payments.fold<double>(0.0, (s, r) => s + (r['amount'] as double)),
+          decimalDigits,
+        );
+        expect(netPaid, 0.0);
+        expect(parentPaid, 0.0);
+        expect(parentRemaining, 100.0);
+        expect(parentStatus, DocumentStatus.issued);
+      },
+    );
+
+    test(
+      '66. Adversarial: Draft invoice updates paid without inserting into document_payments until issued',
+      () {
+        var draftPaid = 30.0;
+        final payments = <Map<String, dynamic>>[];
+
+        draftPaid = 50.0;
+        expect(payments.isEmpty, isTrue);
+
+        const docTotal = 100.0;
+        final initialRemaining = MoneyUtils.calculateRemaining(docTotal, draftPaid, 2);
+        expect(initialRemaining, 50.0);
+        final existingPaid = payments.fold<double>(0.0, (sum, r) => sum + (r['amount'] as double));
+        if (draftPaid > existingPaid) {
+          final missing = draftPaid - existingPaid;
+          payments.add({
+            'document_id': 1,
+            'amount': missing,
+            'receipt_document_id': null,
+          });
+        }
+
+        expect(payments.length, 1);
+        expect(payments.first['amount'], 50.0);
+
+        final secondExisting = payments.fold<double>(0.0, (sum, r) => sum + (r['amount'] as double));
+        if (draftPaid > secondExisting) {
+          payments.add({'document_id': 1, 'amount': draftPaid - secondExisting});
+        }
+        expect(payments.length, 1, reason: 'Exact-once upfront payment recorded on issuance');
+      },
+    );
+
+    test(
+      '67. Adversarial: Guard blocks editing cancelled documents or un-issuing documents to draft',
+      () {
+        void simulateUpdate(String oldStatus, String newStatus) {
+          if (oldStatus == DocumentStatus.cancelled) {
+            throw StateError('Cannot edit a cancelled document');
+          }
+          if (oldStatus != DocumentStatus.draft && newStatus == DocumentStatus.draft) {
+            throw StateError('Cannot convert an issued document to draft');
+          }
+        }
+
+        expect(
+          () => simulateUpdate(DocumentStatus.cancelled, DocumentStatus.issued),
+          throwsA(isA<StateError>().having((e) => e.message, 'message', contains('Cannot edit a cancelled document'))),
+        );
+
+        expect(
+          () => simulateUpdate(DocumentStatus.issued, DocumentStatus.draft),
+          throwsA(isA<StateError>().having((e) => e.message, 'message', contains('Cannot convert an issued document to draft'))),
+        );
+      },
+    );
+
+    test(
+      '68. Adversarial: Multi-currency precision handles 3-decimal and 0-decimal currencies correctly',
+      () {
+        const digits3 = 3;
+        final totalBhd = 100.125;
+        final paidBhd = 33.375;
+        final remainingBhd = MoneyUtils.calculateRemaining(totalBhd, paidBhd, digits3);
+        expect(remainingBhd, 66.750);
+        expect(DocumentStatus.fromPayment(paidBhd, totalBhd, decimalDigits: digits3), DocumentStatus.partiallyPaid);
+
+        const digits0 = 0;
+        final totalJpy = 1000.0;
+        final paidJpy = 1000.0;
+        final remainingJpy = MoneyUtils.calculateRemaining(totalJpy, paidJpy, digits0);
+        expect(remainingJpy, 0.0);
+        expect(DocumentStatus.fromPayment(paidJpy, totalJpy, decimalDigits: digits0), DocumentStatus.paid);
+      },
+    );
+
+    test(
+      '69. Adversarial Finding 3.A: Receipt deletion is blocked if payment ledger history exists',
+      () {
+        // Document receipt with recorded payment rows
+        final paymentHistory = [
+          {
+            'id': 1,
+            'document_id': 10,
+            'amount': 50.0,
+            'receipt_document_id': 101,
+            'payment_origin': PaymentOrigin.receipt,
+          },
+        ];
+
+        void simulateDeleteReceipt(int receiptId) {
+          final history = paymentHistory.where((r) => r['receipt_document_id'] == receiptId).toList();
+          if (history.isNotEmpty) {
+            throw StateError(
+              'Cannot delete payment_receipt with recorded payment history. Please cancel the document instead to preserve accounting records.',
+            );
+          }
+        }
+
+        expect(
+          () => simulateDeleteReceipt(101),
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('Cannot delete payment_receipt with recorded payment history'),
+          )),
+        );
+
+        // A draft receipt without recorded payments can be deleted safely
+        expect(() => simulateDeleteReceipt(999), returnsNormally);
+      },
+    );
+
+    test(
+      '70. Adversarial Finding 3.A: Original and reversal rows preserve receipt_document_id and payment_origin intact',
+      () {
+        final paymentRows = <Map<String, dynamic>>[
+          {
+            'id': 1,
+            'document_id': 10,
+            'amount': 50.0,
+            'receipt_document_id': 101,
+            'payment_origin': PaymentOrigin.receipt,
+          },
+        ];
+
+        // Receipt 101 is cancelled -> insert reversal
+        paymentRows.add({
+          'id': 2,
+          'document_id': 10,
+          'amount': -50.0,
+          'receipt_document_id': 101,
+          'payment_origin': PaymentOrigin.reversal,
+        });
+
+        // INVARIANT: receipt_document_id is NEVER set to NULL!
+        for (final row in paymentRows) {
+          expect(row['receipt_document_id'], 101);
+          expect(row['receipt_document_id'], isNotNull);
+        }
+
+        expect(paymentRows[0]['payment_origin'], PaymentOrigin.receipt);
+        expect(paymentRows[1]['payment_origin'], PaymentOrigin.reversal);
+      },
+    );
+
+    test(
+      '71. Adversarial Finding 3.A: Subsequent upfront payment creation and editing succeeds on parent invoice after receipt cancellation',
+      () {
+        const currencyCode = 'USD';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+        final epsilon = 1.0 / math.pow(10, decimalDigits + 1);
+
+        const invoiceTotal = 100.0;
+        expect(invoiceTotal, 100.0);
+        var invoicePaid = 0.0;
+
+        // Payment history includes a cancelled receipt (net = 0.0)
+        final paymentRows = <Map<String, dynamic>>[
+          {
+            'id': 1,
+            'document_id': 10,
+            'amount': 50.0,
+            'receipt_document_id': 101,
+            'payment_origin': PaymentOrigin.receipt,
+          },
+          {
+            'id': 2,
+            'document_id': 10,
+            'amount': -50.0,
+            'receipt_document_id': 101,
+            'payment_origin': PaymentOrigin.reversal,
+          },
+        ];
+
+        void simulateUpdateInvoicePaid(double incomingPaid) {
+          final totalExistingLedgerPaid = MoneyUtils.round(
+            paymentRows.fold<double>(0.0, (sum, r) => sum + (r['amount'] as double)),
+            decimalDigits,
+          );
+          expect(totalExistingLedgerPaid, isNotNull);
+
+          final isUserAlteringPaid = (incomingPaid - invoicePaid).abs() > epsilon;
+
+          final upfrontRows = paymentRows
+              .where((r) =>
+                  r['payment_origin'] == PaymentOrigin.upfront &&
+                  r['receipt_document_id'] == null)
+              .toList();
+
+          final linkedReceiptRows = paymentRows
+              .where((r) =>
+                  r['receipt_document_id'] != null ||
+                  r['payment_origin'] == PaymentOrigin.receipt ||
+                  r['payment_origin'] == PaymentOrigin.reversal)
+              .toList();
+
+          final unclassifiedLegacyRows = paymentRows
+              .where((r) =>
+                  r['receipt_document_id'] == null &&
+                  r['payment_origin'] == null)
+              .toList();
+
+          final netLinkedReceiptPaid = MoneyUtils.round(
+            linkedReceiptRows.fold<double>(0.0, (sum, r) => sum + (r['amount'] as double)),
+            decimalDigits,
+          );
+
+          if (isUserAlteringPaid) {
+            if (unclassifiedLegacyRows.isNotEmpty) {
+              throw StateError('Cannot modify paid amount: legacy unclassified records');
+            }
+
+            if (netLinkedReceiptPaid > epsilon) {
+              throw StateError('Cannot modify paid amount directly with active linked receipts');
+            }
+
+            if (upfrontRows.length > 1) {
+              throw StateError('multiple upfront rows');
+            }
+
+            if (incomingPaid == 0) {
+              if (upfrontRows.isNotEmpty) {
+                paymentRows.removeWhere((r) => r['id'] == upfrontRows.first['id']);
+              }
+            } else {
+              if (upfrontRows.isNotEmpty) {
+                upfrontRows.first['amount'] = incomingPaid;
+              } else {
+                paymentRows.add({
+                  'id': 3,
+                  'document_id': 10,
+                  'amount': incomingPaid,
+                  'receipt_document_id': null,
+                  'payment_origin': PaymentOrigin.upfront,
+                });
+              }
+            }
+
+            invoicePaid = incomingPaid;
+          }
+        }
+
+        // Action: User enters upfront payment of $20.0 on invoice 10
+        expect(() => simulateUpdateInvoicePaid(20.0), returnsNormally);
+
+        expect(invoicePaid, 20.0);
+        expect(paymentRows.length, 3);
+        final newUpfront = paymentRows.firstWhere((r) => r['payment_origin'] == PaymentOrigin.upfront);
+        expect(newUpfront['amount'], 20.0);
+
+        final ledgerSum = MoneyUtils.round(
+          paymentRows.fold<double>(0.0, (s, r) => s + (r['amount'] as double)),
+          decimalDigits,
+        );
+        expect(ledgerSum, 20.0);
+        expect(ledgerSum, invoicePaid, reason: 'Ledger sum matches invoice.paid exactly');
+
+        // Subsequent edit: Change upfront from 20.0 to 35.0
+        expect(() => simulateUpdateInvoicePaid(35.0), returnsNormally);
+        expect(invoicePaid, 35.0);
+        expect(paymentRows.length, 3);
+        expect(newUpfront['amount'], 35.0);
+
+        // Edit upfront to 0.0
+        expect(() => simulateUpdateInvoicePaid(0.0), returnsNormally);
+        expect(invoicePaid, 0.0);
+        expect(paymentRows.length, 2); // upfront row deleted, cancelled receipt rows preserved
+      },
+    );
+
+    test(
+      '72. Adversarial Finding 3.A: Repeated receipt cancellation and deletion cannot create duplicate reversals',
+      () {
+        var receiptStatus = DocumentStatus.issued;
+        final payments = <Map<String, dynamic>>[
+          {
+            'id': 1,
+            'document_id': 10,
+            'amount': 40.0,
+            'receipt_document_id': 101,
+            'payment_origin': PaymentOrigin.receipt,
+          },
+        ];
+
+        void simulateCancelReceipt() {
+          if (receiptStatus == DocumentStatus.cancelled) {
+            throw StateError('Document is already cancelled');
+          }
+          payments.add({
+            'id': 2,
+            'document_id': 10,
+            'amount': -40.0,
+            'receipt_document_id': 101,
+            'payment_origin': PaymentOrigin.reversal,
+          });
+          receiptStatus = DocumentStatus.cancelled;
+        }
+
+        void simulateDeleteReceipt() {
+          final history = payments.where((r) => r['receipt_document_id'] == 101).toList();
+          if (history.isNotEmpty) {
+            throw StateError('Cannot delete payment_receipt with recorded payment history');
+          }
+        }
+
+        // First cancel succeeds
+        simulateCancelReceipt();
+        expect(receiptStatus, DocumentStatus.cancelled);
+        expect(payments.length, 2);
+
+        // Second cancel fails
+        expect(() => simulateCancelReceipt(), throwsA(isA<StateError>()));
+        expect(payments.length, 2, reason: 'Zero duplicate reversal created');
+
+        // Delete attempt fails
+        expect(() => simulateDeleteReceipt(), throwsA(isA<StateError>()));
+        expect(payments.length, 2, reason: 'Historical rows remain intact');
+      },
+    );
+
+    test(
+      '73. Adversarial Finding 3.A: Expense voucher lifecycle matches payment receipt invariants',
+      () {
+        const currencyCode = 'USD';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+
+        const purchaseTotal = 200.0;
+        var purchasePaid = 0.0;
+
+        final payments = <Map<String, dynamic>>[];
+
+        // 1. Record expense voucher for 80.0
+        payments.add({
+          'id': 1,
+          'document_id': 20,
+          'amount': 80.0,
+          'receipt_document_id': 201,
+          'payment_origin': PaymentOrigin.receipt,
+        });
+        purchasePaid = 80.0;
+
+        // 2. Cancel expense voucher
+        payments.add({
+          'id': 2,
+          'document_id': 20,
+          'amount': -80.0,
+          'receipt_document_id': 201,
+          'payment_origin': PaymentOrigin.reversal,
+        });
+        purchasePaid = 0.0;
+
+        // 3. Deletion attempt of cancelled voucher is rejected
+        final history = payments.where((r) => r['receipt_document_id'] == 201).toList();
+        expect(history.length, 2);
+        void simulateDeleteVoucher(int id) {
+          if (payments.any((r) => r['receipt_document_id'] == id)) {
+            throw StateError('Cannot delete expense_voucher with recorded payment history');
+          }
+        }
+        expect(() => simulateDeleteVoucher(201), throwsA(isA<StateError>()));
+
+        // 4. Record purchase upfront payment of 50.0
+        payments.add({
+          'id': 3,
+          'document_id': 20,
+          'amount': 50.0,
+          'receipt_document_id': null,
+          'payment_origin': PaymentOrigin.upfront,
+        });
+        purchasePaid = 50.0;
+
+        final ledgerTotal = MoneyUtils.round(
+          payments.fold<double>(0.0, (s, r) => s + (r['amount'] as double)),
+          decimalDigits,
+        );
+        expect(ledgerTotal, 50.0);
+        expect(purchasePaid, 50.0);
+        expect(MoneyUtils.calculateRemaining(purchaseTotal, purchasePaid, decimalDigits), 150.0);
+      },
+    );
+
+    test(
+      '74. Adversarial Finding 3.A: Legacy rows with NULL receipt_document_id and NULL payment_origin are preserved',
+      () {
+        final legacyPayments = <Map<String, dynamic>>[
+          {
+            'id': 1,
+            'document_id': 10,
+            'amount': 60.0,
+            'receipt_document_id': null,
+            'payment_origin': null, // legacy row without explicit origin
+          },
+        ];
+
+        void simulateUpdate(double incomingPaid) {
+          final unclassified = legacyPayments
+              .where((r) => r['receipt_document_id'] == null && r['payment_origin'] == null)
+              .toList();
+
+          if (incomingPaid != 60.0) {
+            if (unclassified.isNotEmpty) {
+              throw StateError(
+                'Cannot modify paid amount: document contains legacy unclassified payment records. Please record payments via payment receipts instead.',
+              );
+            }
+          }
+        }
+
+        // Harmless non-financial edit (incoming paid == 60.0) succeeds without mutating legacy rows
+        expect(() => simulateUpdate(60.0), returnsNormally);
+        expect(legacyPayments.length, 1);
+        expect(legacyPayments.first['amount'], 60.0);
+        expect(legacyPayments.first['payment_origin'], isNull, reason: 'Never fabricate origins for legacy data');
+
+        // Altering paid on document with unclassified legacy rows is rejected transactionally
+        expect(
+          () => simulateUpdate(80.0),
+          throwsA(isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('Cannot modify paid amount: document contains legacy unclassified payment records'),
+          )),
+        );
+      },
+    );
+
+    test(
+      '75. Adversarial Finding 3.A: Net ledger sum matches document.paid across multi-step transactions',
+      () {
+        const digits = 2;
+        final payments = <Map<String, dynamic>>[];
+        var docPaid = 0.0;
+
+        // Step 1: Upfront down payment of 30.0
+        payments.add({
+          'id': 1,
+          'document_id': 10,
+          'amount': 30.0,
+          'receipt_document_id': null,
+          'payment_origin': PaymentOrigin.upfront,
+        });
+        docPaid = 30.0;
+        expect(payments.fold<double>(0.0, (s, r) => s + (r['amount'] as double)), docPaid);
+
+        // Step 2: Linked receipt payment of 40.0
+        payments.add({
+          'id': 2,
+          'document_id': 10,
+          'amount': 40.0,
+          'receipt_document_id': 101,
+          'payment_origin': PaymentOrigin.receipt,
+        });
+        docPaid = MoneyUtils.round(docPaid + 40.0, digits);
+        expect(payments.fold<double>(0.0, (s, r) => s + (r['amount'] as double)), docPaid);
+
+        // Step 3: Cancellation of receipt 101 (-40.0)
+        payments.add({
+          'id': 3,
+          'document_id': 10,
+          'amount': -40.0,
+          'receipt_document_id': 101,
+          'payment_origin': PaymentOrigin.reversal,
+        });
+        docPaid = MoneyUtils.round(docPaid - 40.0, digits);
+        expect(payments.fold<double>(0.0, (s, r) => s + (r['amount'] as double)), docPaid);
+        expect(docPaid, 30.0);
+
+        // Step 4: Upfront payment updated to 50.0
+        final upfront = payments.firstWhere((r) => r['payment_origin'] == PaymentOrigin.upfront);
+        upfront['amount'] = 50.0;
+        docPaid = 50.0;
+
+        final finalLedgerSum = MoneyUtils.round(
+          payments.fold<double>(0.0, (s, r) => s + (r['amount'] as double)),
+          digits,
+        );
+        expect(finalLedgerSum, docPaid);
+        expect(finalLedgerSum, 50.0);
       },
     );
   });

@@ -222,6 +222,7 @@ class BusinessReportingService {
     required DateTime from,
     required DateTime to,
     String? category,
+    String? currencyCode,
     String sortBy = 'revenue', // 'revenue', 'quantity', 'profit'
   }) async {
     final db = await DatabaseHelper.instance.database;
@@ -253,6 +254,17 @@ class BusinessReportingService {
     ''', productArgs);
 
     // 2. Fetch all line items from eligible finalized invoices in the period
+    final docConditions = <String>[
+      "d.type = 'invoice'",
+      "d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')",
+      "d.date >= ? AND d.date <= ?",
+    ];
+    final docArgs = <Object?>[from.toIso8601String(), to.toIso8601String()];
+    if (currencyCode != null && currencyCode.isNotEmpty) {
+      docConditions.add('d.currency_code = ?');
+      docArgs.add(currencyCode);
+    }
+
     final invoiceItemRows = await db.rawQuery('''
       SELECT
         di.id AS item_id,
@@ -266,11 +278,9 @@ class BusinessReportingService {
         d.currency_code
       FROM document_items di
       JOIN documents d ON d.id = di.document_id
-      WHERE d.type = 'invoice'
-        AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
-        AND d.date >= ? AND d.date <= ?
+      WHERE ${docConditions.join(' AND ')}
       ORDER BY d.id, di.id
-    ''', [from.toIso8601String(), to.toIso8601String()]);
+    ''', docArgs);
 
     // Group items by invoice document to allocate document-level discount across lines
     final docItemsMap = <int, List<Map<String, Object?>>>{};

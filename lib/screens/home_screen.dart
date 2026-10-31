@@ -92,9 +92,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     try {
       final db = DatabaseHelper.instance;
+      final business = await db.getFirstBusiness();
       final results = await Future.wait([
-        db.getFirstBusiness(),
-        db.getPeriodSummary(from: _dateRange.from, to: _dateRange.to),
+        Future.value(business),
+        db.getPeriodSummary(
+          from: _dateRange.from,
+          to: _dateRange.to,
+          currencyCode: business?.currencyCode,
+        ),
         db.getRecentDocuments(limit: 5),
       ]);
 
