@@ -9,6 +9,6 @@ Tracks implementation of Batches L1 through L8 on branch `l10n/localization-poli
 | **L3** | Plurals & parameterized messages | Done | a590bd8 | `lib/localization/app_localizations.dart`, `test/localization/plural_test.dart`, `docs/l10n_decisions.md` | dart analyze (2 files), test/localization/plural_test.dart (6/6), test/widgets/shared_widgets_test.dart (24/24), API stability diff (0 removed), check_play_compliance | None |
 | **L4** | Numbers, dates, formatting | Done | 85bd5ad | `lib/utils/format_utils.dart`, `test/services/format_utils_test.dart`, `docs/l10n_decisions.md` | dart analyze (2 files), test/services/format_utils_test.dart (12/12), check_play_compliance | None |
 | **L5** | MaterialApp & system localization | Done | e571c17 | `lib/main.dart`, `android/app/src/main/AndroidManifest.xml`, `android/app/src/main/res/values/strings.xml`, `android/app/src/main/res/values-ar/strings.xml`, `docs/l10n_decisions.md` | dart analyze (1 file), test/widgets/rtl_localization_test.dart (2/2), check_play_compliance | None |
-| **L6** | PDF & print text | Not started | - | - | - | - |
+| **L6** | PDF & print text | Done | 664daf7 | `lib/services/pdf/`, `docs/l10n_decisions.md` | test/services/pdf_builder_test.dart (23/23), check_play_compliance | None |
 | **L7** | Structure & comment reorganization | Not started | - | - | - | - |
 | **L8** | Automated l10n quality tests | Not started | - | - | - | - |

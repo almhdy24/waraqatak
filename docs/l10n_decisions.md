@@ -39,3 +39,11 @@ Format per decision:
 - **Alternatives:** Leaving the hardcoded Arabic label in `AndroidManifest.xml` (leads to Arabic title on English devices) or hardcoding English (leads to English title on Arabic devices).
 - **Why Safest:** Zero impact on Flutter business logic; passes `tool/check_play_compliance.sh` and widget tests cleanly.
 - **How to Reverse:** Restore `android:label="ورقتك"` in `AndroidManifest.xml` and delete the added resource files.
+
+---
+
+### Decision 5 (Batch L6): PDF Text Architecture & Strict Isolate Exclusion
+- **Decision:** Verified that all PDF builders in `lib/services/pdf/` retrieve user-facing labels through `AppLocalizations` and contain zero hardcoded deprecated terms ("صنف", "مخزن"). Confirmed zero Unicode Bidi isolates (`\u2068` / `\u2069`) in `lib/services/pdf/` as Tajawal font would render them as missing glyph boxes. All directional alignment in PDF is handled structurally via `PdfTextUtils.directionalText`.
+- **Alternatives:** Injecting Bidi isolates into PDF builder strings (which corrupts PDF font rendering and breaks document layout).
+- **Why Safest:** Completely preserves Arabic text rendering and existing PDF layout across all templates (classic, modern, minimal) and sizes (A4, A5, Thermal 80mm).
+- **How to Reverse:** N/A (verified existing architecture complies with isolate exclusion).
