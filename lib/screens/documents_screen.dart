@@ -5,6 +5,7 @@ import '../localization/app_localizations.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_amount_text.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_search_bar.dart';
@@ -235,12 +236,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
+                          AppAmountText(
+                            amount: doc.total,
+                            currencySymbol: doc.currencySymbol,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
                           ),
                           const SizedBox(height: 4),
                           StatusBadge(status: doc.status),

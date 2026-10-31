@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../utils/url_launcher_utils.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 import 'transparency_screen.dart';
 
@@ -417,9 +418,7 @@ class _LinkTile extends StatelessWidget {
         style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12.5),
       ),
       trailing: Icon(
-        AppLocalizations.of(context).isArabic
-            ? Icons.chevron_left_rounded
-            : Icons.chevron_right_rounded,
+        AppIcons.chevronForward(context),
         color: cs.onSurfaceVariant,
       ),
     );

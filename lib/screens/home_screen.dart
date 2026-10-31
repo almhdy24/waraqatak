@@ -10,6 +10,7 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/app_metric_card.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/pro_upgrade_sheet.dart';
@@ -587,11 +588,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             const SizedBox(width: 4),
                             Icon(
-                              l10n.isArabic
-                                  ? Icons.chevron_left
-                                  : Icons.chevron_right,
+                              AppIcons.chevronForward(context),
                               size: 18,
-                              color: Colors.grey,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ],
                         ),

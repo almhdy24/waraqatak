@@ -6,6 +6,7 @@ import '../localization/app_localizations.dart';
 import '../models/app_notification.dart';
 import '../services/app_ops_service.dart';
 import '../utils/url_launcher_utils.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 import 'database_diagnostic_screen.dart';
 import 'google_drive_backup_screen.dart';
@@ -76,10 +77,10 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       ),
       builder: (ctx) {
         return Padding(
-          padding: EdgeInsets.only(
+          padding: EdgeInsetsDirectional.only(
             top: 20,
-            left: 20,
-            right: 20,
+            start: 20,
+            end: 20,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
           child: Column(
@@ -119,7 +120,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                 const SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: () => _handleAction(ctx, item.actionUrl!.trim(), l10n),
-                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  icon: Icon(AppIcons.arrowForward(ctx), size: 18),
                   label: Text(l10n.openDestination),
                 ),
               ],
@@ -362,7 +363,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                           ),
                         ],
                       ),
-                      trailing: const Icon(Icons.chevron_left, size: 20),
+                      trailing: Icon(AppIcons.chevronForward(context), size: 20),
                       onTap: () => _openDetail(item),
                     );
                   },

@@ -15,6 +15,7 @@ import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_amount_text.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
@@ -743,12 +744,11 @@ class _DocumentTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '${fmt.format(doc.total)} ${doc.currencySymbol}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
+                  AppAmountText(
+                    amount: doc.total,
+                    currencySymbol: doc.currencySymbol,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                   const SizedBox(height: 4),
                   StatusBadge(status: doc.status),

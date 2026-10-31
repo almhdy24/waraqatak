@@ -10,6 +10,7 @@ import '../models/product.dart';
 import '../services/database_diagnostic_service.dart';
 import '../services/database_repair_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'product_form_screen.dart';
@@ -1497,7 +1498,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                           )
                         : null,
                     trailing: Icon(
-                      l10n.isArabic ? Icons.chevron_left : Icons.chevron_right,
+                      AppIcons.chevronForward(context),
                       size: 20,
                       color: cs.onSurfaceVariant,
                     ),

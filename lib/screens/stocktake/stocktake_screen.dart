@@ -6,6 +6,7 @@ import '../../services/feature_access.dart';
 import '../../services/license_service.dart';
 import '../../services/stocktake_service.dart';
 import '../../utils/format_utils.dart';
+import '../../widgets/app_icons.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/responsive.dart';
 import 'stocktake_history_screen.dart';
@@ -657,9 +658,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                               ),
                               if (_session!.isActive)
                                 Icon(
-                                  AppLocalizations.of(context).isArabic
-                                      ? Icons.chevron_left
-                                      : Icons.chevron_right,
+                                  AppIcons.chevronForward(context),
                                   size: 18,
                                 ),
                             ],

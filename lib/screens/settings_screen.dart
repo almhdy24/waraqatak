@@ -18,6 +18,7 @@ import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
 import 'pdf_customize_screen.dart';
 import '../widgets/app_design_tokens.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -92,9 +93,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
-    final chevronIcon = l10n.isArabic
-        ? Icons.chevron_left
-        : Icons.chevron_right;
+    final chevronIcon = AppIcons.chevronForward(context);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings), centerTitle: true),

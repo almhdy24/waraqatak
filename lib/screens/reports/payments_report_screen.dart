@@ -7,6 +7,7 @@ import '../../models/date_range_filter.dart';
 import '../../models/payment_method.dart';
 import '../../utils/currency_utils.dart';
 import '../document_detail_screen.dart';
+import '../../widgets/app_amount_text.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
 
@@ -176,20 +177,19 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             ),
             title: Row(children: [
               Expanded(
-                child: Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      row['document_number'] as String,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                child: Text(
+                  row['document_number'] as String,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
-              Text('${_numFmt.format(amount)}$sym',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+              AppAmountText(
+                amount: amount,
+                currencySymbol: sym.trim(),
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
             ]),
             subtitle: Row(children: [
               Expanded(child: Text(

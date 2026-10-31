@@ -19,6 +19,7 @@ import '../utils/money_utils.dart';
 import '../widgets/status_badge.dart';
 import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 
 class DocumentDetailScreen extends StatefulWidget {
@@ -644,7 +645,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       ),
                       if (_contact != null)
                         Icon(
-                          l10n.isArabic ? Icons.chevron_left : Icons.chevron_right,
+                          AppIcons.chevronForward(context),
                           size: 20,
                           color: Theme.of(context).colorScheme.primary,
                         ),
@@ -852,9 +853,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 ),
               ),
               Icon(
-                AppLocalizations.of(context).isArabic
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
+                AppIcons.chevronForward(context),
                 color: colors.onSurfaceVariant,
                 size: 20,
               ),

@@ -27,3 +27,9 @@ Format per decision:
 - **Alternatives:** Creating an entirely separate `AppStatusBadge` widget and leaving existing `StatusBadge` invocations text-only.
 - **Why Safest:** Preserves the exact existing constructor `StatusBadge({super.key, required this.status})` so zero existing callsites break, while immediately solving finding D-5 (color-only status indicators) across every document list.
 - **How to Reverse:** Revert `lib/widgets/status_badge.dart` to the original 43-line implementation.
+
+### Decision 4 (Batch 3): Unified Directional Icons and Amount Alignment
+- **Decision:** Replaced scattered inline ternaries (`l10n.isArabic ? Icons.chevron_left : Icons.chevron_right`) across 10 screens with `AppIcons.chevronForward(context)` and `AppIcons.arrowBack(context)`, and standardized amounts via `AppAmountText`.
+- **Alternatives:** Keeping screen-by-screen ternaries and raw string interpolations.
+- **Why Safest:** Consistently mirrors all navigation gestures and arrows for RTL Arabic and LTR English, avoiding bugs where Western chevrons point backwards in Arabic.
+- **How to Reverse:** Revert touched screens to inline ternaries.

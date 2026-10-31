@@ -8,6 +8,7 @@ import '../models/business.dart';
 import '../models/currency.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 
 class BusinessSetupScreen extends StatefulWidget {
@@ -482,9 +483,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                           ),
                         ),
                         trailing: Icon(
-                          l10n.isArabic
-                              ? Icons.chevron_left
-                              : Icons.chevron_right,
+                          AppIcons.chevronForward(context),
                         ),
                         onTap: () async {
                           await Navigator.push(
@@ -521,9 +520,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                           ),
                         ),
                         trailing: Icon(
-                          l10n.isArabic
-                              ? Icons.chevron_left
-                              : Icons.chevron_right,
+                          AppIcons.chevronForward(context),
                         ),
                         onTap: () => Navigator.push(
                           context,
