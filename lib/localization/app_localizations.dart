@@ -297,7 +297,7 @@ class AppLocalizations {
   );
   String get appLogoLabel => _t('شعار ورقتك', 'Waraqatak logo');
 
-  // ========== DIAGNOSTICS & CRASH REPORTING (Milestone 2) ==========
+  // ========== DIAGNOSTICS & ERROR REPORTING ==========
   String get diagnosticSharingTitle =>
       _t('مشاركة تقارير الأعطال والتشخيص', 'Share Diagnostic & Crash Reports');
   String get diagnosticSharingDesc => _t(
@@ -422,7 +422,7 @@ class AppLocalizations {
   String get retry => _t('إعادة المحاولة', 'Retry');
   String get items => _t('البنود', 'Items');
 
-  // ========== PRODUCTS PHASE 3.1 ==========
+  // ========== PRODUCTS & CATALOG ==========
   String get productType => _t('نوع المنتج', 'Product Type');
   String get productItem => _t('منتج', 'Product');
   String get serviceItem => _t('خدمة', 'Service');
@@ -471,7 +471,7 @@ class AppLocalizations {
   // ========== DEVELOPER ==========
   String get madeBy => _t('تطوير', 'Made by');
 
-  // ========== PHASE 3.2 — PURCHASES ==========
+  // ========== PURCHASES & ORDERS ==========
   String get purchase => _t('أمر شراء', 'Purchase Order');
   String get purchases => _t('أوامر الشراء', 'Purchase Orders');
   String get newPurchase => _t('أمر شراء جديد', 'New Purchase Order');
@@ -479,14 +479,14 @@ class AppLocalizations {
   String get purchaseDocument => _t('مستند شراء', 'Purchase Document');
   String get purchasesOnly => _t('الشراء', 'Purchases');
 
-  // ========== PHASE 3.2 — SUPPLIERS ==========
+  // ========== SUPPLIERS ==========
   String get suppliers => _t('الموردون', 'Suppliers');
   String get suppliersOnly => _t('الموردون', 'Suppliers');
   String get noSuppliers => _t('لا يوجد موردون بعد', 'No suppliers yet');
   String get supplierBalance => _t('رصيد المورد', 'Supplier Balance');
   String get payable => _t('مستحق الدفع', 'Payable');
 
-  // ========== PHASE 3.2 — CUSTOMERS EXTENDED ==========
+  // ========== CUSTOMERS EXTENDED ==========
   String get customerBalance => _t('رصيد العميل', 'Customer Balance');
   String get receivable => _t('مستحق الاستلام', 'Receivable');
   String get deactivateContact => _t('تعطيل جهة الاتصال', 'Deactivate Contact');
@@ -501,7 +501,7 @@ class AppLocalizations {
       _t('تم تفعيل جهة الاتصال', 'Contact activated');
   String get activeOnly => _t('النشطة فقط', 'Active only');
 
-  // ========== PHASE 3.2 — INVENTORY ==========
+  // ========== INVENTORY & STOCK MOVEMENTS ==========
   String get inventory => _t('المخزون', 'Inventory');
   String get stockMovements => _t('حركات المخزون', 'Stock Movements');
   String get stockMovement => _t('حركة مخزون', 'Stock Movement');
@@ -546,14 +546,14 @@ class AppLocalizations {
       _t('إنشاء منتج بهذا الباركود', 'Create product with this barcode');
   String get allProducts => _t('كل المنتجات', 'All Products');
 
-  // ========== PHASE 3.3 — DASHBOARD DATE FILTERS ==========
+  // ========== DASHBOARD DATE FILTERS ==========
   String get today => _t('اليوم', 'Today');
   String get last7Days => _t('آخر 7 أيام', 'Last 7 Days');
   String get thisMonth => _t('هذا الشهر', 'This Month');
   String get previousMonth => _t('الشهر السابق', 'Previous Month');
   String get customRange => _t('فترة مخصصة', 'Custom Range');
 
-  // ========== PHASE 3.3 — DASHBOARD CARDS ==========
+  // ========== DASHBOARD METRIC CARDS ==========
   String get salesPeriod => _t('المبيعات', 'Sales');
   String get purchasesPeriod => _t('المشتريات', 'Purchases');
   String get paymentsIn => _t('مدفوعات واردة', 'Payments In');
@@ -566,7 +566,7 @@ class AppLocalizations {
   String get viewInventory => _t('عرض المخزون', 'View Inventory');
   String get viewReports => _t('التقارير', 'Reports');
 
-  // ========== PHASE 3.3 — REPORTS HUB ==========
+  // ========== REPORTS HUB ==========
   String get reports => _t('التقارير', 'Reports');
   String get salesReport => _t('تقرير المبيعات', 'Sales Report');
   String get purchasesReport => _t('تقرير المشتريات', 'Purchases Report');
@@ -576,7 +576,7 @@ class AppLocalizations {
   String get inventoryReport => _t('تقرير المخزون', 'Inventory Report');
   String get productReport => _t('تقرير المنتجات', 'Product Report');
 
-  // ========== PHASE 3.3 — REPORT FIELDS ==========
+  // ========== REPORT FIELDS & COLUMNS ==========
   String get totalSales => _t('إجمالي المبيعات', 'Total Sales');
   String get totalPurchasesAmt => _t('إجمالي المشتريات', 'Total Purchases');
   String get totalPaid => _t('إجمالي المدفوع', 'Total Paid');
@@ -595,7 +595,7 @@ class AppLocalizations {
       _t('لا توجد بيانات لهذا التقرير', 'No report data');
   String get relatedDoc => _t('المستند المرجعي', 'Related Doc');
 
-  // ========== PHASE 3.3 — PRINT SETTINGS ==========
+  // ========== PRINT & THERMAL SETTINGS ==========
   String get printSettings => _t('إعدادات الطباعة', 'Print Settings');
   String get paperSize => _t('حجم الورق', 'Paper Size');
   String get paperA4 => _t('A4', 'A4');
@@ -604,7 +604,7 @@ class AppLocalizations {
   String get defaultPaperSize =>
       _t('حجم الورق الافتراضي', 'Default Paper Size');
 
-  // ========== PHASE 3.4 — PAYMENT METHODS ==========
+  // ========== PAYMENT METHODS CONFIGURATION ==========
   String get addPaymentMethod => _t('إضافة طريقة دفع', 'Add Payment Method');
   String get editPaymentMethod =>
       _t('تعديل طريقة الدفع', 'Edit Payment Method');
@@ -616,7 +616,7 @@ class AppLocalizations {
   String get confirmDeleteMethod =>
       _t('حذف طريقة الدفع', 'Delete Payment Method');
 
-  // ========== PHASE 3.6 — PAYMENT METHODS DB ==========
+  // ========== PAYMENT METHODS STORAGE ==========
   String get defaultMethod => _t('الافتراضي', 'Default');
   String get setAsDefault => _t('تعيين كافتراضي', 'Set as Default');
   String get cannotDeleteMethodInUse => _t(
@@ -628,7 +628,7 @@ class AppLocalizations {
   String get noPaymentMethodsEnabled =>
       _t('لا توجد طرق دفع مفعّلة', 'No payment methods enabled');
 
-  // ========== PHASE 3.4 — SCANNER ==========
+  // ========== BARCODE SCANNER ==========
   String get scannerHint =>
       _t('وجّه الكاميرا نحو الباركود', 'Point camera at barcode');
   String get scannerPermDenied =>
@@ -639,16 +639,16 @@ class AppLocalizations {
   );
   String get manualEntry => _t('إدخال يدوي', 'Manual Entry');
 
-  // ========== PHASE 3.4 — INVENTORY ==========
+  // ========== INVENTORY ADJUSTMENTS ==========
   String get newStockQuantity => _t('الكمية بعد التعديل', 'New Stock Quantity');
   String get adjustmentReason => _t('سبب التعديل', 'Adjustment Reason');
   String get inStock => _t('متوفر', 'In Stock');
   String get scanToLocate => _t('مسح للبحث', 'Scan to Locate');
 
-  // ========== PHASE 3.4 — AUDIT ==========
+  // ========== AUDIT TRAIL ==========
   String get auditLog => _t('سجل الأحداث', 'Audit Log');
 
-  // ========== PHASE 3.5 — FINANCIAL & LEGAL ==========
+  // ========== FINANCIAL & LEGAL COMPLIANCE ==========
   String get financialSettings =>
       _t('الإعدادات المالية والقانونية', 'Financial & Legal Settings');
   String get financialSettingsDesc => _t(
@@ -1327,7 +1327,7 @@ class AppLocalizations {
     'Hello $customer,\nAttached is your account statement from $business.\nPeriod: from $from to $to\nOutstanding balance: $balance $symbol\nThank you for your business.',
   );
 
-  // Phase 3 — Inventory Costing & Profit
+  // ========== INVENTORY COSTING & PROFIT ==========
   String get inventoryValuationAtCost =>
       _t('قيمة المخزون بالتكلفة', 'Inventory Value at Cost');
   String get costStatus => _t('حالة التكلفة', 'Cost Status');
@@ -1361,7 +1361,7 @@ class AppLocalizations {
   String get close => _t('إغلاق', 'Close');
   String get currentStock => _t('المخزون الحالي', 'Current Stock');
 
-  // Phase 4 — Business Reports & Analytics
+  // ========== BUSINESS REPORTS & ANALYTICS ==========
   String get stockMovementsReport =>
       _t('تقرير حركات المخزون', 'Stock Movements Report');
   String get balanceBefore => _t('الرصيد قبل', 'Balance Before');
@@ -1417,7 +1417,7 @@ class AppLocalizations {
   String get status => _t('الحالة', 'Status');
   String get issued => _t('صادر', 'Issued');
 
-  // Phase 5 — Advanced Pro Features
+  // ========== ADVANCED PRO FEATURES ==========
   String get featureStocktake =>
       _t('جرد وتسوية المخزون', 'Stocktake & Reconciliation');
   String get featureBulkPriceUpdate =>
@@ -1958,7 +1958,7 @@ class AppLocalizations {
   String get repairReviewBadge =>
       _t('يتطلب مراجعة يدوية', 'Requires Manual Review');
 
-  // ========== UI OVERHAUL ENHANCEMENTS ==========
+  // ========== FINANCIAL SUMMARY ENHANCEMENTS ==========
   String get paymentDetails => _t('تفاصيل الدفع', 'Payment Details');
   String get remainingBalanceHelper => _t(
     'يُحسب الرصيد المتبقي تلقائياً بناءً على المبلغ المدفوع',
@@ -1966,7 +1966,7 @@ class AppLocalizations {
   );
   String get financialOverview => _t('الملخص المالي', 'Financial Overview');
 
-  // ========== BATCH L2: COVERAGE ADDITIONS ==========
+  // ========== LOCALIZATION EXTENSIONS ==========
   String get eventStocktakeStarted =>
       _t('جرد المخزون (بدء)', 'Stocktake (Started)');
   String get eventStocktakeFinalized =>

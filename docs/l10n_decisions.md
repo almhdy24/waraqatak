@@ -47,3 +47,11 @@ Format per decision:
 - **Alternatives:** Injecting Bidi isolates into PDF builder strings (which corrupts PDF font rendering and breaks document layout).
 - **Why Safest:** Completely preserves Arabic text rendering and existing PDF layout across all templates (classic, modern, minimal) and sizes (A4, A5, Thermal 80mm).
 - **How to Reverse:** N/A (verified existing architecture complies with isolate exclusion).
+
+---
+
+### Decision 6 (Batch L7): Section Comment Reorganization by Feature Domain
+- **Decision:** Replaced all 20 legacy section comments named after historical engineering phases (e.g., "PHASE 3.1", "PHASE 3.2 — PURCHASES", "Milestone 2", "Phase 3 — Inventory Costing & Profit", "BATCH L2") with standardized functional feature domains (`PURCHASES & ORDERS`, `SUPPLIERS`, `INVENTORY & STOCK MOVEMENTS`, `DASHBOARD METRIC CARDS`, `REPORTS HUB`, `PRINT & THERMAL SETTINGS`, `PAYMENT METHODS CONFIGURATION`, `DIAGNOSTICS & ERROR REPORTING`). Kept exact member declaration order and signatures 100% unchanged.
+- **Alternatives:** Re-sorting getters and methods alphabetically or by domain (which would create a massive 2000-line diff and destroy git blame/history).
+- **Why Safest:** Comment-only edit; zero code changes; exactly 0 members removed or re-ordered; API diff confirmed 1003/1003 members stable.
+- **How to Reverse:** Revert comment lines back in `lib/localization/app_localizations.dart`.
