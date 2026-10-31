@@ -93,6 +93,17 @@ class AppLocalizations {
   String get open => _t('فتح', 'Open');
   String get sharePdf => _t('مشاركة ملف PDF', 'Share PDF');
   String get print => _t('طباعة', 'Print');
+  String get unsavedChangesTitle => _t('تغييرات غير محفوظة', 'Unsaved Changes');
+  String get unsavedChangesMessage => _t(
+    'لديك تعديلات لم يتم حفظها. هل تريد بالتأكيد الخروج وإلغاء التعديلات؟',
+    'You have unsaved changes. Are you sure you want to discard them and leave?',
+  );
+  String get discardChanges => _t('تجاهل التعديلات', 'Discard Changes');
+  String get confirmDeleteLine => _t('حذف هذا البند؟', 'Delete this item?');
+  String get deleteLineWarning => _t(
+    'هل تريد بالتأكيد إزالة هذا البند من المستند؟',
+    'Are you sure you want to remove this item from the document?',
+  );
 
   // ========== BUSINESS & SETTINGS ==========
   String get businessData =>

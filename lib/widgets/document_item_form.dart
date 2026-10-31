@@ -354,10 +354,10 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                     ),
                     InkWell(
                       onTap: _clearProduct,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Icons.close, size: 16),
+                        padding: EdgeInsets.all(8),
+                        child: Icon(Icons.close, size: 18),
                       ),
                     ),
                   ],
@@ -489,6 +489,15 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       ),
                       border: const OutlineInputBorder(),
                     ),
+                    textInputAction: TextInputAction.next,
+                    onTap: () {
+                      if (widget.quantityController.text.isNotEmpty) {
+                        widget.quantityController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: widget.quantityController.text.length,
+                        );
+                      }
+                    },
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
@@ -513,6 +522,15 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       ),
                       border: const OutlineInputBorder(),
                     ),
+                    textInputAction: TextInputAction.next,
+                    onTap: () {
+                      if (widget.priceController.text.isNotEmpty) {
+                        widget.priceController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: widget.priceController.text.length,
+                        );
+                      }
+                    },
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
@@ -595,10 +613,11 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                     ),
                   ),
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: cs.error, size: 20),
+                  icon: Icon(Icons.delete_outline, color: cs.error, size: 22),
                   tooltip: l10n.delete,
                   onPressed: widget.onDelete,
-                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                 ),
               ],
             ),

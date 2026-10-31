@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -27,6 +28,25 @@ class _CustomDocumentScreenState extends State<CustomDocumentScreen> {
   Contact? _selectedContact;
   String? _contactName;
   bool _saving = false;
+
+  bool get _isDirty =>
+      _titleController.text.isNotEmpty ||
+      _contentController.text.isNotEmpty ||
+      _amountController.text.isNotEmpty ||
+      _notesController.text.isNotEmpty ||
+      _selectedContact != null;
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
 
   @override
   void initState() {
@@ -99,13 +119,22 @@ class _CustomDocumentScreenState extends State<CustomDocumentScreen> {
     final l10n = AppLocalizations.of(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.customDocument), centerTitle: true),
-      body: ResponsiveCenter(child: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.customDocument), centerTitle: true),
+        body: ResponsiveCenter(child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -251,6 +280,7 @@ class _CustomDocumentScreenState extends State<CustomDocumentScreen> {
           ],
         ),
       )),
+      ),
     );
   }
 }

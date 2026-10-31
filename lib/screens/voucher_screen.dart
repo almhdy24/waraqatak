@@ -5,6 +5,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
 import '../models/payment_method.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
@@ -32,6 +33,23 @@ class _VoucherScreenState extends State<VoucherScreen> {
   bool _saving = false;
 
   bool get isReceipt => widget.type == VoucherType.paymentReceipt;
+
+  bool get _isDirty =>
+      _selectedContact != null ||
+      _amountController.text.isNotEmpty ||
+      _reasonController.text.isNotEmpty;
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
 
   @override
   void initState() {
@@ -114,13 +132,22 @@ class _VoucherScreenState extends State<VoucherScreen> {
 
     final allowedMethods = _enabledMethods;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(title), centerTitle: true),
-      body: ResponsiveCenter(child: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(title), centerTitle: true),
+        body: ResponsiveCenter(child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -258,6 +285,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
           ],
         ),
       )),
+      ),
     );
   }
 

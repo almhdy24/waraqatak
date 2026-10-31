@@ -33,3 +33,9 @@ Format per decision:
 - **Alternatives:** Keeping screen-by-screen ternaries and raw string interpolations.
 - **Why Safest:** Consistently mirrors all navigation gestures and arrows for RTL Arabic and LTR English, avoiding bugs where Western chevrons point backwards in Arabic.
 - **How to Reverse:** Revert touched screens to inline ternaries.
+
+### Decision 5 (Batch 4): Sticky Bottom Totals Bar and PopScope Navigation Guard
+- **Decision:** Added sticky `bottomNavigationBar` totals bars on `InvoiceScreen`, `PurchaseScreen`, and `QuotationScreen` with primary action buttons and live `AppAmountText` total; added `PopScope` unsaved dirty guards and line deletion confirmations.
+- **Alternatives:** Requiring users to scroll through lengthy item lists to reach the save button and totals card at the very bottom.
+- **Why Safest:** Retains the full scrollable form and existing totals card inside the body while exposing the sticky totals and save actions at the viewport bottom for quick thumb access. Uses `_isDirty` checks before popping so existing save/issue flow parameters remain completely untouched.
+- **How to Reverse:** Remove `bottomNavigationBar` and `PopScope` wrapper, restoring the full-width buttons inside the list.

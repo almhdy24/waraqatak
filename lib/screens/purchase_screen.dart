@@ -7,6 +7,8 @@ import '../models/currency.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
+import '../widgets/app_amount_text.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_totals_card.dart';
@@ -96,7 +98,42 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     });
   }
 
-  void _removeItem(int index) {
+  bool get _isDirty {
+    return _selectedContact != null ||
+        _notesController.text.isNotEmpty ||
+        (_discountController.text != '0' && _discountController.text.isNotEmpty) ||
+        (_paidController.text != '0' && _paidController.text.isNotEmpty) ||
+        _descriptionControllers.any((c) => c.text.isNotEmpty) ||
+        _productIds.any((id) => id != null) ||
+        _descriptionControllers.length > 1;
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
+  Future<void> _removeItem(int index) async {
+    final hasContent =
+        _descriptionControllers[index].text.isNotEmpty || _productIds[index] != null;
+    if (hasContent) {
+      final l10n = AppLocalizations.of(context);
+      final proceed = await AppConfirmDialog.show(
+        context,
+        title: l10n.confirmDeleteLine,
+        message: l10n.deleteLineWarning,
+        isDestructive: true,
+      );
+      if (!proceed) return;
+    }
+    if (!mounted) return;
     setState(() {
       _descriptionControllers[index].dispose();
       _quantityControllers[index].dispose();
@@ -197,7 +234,6 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final primaryColor = Theme.of(context).colorScheme.primary;
 
     final totals = _totals;
     final subtotal = totals.subtotal;
@@ -209,9 +245,78 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     );
     final remaining = MoneyUtils.calculateRemaining(total, paid, decimalDigits);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.purchase), centerTitle: true),
-      body: ResponsiveCenter(
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.purchase), centerTitle: true),
+        bottomNavigationBar: SafeArea(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              boxShadow: AppDesignTokens.softShadow(context),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.total,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      AppAmountText(
+                        amount: total,
+                        currencySymbol: _business?.currencySymbol ?? '',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _saving ? null : () => _save(isDraft: true),
+                  child: Text(l10n.saveDraft),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _saving ? null : () => _save(),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(110, AppDesignTokens.minTouchTarget),
+                  ),
+                  child: _saving
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(l10n.savePurchase),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: ResponsiveCenter(
         child: Form(
           key: _formKey,
           child: ListView(
@@ -290,6 +395,15 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   labelText: l10n.discount,
                   prefixIcon: const Icon(Icons.percent_rounded, size: 20),
                 ),
+                textInputAction: TextInputAction.next,
+                onTap: () {
+                  if (_discountController.text.isNotEmpty) {
+                    _discountController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: _discountController.text.length,
+                    );
+                  }
+                },
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -302,6 +416,15 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   prefixIcon: const Icon(Icons.payments_outlined, size: 20),
                   helperText: l10n.remainingBalanceHelper,
                 ),
+                textInputAction: TextInputAction.next,
+                onTap: () {
+                  if (_paidController.text.isNotEmpty) {
+                    _paidController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: _paidController.text.length,
+                    );
+                  }
+                },
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -336,15 +459,6 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 height: 52,
                 child: FilledButton(
                   onPressed: _saving ? null : () => _save(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppDesignTokens.buttonRadius,
-                      ),
-                    ),
-                  ),
                   child: _saving
                       ? SizedBox(
                           width: 24,
@@ -365,6 +479,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
@@ -9,6 +9,8 @@ import '../models/payment_method.dart';
 import '../models/product.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_confirm_dialog.dart';
+import '../widgets/app_loading_view.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -182,7 +184,35 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     });
   }
 
-  void _removeItem(int index) {
+  bool _hasChanges = false;
+
+  Future<bool> _onWillPop() async {
+    if (!_hasChanges || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
+  Future<void> _removeItem(int index) async {
+    final hasContent =
+        _descriptionControllers[index].text.isNotEmpty || _productIds[index] != null;
+    if (hasContent) {
+      final l10n = AppLocalizations.of(context);
+      final proceed = await AppConfirmDialog.show(
+        context,
+        title: l10n.confirmDeleteLine,
+        message: l10n.deleteLineWarning,
+        isDestructive: true,
+      );
+      if (!proceed) return;
+    }
+    if (!mounted) return;
+    _hasChanges = true;
     setState(() {
       _descriptionControllers[index].dispose();
       _quantityControllers[index].dispose();
@@ -315,7 +345,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: AppLoadingView());
     }
 
     final type = _document!.type;
@@ -328,16 +358,25 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
 
     final allowedMethods = _enabledMethods;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${l10n.edit} - ${_document!.documentNumber}'),
-        centerTitle: true,
-      ),
-      body: ResponsiveCenter(child: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+    return PopScope(
+      canPop: !_hasChanges || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('${l10n.edit} - ${_document!.documentNumber}'),
+          centerTitle: true,
+        ),
+        body: ResponsiveCenter(child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
             if (!isFinancial) ...[
               Card(
                 child: Padding(
@@ -638,6 +677,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
           ],
         ),
       )),
+      ),
     );
   }
 
