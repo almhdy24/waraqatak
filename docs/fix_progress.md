@@ -23,7 +23,7 @@ Base Commit: `e2ce47fc19084bc5badae196a68769d3abafebc4` (contains `v1.1.5-beta+1
 | Part 2 Commit | `fix(accounting): atomic stock delta on document edit and guided repair` | COMPLETE | 0b4e0bd | 13 purchase edit tests, 5 repair tests, 2 invariants P1+P2 pass |
 | 3.1 | Read-Only Accounting Spec Addendum | COMPLETE | - | `docs/accounting_spec_addendum.md` documents all posting rules & file:line citations |
 | Part 3 Commit | `docs(accounting): posting rules addendum` | IN_PROGRESS | - | Canonical reference completed |
-| 4.0 | Full Verification, Report & Docs | PENDING | - | run_tests_one_by_one, analyze, compliance, final report |
+| 4.0 | Full Verification, Report & Docs | COMPLETE | - | run_tests_one_by_one (77 files, 965 tests pass), analyze (0 issues), compliance OK, final report written |
 
 ## Test Mapping Updates
 - Prior to Part 1, no existing tests asserted on `SnackBar` directly (`grep -rn "SnackBar" test/` returned 0 matches).
