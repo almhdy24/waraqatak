@@ -59,9 +59,16 @@ Encrypted backups use a fixed 40-byte binary header followed by ciphertext and a
 
 ---
 
-## 5. Unattended & Automatic Safety Backups
+## 5. Unattended & Automatic Safety Backups & Retention Policy
 
-Automatic safety backups (`BackupService.createSafetyBackup()` called prior to database restore or repair operations) remain **unencrypted plain JSON**. They are saved strictly in app-private internal storage (`getApplicationDocumentsDirectory()`), never on external or shared storage. They do not prompt the user for passwords and are never stored with credentials.
+- **Unencrypted Plain JSON**: Automatic safety backups (`BackupService.createSafetyBackup()` called prior to database restore or repair operations) remain strictly unencrypted plain JSON to allow unattended, deterministic recovery.
+- **Storage Location**: Stored strictly in app-private internal storage (`getApplicationDocumentsDirectory()`, `/data/user/0/com.elmahdi.waraqatak/app_flutter/`), sandboxed by Linux UID permissions. They are never saved on shared or external storage (`/storage/emulated/0`).
+- **Retention & Pruning Policy**: After every successful database restore or database repair transaction, `BackupService.pruneSafetyBackups()` runs automatically:
+  - Deletes safety backups (`warqatek_safety_pre_restore_*`) older than 30 days.
+  - Retains at most the 3 most recent safety backups.
+  - NEVER deletes the safety backup that was just created (`preservePath`).
+  - NEVER modifies or deletes user-chosen backups (`warqatek_backup_*`).
+  - Pruning failures are safely suppressed and never cause a restore or repair to fail.
 
 ---
 

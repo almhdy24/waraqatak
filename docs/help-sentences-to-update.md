@@ -94,8 +94,10 @@ This document lists:
 > **رسالة تحديث التطبيق:**
 > - إذا تم فتح نسخة احتياطية مشفرة بصيغة أحدث من إصدار التطبيق الحالي، تظهر رسالة: *"حدّث التطبيق لفتح هذه النسخة"* لمنع أي أخطاء استعادة جزئية.
 >
-> **النسخ الاحتياطية الوقائية التلقائية (Safety Backups):**
-> - النسخ الاحتياطية الوقائية التي يُنشئها التطبيق تلقائياً داخل الذاكرة الداخلية الخاصة قبل أي عملية استعادة أو إصلاح لقاعدة البيانات تبقى دائماً غير مشفرة لتأمين استرجاع النظام تلقائياً دون طلب كلمة مرور.
+> **النسخ الاحتياطية الوقائية التلقائية (Safety Backups) وسياسة الاحتفاظ:**
+> - النسخ الاحتياطية الوقائية التي يُنشئها التطبيق تلقائياً قبل أي عملية استعادة أو إصلاح لقاعدة البيانات تبقى دائماً غير مشفرة لتأمين استرجاع النظام تلقائياً دون طلب كلمة مرور.
+> - تُحفظ هذه النسخ داخل الذاكرة الداخلية الخاصة بالتطبيق حصراً (App-private storage) ولا يمكن لأي تطبيق آخر الوصول إليها.
+> - تُطبّق سياسة احتفاظ تلقائية بعد كل عملية استعادة أو إصلاح ناجحة: يتم الاحتفاظ بآخر 3 نسخ وقائية فقط وحذف أي نسخ أقدم من 30 يوماً لمنع تراكم الملفات، مع الحفاظ الكامل على النسخة المنشأة حديثاً وعدم المساس مطلقاً بنسخ المستخدم العادية.
 
 #### English Help Guide Updates:
 > **Backup Encryption & Password Protection:**
@@ -107,4 +109,4 @@ This document lists:
 > - **Google Drive Cloud Backups:** Manual cloud uploads to Google Drive support optional password encryption identically to local backups.
 > - **Restoring Encrypted Backups:** Encrypted backups are auto-detected. An incorrect password displays an error and allows immediate retry without re-picking the file. The local database is never touched until decryption and validation succeed.
 > - **Update App Message:** Encrypted backups created with newer format versions show: *"Update the app to open this backup"*.
-> - **Automated Safety Backups:** Pre-restore and pre-repair safety backups remain unencrypted in app-private storage for automated recovery.
+> - **Automated Safety Backups & Retention Policy:** Pre-restore and pre-repair safety backups remain unencrypted plain JSON in app-private storage for automated recovery. The app automatically retains the 3 most recent safety backups and purges any older than 30 days after every successful restore or repair, never touching user-chosen backups.
