@@ -11,8 +11,8 @@
 
 | Phase | Description | Status | Commit SHA | Evidence / Key Artifacts |
 |:---|:---|:---|:---|:---|
-| **P0** | Read & Design (No Code) | COMPLETED | Pending commit | `docs/accounting_backbone_design.md`, `docs/accounting_spec_addendum.md` |
-| **P1** | Foundation: Schema, Migration, Models, PostingService & JournalWriter | NOT STARTED | — | — |
+| **P0** | Read & Design (No Code) | COMPLETED | `2c2648a5ad` | `docs/accounting_backbone_design.md`, `docs/accounting_spec_addendum.md` |
+| **P1** | Foundation: Schema, Migration, Models, PostingService & JournalWriter | COMPLETED | Pending commit | Schema v25, models, `PostingService`, `JournalWriter`, `BackupService`, 4 test files (13 tests pass) |
 | **P2** | Single Stock Writer & Routing | NOT STARTED | — | — |
 | **P3** | Shadow Posting & Parity Test Suite | NOT STARTED | — | — |
 | **P4** | Backfill & Parity on Existing Data | NOT STARTED | — | — |

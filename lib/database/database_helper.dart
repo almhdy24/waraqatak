@@ -28,7 +28,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 24;
+  static const int dbVersion = 25;
 
   static Database? _database;
 
@@ -345,6 +345,8 @@ class DatabaseHelper {
         total_cost REAL,
         cost_status TEXT DEFAULT 'unknown',
         provenance TEXT,
+        reason TEXT,
+        target_movement_id INTEGER,
         FOREIGN KEY (product_id) REFERENCES products(id),
         FOREIGN KEY (reference_document_id) REFERENCES documents(id) ON DELETE SET NULL
       )
@@ -561,7 +563,80 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
     );
+
+    // Double-entry accounting backbone tables (Phase 1)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS accounts (
+        code TEXT PRIMARY KEY,
+        name_ar TEXT NOT NULL,
+        name_en TEXT NOT NULL,
+        type TEXT NOT NULL,
+        normal_side TEXT NOT NULL,
+        is_system INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+    await seedAccounts(db);
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS journal_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_no TEXT NOT NULL UNIQUE,
+        effective_date TEXT NOT NULL,
+        posted_at TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        source_id INTEGER,
+        revision INTEGER NOT NULL DEFAULT 1,
+        memo TEXT,
+        reverses_entry_id INTEGER REFERENCES journal_entries(id),
+        origin TEXT NOT NULL DEFAULT 'live'
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(effective_date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_source ON journal_entries(source_type, source_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_origin ON journal_entries(origin)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS journal_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+        account_code TEXT NOT NULL REFERENCES accounts(code),
+        debit_minor INTEGER NOT NULL DEFAULT 0,
+        credit_minor INTEGER NOT NULL DEFAULT 0,
+        product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+        contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_entry ON journal_lines(entry_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON journal_lines(account_code)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_product ON journal_lines(product_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_contact ON journal_lines(contact_id)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )
+    ''');
+    await seedDefaultSettings(db);
   }
+
+  @visibleForTesting
+  Future<void> createTablesForTest(Database db, [int version = dbVersion]) =>
+      _createTables(db, version);
 
   @visibleForTesting
   Future<void> upgradeTablesForTest(
@@ -1199,6 +1274,95 @@ class DatabaseHelper {
     if (oldVersion < 24 && newVersion >= 24) {
       await replaceDefaultPaymentMethods(db);
     }
+
+    if (oldVersion < 25 && newVersion >= 25) {
+      if (!await tableExists('accounts')) {
+        await db.execute('''
+          CREATE TABLE accounts (
+            code TEXT PRIMARY KEY,
+            name_ar TEXT NOT NULL,
+            name_en TEXT NOT NULL,
+            type TEXT NOT NULL,
+            normal_side TEXT NOT NULL,
+            is_system INTEGER NOT NULL DEFAULT 1
+          )
+        ''');
+      }
+      await seedAccounts(db);
+
+      if (!await tableExists('journal_entries')) {
+        await db.execute('''
+          CREATE TABLE journal_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_no TEXT NOT NULL UNIQUE,
+            effective_date TEXT NOT NULL,
+            posted_at TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_id INTEGER,
+            revision INTEGER NOT NULL DEFAULT 1,
+            memo TEXT,
+            reverses_entry_id INTEGER REFERENCES journal_entries(id),
+            origin TEXT NOT NULL DEFAULT 'live'
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(effective_date)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_entries_source ON journal_entries(source_type, source_id)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_entries_origin ON journal_entries(origin)',
+        );
+      }
+
+      if (!await tableExists('journal_lines')) {
+        await db.execute('''
+          CREATE TABLE journal_lines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+            account_code TEXT NOT NULL REFERENCES accounts(code),
+            debit_minor INTEGER NOT NULL DEFAULT 0,
+            credit_minor INTEGER NOT NULL DEFAULT 0,
+            product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+            contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_entry ON journal_lines(entry_id)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON journal_lines(account_code)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_product ON journal_lines(product_id)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_contact ON journal_lines(contact_id)',
+        );
+      }
+
+      if (!await tableExists('app_settings')) {
+        await db.execute('''
+          CREATE TABLE app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+          )
+        ''');
+      }
+      await seedDefaultSettings(db);
+
+      if (await tableExists('stock_movements')) {
+        if (!await columnExists('stock_movements', 'reason')) {
+          await db.execute('ALTER TABLE stock_movements ADD COLUMN reason TEXT');
+        }
+        if (!await columnExists('stock_movements', 'target_movement_id')) {
+          await db.execute(
+            'ALTER TABLE stock_movements ADD COLUMN target_movement_id INTEGER',
+          );
+        }
+      }
+    }
   }
 
   static Future<void> backfillCurrencyLockIfNeeded(DatabaseExecutor db) async {
@@ -1223,6 +1387,105 @@ class DatabaseHelper {
         [now],
       );
     }
+  }
+
+  /// Seeds standard 13-account chart into accounts table if not already present.
+  static Future<void> seedAccounts(DatabaseExecutor db) async {
+    const systemAccounts = [
+      {'code': '1110', 'name_ar': 'الصندوق (النقدية)', 'name_en': 'Cash on hand', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1120', 'name_ar': 'البنوك والمحافظ الإلكترونية', 'name_en': 'Bank & e-wallets', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1130', 'name_ar': 'العملاء (ذمم مدينة)', 'name_en': 'Accounts receivable', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1140', 'name_ar': 'المخزون', 'name_en': 'Inventory', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1150', 'name_ar': 'ضريبة مستردة (مدخلات)', 'name_en': 'Tax receivable (input)', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '2110', 'name_ar': 'الموردون (ذمم دائنة)', 'name_en': 'Accounts payable', 'type': 'liability', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '2120', 'name_ar': 'ضريبة مستحقة (مخرجات)', 'name_en': 'Tax payable (output)', 'type': 'liability', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '3100', 'name_ar': 'رأس المال / أرصدة افتتاحية', 'name_en': 'Opening balance equity', 'type': 'equity', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '4100', 'name_ar': 'إيرادات المبيعات', 'name_en': 'Sales revenue', 'type': 'revenue', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '4900', 'name_ar': 'إيرادات أخرى', 'name_en': 'Other income', 'type': 'revenue', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '5100', 'name_ar': 'تكلفة البضاعة المباعة', 'name_en': 'Cost of goods sold', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '5200', 'name_ar': 'عجز وتسويات المخزون', 'name_en': 'Inventory adjustments', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '6100', 'name_ar': 'المصروفات التشغيلية', 'name_en': 'Operating expenses', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
+    ];
+
+    for (final acc in systemAccounts) {
+      await db.insert('accounts', acc, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  /// Seeds default app settings into app_settings table if not already present.
+  static Future<void> seedDefaultSettings(DatabaseExecutor db) async {
+    const defaults = {
+      'journal_shadow_write': 'true',
+      'journal_reports_enabled': 'false',
+    };
+    for (final entry in defaults.entries) {
+      await db.insert(
+        'app_settings',
+        {'key': entry.key, 'value': entry.value},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+  }
+
+  /// Retrieves a value from app_settings by key.
+  Future<String?> getSetting(String key, {DatabaseExecutor? txn}) async {
+    final exec = txn ?? (await database);
+    final rows = await exec.query(
+      'app_settings',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String?;
+  }
+
+  /// Inserts or updates a value in app_settings.
+  Future<void> setSetting(String key, String? value, {DatabaseExecutor? txn}) async {
+    final exec = txn ?? (await database);
+    await exec.insert(
+      'app_settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Flag indicating whether shadow posting to the journal is active (default true).
+  Future<bool> isJournalShadowWriteEnabled({DatabaseExecutor? txn}) async {
+    final val = await getSetting('journal_shadow_write', txn: txn);
+    return val == null || val.toLowerCase() == 'true';
+  }
+
+  /// Flag indicating whether reporting displays persisted journal data (default false).
+  Future<bool> isJournalReportsEnabled({DatabaseExecutor? txn}) async {
+    final val = await getSetting('journal_reports_enabled', txn: txn);
+    return val != null && val.toLowerCase() == 'true';
+  }
+
+  /// Returns the period lock cutoff date, if any.
+  Future<DateTime?> getBooksClosedThrough({DatabaseExecutor? txn}) async {
+    final val = await getSetting('books_closed_through', txn: txn);
+    if (val == null || val.isEmpty) return null;
+    return DateTime.tryParse(val);
+  }
+
+  /// Sets or clears the period lock cutoff date.
+  Future<void> setBooksClosedThrough(DateTime? date, {DatabaseExecutor? txn}) async {
+    await setSetting(
+      'books_closed_through',
+      date?.toIso8601String().substring(0, 10),
+      txn: txn,
+    );
+  }
+
+  /// Checks if a given transaction date is closed by the period lock.
+  Future<bool> isPeriodClosed(DateTime date, {DatabaseExecutor? txn}) async {
+    final lockDate = await getBooksClosedThrough(txn: txn);
+    if (lockDate == null) return false;
+    final entryDay = DateTime(date.year, date.month, date.day);
+    final lockDay = DateTime(lockDate.year, lockDate.month, lockDate.day);
+    return !entryDay.isAfter(lockDay);
   }
 
   static Future<void> _lockCurrencyTxn(DatabaseExecutor txn) async {

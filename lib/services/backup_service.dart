@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:sqflite/sqflite.dart';
 
 import '../database/database_helper.dart';
 import '../widgets/backup_password_dialog.dart';
@@ -25,6 +26,10 @@ class BackupService {
   @visibleForTesting
   static Future<void> Function(File tempFile, File targetFile)?
   onBeforePromotion;
+
+  /// Hook triggered after restoring a legacy backup that lacks persisted journal entries.
+  /// Typically invokes the backfill process in P4.
+  static Future<void> Function()? onLegacyBackupRestored;
 
   static int _safetyBackupSequence = 0;
 
@@ -387,12 +392,24 @@ class BackupService {
         return info.map((c) => c['name'] as String).toSet();
       }
 
+      Future<bool> tableExists(String table) async {
+        final tables = await txn.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+          [table],
+        );
+        return tables.isNotEmpty;
+      }
+
       Map<String, dynamic> sanitizeRow(
         Map<String, dynamic> row,
         Set<String> cols,
       ) =>
           Map.fromEntries(row.entries.where((e) => cols.contains(e.key)));
 
+      if (await tableExists('journal_lines')) await txn.delete('journal_lines');
+      if (await tableExists('journal_entries')) await txn.delete('journal_entries');
+      if (await tableExists('accounts')) await txn.delete('accounts');
+      if (await tableExists('app_settings')) await txn.delete('app_settings');
       await txn.delete('document_payments');
       await txn.delete('document_items');
       await txn.delete('stocktake_items');
@@ -511,6 +528,57 @@ class BackupService {
         }
       }
 
+      // Accounts: restore or re-seed
+      if (await tableExists('accounts')) {
+        if (data.containsKey('accounts') && data['accounts'] is List) {
+          final accCols = await getTableCols('accounts');
+          for (final row in _convertRows(data['accounts'])) {
+            await txn.insert(
+              'accounts',
+              sanitizeRow(row, accCols),
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+        } else {
+          await DatabaseHelper.seedAccounts(txn);
+        }
+      }
+
+      // Settings: restore or re-seed
+      if (await tableExists('app_settings')) {
+        if (data.containsKey('app_settings') && data['app_settings'] is List) {
+          final setCols = await getTableCols('app_settings');
+          for (final row in _convertRows(data['app_settings'])) {
+            await txn.insert(
+              'app_settings',
+              sanitizeRow(row, setCols),
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+        } else {
+          await DatabaseHelper.seedDefaultSettings(txn);
+        }
+      }
+
+      // Journal entries & lines (Phase 1)
+      if (await tableExists('journal_entries') &&
+          data.containsKey('journal_entries') &&
+          data['journal_entries'] is List) {
+        final jeCols = await getTableCols('journal_entries');
+        for (final row in _convertRows(data['journal_entries'])) {
+          await txn.insert('journal_entries', sanitizeRow(row, jeCols));
+        }
+      }
+
+      if (await tableExists('journal_lines') &&
+          data.containsKey('journal_lines') &&
+          data['journal_lines'] is List) {
+        final jlCols = await getTableCols('journal_lines');
+        for (final row in _convertRows(data['journal_lines'])) {
+          await txn.insert('journal_lines', sanitizeRow(row, jlCols));
+        }
+      }
+
       await DatabaseHelper.backfillCurrencyLockIfNeeded(txn);
     });
 
@@ -520,6 +588,16 @@ class BackupService {
       details:
           'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}',
     );
+
+    // If legacy backup lacked journal tables, invoke backfill hook if registered
+    final isLegacy = !data.containsKey('journal_entries') ||
+        data['journal_entries'] == null ||
+        (data['journal_entries'] as List).isEmpty;
+    if (isLegacy && onLegacyBackupRestored != null) {
+      try {
+        await onLegacyBackupRestored!();
+      } catch (_) {}
+    }
 
     // Prune older safety backups beyond retention limits
     if (createSafetyBackup) {
@@ -575,6 +653,9 @@ class BackupService {
   // BUILD BACKUP JSON (including logo as base64)
   // ============================================================
 
+  @visibleForTesting
+  static Future<String> buildBackupJsonForTest() => _buildBackupJson();
+
   static Future<String> _buildBackupJson() async {
     final db = await DatabaseHelper.instance.database;
 
@@ -618,6 +699,10 @@ class BackupService {
         'stocktake_sessions': await db.query('stocktake_sessions'),
         'stocktake_items': await db.query('stocktake_items'),
         'audit_log': await db.query('audit_log'),
+        'accounts': await db.query('accounts'),
+        'journal_entries': await db.query('journal_entries'),
+        'journal_lines': await db.query('journal_lines'),
+        'app_settings': await db.query('app_settings'),
       },
       'assets': {'logo_base64': logoBase64},
     };
