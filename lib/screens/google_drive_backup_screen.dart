@@ -5,7 +5,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 
 import '../localization/app_localizations.dart';
+import '../services/backup_encryption_service.dart';
 import '../services/google_drive_backup_service.dart';
+import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
 
 class GoogleDriveBackupScreen extends StatefulWidget {
@@ -153,6 +155,9 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
   }
 
   Future<void> _uploadBackup() async {
+    final password = await BackupPasswordCreateDialog.show(context);
+    if (password == null || !mounted) return;
+
     final l10n = AppLocalizations.of(context);
     setState(() {
       _loading = true;
@@ -161,7 +166,9 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     });
 
     try {
-      await _service.uploadCurrentBackup();
+      await _service.uploadCurrentBackup(
+        password: password.isEmpty ? null : password,
+      );
       if (!mounted) return;
       setState(() {
         _statusMessage = l10n.googleDriveUploadSuccess;
@@ -215,7 +222,10 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     });
 
     try {
-      final success = await _service.restoreFromDrive(backup);
+      final success = await _service.restoreFromDrive(
+        backup,
+        context: context,
+      );
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(
@@ -228,6 +238,24 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
           _isError = true;
         });
       }
+    } on BackupUnsupportedVersionException {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = l10n.backupUpdateRequired;
+        _isError = true;
+      });
+    } on BackupDecryptionException {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = l10n.backupIncorrectPassword;
+        _isError = true;
+      });
+    } on BackupCorruptedFileException {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = l10n.backupCorrupted;
+        _isError = true;
+      });
     } catch (e) {
       if (!mounted) return;
       final errStr = e.toString().toLowerCase();

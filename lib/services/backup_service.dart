@@ -3,11 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../database/database_helper.dart';
+import '../widgets/backup_password_dialog.dart';
+import 'backup_encryption_service.dart';
 
 class BackupService {
   static const String backupExtension = 'waraq';
@@ -61,14 +63,22 @@ class BackupService {
   // SAVE LOCAL BACKUP (App Documents Directory)
   // ============================================================
 
-  static Future<String> createLocalBackup() async {
+  static Future<String> createLocalBackup({String? password}) async {
     final jsonStr = await _buildBackupJson();
     final fileName =
         'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
 
     final directory = await _getBackupDirectory();
     final file = File('${directory.path}/$fileName');
-    await file.writeAsString(jsonStr, encoding: utf8);
+    if (password != null && password.isNotEmpty) {
+      final encryptedBytes = await BackupEncryptionService.encryptJson(
+        jsonStr: jsonStr,
+        password: password,
+      );
+      await file.writeAsBytes(encryptedBytes, flush: true);
+    } else {
+      await file.writeAsString(jsonStr, encoding: utf8);
+    }
 
     return file.path;
   }
@@ -172,12 +182,20 @@ class BackupService {
   // SAVE BACKUP VIA SYSTEM SAVE DIALOG (bytes-based)
   // ============================================================
 
-  static Future<bool> createBackupUserChosen() async {
+  static Future<bool> createBackupUserChosen({String? password}) async {
     final jsonStr = await _buildBackupJson();
     final fileName =
         'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
 
-    final bytes = Uint8List.fromList(utf8.encode(jsonStr));
+    Uint8List bytes;
+    if (password != null && password.isNotEmpty) {
+      bytes = await BackupEncryptionService.encryptJson(
+        jsonStr: jsonStr,
+        password: password,
+      );
+    } else {
+      bytes = Uint8List.fromList(utf8.encode(jsonStr));
+    }
 
     final uri = await FilePicker.saveFile(
       dialogTitle: 'Save Backup',
@@ -193,7 +211,11 @@ class BackupService {
   // RESTORE BACKUP (content-based validation, not extension)
   // ============================================================
 
-  static Future<bool> restoreBackup() async {
+  static Future<bool> restoreBackup({
+    BuildContext? context,
+    String? password,
+    Future<String?> Function(List<int> bytes)? passwordPrompt,
+  }) async {
     final file = await FilePicker.pickFile(type: FileType.any);
 
     if (file == null) return false;
@@ -203,9 +225,36 @@ class BackupService {
       throw Exception('Empty backup file');
     }
 
+    String jsonStr;
+    if (BackupEncryptionService.isEncrypted(bytes)) {
+      if (password != null && password.isNotEmpty) {
+        jsonStr = await BackupEncryptionService.decryptJson(
+          encryptedBytes: bytes,
+          password: password,
+        );
+      } else if (passwordPrompt != null) {
+        final result = await passwordPrompt(bytes);
+        if (result == null) return false;
+        jsonStr = result;
+      } else if (context != null && context.mounted) {
+        final result = await BackupPasswordPromptDialog.show(
+          context,
+          encryptedBytes: bytes,
+        );
+        if (result == null) return false;
+        jsonStr = result;
+      } else {
+        throw const BackupDecryptionException(
+          'Password is required for encrypted backup',
+        );
+      }
+    } else {
+      jsonStr = utf8.decode(bytes);
+    }
+
     Map<String, dynamic> jsonMap;
     try {
-      final decoded = jsonDecode(utf8.decode(bytes));
+      final decoded = jsonDecode(jsonStr);
       if (decoded is! Map<String, dynamic>) {
         throw Exception('Invalid backup format');
       }
