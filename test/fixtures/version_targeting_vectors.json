@@ -1,0 +1,122 @@
+[
+  {
+    "description": "App 1.1.5-alpha+16 vs unbounded (null/null)",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": null,
+    "max_version": null,
+    "expected_match": true
+  },
+  {
+    "description": "App 1.1.5-alpha+16 vs exact core 1.1.5 (no build bound)",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": "1.1.5",
+    "max_version": "1.1.5",
+    "expected_match": true
+  },
+  {
+    "description": "App 1.1.5-alpha+16 vs exact build bound 1.1.5+16",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": "1.1.5+16",
+    "max_version": "1.1.5+16",
+    "expected_match": true
+  },
+  {
+    "description": "App 1.1.5-alpha+16 vs min bound 1.1.5+17 (too low)",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": "1.1.5+17",
+    "max_version": null,
+    "expected_match": false
+  },
+  {
+    "description": "App 1.1.5-alpha+16 vs max bound 1.1.5+15 (too high)",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": null,
+    "max_version": "1.1.5+15",
+    "expected_match": false
+  },
+  {
+    "description": "App 1.1.5-alpha+16 vs range 1.1.4 to 1.2.0",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": "1.1.4",
+    "max_version": "1.2.0",
+    "expected_match": true
+  },
+  {
+    "description": "App 1.1.5-alpha+16 vs min bound 1.2.0 (below range)",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": "1.2.0",
+    "max_version": null,
+    "expected_match": false
+  },
+  {
+    "description": "App 1.1.5-alpha+16 vs max bound 1.1.4 (above range)",
+    "app_version": "1.1.5-alpha+16",
+    "app_build": null,
+    "min_version": null,
+    "max_version": "1.1.4",
+    "expected_match": false
+  },
+  {
+    "description": "App separated version and build 1.1.5-alpha with build 16 vs 1.1.5+16",
+    "app_version": "1.1.5-alpha",
+    "app_build": 16,
+    "min_version": "1.1.5+16",
+    "max_version": "1.1.5+16",
+    "expected_match": true
+  },
+  {
+    "description": "Malformed app version vs unbounded notification",
+    "app_version": "not-a-version",
+    "app_build": null,
+    "min_version": null,
+    "max_version": null,
+    "expected_match": true
+  },
+  {
+    "description": "Malformed app version vs bounded notification",
+    "app_version": "not-a-version",
+    "app_build": null,
+    "min_version": "1.0.0",
+    "max_version": null,
+    "expected_match": false
+  },
+  {
+    "description": "Null app version vs unbounded notification",
+    "app_version": null,
+    "app_build": null,
+    "min_version": null,
+    "max_version": null,
+    "expected_match": true
+  },
+  {
+    "description": "Null app version vs bounded notification",
+    "app_version": null,
+    "app_build": null,
+    "min_version": "1.0.0",
+    "max_version": null,
+    "expected_match": false
+  },
+  {
+    "description": "Pre-release version 1.2.0-beta.1 matches 1.2.0 bound",
+    "app_version": "1.2.0-beta.1",
+    "app_build": null,
+    "min_version": "1.2.0",
+    "max_version": "1.2.0",
+    "expected_match": true
+  },
+  {
+    "description": "Short core 1.1 equals 1.1.0 bound",
+    "app_version": "1.1",
+    "app_build": null,
+    "min_version": "1.1.0",
+    "max_version": "1.1.0",
+    "expected_match": true
+  }
+]
