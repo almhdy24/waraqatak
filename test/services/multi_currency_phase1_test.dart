@@ -542,21 +542,42 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(Card),
-          matching: find.textContaining('50,000 ج.س'),
+          matching: find.textContaining('50,000'),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: find.byType(Card),
-          matching: find.textContaining('100 \$'),
+          matching: find.text('ج.س'),
         ),
         findsOneWidget,
       );
       expect(
         find.descendant(
           of: find.byType(Card),
-          matching: find.textContaining('80 ر.س'),
+          matching: find.textContaining('100'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.text('\$'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.textContaining('80'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.text('ر.س'),
         ),
         findsOneWidget,
       );
