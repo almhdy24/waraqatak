@@ -18,11 +18,11 @@
 | **P4** | Backfill & Parity on Existing Data | COMPLETED | `48b4e2b` | `JournalBackfillService` idempotent engine, `DatabaseHelper` onOpen & `BackupService` legacy restore hooks, `journal_backfill_test.dart` (4/4 passed) |
 | **P5** | Report Switch Behind Flag & Diagnostics UI | COMPLETED | `2021952` | `LedgerService` switch behind `journal_reports_enabled`, `DatabaseDiagnosticScreen` accounting books card & backfill trigger, `journal_report_switch_test.dart` (2/2 passed) |
 | **P6** | Reason-Coded Adjustments & Period Lock | COMPLETED | `25f357a` | Reason-coded adjustments (D5), `books_closed_through` period lock (D6), `FinancialSettingsScreen` lock section, `period_lock_and_reasons_test.dart` (2/2 passed) |
-| **P7** | Reconciliation Engine | COMPLETED | Pending commit | `JournalReconciliationService` (8 read-only D7 checks), wired to `DatabaseDiagnosticService`, `journal_reconciliation_test.dart` (5/5 passed) |
-| **P8** | Guards & Hard Invariants (INV-14..INV-18) | IN PROGRESS | — | — |
-| **P9** | Final Verification, Mutation Checks, Reports | NOT STARTED | — | — |
+| **P7** | Reconciliation Engine | COMPLETED | `95da795` | `JournalReconciliationService` (8 read-only D7 checks), wired to `DatabaseDiagnosticService`, `journal_reconciliation_test.dart` (5/5 passed) |
+| **P8** | Guards & Hard Invariants (INV-14..INV-18) | COMPLETED | Pending commit | `test/invariants/accounting_backbone_invariants_test.dart` (5/5 passed), `docs/invariants_units_wholesale.md`, `CLAUDE.md`, `AGENTS.md` |
+| **P9** | Final Verification, Mutation Checks, Reports | IN PROGRESS | — | Hostile review, mutation checks, final report, release notes draft |
 
 ---
 
 ## Current Step
-Completed P7. Committing P7, then starting Phase P8 (Guards & Hard Invariants INV-14..INV-18).
+Completed P8. Ready to commit Phase 8 and execute Phase P9 (Final Verification, Mutation Checks, Reports).

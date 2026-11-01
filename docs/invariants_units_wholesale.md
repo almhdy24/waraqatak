@@ -7,6 +7,8 @@
 - [`test/guards/architecture_guards_test.dart`](file:///data/data/com.termux/files/home/projects/waraqatak/test/guards/architecture_guards_test.dart)
 - [`test/audit/units_wholesale_fix_test.dart`](file:///data/data/com.termux/files/home/projects/waraqatak/test/audit/units_wholesale_fix_test.dart)
 - [`test/audit/units_wholesale_audit_test.dart`](file:///data/data/com.termux/files/home/projects/waraqatak/test/audit/units_wholesale_audit_test.dart)
+- [`test/invariants/accounting_backbone_invariants_test.dart`](file:///data/data/com.termux/files/home/projects/waraqatak/test/invariants/accounting_backbone_invariants_test.dart)
+- [`test/guards/single_stock_writer_guard_test.dart`](file:///data/data/com.termux/files/home/projects/waraqatak/test/guards/single_stock_writer_guard_test.dart)
 
 ---
 
@@ -27,6 +29,11 @@
 | **INV-11** | **Physical Stock Balance Integrity** | For every product, `products.stock_quantity` equals the sum of its movements in `stock_movements` at all times. |
 | **INV-12** | **Metadata Edit No-Op** | Metadata-only edits (supplier/customer, notes, date, payment method, paid amount, recipient info) produce ZERO stock movements and ZERO changes to physical stock or ledger inventory. |
 | **INV-13** | **Ledger-Movement Inventory Valuation Parity** | Inventory balance per ledger (`Accounts.inventory`) equals total inventory per movements valued at cost, except for documented unvalued/unknown cost historical cases. |
+| **INV-14** | **Double-Entry Balance Invariance** | For every persisted journal entry $e$, $\sum_{l \in e} \text{debit\_minor} = \sum_{l \in e} \text{credit\_minor}$. Unbalanced drafts are rejected prior to any write with `StateError`. Total ledger debits equal credits at all times. |
+| **INV-15** | **Journal Immutability & Append-Only Corrections** | Journal rows are immutable: no `UPDATE` or `DELETE` on `journal_entries` or `journal_lines` except on rollback. Corrections are append-only via paired reversal entries (`reverses_entry_id` pointing to original entry) and subsequent reposts. Reversals inherit the original `effective_date`. |
+| **INV-16** | **Single Stock Writer Authoritativeness** | All physical stock mutations and `stock_movements` rows MUST route exclusively through `StockLedger.record(txn, ...)`. Direct inserts into `stock_movements` or direct writes to `products.stock_quantity` / `products.average_cost` outside `StockLedger` are strictly prohibited. |
+| **INV-17** | **Accounting Period Lock Gate** | If `books_closed_through` is set, any document issuance, revision, cancellation, deletion, payment, receipt, voucher, or stock adjustment dated on or before `books_closed_through` is strictly rejected with a localized error before any database mutation. |
+| **INV-18** | **Persisted-to-Derived Parity Invariance** | When `journal_shadow_write` is active, the balances of all base monetary accounts in the persisted journal match the on-the-fly derived ledger with zero tolerance on 1110, 1120, 1130, 2110, 2120, 4100, and 1150. |
 
 ---
 
