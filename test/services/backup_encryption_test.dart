@@ -15,7 +15,7 @@ void main() {
       final encryptedBytes = await BackupEncryptionService.encryptJson(
         jsonStr: testJson,
         password: testPassword,
-        iterations: 100000,
+        iterations: BackupEncryptionService.minIterations,
       );
 
       expect(encryptedBytes, isNotNull);
@@ -29,6 +29,35 @@ void main() {
       );
 
       expect(decrypted, equals(testJson));
+    });
+
+    test('KAT 1: Pure-Dart 600,000 iterations known-answer test with Arabic-Indic digits', () async {
+      final salt = List<int>.generate(16, (i) => i);
+      const input = 'كلمة_سر_ورقتك_١٤٤٨';
+      final normalized = BackupEncryptionService.normalizePassword(input);
+      expect(normalized, equals('كلمة_سر_ورقتك_1448'));
+      final utf8Hex = utf8.encode(normalized).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      expect(utf8Hex, equals('d983d984d985d8a95fd8b3d8b15fd988d8b1d982d8aad9835f31343438'));
+
+      final keyBytes = await BackupEncryptionService.deriveKeyPureDart(
+        password: input,
+        salt: salt,
+        iterations: 600000,
+      );
+      final keyHex = keyBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      expect(keyHex, equals('5ab1541bf7f1d4d055aef3bb368b2b29e56b37922a549e7a03c6e97271fd3491'));
+    });
+
+    test('KAT 2: Pure-Dart 600,000 iterations known-answer test with ASCII password', () async {
+      final salt = List<int>.generate(16, (i) => i);
+      const input = 'Waraqatak2026!';
+      final keyBytes = await BackupEncryptionService.deriveKeyPureDart(
+        password: input,
+        salt: salt,
+        iterations: 600000,
+      );
+      final keyHex = keyBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      expect(keyHex, equals('40b5b44b3181c4c51ab7195718cd77c19c213e84f21db29cac26b346c5c95387'));
     });
 
     test('2. Wrong password throws BackupDecryptionException', () async {
