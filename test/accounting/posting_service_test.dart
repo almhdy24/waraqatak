@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/models/document.dart';
 import 'package:warqatek/models/document_item.dart';
-import 'package:warqatek/models/document_payment.dart';
-import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/models/journal_entry_entity.dart';
 import 'package:warqatek/models/journal_line_entity.dart';
 import 'package:warqatek/models/product.dart';

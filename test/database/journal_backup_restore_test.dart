@@ -6,11 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/models/business.dart';
-import 'package:warqatek/models/currency.dart';
 import 'package:warqatek/models/document.dart';
-import 'package:warqatek/models/product.dart';
-import 'package:warqatek/services/accounting/journal_draft.dart';
-import 'package:warqatek/services/accounting/journal_writer.dart';
+import 'package:warqatek/models/document_item.dart';
+import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/services/backup_service.dart';
 
 void main() {
@@ -47,23 +45,32 @@ void main() {
     );
 
     final rawDb = await db.database;
-    await rawDb.transaction((txn) async {
-      await JournalWriter.write(
-        txn,
-        JournalEntryDraft(
-          entryNo: 'JE-BK-001',
-          effectiveDate: DateTime(2026, 4, 1),
-          postedAt: DateTime(2026, 4, 1, 10, 0),
-          sourceType: 'invoice',
-          sourceId: 1,
-          memo: 'Backup test invoice',
-          lines: const [
-            JournalLineDraft(accountCode: '1130', debitMinor: 15000),
-            JournalLineDraft(accountCode: '4100', creditMinor: 15000),
-          ],
+    final docId = await db.insertDocumentWithItems(
+      Document(
+        type: 'invoice',
+        documentNumber: 'INV-BK-001',
+        date: DateTime(2026, 4, 1),
+        subtotal: 150.0,
+        discount: 0.0,
+        taxRate: 0.0,
+        taxAmount: 0.0,
+        total: 150.0,
+        paid: 0.0,
+        remaining: 150.0,
+        status: DocumentStatus.issued,
+        currencyCode: 'SDG',
+      ),
+      [
+        DocumentItem(
+          documentId: 0,
+          description: 'خدمة تجريبية',
+          quantity: 1.0,
+          price: 150.0,
+          total: 150.0,
         ),
-      );
-    });
+      ],
+    );
+    expect(docId, greaterThan(0));
 
     await db.setSetting('test_custom_setting', 'sample_value');
 
@@ -79,7 +86,7 @@ void main() {
 
     final exportedEntries = data['journal_entries'] as List;
     expect(exportedEntries.length, 1);
-    expect(exportedEntries.first['entry_no'], 'JE-BK-001');
+    expect((exportedEntries.first['entry_no'] as String).startsWith('JE-INV'), isTrue);
 
     // 3. Clear data and restore
     final success = await BackupService.restoreFromJsonMap(
@@ -91,7 +98,7 @@ void main() {
     // 4. Verify restored state
     final restoredEntries = await rawDb.query('journal_entries');
     expect(restoredEntries.length, 1);
-    expect(restoredEntries.first['entry_no'], 'JE-BK-001');
+    expect((restoredEntries.first['entry_no'] as String).startsWith('JE-INV'), isTrue);
 
     final restoredLines = await rawDb.query('journal_lines');
     expect(restoredLines.length, 2);
