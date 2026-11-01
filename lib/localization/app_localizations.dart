@@ -358,8 +358,12 @@ class AppLocalizations {
   String get backupPasswordsDoNotMatch =>
       _t('كلمتا المرور غير متطابقتين', 'Passwords do not match');
   String get backupPasswordWarning => _t(
-    'تحذير: إذا نسيت كلمة المرور، فلن تتمكن أنت ولا نحن ولا أي شخص آخر من استعادة بياناتك.',
-    'Warning: If you forget the password, neither you, nor we, nor anyone else will ever be able to recover your data.',
+    'تحذير: إذا نسيت كلمة المرور فلن يستطيع أحد فتح هذه النسخة، لا أنت ولا نحن.',
+    'If you forget the password, nobody can open this backup, neither you nor us.',
+  );
+  String get backupPasswordHint => _t(
+    'تلميح: استخدام الأحرف والأرقام الإنجليزية يجنبك اختلاف لوحات المفاتيح.',
+    'Tip: Using English letters and digits avoids keyboard differences.',
   );
   String get backupEncryptedTitle =>
       _t('نسخة احتياطية مشفرة', 'Encrypted Backup');

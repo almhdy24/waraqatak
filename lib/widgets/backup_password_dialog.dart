@@ -57,25 +57,27 @@ class _BackupPasswordCreateDialogState
       return;
     }
 
-    final password = _passwordController.text;
-    final confirm = _confirmController.text;
+    final normalized =
+        BackupEncryptionService.normalizePassword(_passwordController.text);
+    final normalizedConfirm =
+        BackupEncryptionService.normalizePassword(_confirmController.text);
 
-    if (password.isEmpty) {
+    if (normalized.isEmpty) {
       setState(() => _errorMessage = l10n.backupPasswordRequired);
       return;
     }
 
-    if (password.length < 8) {
+    if (normalized.length < 8) {
       setState(() => _errorMessage = l10n.backupPasswordMinLength);
       return;
     }
 
-    if (password != confirm) {
+    if (normalized != normalizedConfirm) {
       setState(() => _errorMessage = l10n.backupPasswordsDoNotMatch);
       return;
     }
 
-    Navigator.of(context).pop(password);
+    Navigator.of(context).pop(_passwordController.text);
   }
 
   Widget _buildChoiceTile({
@@ -224,6 +226,14 @@ class _BackupPasswordCreateDialogState
                     setState(() => _errorMessage = null);
                   }
                 },
+              ),
+              const SizedBox(height: AppDesignTokens.space8),
+              Text(
+                l10n.backupPasswordHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(height: AppDesignTokens.space16),
               // Warning box
@@ -455,6 +465,14 @@ class _BackupPasswordPromptDialogState
                   setState(() => _errorMessage = null);
                 }
               },
+            ),
+            const SizedBox(height: AppDesignTokens.space8),
+            Text(
+              l10n.backupPasswordHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
             ),
             if (_isLoading) ...[
               const SizedBox(height: AppDesignTokens.space16),
