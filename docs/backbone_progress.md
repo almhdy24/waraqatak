@@ -20,9 +20,9 @@
 | **P6** | Reason-Coded Adjustments & Period Lock | COMPLETED | `25f357a` | Reason-coded adjustments (D5), `books_closed_through` period lock (D6), `FinancialSettingsScreen` lock section, `period_lock_and_reasons_test.dart` (2/2 passed) |
 | **P7** | Reconciliation Engine | COMPLETED | `95da795` | `JournalReconciliationService` (8 read-only D7 checks), wired to `DatabaseDiagnosticService`, `journal_reconciliation_test.dart` (5/5 passed) |
 | **P8** | Guards & Hard Invariants (INV-14..INV-18) | COMPLETED | `a2606ea` | `test/invariants/accounting_backbone_invariants_test.dart` (5/5 passed), `docs/invariants_units_wholesale.md`, `CLAUDE.md`, `AGENTS.md` |
-| **P9** | Final Verification, Mutation Checks, Reports | COMPLETED | Pending commit | `docs/backbone_final_report.md`, `docs/release-notes-1.1.5-beta+19-draft.md`, 3 mutation checks verified |
+| **P9** | Final Verification, Mutation Checks, Reports | COMPLETED | `6e7ecee` | `docs/backbone_final_report.md`, `docs/release-notes-1.1.5-beta+19-draft.md`, 3 mutation checks verified |
 
 ---
 
 ## Current Step
-Completed all phases (P0 through P9). Ready to commit Phase 9 locally.
+Completed all phases (P0 through P9). All commits cleanly finalized.
