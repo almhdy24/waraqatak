@@ -1,0 +1,92 @@
+[
+  {
+    "reason": "license_expired",
+    "http_status": 401,
+    "expected_status": "expired",
+    "terminal": true
+  },
+  {
+    "reason": "license_revoked",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "license_refunded",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "license_flagged",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "device_not_registered",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "device_revoked",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "device_deactivated",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "device_mismatch",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "product_mismatch",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "license_not_found",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "invalid_signature_or_payload",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "invalid_machine_id",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "unknown_future_error",
+    "http_status": 401,
+    "expected_status": "revoked",
+    "terminal": true
+  },
+  {
+    "reason": "rate_limited",
+    "http_status": 429,
+    "expected_status": "no_change",
+    "terminal": false
+  },
+  {
+    "reason": "server_error",
+    "http_status": 500,
+    "expected_status": "no_change",
+    "terminal": false
+  }
+]

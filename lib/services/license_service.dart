@@ -55,8 +55,11 @@ class SecureLicenseStorage implements LicenseStorage {
 /// (backed by the Android Keystore).
 ///
 /// **Persistence note:** Android's EncryptedSharedPreferences are deleted on
-/// uninstall. A new install gets a fresh 14-day trial. This is the strongest
-/// practical Android-supported persistence without requiring a backend account.
+/// uninstall, but device identity is derived deterministically from hardware
+/// identifiers (Settings.Secure.ANDROID_ID hashed with SHA-256) and verified
+/// against the central licensing server (`app_trials`). Reinstalling or clearing
+/// app data does not grant a fresh trial: the server-authoritative trial window
+/// and original trial start timestamp are preserved.
 class LicenseService {
   LicenseService._(this._store, this._clock);
   static final instance =
@@ -194,6 +197,18 @@ class LicenseService {
         return EntitlementState(
           status: EntitlementStatus.licenseRevoked,
           deviceId: deviceId,
+        );
+      }
+      if (statusStr == 'expired') {
+        DateTime? exp;
+        final expiryStr = await _store.read(key: _kLicenseExpiry);
+        if (expiryStr != null && expiryStr.isNotEmpty) {
+          exp = DateTime.tryParse(expiryStr);
+        }
+        return EntitlementState(
+          status: EntitlementStatus.licenseExpired,
+          deviceId: deviceId,
+          licenseExpiresAt: exp,
         );
       }
 
@@ -384,6 +399,15 @@ class LicenseService {
   /// Authoritatively syncs free trial status with the licensing API.
   Future<void> syncTrialWithServer({bool force = false}) async {
     try {
+      if (!force) {
+        final key = await _store.read(key: _kLicenseKey);
+        final status = await _store.read(key: _kLicenseStatus);
+        if (key != null && key.isNotEmpty && status == 'active') {
+          // Device is actively licensed; avoid claiming stray trial or dispatching trial notifications
+          return;
+        }
+      }
+
       final deviceId = await getOrCreateDeviceId();
       final model = await getDeviceModel();
 
