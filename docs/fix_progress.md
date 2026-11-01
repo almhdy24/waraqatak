@@ -12,15 +12,15 @@ Base Commit: `e2ce47fc19084bc5badae196a68769d3abafebc4` (contains `v1.1.5-beta+1
 | 1.2 | Implement AppSnackBar & Countdown Widget | COMPLETE | - | `lib/widgets/app_snackbar.dart` (5s timeout, 10s a11y, 48dp, Telegram countdown, fallback timer) |
 | 1.3 | Migrate All Call Sites | COMPLETE | - | All 35 files migrated to `AppSnackBar.show(...)`; 0 bare `SnackBar`/`showSnackBar` in `lib/` |
 | 1.4 | SnackBar Guards & Tests | COMPLETE | - | `test/guards/snackbar_guard_test.dart` (2 tests), `test/widgets/app_snackbar_test.dart` (6 tests) pass; mutations verified |
-| Part 1 Commit | `fix(ui): central 5-second snackbar with countdown` | PENDING | - | Ready to commit |
-| 2.1 | Purchase Edit Integrity Test (RED) | PENDING | - | Reproduce double-count scenario |
-| 2.2 | Root Cause Analysis (Purchase Edit) | PENDING | - | Code inspection of edit paths |
-| 2.3 | Implement Delta Logic on Document Edit | PENDING | - | Atomic delta stock movement & ledger idempotency |
-| 2.4 | Test Matrix (Purchases & Sales) | PENDING | - | Complete suite of edge cases |
-| 2.5 | Structural Invariants (INV-10..13) & Source Guard | PENDING | - | Invariant tests & docs updated |
-| 2.6 | Diagnostics for Corrupted Data | PENDING | - | Read-only mismatch detection |
-| 2.7 | Guided Safe Repair Service & Fixture Test | PENDING | - | Optional repair with preview & auto-backup |
-| Part 2 Commits | test, fix, feat(diagnostics), feat(repair) | PENDING | - | - |
+| Part 1 Commit | `fix(ui): central 5-second snackbar with countdown` | COMPLETE | 7e58229 | Clean tests & guard pass, mutation verified |
+| 2.1 | Purchase Edit Integrity Test (RED) | COMPLETE | - | Reproduced exact double-count bug: expected 100.0, actual 200.0 |
+| 2.2 | Root Cause Analysis (Purchase Edit) | COMPLETE | - | Proved `_insertStockMovement` re-applied unconditionally in `updateDocumentWithItems` |
+| 2.3 | Implement Delta Logic on Document Edit | COMPLETE | - | Atomic delta stock movement `_applyDocumentEditStockDeltas` in `database_helper.dart` |
+| 2.4 | Test Matrix (Purchases & Sales) | COMPLETE | - | 13 test cases in `test/accounting/purchase_edit_integrity_test.dart` all pass (10s) |
+| 2.5 | Structural Invariants (INV-10..13) & Source Guard | COMPLETE | - | Added P2 to `units_wholesale_invariants_test.dart`, `document_edit_guard_test.dart` passes (6s), docs updated |
+| 2.6 | Diagnostics for Corrupted Data | COMPLETE | - | Read-only mismatch detection in `DatabaseDiagnosticService` (`document_movement_mismatch`, `ledger_movement_inventory_mismatch`) |
+| 2.7 | Guided Safe Repair Service & Fixture Test | COMPLETE | - | Guided repair tool in `DatabaseRepairService` (Option A & B) + 5 tests in `purchase_repair_test.dart` pass (11s) |
+| Part 2 Commit | `fix(accounting): atomic stock delta on document edit and guided repair` | IN_PROGRESS | - | Tree clean and verified |
 | 3.1 | Read-Only Accounting Spec Addendum | PENDING | - | docs/accounting_spec_addendum.md |
 | Part 3 Commit | `docs(accounting): posting rules addendum` | PENDING | - | - |
 | 4.0 | Full Verification, Report & Docs | PENDING | - | run_tests_one_by_one, analyze, compliance, final report |

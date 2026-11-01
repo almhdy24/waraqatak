@@ -23,6 +23,10 @@
 | **INV-7** | **Edit-Then-Cancel Invariance** | Editing an issued document (which rolls back old movements and records new movements) followed by cancellation returns physical stock to its exact initial pre-sale state. |
 | **INV-8** | **Repricing Immutability** | Line repricing via `DocumentService.resolveLinePrice` NEVER mutates lines with manual price overrides (`isManualPrice == true`) or legacy lines (`pricingCategory == null && currentPrice != null`). Furthermore, if a line's snapshot conversion factor differs from the catalog unit definition, history wins and price is preserved. |
 | **INV-9** | **Reporting Base-Unit Aggregation** | All sales and inventory reporting queries aggregate $\text{COALESCE}(\text{base\_quantity}, \text{quantity})$, correctly summing secondary and base packaging units in terms of standard base stock. |
+| **INV-10** | **Document Net Movement Parity** | For every non-cancelled issued document, the net stock movements referencing it equal the signed sum of its items' effective base quantities (+ for purchases, - for sales). Cancelled documents net strictly to zero. |
+| **INV-11** | **Physical Stock Balance Integrity** | For every product, `products.stock_quantity` equals the sum of its movements in `stock_movements` at all times. |
+| **INV-12** | **Metadata Edit No-Op** | Metadata-only edits (supplier/customer, notes, date, payment method, paid amount, recipient info) produce ZERO stock movements and ZERO changes to physical stock or ledger inventory. |
+| **INV-13** | **Ledger-Movement Inventory Valuation Parity** | Inventory balance per ledger (`Accounts.inventory`) equals total inventory per movements valued at cost, except for documented unvalued/unknown cost historical cases. |
 
 ---
 

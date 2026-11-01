@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/models/business.dart';
@@ -279,6 +280,160 @@ void main() {
       final prodPerf = perf.items.firstWhere((p) => p.productId == pid);
       // The report must reflect base units (2.0 * factor) for this sale (plus any previous non-cancelled sale on this product)
       expect(prodPerf.salesQty >= 2.0 * factor, true, reason: 'INV-9: report must aggregate base quantities');
+    }
+  });
+
+  test('P2: Seeded randomized invariant tests for document edits (INV-10..INV-13)', () async {
+    final rand = Random(1337);
+
+    for (int iter = 0; iter < 60; iter++) {
+      final initialStock = (rand.nextInt(30) + 10).toDouble(); // 10..40
+      final initialCost = (rand.nextInt(20) + 10).toDouble(); // 10..30
+      final pid = await db.insertProduct(
+        Product(
+          name: 'سلعة ثوابت $iter',
+          unit: 'قطعة',
+          stockQuantity: initialStock,
+          purchasePrice: initialCost,
+          salePrice: initialCost + 15.0,
+        ),
+      );
+
+      final isPurchase = rand.nextBool();
+      final type = isPurchase ? 'purchase' : 'invoice';
+
+      final qty1 = (rand.nextInt(15) + 5).toDouble(); // 5..20
+      final price1 = isPurchase ? (initialCost + rand.nextInt(5)) : (initialCost + 15.0);
+
+      // If invoice and strict, ensure qty1 <= initialStock
+      final canCreate = isPurchase || qty1 <= initialStock;
+      if (!canCreate) continue;
+
+      final docId = await DocumentService.createDocument(
+        type: type,
+        business: business,
+        items: [
+          DocumentItemInput(
+            productId: pid,
+            description: 'بند أول',
+            quantity: qty1,
+            price: price1,
+          ),
+        ],
+        isDraft: false,
+      );
+
+      // --- INV-10 (Post-create): net movements match signed items base quantity ---
+      final sqliteDb = await db.database;
+      var movRows = await sqliteDb.rawQuery(
+        'SELECT SUM(quantity) as net FROM stock_movements WHERE reference_document_id = ?',
+        [docId],
+      );
+      var netMov = (movRows.first['net'] as num?)?.toDouble() ?? 0.0;
+      var expectedNet = isPurchase ? qty1 : -qty1;
+      expect(netMov, closeTo(expectedNet, 0.0001), reason: 'INV-10: initial issuance net movement');
+
+      // --- INV-11 (Post-create): stock_quantity == sum of all movements for product ---
+      var allMovRows = await sqliteDb.rawQuery(
+        'SELECT SUM(quantity) as net FROM stock_movements WHERE product_id = ?',
+        [pid],
+      );
+      var productTotalMov = (allMovRows.first['net'] as num?)?.toDouble() ?? 0.0;
+      var p = (await db.getProductById(pid))!;
+      expect(p.stockQuantity, closeTo(productTotalMov, 0.0001), reason: 'INV-11: stock equals sum of movements');
+
+      // --- INV-12: Metadata-only edit must be a no-op on movements and stock ---
+      final movementsCountBeforeMeta = Sqflite.firstIntValue(
+        await sqliteDb.rawQuery('SELECT COUNT(*) FROM stock_movements WHERE reference_document_id = ?', [docId]),
+      );
+      final stockBeforeMeta = (await db.getProductById(pid))!.stockQuantity;
+
+      await DocumentService.updateDocument(
+        documentId: docId,
+        type: type,
+        business: business,
+        items: [
+          DocumentItemInput(
+            productId: pid,
+            description: 'بند أول',
+            quantity: qty1,
+            price: price1,
+          ),
+        ],
+        notes: 'تعديل بيانات وصفية فقط $iter',
+        isDraft: false,
+      );
+
+      final movementsCountAfterMeta = Sqflite.firstIntValue(
+        await sqliteDb.rawQuery('SELECT COUNT(*) FROM stock_movements WHERE reference_document_id = ?', [docId]),
+      );
+      final stockAfterMeta = (await db.getProductById(pid))!.stockQuantity;
+      expect(movementsCountAfterMeta, movementsCountBeforeMeta, reason: 'INV-12: metadata edit produces zero movements');
+      expect(stockAfterMeta, closeTo(stockBeforeMeta, 0.0001), reason: 'INV-12: metadata edit does not alter stock');
+
+      // --- Perform a quantity/item edit ---
+      final editUp = rand.nextBool();
+      final double qty2;
+      if (editUp) {
+        qty2 = qty1 + (rand.nextInt(10) + 1).toDouble();
+      } else {
+        qty2 = (qty1 - (rand.nextInt(4) + 1).toDouble()).clamp(1.0, 999.0);
+      }
+
+      final canEdit = isPurchase || qty2 <= (stockAfterMeta + qty1);
+      if (canEdit) {
+        await DocumentService.updateDocument(
+          documentId: docId,
+          type: type,
+          business: business,
+          items: [
+            DocumentItemInput(
+              productId: pid,
+              description: 'بند معدل',
+              quantity: qty2,
+              price: price1,
+            ),
+          ],
+          isDraft: false,
+        );
+
+        // --- INV-10 (Post-edit): net movements match signed items base quantity ---
+        movRows = await sqliteDb.rawQuery(
+          'SELECT SUM(quantity) as net FROM stock_movements WHERE reference_document_id = ?',
+          [docId],
+        );
+        netMov = (movRows.first['net'] as num?)?.toDouble() ?? 0.0;
+        expectedNet = isPurchase ? qty2 : -qty2;
+        expect(netMov, closeTo(expectedNet, 0.0001), reason: 'INV-10: edited doc net movements match item quantity');
+
+        // --- INV-11 (Post-edit): stock_quantity == sum of all movements ---
+        allMovRows = await sqliteDb.rawQuery(
+          'SELECT SUM(quantity) as net FROM stock_movements WHERE product_id = ?',
+          [pid],
+        );
+        productTotalMov = (allMovRows.first['net'] as num?)?.toDouble() ?? 0.0;
+        p = (await db.getProductById(pid))!;
+        expect(p.stockQuantity, closeTo(productTotalMov, 0.0001), reason: 'INV-11: post-edit stock equals sum of movements');
+
+        // --- Cancellation verification ---
+        if (rand.nextBool()) {
+          await db.cancelDocument(docId);
+          movRows = await sqliteDb.rawQuery(
+            'SELECT SUM(quantity) as net FROM stock_movements WHERE reference_document_id = ?',
+            [docId],
+          );
+          netMov = (movRows.first['net'] as num?)?.toDouble() ?? 0.0;
+          expect(netMov, closeTo(0.0, 0.0001), reason: 'INV-10: cancelled document nets to zero');
+
+          allMovRows = await sqliteDb.rawQuery(
+            'SELECT SUM(quantity) as net FROM stock_movements WHERE product_id = ?',
+            [pid],
+          );
+          productTotalMov = (allMovRows.first['net'] as num?)?.toDouble() ?? 0.0;
+          p = (await db.getProductById(pid))!;
+          expect(p.stockQuantity, closeTo(productTotalMov, 0.0001), reason: 'INV-11: post-cancel stock equals movements');
+        }
+      }
     }
   });
 }

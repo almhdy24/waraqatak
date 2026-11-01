@@ -41,8 +41,9 @@ This rule applies to all future tasks, not just the current issue.
 
 ## Hard Invariants (Units, Wholesale Pricing & Inventory)
 
-Any changes touching sales, stock, pricing, or units code must preserve the core invariants INV-1..INV-9 detailed in `docs/invariants_units_wholesale.md`:
+Any changes touching sales, stock, pricing, or units code must preserve the core invariants INV-1..INV-13 detailed in `docs/invariants_units_wholesale.md`:
 - Authoritative stock availability validation must reside strictly in `DatabaseHelper._assertSaleStockAvailable`.
 - Line-level repricing must route strictly through `DocumentService.resolveLinePrice`.
+- Authoritative stock movement delta calculation for edits must reside strictly in `DatabaseHelper._applyDocumentEditStockDeltas`.
 - All snapshot fields (`sale_unit`, `unit_conversion_factor`, `base_quantity`, `pricing_category`) must be preserved across create, edit, duplicate, and quotation conversion.
-- `test/invariants/units_wholesale_invariants_test.dart` and `test/guards/architecture_guards_test.dart` MUST pass before committing any changes.
+- `test/invariants/units_wholesale_invariants_test.dart`, `test/guards/architecture_guards_test.dart`, and `test/guards/document_edit_guard_test.dart` MUST pass before committing any changes.

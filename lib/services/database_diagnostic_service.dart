@@ -816,6 +816,158 @@ class DatabaseDiagnosticService {
       );
     }
 
+    // 5.3 Document stock movements mismatch (expected vs actual net movements)
+    checks++;
+    final itemCols = await db.rawQuery("PRAGMA table_info('document_items')");
+    final hasFactor = itemCols.any((c) => c['name'] == 'unit_conversion_factor');
+    final factorExpr = hasFactor ? 'COALESCE(di.unit_conversion_factor, 1.0)' : '1.0';
+
+    final expectedDocMovements = await db.rawQuery('''
+      SELECT 
+        d.id AS doc_id,
+        d.document_number,
+        d.type AS doc_type,
+        d.status AS doc_status,
+        di.product_id,
+        SUM(
+          CASE 
+            WHEN d.status IN ('draft', 'cancelled') THEN 0.0
+            WHEN d.type = 'purchase' THEN di.quantity * $factorExpr
+            WHEN d.type = 'invoice' THEN -1.0 * di.quantity * $factorExpr
+            ELSE 0.0
+          END
+        ) AS expected_movement
+      FROM documents d
+      JOIN document_items di ON d.id = di.document_id
+      WHERE di.product_id IS NOT NULL AND d.type IN ('purchase', 'invoice')
+      GROUP BY d.id, di.product_id
+    ''');
+
+    final actualDocMovements = await db.rawQuery('''
+      SELECT 
+        sm.reference_document_id AS doc_id,
+        sm.product_id,
+        SUM(sm.quantity) AS actual_movement
+      FROM stock_movements sm
+      WHERE sm.reference_document_id IS NOT NULL
+      GROUP BY sm.reference_document_id, sm.product_id
+    ''');
+
+    final actualMap = <String, double>{};
+    for (final row in actualDocMovements) {
+      final docId = row['doc_id'] as int;
+      final prodId = row['product_id'] as int;
+      actualMap['${docId}_$prodId'] = (row['actual_movement'] as num).toDouble();
+    }
+
+    final docMismatchIds = <int>{};
+    final mismatchedDetails = <Map<String, dynamic>>[];
+
+    for (final row in expectedDocMovements) {
+      final docId = row['doc_id'] as int;
+      final docNum = row['document_number'] as String;
+      final prodId = row['product_id'] as int;
+      final expected = (row['expected_movement'] as num).toDouble();
+      final actual = actualMap['${docId}_$prodId'] ?? 0.0;
+
+      if ((expected - actual).abs() > _qtyEpsilon) {
+        docMismatchIds.add(docId);
+        mismatchedDetails.add({
+          'document_id': docId,
+          'document_number': docNum,
+          'product_id': prodId,
+          'expected_movement': expected,
+          'actual_movement': actual,
+        });
+      }
+    }
+
+    if (docMismatchIds.isNotEmpty) {
+      findings.add(
+        DiagnosticFinding(
+          code: 'document_movement_mismatch',
+          category: DiagnosticCategory.stockDiscrepancy,
+          severity: DiagnosticSeverity.error,
+          entityType: 'documents',
+          affectedIds: docMismatchIds.toList()..sort(),
+          title: 'Document stock movements mismatch',
+          explanation:
+              'Found ${docMismatchIds.length} document(s) where net stock movements do not match document line item quantities.',
+          requiresManualReview: true,
+          metadata: {'mismatches': mismatchedDetails},
+        ),
+      );
+    }
+
+    // 5.4 Ledger-vs-movements inventory difference per product
+    checks++;
+    final ledgerQtyRows = await db.rawQuery('''
+      SELECT p.id AS product_id,
+        (
+          COALESCE((
+            SELECT SUM(di.quantity * $factorExpr)
+            FROM documents d
+            JOIN document_items di ON d.id = di.document_id
+            WHERE di.product_id = p.id AND d.type = 'purchase' AND d.status NOT IN ('draft', 'cancelled')
+          ), 0.0)
+          -
+          COALESCE((
+            SELECT SUM(di.quantity * $factorExpr)
+            FROM documents d
+            JOIN document_items di ON d.id = di.document_id
+            WHERE di.product_id = p.id AND d.type = 'invoice' AND d.status NOT IN ('draft', 'cancelled')
+          ), 0.0)
+          +
+          COALESCE((
+            SELECT SUM(sm.quantity)
+            FROM stock_movements sm
+            WHERE sm.product_id = p.id AND sm.type IN ('opening', 'adjustment', 'cancellation')
+              AND sm.reference_document_id IS NULL
+          ), 0.0)
+        ) AS ledger_expected_qty,
+        COALESCE((
+          SELECT SUM(sm.quantity)
+          FROM stock_movements sm
+          WHERE sm.product_id = p.id
+        ), 0.0) AS actual_movement_sum
+      FROM products p
+      WHERE p.type = 'product'
+    ''');
+
+    final ledgerMismatchIds = <int>[];
+    final ledgerMismatchDetails = <Map<String, dynamic>>[];
+    for (final row in ledgerQtyRows) {
+      final prodId = row['product_id'] as int;
+      final ledgerQty = (row['ledger_expected_qty'] as num).toDouble();
+      final actualSum = (row['actual_movement_sum'] as num).toDouble();
+      if ((ledgerQty - actualSum).abs() > _qtyEpsilon) {
+        ledgerMismatchIds.add(prodId);
+        ledgerMismatchDetails.add({
+          'product_id': prodId,
+          'ledger_quantity': ledgerQty,
+          'movement_quantity': actualSum,
+          'difference': (actualSum - ledgerQty),
+        });
+      }
+    }
+
+    if (ledgerMismatchIds.isNotEmpty) {
+      findings.add(
+        DiagnosticFinding(
+          code: 'ledger_movement_inventory_mismatch',
+          category: DiagnosticCategory.stockDiscrepancy,
+          severity: DiagnosticSeverity.error,
+          entityType: 'products',
+          affectedIds: ledgerMismatchIds,
+          title: 'Ledger and movement inventory discrepancy',
+          explanation:
+              'Found ${ledgerMismatchIds.length} product(s) where inventory derived by ledger events differs from the sum of stock movements.',
+          requiresManualReview: true,
+          metadata: {'mismatches': ledgerMismatchDetails},
+        ),
+      );
+    }
+
     return checks;
   }
 
