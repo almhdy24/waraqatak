@@ -20,6 +20,9 @@ class BackupService {
   static Future<String> Function()? safetyBackupOverride;
 
   @visibleForTesting
+  static Directory Function()? backupDirectoryOverride;
+
+  @visibleForTesting
   static Future<void> Function(File tempFile, File targetFile)?
   onBeforePromotion;
 
@@ -35,6 +38,9 @@ class BackupService {
   ];
 
   static Future<Directory> _getBackupDirectory() async {
+    if (backupDirectoryOverride != null) {
+      return backupDirectoryOverride!();
+    }
     try {
       return await getApplicationDocumentsDirectory();
     } catch (_) {
@@ -179,6 +185,88 @@ class BackupService {
   }
 
   // ============================================================
+  // SAFETY BACKUP RETENTION / PRUNING
+  // ============================================================
+
+  /// Prunes old safety backups in application documents directory:
+  /// - Deletes safety backups (`warqatek_safety_pre_restore_*`) older than 30 days.
+  /// - Retains at most the 3 most recent safety backups.
+  /// - NEVER deletes [preservePath] (the safety backup just created).
+  /// - NEVER deletes or touches user-chosen backups (`warqatek_backup_*`).
+  /// - Suppresses all errors internally so pruning failure never fails restore or repair.
+  static Future<void> pruneSafetyBackups({String? preservePath}) async {
+    try {
+      final directory = await _getBackupDirectory();
+      if (!await directory.exists()) return;
+
+      final entities = await directory.list().toList();
+      final safetyFiles = <File>[];
+      final now = DateTime.now();
+      const maxAge = Duration(days: 30);
+
+      for (final entity in entities) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.isNotEmpty
+            ? entity.uri.pathSegments.last
+            : '';
+
+        // Strict match on safety backups only
+        final isSafety = name.startsWith('warqatek_safety_pre_restore_') &&
+            name.endsWith('.$backupExtension');
+        if (!isSafety) continue;
+
+        // Never touch the freshly created safety backup
+        if (preservePath != null && entity.path == preservePath) continue;
+
+        safetyFiles.add(entity);
+      }
+
+      // Read modification times and sort newest first
+      final filesWithTime = <({File file, DateTime mtime})>[];
+      for (final file in safetyFiles) {
+        try {
+          final mtime = await file.lastModified();
+          filesWithTime.add((file: file, mtime: mtime));
+        } catch (_) {
+          filesWithTime.add(
+            (file: file, mtime: DateTime.fromMillisecondsSinceEpoch(0)),
+          );
+        }
+      }
+      filesWithTime.sort((a, b) => b.mtime.compareTo(a.mtime));
+
+      // Collect files to delete:
+      // 1. Any file older than 30 days
+      // 2. Any file beyond the 3 most recent
+      final toDelete = <File>[];
+      final kept = <File>[];
+
+      for (final item in filesWithTime) {
+        final age = now.difference(item.mtime);
+        if (age > maxAge) {
+          toDelete.add(item.file);
+        } else if (kept.length < 3) {
+          kept.add(item.file);
+        } else {
+          toDelete.add(item.file);
+        }
+      }
+
+      for (final file in toDelete) {
+        try {
+          if (await file.exists()) {
+            await file.delete();
+          }
+        } catch (_) {
+          // Best-effort cleanup; never throw
+        }
+      }
+    } catch (_) {
+      // Pruning failure must never fail restore or repair
+    }
+  }
+
+  // ============================================================
   // SAVE BACKUP VIA SYSTEM SAVE DIALOG (bytes-based)
   // ============================================================
 
@@ -281,8 +369,9 @@ class BackupService {
 
     // Create and validate an automatic safety backup of the current database
     // before touching any data. If this fails, restore aborts immediately.
+    String? safetyPath;
     if (createSafetyBackup) {
-      final safetyPath = await BackupService.createSafetyBackup();
+      safetyPath = await BackupService.createSafetyBackup();
       await DatabaseHelper.instance.logAuditEvent(
         'pre_restore_safety_backup_created',
         details: 'path=$safetyPath',
@@ -431,6 +520,12 @@ class BackupService {
       details:
           'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}',
     );
+
+    // Prune older safety backups beyond retention limits
+    if (createSafetyBackup) {
+      await pruneSafetyBackups(preservePath: safetyPath);
+    }
+
     return true;
   }
 
