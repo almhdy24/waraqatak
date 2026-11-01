@@ -7,7 +7,7 @@ class AppConstants {
   static const String appVersion = '1.1.5';
 
   /// Monotonically increasing build number.
-  static const int appBuild = 16;
+  static const int appBuild = 17;
 
   /// Short display name of the developer / publisher.
   static const String developerName = 'Elmahdi Abdallh';

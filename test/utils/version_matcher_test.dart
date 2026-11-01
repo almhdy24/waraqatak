@@ -55,5 +55,21 @@ void main() {
         isTrue,
       );
     });
+
+    test('Orders 1.1.5-beta+16 < 1.1.5-beta+17 correctly', () {
+      final v16 = ParsedVersion.tryParse('1.1.5-beta+16')!;
+      final v17 = ParsedVersion.tryParse('1.1.5-beta+17')!;
+      expect(v16.compareTo(v17, compareBuild: true), lessThan(0));
+      expect(v17.compareTo(v16, compareBuild: true), greaterThan(0));
+
+      expect(
+        VersionMatcher.matches(appVersion: '1.1.5-beta+16', minVersion: '1.1.5+17'),
+        isFalse,
+      );
+      expect(
+        VersionMatcher.matches(appVersion: '1.1.5-beta+17', minVersion: '1.1.5+17'),
+        isTrue,
+      );
+    });
   });
 }
