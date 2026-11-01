@@ -76,6 +76,16 @@ class ErrorUtils {
       return l10n.cannotEditPurchaseWithSubsequentSales;
     }
 
+    // Active payment receipts / vouchers guard on cancellation
+    final activeVouchersMatch = RegExp(
+      r'active payment receipts/vouchers \(([^)]+)\)',
+      caseSensitive: false,
+    ).firstMatch(raw);
+    if (activeVouchersMatch != null) {
+      final numbers = activeVouchersMatch.group(1) ?? '';
+      return l10n.cannotCancelWithActiveVouchers(numbers);
+    }
+
     // Clean up technical prefixes like "Exception: ", "Bad state: ", "Invalid argument(s): "
     final cleaned = raw
         .replaceFirst(RegExp(r'^(Exception|Bad state|Invalid argument\(s\)|DatabaseException):\s*'), '')

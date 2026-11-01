@@ -1,15 +1,19 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
+import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/models/business.dart';
 import 'package:warqatek/models/contact.dart';
 import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/models/product.dart';
 import 'package:warqatek/services/backup_service.dart';
 import 'package:warqatek/services/document_service.dart';
+import 'package:warqatek/utils/error_utils.dart';
+import 'package:warqatek/widgets/cancel_paid_document_dialog.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -234,7 +238,7 @@ void main() {
     expect(paymentReport, isEmpty);
   });
 
-  test('5. Cancel still blocked when active receipt vouchers exist', () async {
+  test('5. Cancel still blocked when active receipt vouchers exist, shows localized message', () async {
     final invId = await DocumentService.createDocument(
       type: 'invoice',
       business: business,
@@ -257,12 +261,33 @@ void main() {
       amount: 50.0,
       paymentMethod: 'cash',
     );
+    final activeReceipts = await (await db.database).query(
+      'documents',
+      where: 'related_document_id = ? AND type = ?',
+      whereArgs: [invId, 'payment_receipt'],
+    );
+    final receiptDocNum = activeReceipts.first['document_number'] as String;
 
     // Attempting to cancel parent invoice must throw StateError
-    expect(
-      () => db.cancelDocument(invId),
-      throwsA(isA<StateError>()),
-    );
+    late Object caughtError;
+    try {
+      await db.cancelDocument(invId);
+      fail('Expected cancelDocument to throw StateError');
+    } catch (e) {
+      caughtError = e;
+      expect(e, isA<StateError>());
+    }
+
+    // Verify ErrorUtils converts the error to localized message naming the voucher
+    final l10nAr = AppLocalizations('ar');
+    final friendlyMsgAr = ErrorUtils.toFriendlyMessage(caughtError, l10nAr);
+    expect(friendlyMsgAr, contains(receiptDocNum));
+    expect(friendlyMsgAr, l10nAr.cannotCancelWithActiveVouchers(receiptDocNum));
+
+    final l10nEn = AppLocalizations('en');
+    final friendlyMsgEn = ErrorUtils.toFriendlyMessage(caughtError, l10nEn);
+    expect(friendlyMsgEn, contains(receiptDocNum));
+    expect(friendlyMsgEn, l10nEn.cannotCancelWithActiveVouchers(receiptDocNum));
   });
 
   test('6. Old cancelled document without an audit entry shows neutral state', () async {
@@ -379,5 +404,92 @@ void main() {
     expect(status!['status'], 'refunded');
     expect(status['amount'], 120.0);
     expect(status['notes'], 'Supplier returned cash to shop');
+  });
+
+  testWidgets('9. CancelPaidDocumentDialog: confirm button disabled until status is chosen', (tester) async {
+    final invId = await DocumentService.createDocument(
+      type: 'invoice',
+      business: business,
+      contact: customer,
+      items: [
+        DocumentItemInput(
+          description: product.name,
+          productId: product.id,
+          quantity: 1,
+          price: 100.0,
+        ),
+      ],
+      paid: 100.0,
+      date: DateTime.now(),
+    );
+    final doc = (await db.getDocumentById(invId))!;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (ctx) => CancelPaidDocumentDialog(document: doc),
+          ),
+        ),
+      ),
+    );
+
+    // Confirm button should initially be disabled (onPressed == null)
+    final confirmFinder = find.byType(ElevatedButton);
+    expect(confirmFinder, findsOneWidget);
+    var confirmBtn = tester.widget<ElevatedButton>(confirmFinder);
+    expect(confirmBtn.onPressed, isNull);
+
+    // Tap "تم رد المبلغ"
+    final l10n = AppLocalizations('ar');
+    final refundedTile = find.text(l10n.refundStatusRefunded);
+    expect(refundedTile, findsOneWidget);
+    await tester.tap(refundedTile);
+    await tester.pump();
+
+    // Confirm button must now be enabled
+    confirmBtn = tester.widget<ElevatedButton>(confirmFinder);
+    expect(confirmBtn.onPressed, isNotNull);
+  });
+
+  test('10. Old backup without audit_log key restores cleanly (null-safe import)', () async {
+    final legacyBackupPayload = {
+      'app': 'warqatek',
+      'backup_version': 2,
+      'database_version': DatabaseHelper.dbVersion,
+      'created_at': DateTime.now().toIso8601String(),
+      'data': {
+        'businesses': [
+          {
+            'id': 1,
+            'name': 'متجر قديم',
+            'owner_name': 'خالد',
+            'phone': '0111111111',
+            'address': 'الخرطوم',
+            'currency_code': 'SDG',
+          },
+        ],
+        'contacts': <Map<String, dynamic>>[],
+        'products': <Map<String, dynamic>>[],
+        'product_units': <Map<String, dynamic>>[],
+        'documents': <Map<String, dynamic>>[],
+        'document_items': <Map<String, dynamic>>[],
+        'document_counters': <Map<String, dynamic>>[],
+        'document_payments': <Map<String, dynamic>>[],
+        'stock_movements': <Map<String, dynamic>>[],
+        'tax_profiles': <Map<String, dynamic>>[],
+        'payment_methods': <Map<String, dynamic>>[],
+        'stocktake_sessions': <Map<String, dynamic>>[],
+        'stocktake_items': <Map<String, dynamic>>[],
+        // Notice: 'audit_log' key is intentionally absent, simulating legacy backup
+      },
+    };
+
+    // Restore must succeed without throwing
+    final ok = await BackupService.restoreFromJsonMap(legacyBackupPayload);
+    expect(ok, isTrue);
+
+    final restoredBusiness = (await db.getFirstBusiness())!;
+    expect(restoredBusiness.name, 'متجر قديم');
   });
 }

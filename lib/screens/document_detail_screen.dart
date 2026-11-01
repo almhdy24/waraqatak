@@ -14,6 +14,7 @@ import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
+import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
 import '../widgets/status_badge.dart';
@@ -189,8 +190,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         Navigator.pop(context, true);
       } catch (e) {
         if (!mounted) return;
+        final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+            .showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     }
   }
@@ -244,8 +246,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _load();
       } catch (e) {
         if (!mounted) return;
+        final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+            .showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     }
   }
@@ -316,8 +319,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         ).then((_) => _load());
       } catch (e) {
         if (!mounted) return;
+        final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+            .showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     }
   }

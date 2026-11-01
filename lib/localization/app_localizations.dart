@@ -372,6 +372,10 @@ class AppLocalizations {
     'إلغاء هذا الإيصال سيعكس الدفعة المرتبطة به ويُحدّث حالة الفاتورة.',
     'Cancelling this receipt will reverse its payment and update the invoice.',
   );
+  String cannotCancelWithActiveVouchers(String voucherNumbers) => _t(
+    'لا يمكن إلغاء المستند لوجود سندات قبض/صرف نشطة مرتبطة به ($voucherNumbers). يرجى إلغاء هذه السندات أولاً.',
+    'Cannot cancel document with active payment receipts/vouchers ($voucherNumbers). Please cancel these vouchers first.',
+  );
   String get cancelPaidDocumentTitle => _t('تأكيد إلغاء مستند مسدد', 'Confirm Cancellation of Paid Document');
   String cancelPaidRecordedAmount(String amount, String symbol) => _t(
     'المبلغ المسدد المسجل: $amount $symbol',
@@ -390,14 +394,18 @@ class AppLocalizations {
     'This money must be recovered from the supplier manually outside the app.',
   );
   String get cancelPaidDoubleCountWarning => _t(
-    'تنبيه هام: لا تقم بإنشاء سند صرف لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وإنشاء سند صرف سيؤدي إلى خصم المبلغ مرتين.',
-    'Important: Do not create an expense voucher for this refund; the payment is already excluded from cash reports, and creating a voucher will deduct it twice.',
+    'تنبيه هام: لا تُسجّل سند صرف لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وتسجيل سند صرف سيؤدي إلى خصم المبلغ مرتين.',
+    'Important: Do not record an expense voucher for this refund; the payment is already excluded from cash reports, and recording a voucher will deduct it twice.',
   );
   String get cancelPaidDoubleCountWarningPurchase => _t(
-    'تنبيه هام: لا تقم بإنشاء سند قبض لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وإنشاء سند قبض سيؤدي إلى إضافة المبلغ مرتين.',
-    'Important: Do not create a payment receipt for this refund; the payment is already excluded from cash reports, and creating a receipt will add it twice.',
+    'تنبيه هام: لا تُسجّل سند قبض لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وتسجيل سند قبض سيؤدي إلى إضافة المبلغ مرتين.',
+    'Important: Do not record a payment receipt for this refund; the payment is already excluded from cash reports, and recording a receipt will add it twice.',
   );
   String get refundStatusLabel => _t('حالة رد المبلغ', 'Refund Status');
+  String get refundStatusRequiredHint => _t(
+    'يرجى تحديد حالة رد المبلغ لإتمام الإلغاء',
+    'Please select the refund status to confirm cancellation',
+  );
   String get refundStatusRefunded => _t('تم رد المبلغ', 'Refunded');
   String get refundStatusNotRefunded => _t('لم يُرد بعد', 'Not refunded yet');
   String get refundStatusNotRecorded => _t('لم تُسجَّل حالة الرد', 'Refund status not recorded');

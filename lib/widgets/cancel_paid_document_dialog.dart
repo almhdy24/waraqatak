@@ -42,7 +42,7 @@ class CancelPaidDocumentDialog extends StatefulWidget {
 }
 
 class _CancelPaidDocumentDialogState extends State<CancelPaidDocumentDialog> {
-  String _selectedStatus = 'refunded';
+  String? _selectedStatus;
   static final _numFmt = NumberFormat('#,##0.##');
 
   Widget _buildStatusTile({
@@ -226,6 +226,19 @@ class _CancelPaidDocumentDialogState extends State<CancelPaidDocumentDialog> {
               isSelected: _selectedStatus == 'unrefunded',
               onTap: () => setState(() => _selectedStatus = 'unrefunded'),
             ),
+            if (_selectedStatus == null) ...[
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  l10n.refundStatusRequiredHint,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -235,15 +248,17 @@ class _CancelPaidDocumentDialogState extends State<CancelPaidDocumentDialog> {
           child: Text(l10n.keepDocument),
         ),
         ElevatedButton(
-          onPressed: () {
-            Navigator.pop(
-              context,
-              CancelPaidDocumentResult(
-                confirmed: true,
-                refundStatus: _selectedStatus,
-              ),
-            );
-          },
+          onPressed: _selectedStatus == null
+              ? null
+              : () {
+                  Navigator.pop(
+                    context,
+                    CancelPaidDocumentResult(
+                      confirmed: true,
+                      refundStatus: _selectedStatus!,
+                    ),
+                  );
+                },
           style: ElevatedButton.styleFrom(
             backgroundColor: cs.error,
             foregroundColor: cs.onError,
