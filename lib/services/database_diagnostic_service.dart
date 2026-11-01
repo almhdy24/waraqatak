@@ -4,6 +4,7 @@ import '../database/database_helper.dart';
 import '../models/database_diagnostic.dart';
 import '../models/document_status.dart';
 import '../models/stock_movement.dart';
+import 'accounting/journal_reconciliation_service.dart';
 
 /// Read-only diagnostic service that inspects existing Waraqatak SQLite databases
 /// for data integrity, accounting, inventory, and relational inconsistencies.
@@ -53,6 +54,13 @@ class DatabaseDiagnosticService {
 
     // 8. Duplicate document numbers
     checksRun += await _checkDuplicateDocumentNumbers(executor, findings);
+
+    // 9. Accounting backbone reconciliation (8 checks from D7)
+    final reconFindings = await JournalReconciliationService.runReconciliation(
+      executor: executor,
+    );
+    findings.addAll(reconFindings);
+    checksRun += 8;
 
     return DatabaseDiagnosticReport(
       executedAt: DateTime.now(),

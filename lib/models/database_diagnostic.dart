@@ -10,6 +10,7 @@ enum DiagnosticCategory {
   documentStatusMismatch,
   paymentMismatch,
   duplicateDocumentNumber,
+  accountingReconciliation,
 }
 
 /// A structured diagnostic finding identified during read-only database integrity checks.

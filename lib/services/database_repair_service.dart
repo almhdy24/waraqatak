@@ -1212,6 +1212,8 @@ class DatabaseRepairService {
       DiagnosticCategory.paymentMismatch => l10n.diagnosticsCategoryPayments,
       DiagnosticCategory.duplicateDocumentNumber =>
         l10n.diagnosticsCategoryDuplicates,
+      DiagnosticCategory.accountingReconciliation =>
+        l10n.accountingBooksSection,
     };
   }
 
