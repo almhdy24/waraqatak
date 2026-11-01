@@ -561,7 +561,7 @@ class LedgerBuilder {
 
       final avg = resolvedAvg ?? 0.0;
 
-      if (e.quantity > 0 && e.unitCost != null) {
+      if (e.quantity > 0 && e.unitCost != null && !e.adjustment) {
         // Purchase or opening stock: enters at its own cost.
         final cost = e.quantity * e.unitCost!;
         qty[e.productId] = q + e.quantity;

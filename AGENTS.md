@@ -127,3 +127,13 @@ Any changes touching sales, stock, pricing, or units code must preserve the core
 - Authoritative stock movement delta calculation for edits must reside strictly in `DatabaseHelper._applyDocumentEditStockDeltas`.
 - All snapshot fields (`sale_unit`, `unit_conversion_factor`, `base_quantity`, `pricing_category`) must be preserved across create, edit, duplicate, and quotation conversion.
 - `test/invariants/units_wholesale_invariants_test.dart`, `test/guards/architecture_guards_test.dart`, and `test/guards/document_edit_guard_test.dart` MUST pass before committing any changes.
+
+## Hard Invariants (Accounting Backbone & Journal)
+
+Any changes touching accounting, journal, stock movements, or period closing must preserve invariants INV-14..INV-18:
+- **INV-14 (Double-Entry Balance Invariance):** Every persisted entry must balance debits and credits in minor units exactly. `JournalWriter.write` rejects unbalanced drafts.
+- **INV-15 (Journal Immutability):** No `UPDATE` or `DELETE` on journal tables outside rollback. Revisions and cancellations are append-only reversals dated at original effective date.
+- **INV-16 (Single Stock Writer):** All physical stock and average cost mutations MUST route through `StockLedger.record(txn, ...)`. Direct inserts into `stock_movements` or manual column updates outside `StockLedger` are strictly prohibited (enforced by `single_stock_writer_guard_test.dart`).
+- **INV-17 (Accounting Period Lock):** Mutations on or before `books_closed_through` are blocked across documents, payments, vouchers, receipts, and stock adjustments before any database writes.
+- **INV-18 (Parity Invariance):** Persisted journal balances match the reference derived ledger with zero tolerance on base monetary accounts (1110, 1120, 1130, 2110, 2120, 4100, 1150).
+- `test/invariants/accounting_backbone_invariants_test.dart` and `test/guards/single_stock_writer_guard_test.dart` MUST pass.

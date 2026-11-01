@@ -27,12 +27,16 @@ class InventoryService {
     required int productId,
     required double delta,
     String? notes,
+    String? reason,
+    DateTime? date,
   }) async {
     if (delta == 0) throw ArgumentError('Delta cannot be zero');
     await DatabaseHelper.instance.adjustStock(
       productId: productId,
       delta: delta,
       notes: notes,
+      reason: reason,
+      date: date,
     );
   }
 

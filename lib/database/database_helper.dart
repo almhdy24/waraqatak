@@ -20,6 +20,9 @@ import '../models/app_notification.dart';
 import '../models/diagnostic_report.dart';
 import '../models/product_unit.dart';
 import '../models/stocktake.dart';
+import '../services/accounting/journal_backfill_service.dart';
+import '../services/accounting/journal_writer.dart';
+import '../services/accounting/stock_ledger.dart';
 import '../services/inventory_costing_service.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
@@ -28,7 +31,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 24;
+  static const int dbVersion = 25;
 
   static Database? _database;
 
@@ -45,6 +48,9 @@ class DatabaseHelper {
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _createTables,
       onUpgrade: _upgradeTables,
+      onOpen: (db) async {
+        await JournalBackfillService.backfillIfNeeded(dbOverride: db);
+      },
     );
   }
 
@@ -345,6 +351,8 @@ class DatabaseHelper {
         total_cost REAL,
         cost_status TEXT DEFAULT 'unknown',
         provenance TEXT,
+        reason TEXT,
+        target_movement_id INTEGER,
         FOREIGN KEY (product_id) REFERENCES products(id),
         FOREIGN KEY (reference_document_id) REFERENCES documents(id) ON DELETE SET NULL
       )
@@ -561,7 +569,80 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
     );
+
+    // Double-entry accounting backbone tables (Phase 1)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS accounts (
+        code TEXT PRIMARY KEY,
+        name_ar TEXT NOT NULL,
+        name_en TEXT NOT NULL,
+        type TEXT NOT NULL,
+        normal_side TEXT NOT NULL,
+        is_system INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
+    await seedAccounts(db);
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS journal_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_no TEXT NOT NULL UNIQUE,
+        effective_date TEXT NOT NULL,
+        posted_at TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        source_id INTEGER,
+        revision INTEGER NOT NULL DEFAULT 1,
+        memo TEXT,
+        reverses_entry_id INTEGER REFERENCES journal_entries(id),
+        origin TEXT NOT NULL DEFAULT 'live'
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(effective_date)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_source ON journal_entries(source_type, source_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_origin ON journal_entries(origin)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS journal_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+        account_code TEXT NOT NULL REFERENCES accounts(code),
+        debit_minor INTEGER NOT NULL DEFAULT 0,
+        credit_minor INTEGER NOT NULL DEFAULT 0,
+        product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+        contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_entry ON journal_lines(entry_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON journal_lines(account_code)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_product ON journal_lines(product_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_journal_lines_contact ON journal_lines(contact_id)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )
+    ''');
+    await seedDefaultSettings(db);
   }
+
+  @visibleForTesting
+  Future<void> createTablesForTest(Database db, [int version = dbVersion]) =>
+      _createTables(db, version);
 
   @visibleForTesting
   Future<void> upgradeTablesForTest(
@@ -1199,6 +1280,95 @@ class DatabaseHelper {
     if (oldVersion < 24 && newVersion >= 24) {
       await replaceDefaultPaymentMethods(db);
     }
+
+    if (oldVersion < 25 && newVersion >= 25) {
+      if (!await tableExists('accounts')) {
+        await db.execute('''
+          CREATE TABLE accounts (
+            code TEXT PRIMARY KEY,
+            name_ar TEXT NOT NULL,
+            name_en TEXT NOT NULL,
+            type TEXT NOT NULL,
+            normal_side TEXT NOT NULL,
+            is_system INTEGER NOT NULL DEFAULT 1
+          )
+        ''');
+      }
+      await seedAccounts(db);
+
+      if (!await tableExists('journal_entries')) {
+        await db.execute('''
+          CREATE TABLE journal_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_no TEXT NOT NULL UNIQUE,
+            effective_date TEXT NOT NULL,
+            posted_at TEXT NOT NULL,
+            source_type TEXT NOT NULL,
+            source_id INTEGER,
+            revision INTEGER NOT NULL DEFAULT 1,
+            memo TEXT,
+            reverses_entry_id INTEGER REFERENCES journal_entries(id),
+            origin TEXT NOT NULL DEFAULT 'live'
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(effective_date)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_entries_source ON journal_entries(source_type, source_id)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_entries_origin ON journal_entries(origin)',
+        );
+      }
+
+      if (!await tableExists('journal_lines')) {
+        await db.execute('''
+          CREATE TABLE journal_lines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+            account_code TEXT NOT NULL REFERENCES accounts(code),
+            debit_minor INTEGER NOT NULL DEFAULT 0,
+            credit_minor INTEGER NOT NULL DEFAULT 0,
+            product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+            contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_entry ON journal_lines(entry_id)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON journal_lines(account_code)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_product ON journal_lines(product_id)',
+        );
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_journal_lines_contact ON journal_lines(contact_id)',
+        );
+      }
+
+      if (!await tableExists('app_settings')) {
+        await db.execute('''
+          CREATE TABLE app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+          )
+        ''');
+      }
+      await seedDefaultSettings(db);
+
+      if (await tableExists('stock_movements')) {
+        if (!await columnExists('stock_movements', 'reason')) {
+          await db.execute('ALTER TABLE stock_movements ADD COLUMN reason TEXT');
+        }
+        if (!await columnExists('stock_movements', 'target_movement_id')) {
+          await db.execute(
+            'ALTER TABLE stock_movements ADD COLUMN target_movement_id INTEGER',
+          );
+        }
+      }
+    }
   }
 
   static Future<void> backfillCurrencyLockIfNeeded(DatabaseExecutor db) async {
@@ -1222,6 +1392,116 @@ class DatabaseHelper {
         'UPDATE businesses SET currency_locked_at = ? WHERE currency_locked_at IS NULL',
         [now],
       );
+    }
+  }
+
+  /// Seeds standard 13-account chart into accounts table if not already present.
+  static Future<void> seedAccounts(DatabaseExecutor db) async {
+    const systemAccounts = [
+      {'code': '1110', 'name_ar': 'الصندوق (النقدية)', 'name_en': 'Cash on hand', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1120', 'name_ar': 'البنوك والمحافظ الإلكترونية', 'name_en': 'Bank & e-wallets', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1130', 'name_ar': 'العملاء (ذمم مدينة)', 'name_en': 'Accounts receivable', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1140', 'name_ar': 'المخزون', 'name_en': 'Inventory', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '1150', 'name_ar': 'ضريبة مستردة (مدخلات)', 'name_en': 'Tax receivable (input)', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '2110', 'name_ar': 'الموردون (ذمم دائنة)', 'name_en': 'Accounts payable', 'type': 'liability', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '2120', 'name_ar': 'ضريبة مستحقة (مخرجات)', 'name_en': 'Tax payable (output)', 'type': 'liability', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '3100', 'name_ar': 'رأس المال / أرصدة افتتاحية', 'name_en': 'Opening balance equity', 'type': 'equity', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '4100', 'name_ar': 'إيرادات المبيعات', 'name_en': 'Sales revenue', 'type': 'revenue', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '4900', 'name_ar': 'إيرادات أخرى', 'name_en': 'Other income', 'type': 'revenue', 'normal_side': 'credit', 'is_system': 1},
+      {'code': '5100', 'name_ar': 'تكلفة البضاعة المباعة', 'name_en': 'Cost of goods sold', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '5200', 'name_ar': 'عجز وتسويات المخزون', 'name_en': 'Inventory adjustments', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
+      {'code': '6100', 'name_ar': 'المصروفات التشغيلية', 'name_en': 'Operating expenses', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
+    ];
+
+    for (final acc in systemAccounts) {
+      await db.insert('accounts', acc, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  /// Seeds default app settings into app_settings table if not already present.
+  static Future<void> seedDefaultSettings(DatabaseExecutor db) async {
+    const defaults = {
+      'journal_shadow_write': 'true',
+      'journal_reports_enabled': 'false',
+    };
+    for (final entry in defaults.entries) {
+      await db.insert(
+        'app_settings',
+        {'key': entry.key, 'value': entry.value},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+  }
+
+  /// Retrieves a value from app_settings by key.
+  Future<String?> getSetting(String key, {DatabaseExecutor? txn}) async {
+    final exec = txn ?? (await database);
+    final rows = await exec.query(
+      'app_settings',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String?;
+  }
+
+  /// Inserts or updates a value in app_settings.
+  Future<void> setSetting(String key, String? value, {DatabaseExecutor? txn}) async {
+    final exec = txn ?? (await database);
+    await exec.insert(
+      'app_settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Flag indicating whether shadow posting to the journal is active (default true).
+  Future<bool> isJournalShadowWriteEnabled({DatabaseExecutor? txn}) async {
+    final val = await getSetting('journal_shadow_write', txn: txn);
+    return val == null || val.toLowerCase() == 'true';
+  }
+
+  /// Flag indicating whether reporting displays persisted journal data (default false).
+  Future<bool> isJournalReportsEnabled({DatabaseExecutor? txn}) async {
+    final val = await getSetting('journal_reports_enabled', txn: txn);
+    return val != null && val.toLowerCase() == 'true';
+  }
+
+  /// Returns the period lock cutoff date, if any.
+  Future<DateTime?> getBooksClosedThrough({DatabaseExecutor? txn}) async {
+    final val = await getSetting('books_closed_through', txn: txn);
+    if (val == null || val.isEmpty) return null;
+    return DateTime.tryParse(val);
+  }
+
+  /// Sets or clears the period lock cutoff date.
+  Future<void> setBooksClosedThrough(DateTime? date, {DatabaseExecutor? txn}) async {
+    await setSetting(
+      'books_closed_through',
+      date?.toIso8601String().substring(0, 10),
+      txn: txn,
+    );
+  }
+
+  /// Checks if a given transaction date is closed by the period lock.
+  Future<bool> isPeriodClosed(DateTime date, {DatabaseExecutor? txn}) async {
+    final lockDate = await getBooksClosedThrough(txn: txn);
+    if (lockDate == null) return false;
+    final entryDay = DateTime(date.year, date.month, date.day);
+    final lockDay = DateTime(lockDate.year, lockDate.month, lockDate.day);
+    return !entryDay.isAfter(lockDay);
+  }
+
+  /// Asserts that a transaction date is open. Throws [StateError] if closed.
+  Future<void> assertPeriodOpen(DateTime date, {DatabaseExecutor? txn}) async {
+    if (await isPeriodClosed(date, txn: txn)) {
+      final lockDate = await getBooksClosedThrough(txn: txn);
+      final dateStr = lockDate != null
+          ? '${lockDate.year.toString().padLeft(4, '0')}-${lockDate.month.toString().padLeft(2, '0')}-${lockDate.day.toString().padLeft(2, '0')}'
+          : '';
+      throw StateError('Accounting period is closed through $dateStr');
     }
   }
 
@@ -2585,22 +2865,25 @@ class DatabaseHelper {
     String costStatus = StockMovement.costStatusUnknown,
     String? provenance,
     DateTime? date,
+    String? reason,
+    int? targetMovementId,
   }) async {
-    await txn.insert('stock_movements', {
-      'product_id': productId,
-      'type': type,
-      'quantity': quantity,
-      'reference_document_id': referenceDocumentId,
-      'date': (date ?? DateTime.now()).toIso8601String(),
-      'notes': notes,
-      'unit_cost': unitCost,
-      'total_cost': totalCost,
-      'cost_status': costStatus,
-      'provenance': provenance,
-    });
-    if (quantity != 0) {
-      await _lockCurrencyTxn(txn);
-    }
+    await StockLedger.record(
+      txn,
+      productId: productId,
+      deltaQuantity: quantity,
+      type: type,
+      referenceDocumentId: referenceDocumentId,
+      notes: notes,
+      unitCost: unitCost,
+      totalCost: totalCost,
+      costStatus: costStatus,
+      provenance: provenance,
+      date: date,
+      reason: reason,
+      targetMovementId: targetMovementId,
+      skipProductUpdate: true, // Product row managed by calling context
+    );
   }
 
   Future<List<StockMovement>> getStockMovements(int productId) async {
@@ -2675,21 +2958,27 @@ class DatabaseHelper {
     required int productId,
     required double delta, // positive = add, negative = remove
     String? notes,
+    String? reason,
+    DateTime? date,
   }) async {
+    final adjDate = date ?? DateTime.now();
     final db = await database;
     await db.transaction((txn) async {
+      await assertPeriodOpen(adjDate, txn: txn);
       await InventoryCostingService.onStockAdjusted(
         txn,
         productId: productId,
         delta: delta,
         notes: notes,
+        reason: reason,
+        date: adjDate,
       );
     });
     await logAuditEvent(
       'stock_adjusted',
       entityType: 'product',
       entityId: productId,
-      details: 'delta=$delta${notes != null ? " reason=$notes" : ""}',
+      details: 'delta=$delta${reason != null ? " reason=$reason" : ""}${notes != null ? " notes=$notes" : ""}',
     );
   }
 
@@ -2733,6 +3022,8 @@ class DatabaseHelper {
           'Document currency (${doc.currencyCode}) must match business base currency ($baseCurrency).',
         );
       }
+
+      await assertPeriodOpen(doc.date, txn: txn);
 
       int? contactId = doc.contactId;
       if (contact != null) {
@@ -2985,6 +3276,20 @@ class DatabaseHelper {
           'payment_origin': PaymentOrigin.upfront,
         });
       }
+
+      final itemRows = await txn.query(
+        'document_items',
+        where: 'document_id = ?',
+        whereArgs: [docId],
+      );
+      final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
+
+      final insertedDoc = newDoc.copyWith(id: docId);
+      await JournalWriter.postDocumentIssued(
+        txn,
+        insertedDoc,
+        persistedItems,
+      );
 
       return docId;
     });
@@ -3326,6 +3631,8 @@ class DatabaseHelper {
       if (existingRows.isEmpty) throw StateError('Document not found');
 
       final oldDoc = Document.fromMap(existingRows.first);
+      await assertPeriodOpen(oldDoc.date, txn: txn);
+      await assertPeriodOpen(doc.date, txn: txn);
       final oldType = oldDoc.type;
       final oldStatus = oldDoc.status;
 
@@ -3932,7 +4239,101 @@ class DatabaseHelper {
           'base_quantity': item.effectiveBaseQuantity,
         });
       }
+
+      final shadowEnabled = await isJournalShadowWriteEnabled(txn: txn);
+      if (shadowEnabled) {
+        final wasIssued = oldDoc.status != DocumentStatus.draft &&
+            oldDoc.status != DocumentStatus.cancelled &&
+            oldDoc.type != 'quotation';
+        final isIssued = effectiveStatus != DocumentStatus.draft &&
+            effectiveStatus != DocumentStatus.cancelled &&
+            doc.type != 'quotation';
+
+        if (!wasIssued && isIssued) {
+          final itemRows = await txn.query(
+            'document_items',
+            where: 'document_id = ?',
+            whereArgs: [doc.id],
+          );
+          final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
+          final finalDoc = doc.copyWith(
+            paid: effectivePaid,
+            remaining: effectiveRemaining,
+            status: effectiveStatus,
+            subtotal: effectiveSubtotal,
+            total: effectiveTotal,
+          );
+          await JournalWriter.postDocumentIssued(txn, finalDoc, persistedItems);
+        } else if (wasIssued && isIssued) {
+          final isMetadataOnly = _isMetadataOnlyDocumentEdit(
+            oldDoc: oldDoc,
+            newDoc: doc,
+            oldItems: oldItems,
+            newItems: newItems,
+            effectivePaid: effectivePaid,
+            effectiveTotal: effectiveTotal,
+            effectiveSubtotal: effectiveSubtotal,
+          );
+
+          if (!isMetadataOnly) {
+            await JournalWriter.reverseDocument(txn, doc.id!);
+            final itemRows = await txn.query(
+              'document_items',
+              where: 'document_id = ?',
+              whereArgs: [doc.id],
+            );
+            final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
+            final finalDoc = doc.copyWith(
+              paid: effectivePaid,
+              remaining: effectiveRemaining,
+              status: effectiveStatus,
+              subtotal: effectiveSubtotal,
+              total: effectiveTotal,
+            );
+            await JournalWriter.postDocumentIssued(txn, finalDoc, persistedItems);
+          }
+        }
+      }
     });
+  }
+
+  bool _isMetadataOnlyDocumentEdit({
+    required Document oldDoc,
+    required Document newDoc,
+    required List<Map<String, Object?>> oldItems,
+    required List<DocumentItem> newItems,
+    required double effectivePaid,
+    required double effectiveTotal,
+    required double effectiveSubtotal,
+  }) {
+    if (oldDoc.date != newDoc.date) return false;
+    if (oldDoc.paymentMethod != newDoc.paymentMethod) return false;
+    if (oldDoc.contactId != newDoc.contactId) return false;
+    if ((oldDoc.total - effectiveTotal).abs() > 1e-6) return false;
+    if ((oldDoc.subtotal - effectiveSubtotal).abs() > 1e-6) return false;
+    if ((oldDoc.taxAmount - newDoc.taxAmount).abs() > 1e-6) return false;
+    if ((oldDoc.paid - effectivePaid).abs() > 1e-6) return false;
+    if (oldDoc.status != newDoc.status) return false;
+
+    if (oldItems.length != newItems.length) return false;
+    for (var i = 0; i < oldItems.length; i++) {
+      final o = oldItems[i];
+      final n = newItems[i];
+      final oProductId = o['product_id'] as int?;
+      final oQty = (o['quantity'] as num?)?.toDouble() ?? 0.0;
+      final oPrice = (o['price'] as num?)?.toDouble() ?? 0.0;
+      final oTotal = (o['total'] as num?)?.toDouble() ?? 0.0;
+      final oSaleUnit = o['sale_unit'] as String?;
+      final oFactor = (o['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
+
+      if (oProductId != n.productId) return false;
+      if ((oQty - n.quantity).abs() > 1e-6) return false;
+      if ((oPrice - n.price).abs() > 1e-6) return false;
+      if ((oTotal - n.total).abs() > 1e-6) return false;
+      if (oSaleUnit != n.saleUnit) return false;
+      if ((oFactor - n.unitConversionFactor).abs() > 1e-6) return false;
+    }
+    return true;
   }
 
   Future<int> deleteDocument(int id) async {
@@ -3945,6 +4346,7 @@ class DatabaseHelper {
       );
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
+      await assertPeriodOpen(doc.date, txn: txn);
 
       // Payment receipts & expense vouchers: block hard deletion if financial ledger history exists.
       // Financial history must remain intact and auditable; cancellations must be used instead.
@@ -4205,6 +4607,12 @@ class DatabaseHelper {
         [id],
       );
 
+      await JournalWriter.reverseDocument(
+        txn,
+        id,
+        memo: 'Document hard deleted',
+      );
+
       return txn.delete('documents', where: 'id = ?', whereArgs: [id]);
     });
   }
@@ -4223,6 +4631,7 @@ class DatabaseHelper {
       );
       if (docRows.isEmpty) return;
       final doc = Document.fromMap(docRows.first);
+      await assertPeriodOpen(doc.date, txn: txn);
 
       if (doc.status == DocumentStatus.cancelled) {
         throw StateError('Document is already cancelled');
@@ -4494,6 +4903,8 @@ class DatabaseHelper {
         whereArgs: [id],
       );
 
+      await JournalWriter.reverseDocument(txn, id);
+
       if (refundStatus != null && doc.paid > 0) {
         await txn.insert('audit_log', {
           'action': 'document_refund_status',
@@ -4662,6 +5073,8 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [receiptId],
     );
+
+    await JournalWriter.reverseDocument(txn, receiptId);
   }
 
   Future<void> recordPayment({
@@ -4672,6 +5085,7 @@ class DatabaseHelper {
   }) async {
     final db = await database;
     await db.transaction((txn) async {
+      await assertPeriodOpen(DateTime.now(), txn: txn);
       final docRows = await txn.query(
         'documents',
         where: 'id = ?',
@@ -4705,11 +5119,12 @@ class DatabaseHelper {
         throw ArgumentError('Payment cannot exceed remaining amount');
       }
 
-      await _insertDocumentPaymentTxn(txn, {
+      final paymentDate = DateTime.now();
+      final paymentId = await _insertDocumentPaymentTxn(txn, {
         'document_id': documentId,
         'amount': canonicalAmount,
         'payment_method': paymentMethod,
-        'date': DateTime.now().toIso8601String(),
+        'date': paymentDate.toIso8601String(),
         'notes': notes,
         'payment_origin': PaymentOrigin.receipt,
       });
@@ -4732,6 +5147,20 @@ class DatabaseHelper {
         {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
         where: 'id = ?',
         whereArgs: [documentId],
+      );
+
+      final payment = DocumentPayment(
+        id: paymentId,
+        documentId: documentId,
+        amount: canonicalAmount,
+        paymentMethod: paymentMethod,
+        date: paymentDate,
+        notes: notes,
+      );
+      await JournalWriter.postPaymentRecorded(
+        txn,
+        payment: payment,
+        parentDoc: doc,
       );
     });
   }
@@ -4779,6 +5208,7 @@ class DatabaseHelper {
     );
     if (docRows.isEmpty) throw StateError('Document not found');
     final doc = Document.fromMap(docRows.first);
+    await assertPeriodOpen(DateTime.now(), txn: txn);
 
     if (doc.type != 'invoice' && doc.type != 'purchase') {
       throw StateError(
@@ -4853,6 +5283,36 @@ class DatabaseHelper {
       {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
       where: 'id = ?',
       whereArgs: [documentId],
+    );
+
+    final receiptDoc = Document(
+      id: receiptId,
+      type: linkedType,
+      documentNumber: linkedNumber,
+      date: now,
+      contactId: doc.contactId,
+      recipientName: doc.recipientName,
+      recipientPhone: doc.recipientPhone,
+      subtotal: canonicalAmount,
+      discount: 0.0,
+      taxRate: 0.0,
+      taxAmount: 0.0,
+      total: canonicalAmount,
+      paid: canonicalAmount,
+      remaining: 0.0,
+      paymentMethod: paymentMethod,
+      validUntil: null,
+      notes: doc.documentNumber,
+      relatedDocumentId: documentId,
+      status: DocumentStatus.issued,
+      currencyCode: doc.currencyCode,
+    );
+
+    await JournalWriter.postDocumentIssued(
+      txn,
+      receiptDoc,
+      const [],
+      parentDoc: doc,
     );
 
     return receiptId;
@@ -6437,6 +6897,7 @@ class DatabaseHelper {
   }) async {
     final db = await database;
     return db.transaction((txn) async {
+      await assertPeriodOpen(DateTime.now(), txn: txn);
       final sessionRow = await txn.query(
         'stocktake_sessions',
         where: 'id = ?',
@@ -6508,28 +6969,22 @@ class DatabaseHelper {
           discrepantCount++;
           adjustedCount++;
 
-          // 1. Atomically update product stock
-          await txn.update(
-            'products',
-            {'stock_quantity': counted, 'updated_at': now.toIso8601String()},
-            where: 'id = ?',
-            whereArgs: [productId],
-          );
-
-          // 2. Insert stock movement
+          // Atomically update product stock and record stock movement through single stock writer
           final totalCost = avgCost != null ? (variance.abs() * avgCost) : null;
-
-          await txn.insert('stock_movements', {
-            'product_id': productId,
-            'type': StockMovement.typeAdjustment,
-            'quantity': variance,
-            'unit_cost': avgCost,
-            'total_cost': totalCost,
-            'cost_status': costStatus,
-            'provenance': 'stocktake',
-            'date': now.toIso8601String(),
-            'notes': 'تسوية جرد المخزون: ${session.sessionNumber}',
-          });
+          await StockLedger.record(
+            txn,
+            productId: productId,
+            deltaQuantity: variance,
+            newStockQuantity: counted,
+            type: StockMovement.typeAdjustment,
+            unitCost: avgCost,
+            totalCost: totalCost,
+            costStatus: costStatus,
+            provenance: 'stocktake',
+            date: now,
+            notes: 'تسوية جرد المخزون: ${session.sessionNumber}',
+            reason: variance > 0 ? 'count_gain' : 'count_loss',
+          );
 
           // 3. Update stocktake item record
           await txn.update(

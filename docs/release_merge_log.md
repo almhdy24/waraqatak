@@ -269,3 +269,15 @@ git push origin main
 3. **Purchase Invoice Edit:** Issue a purchase invoice (qty 100), edit supplier name, edit notes, edit date; verify stock quantity remains 100 and stock movement count remains exactly 1.
 4. **Diagnostic Screen Guided Repair:** In Database Diagnostics, open review guidance for movement discrepancies; preview exact affected rows, toggle Option A vs Option B, and verify confirmation dialog before execution.
 
+---
+
+## Release Merge & Verification Log: v1.1.5+19
+
+### 1. Release Metadata
+- **Version:** `1.1.5+19`
+- **Branch:** `feat/accounting-backbone`
+- **Target Tag:** `v1.1.5+19`
+- **Summary:** Complete Accounting Backbone with persisted immutable double-entry journal, single authoritative stock writer (`StockLedger.record`), reason-coded stock adjustments, period lock (`books_closed_through`), 8-point reconciliation engine, and invariants INV-14..INV-18. Report source switch remains default OFF (`journal_reports_enabled = false`).
+- **Play Compliance Guard:** PASS (`Play compliance guard: OK`)
+- **Static Analysis:** PASS (`dart analyze` — 0 issues found)
+- **Accounting Backbone Tests:** 11 test suites, 47 tests passed, 0 failed
