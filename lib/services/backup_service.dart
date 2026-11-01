@@ -10,6 +10,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../database/database_helper.dart';
 import '../widgets/backup_password_dialog.dart';
+import 'accounting/journal_backfill_service.dart';
 import 'backup_encryption_service.dart';
 
 class BackupService {
@@ -589,14 +590,21 @@ class BackupService {
           'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}',
     );
 
-    // If legacy backup lacked journal tables, invoke backfill hook if registered
+    // If legacy backup lacked journal tables, invoke backfill
     final isLegacy = !data.containsKey('journal_entries') ||
         data['journal_entries'] == null ||
         (data['journal_entries'] as List).isEmpty;
-    if (isLegacy && onLegacyBackupRestored != null) {
-      try {
-        await onLegacyBackupRestored!();
-      } catch (_) {}
+    if (isLegacy) {
+      if (onLegacyBackupRestored != null) {
+        try {
+          await onLegacyBackupRestored!();
+        } catch (_) {}
+      } else {
+        await JournalBackfillService.backfillIfNeeded();
+      }
+    } else {
+      // New backup includes journal: verify parity
+      await JournalBackfillService.verifyParity();
     }
 
     // Prune older safety backups beyond retention limits
