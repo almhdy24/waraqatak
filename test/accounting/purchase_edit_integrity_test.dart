@@ -538,4 +538,106 @@ void main() {
     )).first['net'] as num?;
     expect(netM?.toDouble(), -8.0, reason: 'Net sale movements must match updated sold quantity (-8)');
   });
+
+  test('14. V4 End-to-end full scenario: issue purchase 100 without supplier, edit supplier, notes, date; assert stock, movements, ledger, idempotency', () async {
+    final business = (await db.getFirstBusiness())!;
+    final prodId = await db.insertProduct(
+      const Product(name: 'منتج V4 الشامل', purchasePrice: 40.0, salePrice: 60.0, stockQuantity: 0.0),
+    );
+
+    final purchaseInput = DocumentItemInput(productId: prodId, description: 'شراء 100 وحدة', quantity: 100.0, price: 40.0);
+
+    // 1. Issue purchase qty 100 without a supplier
+    final docId = await DocumentService.createDocument(
+      type: 'purchase',
+      business: business,
+      contact: null,
+      items: [purchaseInput],
+      isDraft: false,
+    );
+
+    expect((await db.getProductById(prodId))!.stockQuantity, 100.0);
+
+    // 2. Edit to add a supplier
+    final supplierId = await db.insertContact(
+      const Contact(name: 'مورد V4 المعتمد', phone: '0900000000', type: 'supplier'),
+    );
+    final supplier = (await db.getContactById(supplierId))!;
+
+    await DocumentService.updateDocument(
+      documentId: docId,
+      type: 'purchase',
+      business: business,
+      contact: supplier,
+      items: [purchaseInput],
+      isDraft: false,
+    );
+
+    // 3. Edit notes
+    await DocumentService.updateDocument(
+      documentId: docId,
+      type: 'purchase',
+      business: business,
+      contact: supplier,
+      items: [purchaseInput],
+      notes: 'ملاحظات التوريد المحدثة',
+      isDraft: false,
+    );
+
+    // 4. Edit date
+    final newDate = DateTime.now().add(const Duration(days: 2));
+    await DocumentService.updateDocument(
+      documentId: docId,
+      type: 'purchase',
+      business: business,
+      contact: supplier,
+      items: [purchaseInput],
+      notes: 'ملاحظات التوريد المحدثة',
+      date: newDate,
+      isDraft: false,
+    );
+
+    // 5. Assert stock stays 100
+    expect((await db.getProductById(prodId))!.stockQuantity, 100.0);
+
+    // 6. Assert net movements for document equal 100, no new movements
+    final rawDb = await db.database;
+    final movements = await rawDb.rawQuery(
+      'SELECT SUM(quantity) as net_qty, COUNT(*) as cnt FROM stock_movements WHERE reference_document_id = ?',
+      [docId],
+    );
+    expect((movements.first['net_qty'] as num).toDouble(), 100.0);
+    expect(movements.first['cnt'], 1, reason: 'Must have exactly 1 initial movement; metadata edits add no new movements');
+
+    // 7. Assert product inventory value and document payables correct
+    final prodAfter = (await db.getProductById(prodId))!;
+    expect(prodAfter.stockQuantity * prodAfter.averageCost!, 4000.0);
+
+    final docAfter = (await db.getDocumentById(docId))!;
+    expect(docAfter.total, 4000.0);
+    expect(docAfter.remaining, 4000.0);
+
+    final supplierDocs = await db.getDocumentsByContact(supplierId);
+    expect(supplierDocs.any((d) => d.id == docId), isTrue);
+    expect(supplierDocs.firstWhere((d) => d.id == docId).remaining, 4000.0);
+
+    // 8. Assert second identical edit is a no-op
+    await DocumentService.updateDocument(
+      documentId: docId,
+      type: 'purchase',
+      business: business,
+      contact: supplier,
+      items: [purchaseInput],
+      notes: 'ملاحظات التوريد المحدثة',
+      date: newDate,
+      isDraft: false,
+    );
+
+    final movementsAfterSecond = await rawDb.rawQuery(
+      'SELECT SUM(quantity) as net_qty, COUNT(*) as cnt FROM stock_movements WHERE reference_document_id = ?',
+      [docId],
+    );
+    expect(movementsAfterSecond.first['cnt'], 1, reason: 'Identical edit must be strictly idempotent with zero new movements');
+    expect((movementsAfterSecond.first['net_qty'] as num).toDouble(), 100.0);
+  });
 }
