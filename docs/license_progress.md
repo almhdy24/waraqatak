@@ -8,7 +8,7 @@
 | Batch 3 | Notification Targeting | COMPLETED | `f0d54eb` | `4c2d176` | `7d5331a` | version_matcher_test (2), test_version_matcher (16), test_notification_targeting (6) |
 | Batch 4 | App Notifications | COMPLETED | `01a947c` | N/A | N/A | app_notifications_test (5), app_identity_test (4), play compliance |
 | Batch 5 | Activation / License / Trial UX | COMPLETED | `ff25efc` | N/A | N/A | activation_detailed_test (4), play_compliance_test (42), localization tests, play compliance guard |
-| Batch 6 | Final Verification & Docs | COMPLETED | Pending commit | `a439e22` | N/A | Full suite (14 passes), 6 hostile mutations verified |
+| Batch 6 | Final Verification & Docs | COMPLETED | `a1ee44a` | `a439e22` | N/A | Full suite (14 passes), 6 hostile mutations verified |
 
 ---
 
