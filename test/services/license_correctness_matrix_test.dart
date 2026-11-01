@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/models/entitlement.dart';
 import 'package:warqatek/services/feature_access.dart';
-import 'package:warqatek/services/license_key.dart';
 import 'package:warqatek/services/license_service.dart';
 
 class FakeLicenseStorage implements LicenseStorage {

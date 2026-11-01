@@ -5854,6 +5854,29 @@ class DatabaseHelper {
     return (res.first['unread_count'] as num?)?.toInt() ?? 0;
   }
 
+  /// Data-only deletion of a single cached notification row by its server ID.
+  Future<int> deleteCachedNotification(int serverId) async {
+    final db = await database;
+    return await db.delete(
+      'cached_notifications',
+      where: 'server_id = ?',
+      whereArgs: [serverId],
+    );
+  }
+
+  /// Data-only bulk deletion of cached notifications, optionally preserving critical alerts.
+  Future<int> deleteAllCachedNotifications({bool preserveCritical = true}) async {
+    final db = await database;
+    if (preserveCritical) {
+      return await db.delete(
+        'cached_notifications',
+        where: 'category != ?',
+        whereArgs: ['critical'],
+      );
+    }
+    return await db.delete('cached_notifications');
+  }
+
   // ========== Diagnostic Reports (Milestone 2) ==========
   static const int maxPendingDiagnosticReports = 50;
 

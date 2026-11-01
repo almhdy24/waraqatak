@@ -3,6 +3,12 @@ class AppConstants {
   static const String packageName = 'com.elmahdi.waraqatak';
   static const String appId = 'com.elmahdi.waraqatak';
 
+  /// Semantic version of the application.
+  static const String appVersion = '1.1.5';
+
+  /// Monotonically increasing build number.
+  static const int appBuild = 15;
+
   /// Short display name of the developer / publisher.
   static const String developerName = 'Elmahdi Abdallh';
   static const String developerBrand = 'Elmahdi Dev';

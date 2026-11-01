@@ -24,6 +24,21 @@ void main() {
       expect(appId, equals(AppConstants.appId));
     });
 
+    test('AppConstants.appVersion and appBuild match pubspec.yaml', () {
+      final file = File('pubspec.yaml');
+      expect(file.existsSync(), isTrue, reason: 'pubspec.yaml must exist');
+
+      final content = file.readAsStringSync();
+      final match = RegExp(r'^version:\s*([0-9]+\.[0-9]+\.[0-9]+)(?:-[a-zA-Z0-9.]+)?\+([0-9]+)', multiLine: true).firstMatch(content);
+
+      expect(match, isNotNull, reason: 'version must be declared in pubspec.yaml');
+      final versionStr = match!.group(1);
+      final buildStr = match.group(2);
+
+      expect(versionStr, equals(AppConstants.appVersion));
+      expect(int.parse(buildStr!), equals(AppConstants.appBuild));
+    });
+
     test('Long key payload app claim verification', () {
       String makeKey(Map<String, dynamic> payload) {
         final b64 = base64Url.encode(utf8.encode(jsonEncode(payload))).replaceAll('=', '');

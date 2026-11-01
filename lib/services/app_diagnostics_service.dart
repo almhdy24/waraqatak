@@ -61,7 +61,7 @@ class AppDiagnosticsService {
       final info = await PackageInfo.fromPlatform();
       _cachedAppVersion = '${info.version}+${info.buildNumber}';
     } catch (_) {
-      _cachedAppVersion = '1.1.3+7';
+      _cachedAppVersion = '${AppConstants.appVersion}+${AppConstants.appBuild}';
     }
 
     _installErrorHooks();
@@ -159,7 +159,7 @@ class AppDiagnosticsService {
 
       final report = DiagnosticReport(
         reportUuid: generateUuidV4(),
-        appVersion: _cachedAppVersion ?? '1.1.1+5',
+        appVersion: _cachedAppVersion ?? '${AppConstants.appVersion}+${AppConstants.appBuild}',
         platform: Platform.operatingSystem,
         osVersion: sanitizeOsVersion(Platform.operatingSystemVersion),
         exceptionType: exType,

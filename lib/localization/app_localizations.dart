@@ -1284,6 +1284,17 @@ class AppLocalizations {
   String get categoryUpdate => _t('تحديث جديد', 'Update');
   String get categoryCritical => _t('تنبيه هام', 'Important');
   String get categoryTips => _t('نصائح وإرشادات', 'Tips & Guides');
+  String get undo => _t('تراجع', 'Undo');
+  String get deleteAll => _t('حذف الكل', 'Delete all');
+  String get confirmDeleteAll => _t('تأكيد حذف جميع التنبيهات؟', 'Delete all notifications?');
+  String get confirmDeleteAllMessage => _t(
+    'سيتم حذف جميع التنبيهات والإعلانات القابلة للحذف نهائياً. التنبيهات الهامة ستبقى محفوظة.',
+    'All dismissible announcements will be permanently deleted. Critical notices will be preserved.',
+  );
+  String get notificationDeleted => _t('تم حذف التنبيه', 'Notification deleted');
+  String get notificationsDeleted => _t('تم حذف التنبيهات المحددة', 'Selected notifications deleted');
+  String get cannotDeleteCritical => _t('لا يمكن حذف التنبيهات الهامة أو الحرجة', 'Critical notifications cannot be deleted');
+  String get selectedCount => _t('محدد', 'selected');
 
   // ========== CUSTOMER ACCOUNT STATEMENT ==========
   String get customerStatement => _t('كشف حساب عميل', 'Customer Statement');
