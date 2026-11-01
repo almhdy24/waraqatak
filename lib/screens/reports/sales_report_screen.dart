@@ -15,6 +15,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
 import '../document_detail_screen.dart';
+import '../../widgets/app_snackbar.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
 
@@ -234,9 +235,11 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
+      );
     }
   }
 

@@ -7,6 +7,7 @@ import '../services/document_service.dart';
 import '../models/payment_method.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -112,8 +113,10 @@ class _VoucherScreenState extends State<VoucherScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${AppLocalizations.of(context).operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _saving = false);

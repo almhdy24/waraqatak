@@ -12,6 +12,7 @@ import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_loading_view.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -331,10 +332,10 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context))),
-        ),
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _saving = false);

@@ -21,6 +21,7 @@ import '../widgets/status_badge.dart';
 import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/cancel_paid_document_dialog.dart';
 import '../widgets/responsive.dart';
 
@@ -66,8 +67,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       if (doc == null) {
         if (mounted) {
           final l10n = AppLocalizations.of(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.documentNotFoundDesc)),
+          AppSnackBar.show(
+            context,
+            l10n.documentNotFoundDesc,
+            severity: AppSnackBarSeverity.warning,
           );
           Navigator.pop(context);
         }
@@ -134,8 +137,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
+      );
     }
   }
 
@@ -158,8 +164,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
+      );
     }
   }
 
@@ -191,8 +200,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       } catch (e) {
         if (!mounted) return;
         final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(errorMsg)));
+        AppSnackBar.show(
+          context,
+          errorMsg,
+          severity: AppSnackBarSeverity.error,
+        );
       }
     }
   }
@@ -242,13 +254,20 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         );
         if (!mounted) return;
         final msg = isReceipt ? l10n.paymentReversed : l10n.operationSuccessful;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        AppSnackBar.show(
+          context,
+          msg,
+          severity: AppSnackBarSeverity.success,
+        );
         _load();
       } catch (e) {
         if (!mounted) return;
         final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(errorMsg)));
+        AppSnackBar.show(
+          context,
+          errorMsg,
+          severity: AppSnackBarSeverity.error,
+        );
       }
     }
   }
@@ -267,14 +286,18 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
           status: newStatus,
         );
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context).operationSuccessful)),
+        AppSnackBar.show(
+          context,
+          AppLocalizations.of(context).operationSuccessful,
+          severity: AppSnackBarSeverity.success,
         );
         _load();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+        AppSnackBar.show(
+          context,
+          '${AppLocalizations.of(context).operationFailed}: $e',
+          severity: AppSnackBarSeverity.error,
         );
       }
     }
@@ -288,8 +311,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
+      );
     }
   }
 
@@ -320,8 +346,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       } catch (e) {
         if (!mounted) return;
         final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(errorMsg)));
+        AppSnackBar.show(
+          context,
+          errorMsg,
+          severity: AppSnackBarSeverity.error,
+        );
       }
     }
   }
@@ -331,22 +360,24 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     try {
       final newId = await DocumentService.copyDocument(_document!.id!);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(l10n.documentCopied),
-        action: SnackBarAction(
-          label: l10n.open,
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: newId)),
-            );
-          },
-        ),
-      ));
+      AppSnackBar.show(
+        context,
+        l10n.documentCopied,
+        actionLabel: l10n.open,
+        onAction: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: newId)),
+          );
+        },
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
+      );
     }
   }
 
@@ -424,8 +455,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                           final amount = double.tryParse(amountController.text) ?? 0;
                           final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
                           if (amount <= 0 || MoneyUtils.isOverpayment(amount, doc.remaining, decimalDigits)) {
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(SnackBar(content: Text(l10n.invalidAmount)));
+                            AppSnackBar.show(
+                              context,
+                              l10n.invalidAmount,
+                              severity: AppSnackBarSeverity.warning,
+                            );
                             return;
                           }
                           Navigator.pop(sheetCtx);
@@ -436,25 +470,27 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                               paymentMethod: selectedMethod,
                             );
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text(l10n.paymentRecorded),
-                              action: SnackBarAction(
-                                label: l10n.viewReceipt,
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => DocumentDetailScreen(documentId: receiptId),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ));
+                            AppSnackBar.show(
+                              context,
+                              l10n.paymentRecorded,
+                              actionLabel: l10n.viewReceipt,
+                              onAction: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => DocumentDetailScreen(documentId: receiptId),
+                                  ),
+                                );
+                              },
+                            );
                             _load();
                           } catch (e) {
                             if (!mounted) return;
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+                            AppSnackBar.show(
+                              context,
+                              '${l10n.operationFailed}: $e',
+                              severity: AppSnackBarSeverity.error,
+                            );
                           }
                         },
                         child: Text(l10n.recordPayment),

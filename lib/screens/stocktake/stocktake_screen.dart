@@ -7,6 +7,7 @@ import '../../services/license_service.dart';
 import '../../services/stocktake_service.dart';
 import '../../utils/format_utils.dart';
 import '../../widgets/app_icons.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/responsive.dart';
 import 'stocktake_history_screen.dart';
@@ -150,7 +151,11 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
         await _load();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+        AppSnackBar.show(
+          context,
+          e.toString(),
+          severity: AppSnackBarSeverity.error,
+        );
         setState(() => _loading = false);
       }
     }
@@ -341,17 +346,20 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
           confirmed: true,
         );
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.stocktakeFinalizedSuccess),
-            backgroundColor: Colors.teal,
-          ),
+        AppSnackBar.show(
+          context,
+          l10n.stocktakeFinalizedSuccess,
+          severity: AppSnackBarSeverity.success,
         );
         await _load();
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      AppSnackBar.show(
+        context,
+        e.toString(),
+        severity: AppSnackBarSeverity.error,
+      );
       setState(() => _loading = false);
     }
   }

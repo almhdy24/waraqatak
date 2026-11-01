@@ -7,6 +7,7 @@ import '../services/activation_service.dart';
 import '../services/license_service.dart';
 import 'activation_screen.dart';
 import 'transparency_screen.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
 /// Settings → License.
@@ -122,9 +123,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
     await _reload();
     if (!mounted) return;
     setState(() => _busy = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.keyRemovedSnack)),
-    );
+    AppSnackBar.show(context, l10n.keyRemovedSnack);
   }
 
   @override
@@ -350,9 +349,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
             tooltip: l10n.copyDeviceId,
             onPressed: () {
               Clipboard.setData(ClipboardData(text: value));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.deviceIdCopied)),
-              );
+              AppSnackBar.show(context, l10n.deviceIdCopied);
             },
           ),
         ],

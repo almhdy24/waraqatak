@@ -12,6 +12,7 @@ import 'stock_movements_screen.dart';
 import '../widgets/responsive.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'activation_screen.dart';
 import 'audit_history_screen.dart';
@@ -194,14 +195,19 @@ class InventoryScreen extends StatefulWidget {
                                 adjusted = true;
                                 if (ctx.mounted) Navigator.pop(ctx);
                                 if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text(l10n.operationSuccessful)));
+                                AppSnackBar.show(
+                                  context,
+                                  l10n.operationSuccessful,
+                                  severity: AppSnackBarSeverity.success,
+                                );
                               } catch (e) {
                                 setSheet(() => isSaving = false);
                                 if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text(
-                                        ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n))));
+                                AppSnackBar.show(
+                                  context,
+                                  ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+                                  severity: AppSnackBarSeverity.error,
+                                );
                               }
                             },
                       style: FilledButton.styleFrom(
@@ -300,8 +306,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
     if (!mounted) return;
     if (product == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppLocalizations.of(context).barcodeNotFound)));
+      AppSnackBar.show(
+        context,
+        AppLocalizations.of(context).barcodeNotFound,
+        severity: AppSnackBarSeverity.warning,
+      );
       return;
     }
     _searchCtrl.text = product.barcode ?? product.name;

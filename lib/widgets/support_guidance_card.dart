@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../localization/app_localizations.dart';
 import '../screens/about_screen.dart';
 import '../utils/support_diagnostics.dart';
+import 'app_snackbar.dart';
 
 /// Standard, Play-compliant support guidance card.
 ///
@@ -29,12 +30,7 @@ class SupportGuidanceCard extends StatelessWidget {
     );
     await Clipboard.setData(ClipboardData(text: summary));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.supportInfoCopied),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      AppSnackBar.show(context, l10n.supportInfoCopied);
     }
   }
 
@@ -97,9 +93,7 @@ class SupportGuidanceCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: referenceId!.trim()));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(l10n.copiedToClipboard)),
-                      );
+                      AppSnackBar.show(context, l10n.copiedToClipboard);
                     },
                   ),
                 ],

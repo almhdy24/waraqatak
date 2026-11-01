@@ -8,6 +8,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_search_bar.dart';
+import '../widgets/app_snackbar.dart';
 import 'contact_form_screen.dart';
 import 'customer_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -77,10 +78,10 @@ class _CustomersScreenState extends State<CustomersScreen>
     await DatabaseHelper.instance
         .setContactActive(contact.id!, active: !contact.active);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-          contact.active ? l10n.contactDeactivated : l10n.contactActivated),
-    ));
+    AppSnackBar.show(
+      context,
+      contact.active ? l10n.contactDeactivated : l10n.contactActivated,
+    );
     _load();
   }
 
@@ -109,13 +110,19 @@ class _CustomersScreenState extends State<CustomersScreen>
     try {
       await DatabaseHelper.instance.deleteContact(contact.id!);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.operationSuccessful)));
+      AppSnackBar.show(
+        context,
+        l10n.operationSuccessful,
+        severity: AppSnackBarSeverity.success,
+      );
       _load();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorUtils.toFriendlyMessage(e, l10n))));
+      AppSnackBar.show(
+        context,
+        ErrorUtils.toFriendlyMessage(e, l10n),
+        severity: AppSnackBarSeverity.error,
+      );
     }
   }
 

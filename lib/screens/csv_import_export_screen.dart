@@ -6,6 +6,7 @@ import '../services/csv_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 
@@ -56,8 +57,10 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -91,8 +94,10 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
+        AppSnackBar.show(
+          context,
+          ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+          severity: AppSnackBarSeverity.error,
         );
       }
     }
@@ -114,19 +119,18 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
         _loading = false;
       });
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${l10n.importedCount}: ${result.importedCount} • ${l10n.updatedCount}: ${result.updatedCount}',
-          ),
-          backgroundColor: Colors.teal,
-        ),
+      AppSnackBar.show(
+        context,
+        '${l10n.importedCount}: ${result.importedCount} • ${l10n.updatedCount}: ${result.updatedCount}',
+        severity: AppSnackBarSeverity.success,
       );
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n))),
+        AppSnackBar.show(
+          context,
+          ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+          severity: AppSnackBarSeverity.error,
         );
       }
     }

@@ -20,6 +20,7 @@ import 'pdf_customize_screen.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
 import '../services/backup_encryption_service.dart';
@@ -338,8 +339,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           );
                           if (context.mounted && saved) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(l10n.backupSavedTo)),
+                            AppSnackBar.show(
+                              context,
+                              l10n.backupSavedTo,
+                              severity: AppSnackBarSeverity.success,
                             );
                           }
                         } else {
@@ -347,14 +350,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             final saved =
                                 await BackupService.createBackupUserChosen();
                             if (context.mounted && saved) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(l10n.backupSavedTo)),
+                              AppSnackBar.show(
+                                context,
+                                l10n.backupSavedTo,
+                                severity: AppSnackBarSeverity.success,
                               );
                             }
                           } catch (_) {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(l10n.backupSaveFailed)),
+                              AppSnackBar.show(
+                                context,
+                                l10n.backupSaveFailed,
+                                severity: AppSnackBarSeverity.error,
                               );
                             }
                           }
@@ -381,10 +388,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               context: context,
                             );
                             if (context.mounted && success) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.operationSuccessful),
-                                ),
+                              AppSnackBar.show(
+                                context,
+                                l10n.operationSuccessful,
+                                severity: AppSnackBarSeverity.success,
                               );
                               // Return to home and reload data
                               Navigator.of(
@@ -393,24 +400,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             }
                           } on BackupUnsupportedVersionException {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.backupUpdateRequired),
-                                ),
+                              AppSnackBar.show(
+                                context,
+                                l10n.backupUpdateRequired,
+                                severity: AppSnackBarSeverity.error,
                               );
                             }
                           } on BackupDecryptionException {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(l10n.backupIncorrectPassword),
-                                ),
+                              AppSnackBar.show(
+                                context,
+                                l10n.backupIncorrectPassword,
+                                severity: AppSnackBarSeverity.error,
                               );
                             }
                           } catch (_) {
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(l10n.operationFailed)),
+                              AppSnackBar.show(
+                                context,
+                                l10n.operationFailed,
+                                severity: AppSnackBarSeverity.error,
                               );
                             }
                           }

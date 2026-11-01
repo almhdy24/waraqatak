@@ -23,6 +23,7 @@ import '../widgets/app_amount_text.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_loading_view.dart';
+import '../widgets/app_snackbar.dart';
 import 'barcode_scanner_screen.dart';
 import 'document_detail_screen.dart';
 
@@ -116,9 +117,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       );
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 2)));
+    AppSnackBar.show(context, msg);
   }
 
   void _addProduct(Product p) {

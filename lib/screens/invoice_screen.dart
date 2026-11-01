@@ -13,6 +13,7 @@ import '../widgets/app_amount_text.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_section_header.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/app_totals_card.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
@@ -224,8 +225,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     if (_business == null) return;
 
     if (_descriptionControllers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).pleaseAddItems)),
+      AppSnackBar.show(
+        context,
+        AppLocalizations.of(context).pleaseAddItems,
+        severity: AppSnackBarSeverity.warning,
       );
       return;
     }
@@ -262,14 +265,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
       if (!mounted) return;
       if (lowStockWarnings.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${AppLocalizations.of(context).lowStockAlert}: ${lowStockWarnings.join(", ")}',
-            ),
-            backgroundColor: Colors.orange.shade800,
-            duration: const Duration(seconds: 4),
-          ),
+        AppSnackBar.show(
+          context,
+          '${AppLocalizations.of(context).lowStockAlert}: ${lowStockWarnings.join(", ")}',
+          severity: AppSnackBarSeverity.warning,
         );
       }
       Navigator.pushReplacement(
@@ -280,15 +279,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            ErrorUtils.getFriendlyErrorMessage(
-              e,
-              l10n: AppLocalizations.of(context),
-            ),
-          ),
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(
+          e,
+          l10n: AppLocalizations.of(context),
         ),
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _saving = false);

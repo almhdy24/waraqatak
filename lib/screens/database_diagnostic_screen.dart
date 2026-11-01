@@ -11,6 +11,7 @@ import '../services/database_diagnostic_service.dart';
 import '../services/database_repair_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'product_form_screen.dart';
@@ -114,9 +115,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(l10n.repairReportCopied)));
+    AppSnackBar.show(context, l10n.repairReportCopied);
   }
 
   Future<void> _fixSingleIssue(RepairableIssue issue) async {
@@ -213,31 +212,26 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
       if (!mounted) return;
 
       if (result.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${l10n.repairSuccess}${result.safetyBackupPath != null ? "\n${l10n.repairSafetyBackupCreated}${result.safetyBackupPath}" : ""}',
-            ),
-            backgroundColor: Colors.green.shade800,
-          ),
+        AppSnackBar.show(
+          context,
+          '${l10n.repairSuccess}${result.safetyBackupPath != null ? "\n${l10n.repairSafetyBackupCreated}${result.safetyBackupPath}" : ""}',
+          severity: AppSnackBarSeverity.success,
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.message),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        AppSnackBar.show(
+          context,
+          result.message,
+          severity: AppSnackBarSeverity.error,
         );
       }
 
       await _runDiagnostics();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n)),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _isRepairing = false);
@@ -304,31 +298,26 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
       if (!mounted) return;
 
       if (result.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${l10n.repairSuccess} (${result.repairedCount})${result.safetyBackupPath != null ? "\n${l10n.repairSafetyBackupCreated}${result.safetyBackupPath}" : ""}',
-            ),
-            backgroundColor: Colors.green.shade800,
-          ),
+        AppSnackBar.show(
+          context,
+          '${l10n.repairSuccess} (${result.repairedCount})${result.safetyBackupPath != null ? "\n${l10n.repairSafetyBackupCreated}${result.safetyBackupPath}" : ""}',
+          severity: AppSnackBarSeverity.success,
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.message),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        AppSnackBar.show(
+          context,
+          result.message,
+          severity: AppSnackBarSeverity.error,
         );
       }
 
       await _runDiagnostics();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n)),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _isRepairing = false);
