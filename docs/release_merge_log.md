@@ -117,3 +117,46 @@ git push origin main
    - Real-world activation against `api.almhdy24.com` (strictly prohibited in local headless testing).
 2. **API & Admin Panel Repositories:**
    - Neither `../api.almhdy24.com` nor `../panel.almhdy24.com` had any branch switches, merges, or pushes performed. Database migrations remain in SQL scripts ready for phpMyAdmin manual application.
+
+
+# Release Merge & Verification Log: v1.1.5-beta+17
+
+## Step 1 — Preflight Audit
+
+- **Date / Timestamp:** 2026-11-01T08:20:00Z
+- **Active Repository:** `./waraqatak` (APP ONLY)
+- **Default Branch:** `main` (confirmed via `remotes/origin/HEAD -> origin/main`)
+- **Remote:** `origin` (`git@github.com:almhdy24/waraqatak.git`)
+- **Working Tree State:** Clean (`git status --porcelain` produced zero output)
+
+### Initial Commit SHAs (Rollback Points)
+- **Local `main` SHA:** `d150613ef9ca596999b98be99e7bef8c903ab085`
+- **Remote `origin/main` SHA:** `d150613ef9ca596999b98be99e7bef8c903ab085`
+- **Status:** Local `main` is in exact lockstep with `origin/main` (0 commits ahead, 0 commits behind).
+
+### Target Tag Check
+- **Tag:** `v1.1.5-beta+17`
+- **Local check (`git tag -l`):** Not found
+- **Remote check (`git ls-remote origin refs/tags/v1.1.5-beta+17`):** Not found
+- **Result:** Preflight check passed. Tag does not exist.
+
+### Pending Feature / Fix Branches to Merge
+1. **`feat/single-currency-accounting-audit`**
+   - Tip SHA: `59232a3`
+   - Commits ahead of main: 7 (`b2ed04b`, `4cfffbc`, `e9efcf4`, `994940f`, `23cdf36`, `52e916b`, `59232a3`)
+   - Description: Single base currency transition, BUG-01 precision scaling fix, accounting invariant & oracle suites, 8 structural guards, full test runner.
+2. **`fix/ui-cleanup-settings-support`**
+   - Tip SHA: `a9e63dd`
+   - Commits ahead of main: 3 (`f9fdd24`, `8bf2f92`, `a9e63dd`)
+   - Description: Removed wholesale toggle from Financial Settings (preserved in Settings with confirmation dialog); removed support guidance card and about/copy buttons from UI surfaces.
+3. **`fix/android-app-label-arabic`**
+   - Tip SHA: `ab22fb3`
+   - Commits ahead of main: 1 (`ab22fb3`)
+   - Description: Ensured Android launcher label permanently resolves to Arabic "ورقتك" via `@string/app_name` across all locales.
+
+### Overlap Proof
+Comparing `git diff --name-only main..<branch>` across all three branches:
+- `feat/single-currency-accounting-audit`: Touched accounting/currency screens, services, models, tests, docs, test runner.
+- `fix/ui-cleanup-settings-support`: Touched `financial_settings_screen`, `settings_screen`, `activation_screen`, `license_screen`, `locked_feature_screen`, `pro_upgrade_sheet`, `docs/ui_cleanup_log.md`.
+- `fix/android-app-label-arabic`: Touched `android/app/src/main/res/values/strings.xml` and deleted `android/app/src/main/res/values-ar/strings.xml`.
+- **Intersection:** Exactly 0 overlapping files. Merge conflicts will be non-existent.
