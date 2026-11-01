@@ -265,3 +265,29 @@ Example 10: Inventory physical count shortage of 5 units @ 20 SDG
 
 ### 6.4 Cross-Currency Product Price Isolation
 - **Rule:** When generating books for an active currency, catalog prices are only referenced if `LedgerInput.productPricesApply` is `true`. If the product belongs to a different currency context, unpriced inventory is costed at zero to prevent cross-currency distortion (`ledger.dart:141-145, 513-528`).
+
+---
+
+## 7. Codebase Audit Clarifications (Backbone Foundation)
+
+### 7.1 Returns & Credit Notes Audit
+- **Question:** Are there return / credit-note document entities?
+- **Finding:** No. The database schema and model enum only support 5 document types: `invoice`, `purchase`, `quotation`, `payment_receipt`, and `expense_voucher`. Returns are handled exclusively through:
+  1. Document cancellation (`cancelDocument` or `cancelDocumentWithSettlementDialog`) with reason tracking in `audit_log`.
+  2. Inventory adjustments with appropriate reason codes (e.g. `damage_loss`, `entry_correction`).
+
+### 7.2 Document Hard Deletion vs Cancellation
+- **Question:** Can issued documents be hard-deleted given that `stock_movements` has `ON DELETE SET NULL`?
+- **Finding:** 
+  1. Documents with any payment history (`paid > 0` or rows in `document_payments`) cannot be hard-deleted; `DatabaseHelper.deleteDocument` explicitly throws `StateError`, requiring cancellation instead.
+  2. Documents with active linked receipts or expense vouchers cannot be hard-deleted.
+  3. Unpaid issued documents can be hard-deleted only if stock reversal is valid (stock available). In that case, `deleteDocument` explicitly issues `DELETE FROM stock_movements WHERE reference_document_id = ?` within the transaction before deleting the document row, preventing orphaned movements.
+  4. With the introduction of the immutable journal, hard-deleting an issued document that has journal entries is strictly prohibited or must require append-only cancellation reversal.
+
+### 7.3 Real-World Document Lifecycle Behaviors
+- **Purchase Payments:** Recording a payment on a purchase automatically creates a linked `expense_voucher` document and an insert into `document_payments` with `payment_origin = 'receipt'` and `receipt_document_id = voucher.id`.
+- **Receipts:** Standalone receipts credit `4900 (Other Income)`. Receipts linked to cancelled invoices credit `2110 (Accounts Payable / Customer Advance)`. Receipts linked to active invoices credit `1130 (Accounts Receivable)`.
+- **Vouchers:** Standalone vouchers debit `6100 (Operating Expenses)`. Vouchers linked to cancelled purchases debit `1130 (Accounts Receivable / Supplier Advance)`. Vouchers linked to active purchases debit `2110 (Accounts Payable)`.
+- **Cancellations:** In the derived ledger, cancelled documents are omitted from the query. In the persisted double-entry journal, cancellations post an explicit reversal entry dated at the original entry's effective date (`posted_at` set to current timestamp, `reverses_entry_id` pointing to the original entry), ensuring period parity with the derived reports.
+- **Opening Balances:** Currently represented in inventory by `StockMovement.typeOpening` (and pre-movement unexplained stock), posting Dr 1140 / Cr 3100.
+
