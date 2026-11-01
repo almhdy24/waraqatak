@@ -771,6 +771,7 @@ class _DocumentTile extends StatelessWidget {
                   AppAmountText(
                     amount: doc.total,
                     currencySymbol: doc.currencySymbol,
+                    decimalDigits: fmt.maximumFractionDigits,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
