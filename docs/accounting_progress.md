@@ -5,7 +5,7 @@
 | Phase 0 | Baseline, Test Runner, CI Failure Root-Cause | COMPLETE | dde0020 (amended) | 63 files / 881 tests passed; play_compliance OK; analyze OK |
 | Phase 1 | Read-Only Audit & Specification | COMPLETE | 522616c | Completed comprehensive audit and as-implemented spec |
 | Phase 2 | Red-First Oracle & Invariant Harness | COMPLETE | 57ad95a | 4 suites / 11 tests passed, 1 skipped (BUG-01) |
-| Phase 3 | Single-Currency Refactor | PENDING | - | - |
+| Phase 3 | Single-Currency Refactor | COMPLETE | e35e10a | Removed UI multi-currency selectors/pickers; enforced base currency with legacy preservation; all mapped tests pass |
 | Phase 4 | Fix Proven Defects | PENDING | - | - |
 | Phase 5 | Structural Guards | PENDING | - | - |
 | Phase 6 | Final Verification & Docs | PENDING | - | - |
@@ -57,3 +57,29 @@
   - Validated 100% discount, zero unit price, fractional quantities (0.001), 10-line Hamilton-Hare largest remainder apportionment, and end-of-period date boundaries.
   - 5 passed.
 - All 4 test suites pass analysis (`dart analyze test/accounting/`) and pass tests.
+
+### Phase 3: Single-Currency Refactor
+- Created `docs/single_currency_design.md`:
+  - Detailed single base currency architecture (`businesses.currency_code`, permanently locked upon first transaction).
+  - Explicit legacy data policy: zero schema drops, zero destructive updates, null/empty currency fallback to base currency at read time, historical foreign records preserved and segregated.
+  - Complete test mapping table ensuring 0 deleted tests.
+- Central Currency Accessor:
+  - Created `lib/services/currency_service.dart` (`CurrencyContext`) providing cached resolution of base currency, symbol, decimal scale, and base currency match validation.
+- UI & Report Simplification:
+  - `lib/screens/reports/accounting_screen.dart`: Removed currency selection dropdown; journal automatically defaults to base currency. Added informational banner for legacy foreign records.
+  - `lib/widgets/customer_statement_dialog.dart`: Removed currency dropdown picker; statement generates strictly for base currency with informational notice when legacy foreign documents exist.
+  - `lib/screens/reports/sales_report_screen.dart`: Primary summary chips and PDF cards always show base currency figures; added dedicated read-only section for legacy foreign-currency documents.
+  - `lib/screens/reports/purchases_report_screen.dart`: Primary summary chips and PDF cards always show base currency figures; added dedicated read-only section for legacy foreign-currency purchases.
+  - `lib/screens/reports/payments_report_screen.dart`: Primary summary chips show base currency received/made payments; legacy payments isolated in dedicated read-only section.
+  - `lib/screens/customer_detail_screen.dart`: Financial stat cards display base currency receivable/payable balance; legacy foreign balances isolated in read-only section below.
+- Database & Reporting Services:
+  - `DatabaseHelper.getPeriodSummary`: Defaults unfiltered scalar totals to base currency, avoiding cross-currency nominal addition while keeping `totalsByCurrency` breakdown.
+  - `BusinessReportingService.getProductPerformance` & `getPurchasesReport`: Primary scalar figures strictly represent base currency.
+  - `DatabaseDiagnosticService`: Added diagnostic check `legacy_foreign_currency_documents` (severity: info, category: documentStatusMismatch) to enumerate any legacy non-base currency records.
+- Verification:
+  - `test/services/multi_currency_phase1_test.dart`: 5 / 5 passed.
+  - `test/services/multi_currency_phase2_stage1_test.dart`: 3 / 3 passed.
+  - `test/services/single_base_currency_test.dart`: 14 / 14 passed.
+  - `test/accounting/cross_layer_consistency_test.dart`: 1 / 1 passed.
+  - `bash tool/check_play_compliance.sh`: Play compliance guard OK.
+  - `dart analyze`: Clean on all modified files.

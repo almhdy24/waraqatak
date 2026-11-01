@@ -72,15 +72,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       if (!mounted) return;
       final biz = results[0] as Business?;
       final byCurrency = results[2] as Map<String, double>;
-      final singleCurrencyOutstanding = byCurrency.length == 1
-          ? byCurrency.values.first
-          : (byCurrency.isEmpty ? 0.0 : 0.0);
+      final baseCurrency = biz?.currencyCode ?? 'SDG';
+      final baseOutstanding = byCurrency[baseCurrency] ?? 0.0;
 
       setState(() {
         _business = biz;
         _documents = results[1] as List<Document>;
         _outstandingByCurrency = byCurrency;
-        _outstanding = singleCurrencyOutstanding;
+        _outstanding = baseOutstanding;
       });
     } catch (e) {
       if (!mounted) return;
@@ -224,12 +223,15 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               d.status != DocumentStatus.cancelled,
         )
         .toList();
-    final relevantCurrencies = relevantDocs.map((d) => d.currencyCode).toSet();
-    final singleCurrency = relevantCurrencies.length == 1
-        ? Currency.symbolForCode(relevantCurrencies.first)
-        : (relevantCurrencies.isEmpty ? currency : null);
-    final totalAmount = relevantDocs.fold<double>(0, (s, d) => s + d.total);
-    final totalPaid = relevantDocs.fold<double>(0, (s, d) => s + d.paid);
+    final baseCurrencyCode = _business?.currencyCode ?? 'SDG';
+    final baseDocs = relevantDocs
+        .where((d) => d.currencyCode == baseCurrencyCode)
+        .toList();
+    final totalAmount = baseDocs.fold<double>(0, (s, d) => s + d.total);
+    final totalPaid = baseDocs.fold<double>(0, (s, d) => s + d.paid);
+    final legacyCurrencies = _outstandingByCurrency.entries
+        .where((e) => e.key != baseCurrencyCode && e.value > 0)
+        .toList();
 
     final avatarColor = _contactColor(widget.contact.name, cs);
 
@@ -383,10 +385,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             Expanded(
               child: _StatCard(
                 label: _isSupplier ? l10n.purchase : l10n.invoice,
-                value: singleCurrency != null
-                    ? _fmt.format(totalAmount)
-                    : '(${relevantCurrencies.length})',
-                currency: singleCurrency ?? '',
+                value: _fmt.format(totalAmount),
+                currency: currency,
                 icon: _isSupplier
                     ? Icons.shopping_cart_outlined
                     : Icons.receipt_long_outlined,
@@ -397,10 +397,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             Expanded(
               child: _StatCard(
                 label: l10n.paid,
-                value: singleCurrency != null
-                    ? _fmt.format(totalPaid)
-                    : '(${relevantCurrencies.length})',
-                currency: singleCurrency ?? '',
+                value: _fmt.format(totalPaid),
+                currency: currency,
                 icon: Icons.check_circle_outline,
                 color: AppDesignTokens.semanticSuccess(context),
               ),
@@ -409,24 +407,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             Expanded(
               child: _StatCard(
                 label: _isSupplier ? l10n.payable : l10n.receivable,
-                value: _outstandingByCurrency.length > 1
-                    ? '(${_outstandingByCurrency.length})'
-                    : _fmt.format(_outstanding),
-                currency: _outstandingByCurrency.length == 1
-                    ? Currency.symbolForCode(_outstandingByCurrency.keys.first)
-                    : (_outstandingByCurrency.length > 1 ? '' : currency),
+                value: _fmt.format(_outstanding),
+                currency: currency,
                 icon: Icons.account_balance_wallet_outlined,
-                color: (_outstanding > 0 || _outstandingByCurrency.isNotEmpty)
-                    ? Colors.red.shade600
-                    : Colors.grey,
-                highlight:
-                    _outstanding > 0 || _outstandingByCurrency.isNotEmpty,
+                color: _outstanding > 0 ? Colors.red.shade600 : Colors.grey,
+                highlight: _outstanding > 0,
               ),
             ),
           ],
         ),
 
-        if (_outstandingByCurrency.length > 1) ...[
+        if (legacyCurrencies.isNotEmpty) ...[
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -445,13 +436,15 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 Row(
                   children: [
                     Icon(
-                      Icons.currency_exchange,
+                      Icons.history,
                       size: 16,
                       color: Theme.of(context).colorScheme.primary,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      _isSupplier ? l10n.payable : l10n.receivable,
+                      _isSupplier
+                          ? (l10n.langCode == 'ar' ? 'مستحقات قديمة بعملات أخرى' : 'Legacy payables in other currencies')
+                          : (l10n.langCode == 'ar' ? 'مستحقات قديمة بعملات أخرى' : 'Legacy receivables in other currencies'),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -463,7 +456,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  children: _outstandingByCurrency.entries.map((e) {
+                  children: legacyCurrencies.map((e) {
                     final sym = Currency.symbolForCode(e.key);
                     return Chip(
                       label: Text(

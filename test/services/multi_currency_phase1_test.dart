@@ -301,10 +301,13 @@ void main() {
       expect(summary.totalsByCurrency.containsKey('EUR'), isFalse);
       expect(summary.cancelledCount, 1);
 
-      // Verify that nominal cross-currency addition was prevented in totalsByCurrency
+      // Verify that nominal cross-currency addition was prevented in totalPurchases
       expect(sdgTotals.purchases, 200000.0);
       expect(usdTotals.purchases, 500.0);
-      expect(sdgTotals.purchases, isNot(equals(summary.totalPurchases)));
+      // Under single base currency, totalPurchases reflects the base currency (SDG: 200,000)
+      // and strictly prevents nominal addition with foreign currency (200,500).
+      expect(summary.totalPurchases, 200000.0);
+      expect(summary.totalPurchases, isNot(equals(200500.0)));
     });
   });
 
