@@ -4,12 +4,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../database/database_helper.dart';
+import '../widgets/backup_password_dialog.dart';
+import 'backup_encryption_service.dart';
 import 'backup_service.dart';
 
 /// Metadata for a Google Drive backup file stored in appDataFolder.
@@ -349,10 +352,10 @@ class GoogleDriveBackupService {
   String? get currentUserEmail => _client.currentUserEmail;
 
   /// Creates a local backup and uploads it to the appDataFolder on Google Drive.
-  Future<DriveBackupFile> uploadCurrentBackup() async {
+  Future<DriveBackupFile> uploadCurrentBackup({String? password}) async {
     final localBackupPath = createLocalBackupOverride != null
         ? await createLocalBackupOverride!()
-        : await BackupService.createLocalBackup();
+        : await BackupService.createLocalBackup(password: password);
     final localFile = File(localBackupPath);
     try {
       final bytes = await localFile.readAsBytes();
@@ -393,11 +396,17 @@ class GoogleDriveBackupService {
   ///
   /// Steps:
   /// 1. Download to temporary file.
-  /// 2. Validate JSON structure, application ID, and schema compatibility.
-  /// 3. Create a safety backup of the active database before any mutation.
-  /// 4. Restore data within SQLite transaction.
-  /// 5. Clean up temporary download file.
-  Future<bool> restoreFromDrive(DriveBackupFile backupFile) async {
+  /// 2. If encrypted, prompt for password and decrypt in memory.
+  /// 3. Validate JSON structure, application ID, and schema compatibility.
+  /// 4. Create a safety backup of the active database before any mutation.
+  /// 5. Restore data within SQLite transaction.
+  /// 6. Clean up temporary download file.
+  Future<bool> restoreFromDrive(
+    DriveBackupFile backupFile, {
+    BuildContext? context,
+    String? password,
+    Future<String?> Function(List<int> bytes)? passwordPrompt,
+  }) async {
     final bytes = await _client.downloadBackup(backupFile.id);
     if (bytes.isEmpty) {
       throw Exception('Empty backup file received from cloud storage.');
@@ -410,7 +419,33 @@ class GoogleDriveBackupService {
     await tempFile.writeAsBytes(bytes, flush: true);
 
     try {
-      final content = await tempFile.readAsString(encoding: utf8);
+      String content;
+      if (BackupEncryptionService.isEncrypted(bytes)) {
+        if (password != null && password.isNotEmpty) {
+          content = await BackupEncryptionService.decryptJson(
+            encryptedBytes: bytes,
+            password: password,
+          );
+        } else if (passwordPrompt != null) {
+          final result = await passwordPrompt(bytes);
+          if (result == null) return false;
+          content = result;
+        } else if (context != null && context.mounted) {
+          final result = await BackupPasswordPromptDialog.show(
+            context,
+            encryptedBytes: bytes,
+          );
+          if (result == null) return false;
+          content = result;
+        } else {
+          throw const BackupDecryptionException(
+            'Password is required for encrypted backup',
+          );
+        }
+      } else {
+        content = await tempFile.readAsString(encoding: utf8);
+      }
+
       final decoded = jsonDecode(content);
       if (decoded is! Map<String, dynamic>) {
         throw Exception('Invalid cloud backup format');

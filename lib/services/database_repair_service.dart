@@ -825,6 +825,10 @@ class DatabaseRepairService {
         }
       });
 
+      if (createSafetyBackup && safetyBackupPath != null) {
+        await BackupService.pruneSafetyBackups(preservePath: safetyBackupPath);
+      }
+
       return RepairResult(
         success: true,
         repairedCount: repairedCount,
@@ -908,6 +912,10 @@ class DatabaseRepairService {
           }
         }
       });
+
+      if (createSafetyBackup && safetyBackupPath != null) {
+        await BackupService.pruneSafetyBackups(preservePath: safetyBackupPath);
+      }
 
       return RepairResult(
         success: true,

@@ -14,12 +14,14 @@ import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
+import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
 import '../widgets/status_badge.dart';
 import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/cancel_paid_document_dialog.dart';
 import '../widgets/responsive.dart';
 
 class DocumentDetailScreen extends StatefulWidget {
@@ -40,6 +42,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   Document? _convertedInvoice;
   List<PaymentMethod> _enabledMethods = [];
   List<PaymentMethod> _allMethods = [];
+  Map<String, dynamic>? _refundStatusInfo;
   bool _loading = true;
   String? _error;
 
@@ -89,6 +92,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
           Future.value(null),
       ]);
 
+      Map<String, dynamic>? refundInfo;
+      if (doc.status == DocumentStatus.cancelled && doc.paid > 0) {
+        refundInfo = await DocumentService.getLatestDocumentRefundStatus(doc.id!);
+      }
+
       if (!mounted) return;
       setState(() {
         _document = doc;
@@ -100,6 +108,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _convertedInvoice = doc.type == 'quotation' ? futures[5] as Document? : null;
         _enabledMethods = enabledMethods;
         _allMethods = allMethods;
+        _refundStatusInfo = refundInfo;
         _loading = false;
       });
     } catch (e) {
@@ -181,8 +190,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         Navigator.pop(context, true);
       } catch (e) {
         if (!mounted) return;
+        final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+            .showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     }
   }
@@ -191,35 +201,81 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final l10n = AppLocalizations.of(context);
     final doc = _document!;
     final isReceipt = doc.type == 'payment_receipt';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.confirmCancel),
-        content: Text(isReceipt ? l10n.cancelReceiptMessage : l10n.cancelDocumentMessage),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+    final isInvoiceOrPurchase = doc.type == 'invoice' || doc.type == 'purchase';
+
+    String? chosenRefundStatus;
+    bool confirmed = false;
+
+    if (isInvoiceOrPurchase && doc.paid > 0) {
+      final res = await CancelPaidDocumentDialog.show(context, document: doc);
+      if (res != null && res.confirmed) {
+        confirmed = true;
+        chosenRefundStatus = res.refundStatus;
+      }
+    } else {
+      final res = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.confirmCancel),
+          content: Text(isReceipt ? l10n.cancelReceiptMessage : l10n.cancelDocumentMessage),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              ),
+              child: Text(l10n.cancelDocument),
             ),
-            child: Text(l10n.cancelDocument),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) {
+          ],
+        ),
+      );
+      confirmed = res == true;
+    }
+
+    if (confirmed && mounted) {
       try {
-        await DocumentService.cancelDocument(doc.id!);
+        await DocumentService.cancelDocument(
+          doc.id!,
+          refundStatus: chosenRefundStatus,
+        );
         if (!mounted) return;
         final msg = isReceipt ? l10n.paymentReversed : l10n.operationSuccessful;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
         _load();
       } catch (e) {
         if (!mounted) return;
+        final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+            .showSnackBar(SnackBar(content: Text(errorMsg)));
+      }
+    }
+  }
+
+  Future<void> _updateRefundStatus() async {
+    if (_document == null) return;
+    final currentStatus = _refundStatusInfo?['status'] as String?;
+    final newStatus = await UpdateRefundStatusDialog.show(
+      context,
+      initialStatus: currentStatus,
+    );
+    if (newStatus != null && mounted) {
+      try {
+        await DocumentService.updateDocumentRefundStatus(
+          documentId: _document!.id!,
+          status: newStatus,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context).operationSuccessful)),
+        );
+        _load();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+        );
       }
     }
   }
@@ -263,8 +319,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         ).then((_) => _load());
       } catch (e) {
         if (!mounted) return;
+        final errorMsg = ErrorUtils.toFriendlyMessage(e, l10n);
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('${l10n.operationFailed}: $e')));
+            .showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     }
   }
@@ -551,6 +608,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       body: ResponsiveCenter(child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
+          if (isCancelled && doc.paid > 0 && (isInvoice || isPurchase)) ...[
+            _refundStatusCard(l10n, sym),
+            const SizedBox(height: 10),
+          ],
+
           // ── Header card ──────────────────────────────────
           _card(Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -836,6 +898,117 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
           if (fab != null) const SizedBox(height: 80),
         ],
       )),
+    );
+  }
+
+  Widget _refundStatusCard(AppLocalizations l10n, String sym) {
+    final cs = Theme.of(context).colorScheme;
+    final statusKey = _refundStatusInfo?['status'] as String?;
+    final date = _refundStatusInfo?['timestamp'] as DateTime?;
+
+    final String statusLabel;
+    final Color badgeColor;
+    final IconData statusIcon;
+
+    if (statusKey == 'refunded') {
+      statusLabel = l10n.refundStatusRefunded;
+      badgeColor = Colors.green;
+      statusIcon = Icons.check_circle_outline_rounded;
+    } else if (statusKey == 'unrefunded') {
+      statusLabel = l10n.refundStatusNotRefunded;
+      badgeColor = Colors.orange;
+      statusIcon = Icons.schedule_rounded;
+    } else {
+      statusLabel = l10n.refundStatusNotRecorded;
+      badgeColor = cs.onSurfaceVariant;
+      statusIcon = Icons.help_outline_rounded;
+    }
+
+    return _card(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined, size: 20, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.cancelledDocumentMoneyCardTitle,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+              TextButton(
+                onPressed: _updateRefundStatus,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                ),
+                child: Text(l10n.changeStatus),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _infoRow(l10n.paid, '${_fmt.format(_document!.paid)} $sym'),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.refundStatusLabel,
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 13,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: badgeColor.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(statusIcon, size: 14, color: badgeColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      statusLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: badgeColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (date != null) ...[
+            const SizedBox(height: 6),
+            _infoRow(l10n.date, _dateFmt.format(date)),
+          ],
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              l10n.refundAuditCardDisclaimer,
+              style: TextStyle(
+                fontSize: 11,
+                color: cs.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

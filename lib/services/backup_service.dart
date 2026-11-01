@@ -3,11 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../database/database_helper.dart';
+import '../widgets/backup_password_dialog.dart';
+import 'backup_encryption_service.dart';
 
 class BackupService {
   static const String backupExtension = 'waraq';
@@ -16,6 +18,9 @@ class BackupService {
 
   @visibleForTesting
   static Future<String> Function()? safetyBackupOverride;
+
+  @visibleForTesting
+  static Directory Function()? backupDirectoryOverride;
 
   @visibleForTesting
   static Future<void> Function(File tempFile, File targetFile)?
@@ -33,6 +38,9 @@ class BackupService {
   ];
 
   static Future<Directory> _getBackupDirectory() async {
+    if (backupDirectoryOverride != null) {
+      return backupDirectoryOverride!();
+    }
     try {
       return await getApplicationDocumentsDirectory();
     } catch (_) {
@@ -61,14 +69,22 @@ class BackupService {
   // SAVE LOCAL BACKUP (App Documents Directory)
   // ============================================================
 
-  static Future<String> createLocalBackup() async {
+  static Future<String> createLocalBackup({String? password}) async {
     final jsonStr = await _buildBackupJson();
     final fileName =
         'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
 
     final directory = await _getBackupDirectory();
     final file = File('${directory.path}/$fileName');
-    await file.writeAsString(jsonStr, encoding: utf8);
+    if (password != null && password.isNotEmpty) {
+      final encryptedBytes = await BackupEncryptionService.encryptJson(
+        jsonStr: jsonStr,
+        password: password,
+      );
+      await file.writeAsBytes(encryptedBytes, flush: true);
+    } else {
+      await file.writeAsString(jsonStr, encoding: utf8);
+    }
 
     return file.path;
   }
@@ -169,15 +185,110 @@ class BackupService {
   }
 
   // ============================================================
+  // SAFETY BACKUP RETENTION / PRUNING
+  // ============================================================
+
+  /// Prunes old safety backups in application documents directory:
+  /// - Deletes safety backups (`warqatek_safety_pre_restore_*`) older than 30 days.
+  /// - Retains at most the 3 most recent safety backups.
+  /// - NEVER deletes [preservePath] (the safety backup just created).
+  /// - NEVER deletes or touches user-chosen backups (`warqatek_backup_*`).
+  /// - Suppresses all errors internally so pruning failure never fails restore or repair.
+  static Future<void> pruneSafetyBackups({String? preservePath}) async {
+    try {
+      final directory = await _getBackupDirectory();
+      if (!await directory.exists()) return;
+
+      final entities = await directory.list().toList();
+      final safetyFiles = <File>[];
+      final now = DateTime.now();
+      const maxAge = Duration(days: 30);
+
+      for (final entity in entities) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.isNotEmpty
+            ? entity.uri.pathSegments.last
+            : '';
+
+        // Strict match on safety backups only
+        final isSafety = name.startsWith('warqatek_safety_pre_restore_') &&
+            name.endsWith('.$backupExtension');
+        if (!isSafety) continue;
+
+        // Never touch the freshly created safety backup
+        if (preservePath != null && entity.path == preservePath) continue;
+
+        safetyFiles.add(entity);
+      }
+
+      // Read modification times and sort newest first
+      final filesWithTime = <({File file, DateTime mtime})>[];
+      for (final file in safetyFiles) {
+        try {
+          final mtime = await file.lastModified();
+          filesWithTime.add((file: file, mtime: mtime));
+        } catch (_) {
+          filesWithTime.add(
+            (file: file, mtime: DateTime.fromMillisecondsSinceEpoch(0)),
+          );
+        }
+      }
+      filesWithTime.sort((a, b) => b.mtime.compareTo(a.mtime));
+
+      // Collect files to delete:
+      // 1. Any file older than 30 days
+      // 2. Any file beyond the 3 most recent
+      final toDelete = <File>[];
+      final kept = <File>[];
+
+      for (final item in filesWithTime) {
+        final age = now.difference(item.mtime);
+        if (age > maxAge) {
+          toDelete.add(item.file);
+        } else if (kept.length < 3) {
+          kept.add(item.file);
+        } else {
+          toDelete.add(item.file);
+        }
+      }
+
+      for (final file in toDelete) {
+        try {
+          if (await file.exists()) {
+            await file.delete();
+          }
+        } catch (_) {
+          // Best-effort cleanup; never throw
+        }
+      }
+    } catch (_) {
+      // Pruning failure must never fail restore or repair
+    }
+  }
+
+  // ============================================================
   // SAVE BACKUP VIA SYSTEM SAVE DIALOG (bytes-based)
   // ============================================================
 
-  static Future<bool> createBackupUserChosen() async {
+  static Future<bool> createBackupUserChosen({
+    String? password,
+    bool Function()? isCancelled,
+  }) async {
     final jsonStr = await _buildBackupJson();
+    if (isCancelled != null && isCancelled()) return false;
     final fileName =
         'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
 
-    final bytes = Uint8List.fromList(utf8.encode(jsonStr));
+    Uint8List bytes;
+    if (password != null && password.isNotEmpty) {
+      bytes = await BackupEncryptionService.encryptJson(
+        jsonStr: jsonStr,
+        password: password,
+      );
+      if (isCancelled != null && isCancelled()) return false;
+    } else {
+      bytes = Uint8List.fromList(utf8.encode(jsonStr));
+    }
 
     final uri = await FilePicker.saveFile(
       dialogTitle: 'Save Backup',
@@ -193,7 +304,11 @@ class BackupService {
   // RESTORE BACKUP (content-based validation, not extension)
   // ============================================================
 
-  static Future<bool> restoreBackup() async {
+  static Future<bool> restoreBackup({
+    BuildContext? context,
+    String? password,
+    Future<String?> Function(List<int> bytes)? passwordPrompt,
+  }) async {
     final file = await FilePicker.pickFile(type: FileType.any);
 
     if (file == null) return false;
@@ -203,9 +318,36 @@ class BackupService {
       throw Exception('Empty backup file');
     }
 
+    String jsonStr;
+    if (BackupEncryptionService.isEncrypted(bytes)) {
+      if (password != null && password.isNotEmpty) {
+        jsonStr = await BackupEncryptionService.decryptJson(
+          encryptedBytes: bytes,
+          password: password,
+        );
+      } else if (passwordPrompt != null) {
+        final result = await passwordPrompt(bytes);
+        if (result == null) return false;
+        jsonStr = result;
+      } else if (context != null && context.mounted) {
+        final result = await BackupPasswordPromptDialog.show(
+          context,
+          encryptedBytes: bytes,
+        );
+        if (result == null) return false;
+        jsonStr = result;
+      } else {
+        throw const BackupDecryptionException(
+          'Password is required for encrypted backup',
+        );
+      }
+    } else {
+      jsonStr = utf8.decode(bytes);
+    }
+
     Map<String, dynamic> jsonMap;
     try {
-      final decoded = jsonDecode(utf8.decode(bytes));
+      final decoded = jsonDecode(jsonStr);
       if (decoded is! Map<String, dynamic>) {
         throw Exception('Invalid backup format');
       }
@@ -227,8 +369,9 @@ class BackupService {
 
     // Create and validate an automatic safety backup of the current database
     // before touching any data. If this fails, restore aborts immediately.
+    String? safetyPath;
     if (createSafetyBackup) {
-      final safetyPath = await BackupService.createSafetyBackup();
+      safetyPath = await BackupService.createSafetyBackup();
       await DatabaseHelper.instance.logAuditEvent(
         'pre_restore_safety_backup_created',
         details: 'path=$safetyPath',
@@ -377,6 +520,12 @@ class BackupService {
       details:
           'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}',
     );
+
+    // Prune older safety backups beyond retention limits
+    if (createSafetyBackup) {
+      await pruneSafetyBackups(preservePath: safetyPath);
+    }
+
     return true;
   }
 

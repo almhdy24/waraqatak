@@ -31,6 +31,12 @@ The current project contains database logic related to:
 - Keep database access out of UI screens.
 - Do not introduce destructive migrations without explicit approval.
 
+## Backups & Encryption
+
+- Local backups (`.waraq`) and Google Drive cloud backups support optional AES-256-GCM password encryption.
+- See `docs/backup_encryption.md` for full binary header specifications, KDF parameters, and verification procedures.
+- Pre-restore and pre-repair safety backups (`createSafetyBackup`) are strictly unencrypted plain JSON to allow unattended automated rollbacks, saved in app-private storage, and pruned to the 3 most recent / 30 days after successful operations.
+
 ## Source of Truth
 
 The actual implementation in `lib/database/database_helper.dart` is the source of truth.

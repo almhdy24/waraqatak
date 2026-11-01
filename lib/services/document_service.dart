@@ -466,10 +466,38 @@ class DocumentService {
   /// Marks a document as cancelled.
   /// For payment_receipts: also reverses the linked invoice payment transactionally.
   /// For non-draft invoices: stock is reverted.
-  static Future<void> cancelDocument(int documentId) async {
-    await DatabaseHelper.instance.cancelDocument(documentId);
+  static Future<void> cancelDocument(
+    int documentId, {
+    String? refundStatus,
+    String? refundNotes,
+  }) async {
+    await DatabaseHelper.instance.cancelDocument(
+      documentId,
+      refundStatus: refundStatus,
+      refundNotes: refundNotes,
+    );
     await DatabaseHelper.instance.logAuditEvent('document_cancelled',
         entityType: 'document', entityId: documentId);
+  }
+
+  /// Updates or records the refund status for a cancelled document.
+  static Future<void> updateDocumentRefundStatus({
+    required int documentId,
+    required String status,
+    String? notes,
+  }) async {
+    await DatabaseHelper.instance.updateDocumentRefundStatus(
+      documentId: documentId,
+      status: status,
+      notes: notes,
+    );
+  }
+
+  /// Returns the latest recorded refund status for a document, if any.
+  static Future<Map<String, dynamic>?> getLatestDocumentRefundStatus(
+    int documentId,
+  ) async {
+    return DatabaseHelper.instance.getLatestDocumentRefundStatus(documentId);
   }
 
   /// Converts an issued (or draft) quotation to a new draft invoice.

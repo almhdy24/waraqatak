@@ -333,7 +333,7 @@ class AppLocalizations {
     'This app uses open-source libraries and the Tajawal font (SIL Open Font License 1.1).',
   );
 
-  // ========== BACKUP WARNING ==========
+  // ========== BACKUP WARNING & ENCRYPTION ==========
   String get backupUnencryptedTitle =>
       _t('نسخة احتياطية غير مشفرة', 'Unencrypted Backup');
   String get backupUnencryptedWarning => _t(
@@ -341,6 +341,49 @@ class AppLocalizations {
         'احفظه في مكان آمن ولا تشاركه مع أي شخص لا تثق به.',
     'The backup file contains your data in unencrypted form. '
         'Keep it in a safe place and do not share it with anyone you do not trust.',
+  );
+  String get backupEncryptionQuestion =>
+      _t('هل تريد حماية النسخة بكلمة سر؟', 'Do you want to protect this backup with a password?');
+  String get backupWithoutPassword =>
+      _t('لا، بدون كلمة سر (غير مشفرة)', 'No, without password (unencrypted)');
+  String get backupWithPassword =>
+      _t('نعم، حماية بكلمة سر', 'Yes, protect with password');
+  String get backupPassword => _t('كلمة المرور', 'Password');
+  String get backupConfirmPassword =>
+      _t('تأكيد كلمة المرور', 'Confirm password');
+  String get backupPasswordRequired =>
+      _t('يرجى إدخال كلمة المرور', 'Please enter a password');
+  String get backupPasswordMinLength =>
+      _t('كلمة المرور يجب أن لا تقل عن 8 أحرف', 'Password must be at least 8 characters');
+  String get backupPasswordsDoNotMatch =>
+      _t('كلمتا المرور غير متطابقتين', 'Passwords do not match');
+  String get backupPasswordWarning => _t(
+    'تحذير: إذا نسيت كلمة المرور فلن يستطيع أحد فتح هذه النسخة، لا أنت ولا نحن.',
+    'If you forget the password, nobody can open this backup, neither you nor us.',
+  );
+  String get backupPasswordHint => _t(
+    'تلميح: استخدام الأحرف والأرقام الإنجليزية يجنبك اختلاف لوحات المفاتيح.',
+    'Tip: Using English letters and digits avoids keyboard differences.',
+  );
+  String get backupEncryptedTitle =>
+      _t('نسخة احتياطية مشفرة', 'Encrypted Backup');
+  String get backupEnterPasswordMessage => _t(
+    'هذه النسخة محمية بكلمة سر. أدخل كلمة المرور لاستعادتها:',
+    'This backup is password-protected. Enter the password to restore it:',
+  );
+  String get backupIncorrectPassword =>
+      _t('كلمة المرور غير صحيحة أو الملف تالف', 'Incorrect password or corrupted backup file');
+  String get backupUpdateRequired =>
+      _t('حدّث التطبيق لفتح هذه النسخة', 'Update the app to open this backup');
+  String get backupCorrupted =>
+      _t('ملف النسخة الاحتياطية تالف أو غير صالح', 'Backup file is corrupted or invalid');
+  String get backupDecrypting =>
+      _t('جاري فك التشفير والتحقق من البيانات…', 'Decrypting and verifying data…');
+  String get backupEncrypting =>
+      _t('جاري تشفير النسخة الاحتياطية والتحقق…', 'Encrypting backup and verifying…');
+  String get backupSlowNotice => _t(
+    'قد تستغرق هذه العملية دقيقة على الهواتف القديمة',
+    'This operation may take up to a minute on older phones',
   );
   String get continueAction => _t('متابعة', 'Continue');
 
@@ -372,6 +415,52 @@ class AppLocalizations {
     'إلغاء هذا الإيصال سيعكس الدفعة المرتبطة به ويُحدّث حالة الفاتورة.',
     'Cancelling this receipt will reverse its payment and update the invoice.',
   );
+  String cannotCancelWithActiveVouchers(String voucherNumbers) => _t(
+    'لا يمكن إلغاء المستند لوجود سندات قبض/صرف نشطة مرتبطة به ($voucherNumbers). يرجى إلغاء هذه السندات أولاً.',
+    'Cannot cancel document with active payment receipts/vouchers ($voucherNumbers). Please cancel these vouchers first.',
+  );
+  String get cancelPaidDocumentTitle => _t('تأكيد إلغاء مستند مسدد', 'Confirm Cancellation of Paid Document');
+  String cancelPaidRecordedAmount(String amount, String symbol) => _t(
+    'المبلغ المسدد المسجل: $amount $symbol',
+    'Recorded paid amount: $amount $symbol',
+  );
+  String get cancelPaidReportsWarning => _t(
+    'إلغاء هذا المستند سيؤدي إلى استبعاده واستبعاد دفعاته بالكامل من تقارير المبيعات والمشتريات والدفعات والأرباح وكشوف الحسابات.',
+    'Cancelling this document will completely exclude it and its payments from sales, purchases, payments, profits, and statements.',
+  );
+  String get cancelPaidCustomerReturnInstruction => _t(
+    'يجب تسليم هذا المبلغ للعميل يدوياً خارج التطبيق.',
+    'This money must be returned to the customer manually outside the app.',
+  );
+  String get cancelPaidSupplierReturnInstruction => _t(
+    'يجب استرداد هذا المبلغ من المورد يدوياً خارج التطبيق.',
+    'This money must be recovered from the supplier manually outside the app.',
+  );
+  String get cancelPaidDoubleCountWarning => _t(
+    'تنبيه هام: لا تُسجّل سند صرف لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وتسجيل سند صرف سيؤدي إلى خصم المبلغ مرتين.',
+    'Important: Do not record an expense voucher for this refund; the payment is already excluded from cash reports, and recording a voucher will deduct it twice.',
+  );
+  String get cancelPaidDoubleCountWarningPurchase => _t(
+    'تنبيه هام: لا تُسجّل سند قبض لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وتسجيل سند قبض سيؤدي إلى إضافة المبلغ مرتين.',
+    'Important: Do not record a payment receipt for this refund; the payment is already excluded from cash reports, and recording a receipt will add it twice.',
+  );
+  String get refundStatusLabel => _t('حالة رد المبلغ', 'Refund Status');
+  String get refundStatusRequiredHint => _t(
+    'يرجى تحديد حالة رد المبلغ لإتمام الإلغاء',
+    'Please select the refund status to confirm cancellation',
+  );
+  String get refundStatusRefunded => _t('تم رد المبلغ', 'Refunded');
+  String get refundStatusNotRefunded => _t('لم يُرد بعد', 'Not refunded yet');
+  String get refundStatusNotRecorded => _t('لم تُسجَّل حالة الرد', 'Refund status not recorded');
+  String get keepDocument => _t('تراجع (إبقاء المستند)', 'Go Back (Keep Document)');
+  String get confirmAndCancel => _t('تأكيد وإلغاء المستند', 'Confirm & Cancel Document');
+  String get updateRefundStatus => _t('تعديل حالة رد المبلغ', 'Update Refund Status');
+  String get refundAuditCardDisclaimer => _t(
+    'هذه الملاحظة للسجلات الإدارية فقط ولا تؤثر على التقارير أو الأرصدة الحسابية.',
+    'This note is for record-keeping only and does not affect reports or balances.',
+  );
+  String get cancelledDocumentMoneyCardTitle => _t('حالة أموال المستند الملغى', 'Cancelled Document Money Status');
+  String get changeStatus => _t('تعديل الحالة', 'Change Status');
 
   // ========== DRAFT / ISSUE ==========
   String get saveDraft => _t('حفظ كمسودة', 'Save as Draft');

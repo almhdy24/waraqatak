@@ -4038,7 +4038,11 @@ class DatabaseHelper {
     });
   }
 
-  Future<void> cancelDocument(int id) async {
+  Future<void> cancelDocument(
+    int id, {
+    String? refundStatus,
+    String? refundNotes,
+  }) async {
     final db = await database;
     await db.transaction((txn) async {
       final docRows = await txn.query(
@@ -4318,7 +4322,85 @@ class DatabaseHelper {
         where: 'id = ?',
         whereArgs: [id],
       );
+
+      if (refundStatus != null && doc.paid > 0) {
+        await txn.insert('audit_log', {
+          'action': 'document_refund_status',
+          'entity_type': 'document',
+          'entity_id': id,
+          'details': jsonEncode({
+            'status': refundStatus,
+            'amount': doc.paid,
+            'currency': doc.currencyCode,
+            'doc_type': doc.type,
+            if (refundNotes != null && refundNotes.isNotEmpty) 'notes': refundNotes,
+          }),
+          'timestamp': DateTime.now().toIso8601String(),
+        });
+      }
     });
+  }
+
+  /// Updates or records a document refund status for an existing document.
+  Future<void> updateDocumentRefundStatus({
+    required int documentId,
+    required String status,
+    String? notes,
+  }) async {
+    final db = await database;
+    final docRows = await db.query(
+      'documents',
+      columns: ['id', 'type', 'paid', 'currency_code'],
+      where: 'id = ?',
+      whereArgs: [documentId],
+    );
+    if (docRows.isEmpty) throw StateError('Document not found');
+    final r = docRows.first;
+    await db.insert('audit_log', {
+      'action': 'document_refund_status',
+      'entity_type': 'document',
+      'entity_id': documentId,
+      'details': jsonEncode({
+        'status': status,
+        'amount': (r['paid'] as num?)?.toDouble() ?? 0.0,
+        'currency': (r['currency_code'] as String?) ?? 'SDG',
+        'doc_type': r['type'] as String?,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      }),
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Queries the latest refund status recorded for a document in audit_log.
+  Future<Map<String, dynamic>?> getLatestDocumentRefundStatus(int documentId) async {
+    final db = await database;
+    final rows = await db.query(
+      'audit_log',
+      where: "entity_type = 'document' AND entity_id = ? AND action = 'document_refund_status'",
+      whereArgs: [documentId],
+      orderBy: 'id DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    try {
+      final detailsStr = row['details'] as String?;
+      final details = detailsStr != null
+          ? jsonDecode(detailsStr) as Map<String, dynamic>
+          : <String, dynamic>{};
+      return {
+        'status': details['status'] as String?,
+        'amount': (details['amount'] as num?)?.toDouble(),
+        'currency': details['currency'] as String?,
+        'timestamp': DateTime.tryParse(row['timestamp'] as String? ?? ''),
+        'notes': details['notes'] as String?,
+      };
+    } catch (_) {
+      return {
+        'status': null,
+        'timestamp': DateTime.tryParse(row['timestamp'] as String? ?? ''),
+      };
+    }
   }
 
   Future<void> _reverseReceiptPayment(

@@ -20,7 +20,9 @@ import 'pdf_customize_screen.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
+import '../services/backup_encryption_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -319,28 +321,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: const Icon(Icons.save_outlined),
                       title: Text(l10n.saveBackupTo),
                       onTap: () async {
-                        final proceed = await AppConfirmDialog.show(
-                          context,
-                          title: l10n.backupUnencryptedTitle,
-                          message: l10n.backupUnencryptedWarning,
-                          confirmLabel: l10n.continueAction,
-                          cancelLabel: l10n.cancel,
-                          isDestructive: false,
-                        );
-                        if (proceed != true) return;
-                        try {
-                          final saved =
-                              await BackupService.createBackupUserChosen();
+                        final password =
+                            await BackupPasswordCreateDialog.show(context);
+                        if (password == null) return;
+                        if (!context.mounted) return;
+
+                        if (password.isNotEmpty) {
+                          final saved = await BackupProgressDialog.show(
+                            context,
+                            title: l10n.saveBackupTo,
+                            message: l10n.backupEncrypting,
+                            operation: (isCancelled) =>
+                                BackupService.createBackupUserChosen(
+                              password: password,
+                              isCancelled: isCancelled,
+                            ),
+                          );
                           if (context.mounted && saved) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(l10n.backupSavedTo)),
                             );
                           }
-                        } catch (_) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(l10n.backupSaveFailed)),
-                            );
+                        } else {
+                          try {
+                            final saved =
+                                await BackupService.createBackupUserChosen();
+                            if (context.mounted && saved) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(l10n.backupSavedTo)),
+                              );
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(l10n.backupSaveFailed)),
+                              );
+                            }
                           }
                         }
                       },
@@ -359,8 +375,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           isDestructive: true,
                         );
                         if (confirmed == true) {
+                          if (!context.mounted) return;
                           try {
-                            final success = await BackupService.restoreBackup();
+                            final success = await BackupService.restoreBackup(
+                              context: context,
+                            );
                             if (context.mounted && success) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -371,6 +390,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Navigator.of(
                                 context,
                               ).popUntil((route) => route.isFirst);
+                            }
+                          } on BackupUnsupportedVersionException {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.backupUpdateRequired),
+                                ),
+                              );
+                            }
+                          } on BackupDecryptionException {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.backupIncorrectPassword),
+                                ),
+                              );
                             }
                           } catch (_) {
                             if (context.mounted) {
