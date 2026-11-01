@@ -5,7 +5,6 @@ import '../localization/app_localizations.dart';
 import '../services/activation_service.dart';
 import '../services/license_service.dart';
 import '../widgets/responsive.dart';
-import '../widgets/support_guidance_card.dart';
 
 /// Screen for entering an activation key.
 ///
@@ -25,7 +24,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
   bool _success = false;
   String? _error;
   ActivationOutcome? _lastOutcome;
-  String? _lastReferenceId;
 
   @override
   void dispose() {
@@ -41,7 +39,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _loading = true;
       _error = null;
       _lastOutcome = null;
-      _lastReferenceId = null;
     });
 
     final String deviceId;
@@ -61,7 +58,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
     final l10n = AppLocalizations.of(context);
     setState(() {
       _lastOutcome = res.outcome;
-      _lastReferenceId = res.referenceId;
     });
 
     switch (res.outcome) {
@@ -210,11 +206,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.bold)),
             ),
-          ),
-          const SizedBox(height: 32),
-          SupportGuidanceCard(
-            referenceId: _lastReferenceId,
-            rawKey: _ctrl.text,
           ),
         ],
       ),

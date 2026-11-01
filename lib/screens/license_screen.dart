@@ -8,7 +8,6 @@ import '../services/license_service.dart';
 import 'activation_screen.dart';
 import 'transparency_screen.dart';
 import '../widgets/responsive.dart';
-import '../widgets/support_guidance_card.dart';
 
 /// Settings → License.
 ///
@@ -285,8 +284,6 @@ class _LicenseScreenState extends State<LicenseScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 20),
-                const SupportGuidanceCard(),
               ],
             )),
     );
