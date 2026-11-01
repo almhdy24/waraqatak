@@ -372,6 +372,44 @@ class AppLocalizations {
     'إلغاء هذا الإيصال سيعكس الدفعة المرتبطة به ويُحدّث حالة الفاتورة.',
     'Cancelling this receipt will reverse its payment and update the invoice.',
   );
+  String get cancelPaidDocumentTitle => _t('تأكيد إلغاء مستند مسدد', 'Confirm Cancellation of Paid Document');
+  String cancelPaidRecordedAmount(String amount, String symbol) => _t(
+    'المبلغ المسدد المسجل: $amount $symbol',
+    'Recorded paid amount: $amount $symbol',
+  );
+  String get cancelPaidReportsWarning => _t(
+    'إلغاء هذا المستند سيؤدي إلى استبعاده واستبعاد دفعاته بالكامل من تقارير المبيعات والمشتريات والدفعات والأرباح وكشوف الحسابات.',
+    'Cancelling this document will completely exclude it and its payments from sales, purchases, payments, profits, and statements.',
+  );
+  String get cancelPaidCustomerReturnInstruction => _t(
+    'يجب تسليم هذا المبلغ للعميل يدوياً خارج التطبيق.',
+    'This money must be returned to the customer manually outside the app.',
+  );
+  String get cancelPaidSupplierReturnInstruction => _t(
+    'يجب استرداد هذا المبلغ من المورد يدوياً خارج التطبيق.',
+    'This money must be recovered from the supplier manually outside the app.',
+  );
+  String get cancelPaidDoubleCountWarning => _t(
+    'تنبيه هام: لا تقم بإنشاء سند صرف لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وإنشاء سند صرف سيؤدي إلى خصم المبلغ مرتين.',
+    'Important: Do not create an expense voucher for this refund; the payment is already excluded from cash reports, and creating a voucher will deduct it twice.',
+  );
+  String get cancelPaidDoubleCountWarningPurchase => _t(
+    'تنبيه هام: لا تقم بإنشاء سند قبض لهذا المبلغ؛ لأن الدفعة مستبعدة تلقائياً من تقارير الصندوق، وإنشاء سند قبض سيؤدي إلى إضافة المبلغ مرتين.',
+    'Important: Do not create a payment receipt for this refund; the payment is already excluded from cash reports, and creating a receipt will add it twice.',
+  );
+  String get refundStatusLabel => _t('حالة رد المبلغ', 'Refund Status');
+  String get refundStatusRefunded => _t('تم رد المبلغ', 'Refunded');
+  String get refundStatusNotRefunded => _t('لم يُرد بعد', 'Not refunded yet');
+  String get refundStatusNotRecorded => _t('لم تُسجَّل حالة الرد', 'Refund status not recorded');
+  String get keepDocument => _t('تراجع (إبقاء المستند)', 'Go Back (Keep Document)');
+  String get confirmAndCancel => _t('تأكيد وإلغاء المستند', 'Confirm & Cancel Document');
+  String get updateRefundStatus => _t('تعديل حالة رد المبلغ', 'Update Refund Status');
+  String get refundAuditCardDisclaimer => _t(
+    'هذه الملاحظة للسجلات الإدارية فقط ولا تؤثر على التقارير أو الأرصدة الحسابية.',
+    'This note is for record-keeping only and does not affect reports or balances.',
+  );
+  String get cancelledDocumentMoneyCardTitle => _t('حالة أموال المستند الملغى', 'Cancelled Document Money Status');
+  String get changeStatus => _t('تعديل الحالة', 'Change Status');
 
   // ========== DRAFT / ISSUE ==========
   String get saveDraft => _t('حفظ كمسودة', 'Save as Draft');
