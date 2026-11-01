@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
@@ -334,10 +335,14 @@ class _BackupPasswordPromptDialogState
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _showSlowNotice = false;
+  bool _isCancelled = false;
+  Timer? _slowTimer;
   String? _errorMessage;
 
   @override
   void dispose() {
+    _slowTimer?.cancel();
     _passwordController.dispose();
     super.dispose();
   }
@@ -351,7 +356,15 @@ class _BackupPasswordPromptDialogState
 
     setState(() {
       _isLoading = true;
+      _showSlowNotice = false;
       _errorMessage = null;
+    });
+
+    _slowTimer?.cancel();
+    _slowTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _isLoading) {
+        setState(() => _showSlowNotice = true);
+      }
     });
 
     try {
@@ -359,6 +372,9 @@ class _BackupPasswordPromptDialogState
         encryptedBytes: widget.encryptedBytes,
         password: password,
       );
+
+      _slowTimer?.cancel();
+      if (_isCancelled || !mounted) return;
 
       // Validate that it is valid backup JSON before popping
       final decoded = jsonDecode(jsonStr);
@@ -376,26 +392,29 @@ class _BackupPasswordPromptDialogState
         Navigator.of(context).pop(jsonStr);
       }
     } on BackupDecryptionException {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = l10n.backupIncorrectPassword;
-        });
-      }
+      _slowTimer?.cancel();
+      if (_isCancelled || !mounted) return;
+      setState(() {
+        _isLoading = false;
+        _showSlowNotice = false;
+        _errorMessage = l10n.backupIncorrectPassword;
+      });
     } on BackupUnsupportedVersionException {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = l10n.backupUpdateRequired;
-        });
-      }
+      _slowTimer?.cancel();
+      if (_isCancelled || !mounted) return;
+      setState(() {
+        _isLoading = false;
+        _showSlowNotice = false;
+        _errorMessage = l10n.backupUpdateRequired;
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = l10n.backupCorrupted;
-        });
-      }
+      _slowTimer?.cancel();
+      if (_isCancelled || !mounted) return;
+      setState(() {
+        _isLoading = false;
+        _showSlowNotice = false;
+        _errorMessage = l10n.backupCorrupted;
+      });
     }
   }
 
@@ -491,6 +510,18 @@ class _BackupPasswordPromptDialogState
                   ),
                 ],
               ),
+              if (_showSlowNotice) ...[
+                const SizedBox(height: AppDesignTokens.space12),
+                Text(
+                  l10n.backupSlowNotice,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.amber.shade800,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ],
             if (_errorMessage != null) ...[
               const SizedBox(height: AppDesignTokens.space12),
@@ -508,7 +539,11 @@ class _BackupPasswordPromptDialogState
       ),
       actions: [
         TextButton(
-          onPressed: _isLoading ? null : () => Navigator.of(context).pop(null),
+          onPressed: () {
+            _isCancelled = true;
+            _slowTimer?.cancel();
+            Navigator.of(context).pop(null);
+          },
           child: Text(l10n.cancel),
         ),
         FilledButton(
@@ -516,6 +551,127 @@ class _BackupPasswordPromptDialogState
           child: Text(l10n.restore),
         ),
       ],
+    );
+  }
+}
+
+/// Modal progress dialog shown during lengthy cryptographic operations (e.g. backup creation)
+/// with a 3-second delay timer for slow devices and a fully functional cancel action.
+class BackupProgressDialog extends StatefulWidget {
+  final String title;
+  final String message;
+  final Future<bool> Function(bool Function() isCancelled) operation;
+
+  const BackupProgressDialog({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.operation,
+  });
+
+  static Future<bool> show(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required Future<bool> Function(bool Function() isCancelled) operation,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => BackupProgressDialog(
+        title: title,
+        message: message,
+        operation: operation,
+      ),
+    );
+    return result ?? false;
+  }
+
+  @override
+  State<BackupProgressDialog> createState() => _BackupProgressDialogState();
+}
+
+class _BackupProgressDialogState extends State<BackupProgressDialog> {
+  Timer? _slowTimer;
+  bool _showSlowNotice = false;
+  bool _isCancelled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _slowTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _showSlowNotice = true);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final success = await widget.operation(() => _isCancelled);
+        _slowTimer?.cancel();
+        if (mounted && !_isCancelled) {
+          Navigator.of(context).pop(success);
+        }
+      } catch (_) {
+        _slowTimer?.cancel();
+        if (mounted && !_isCancelled) {
+          Navigator.of(context).pop(false);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _slowTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _isCancelled = true;
+          _slowTimer?.cancel();
+          Navigator.of(context).pop(false);
+        }
+      },
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: AppDesignTokens.br16),
+        title: Text(widget.title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: AppDesignTokens.space16),
+            Text(widget.message, textAlign: TextAlign.center),
+            if (_showSlowNotice) ...[
+              const SizedBox(height: AppDesignTokens.space12),
+              Text(
+                l10n.backupSlowNotice,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.amber.shade800,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _isCancelled = true;
+              _slowTimer?.cancel();
+              Navigator.of(context).pop(false);
+            },
+            child: Text(l10n.cancel),
+          ),
+        ],
+      ),
     );
   }
 }

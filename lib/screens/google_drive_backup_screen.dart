@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -28,11 +29,18 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
   List<DriveBackupFile> _backups = [];
   String? _statusMessage;
   bool _isError = false;
+  Timer? _slowTimer;
 
   @override
   void initState() {
     super.initState();
     _checkSignInStatus();
+  }
+
+  @override
+  void dispose() {
+    _slowTimer?.cancel();
+    super.dispose();
   }
 
   String _mapErrorToMessage(Object error, AppLocalizations l10n) {
@@ -165,10 +173,21 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
       _isError = false;
     });
 
+    _slowTimer?.cancel();
+    _slowTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) {
+        setState(() {
+          _statusMessage =
+              '${l10n.googleDriveUploading}\n${l10n.backupSlowNotice}';
+        });
+      }
+    });
+
     try {
       await _service.uploadCurrentBackup(
         password: password.isEmpty ? null : password,
       );
+      _slowTimer?.cancel();
       if (!mounted) return;
       setState(() {
         _statusMessage = l10n.googleDriveUploadSuccess;
@@ -176,6 +195,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
       });
       await _fetchBackups();
     } catch (e) {
+      _slowTimer?.cancel();
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
       setState(() {
@@ -183,6 +203,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
         _isError = true;
       });
     } finally {
+      _slowTimer?.cancel();
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -221,11 +242,22 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
       _isError = false;
     });
 
+    _slowTimer?.cancel();
+    _slowTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _loading) {
+        setState(() {
+          _statusMessage =
+              '${l10n.googleDriveDownloading}\n${l10n.backupSlowNotice}';
+        });
+      }
+    });
+
     try {
       final success = await _service.restoreFromDrive(
         backup,
         context: context,
       );
+      _slowTimer?.cancel();
       if (!mounted) return;
       if (success) {
         ScaffoldMessenger.of(
@@ -239,24 +271,28 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
         });
       }
     } on BackupUnsupportedVersionException {
+      _slowTimer?.cancel();
       if (!mounted) return;
       setState(() {
         _statusMessage = l10n.backupUpdateRequired;
         _isError = true;
       });
     } on BackupDecryptionException {
+      _slowTimer?.cancel();
       if (!mounted) return;
       setState(() {
         _statusMessage = l10n.backupIncorrectPassword;
         _isError = true;
       });
     } on BackupCorruptedFileException {
+      _slowTimer?.cancel();
       if (!mounted) return;
       setState(() {
         _statusMessage = l10n.backupCorrupted;
         _isError = true;
       });
     } catch (e) {
+      _slowTimer?.cancel();
       if (!mounted) return;
       final errStr = e.toString().toLowerCase();
       final isFormatOrCorrupt = errStr.contains('backup') ||
@@ -272,6 +308,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
         _isError = true;
       });
     } finally {
+      _slowTimer?.cancel();
       if (mounted) setState(() => _loading = false);
     }
   }

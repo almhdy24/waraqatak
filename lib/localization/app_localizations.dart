@@ -381,6 +381,10 @@ class AppLocalizations {
       _t('جاري فك التشفير والتحقق من البيانات…', 'Decrypting and verifying data…');
   String get backupEncrypting =>
       _t('جاري تشفير النسخة الاحتياطية والتحقق…', 'Encrypting backup and verifying…');
+  String get backupSlowNotice => _t(
+    'قد تستغرق هذه العملية دقيقة على الهواتف القديمة',
+    'This operation may take up to a minute on older phones',
+  );
   String get continueAction => _t('متابعة', 'Continue');
 
   String get fromYourPhone => _t('من هاتفك', 'From your phone');

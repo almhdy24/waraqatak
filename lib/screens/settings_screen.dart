@@ -326,21 +326,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         if (password == null) return;
                         if (!context.mounted) return;
 
-                        try {
-                          final saved =
-                              await BackupService.createBackupUserChosen(
-                            password: password.isEmpty ? null : password,
+                        if (password.isNotEmpty) {
+                          final saved = await BackupProgressDialog.show(
+                            context,
+                            title: l10n.saveBackupTo,
+                            message: l10n.backupEncrypting,
+                            operation: (isCancelled) =>
+                                BackupService.createBackupUserChosen(
+                              password: password,
+                              isCancelled: isCancelled,
+                            ),
                           );
                           if (context.mounted && saved) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(l10n.backupSavedTo)),
                             );
                           }
-                        } catch (_) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(l10n.backupSaveFailed)),
-                            );
+                        } else {
+                          try {
+                            final saved =
+                                await BackupService.createBackupUserChosen();
+                            if (context.mounted && saved) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(l10n.backupSavedTo)),
+                              );
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(l10n.backupSaveFailed)),
+                              );
+                            }
                           }
                         }
                       },

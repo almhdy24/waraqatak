@@ -182,8 +182,12 @@ class BackupService {
   // SAVE BACKUP VIA SYSTEM SAVE DIALOG (bytes-based)
   // ============================================================
 
-  static Future<bool> createBackupUserChosen({String? password}) async {
+  static Future<bool> createBackupUserChosen({
+    String? password,
+    bool Function()? isCancelled,
+  }) async {
     final jsonStr = await _buildBackupJson();
+    if (isCancelled != null && isCancelled()) return false;
     final fileName =
         'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
 
@@ -193,6 +197,7 @@ class BackupService {
         jsonStr: jsonStr,
         password: password,
       );
+      if (isCancelled != null && isCancelled()) return false;
     } else {
       bytes = Uint8List.fromList(utf8.encode(jsonStr));
     }
