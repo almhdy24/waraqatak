@@ -1494,6 +1494,17 @@ class DatabaseHelper {
     return !entryDay.isAfter(lockDay);
   }
 
+  /// Asserts that a transaction date is open. Throws [StateError] if closed.
+  Future<void> assertPeriodOpen(DateTime date, {DatabaseExecutor? txn}) async {
+    if (await isPeriodClosed(date, txn: txn)) {
+      final lockDate = await getBooksClosedThrough(txn: txn);
+      final dateStr = lockDate != null
+          ? '${lockDate.year.toString().padLeft(4, '0')}-${lockDate.month.toString().padLeft(2, '0')}-${lockDate.day.toString().padLeft(2, '0')}'
+          : '';
+      throw StateError('Accounting period is closed through $dateStr');
+    }
+  }
+
   static Future<void> _lockCurrencyTxn(DatabaseExecutor txn) async {
     final now = DateTime.now().toIso8601String();
     await txn.rawUpdate(
@@ -2947,21 +2958,27 @@ class DatabaseHelper {
     required int productId,
     required double delta, // positive = add, negative = remove
     String? notes,
+    String? reason,
+    DateTime? date,
   }) async {
+    final adjDate = date ?? DateTime.now();
     final db = await database;
     await db.transaction((txn) async {
+      await assertPeriodOpen(adjDate, txn: txn);
       await InventoryCostingService.onStockAdjusted(
         txn,
         productId: productId,
         delta: delta,
         notes: notes,
+        reason: reason,
+        date: adjDate,
       );
     });
     await logAuditEvent(
       'stock_adjusted',
       entityType: 'product',
       entityId: productId,
-      details: 'delta=$delta${notes != null ? " reason=$notes" : ""}',
+      details: 'delta=$delta${reason != null ? " reason=$reason" : ""}${notes != null ? " notes=$notes" : ""}',
     );
   }
 
@@ -3005,6 +3022,8 @@ class DatabaseHelper {
           'Document currency (${doc.currencyCode}) must match business base currency ($baseCurrency).',
         );
       }
+
+      await assertPeriodOpen(doc.date, txn: txn);
 
       int? contactId = doc.contactId;
       if (contact != null) {
@@ -3612,6 +3631,8 @@ class DatabaseHelper {
       if (existingRows.isEmpty) throw StateError('Document not found');
 
       final oldDoc = Document.fromMap(existingRows.first);
+      await assertPeriodOpen(oldDoc.date, txn: txn);
+      await assertPeriodOpen(doc.date, txn: txn);
       final oldType = oldDoc.type;
       final oldStatus = oldDoc.status;
 
@@ -4325,6 +4346,7 @@ class DatabaseHelper {
       );
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
+      await assertPeriodOpen(doc.date, txn: txn);
 
       // Payment receipts & expense vouchers: block hard deletion if financial ledger history exists.
       // Financial history must remain intact and auditable; cancellations must be used instead.
@@ -4609,6 +4631,7 @@ class DatabaseHelper {
       );
       if (docRows.isEmpty) return;
       final doc = Document.fromMap(docRows.first);
+      await assertPeriodOpen(doc.date, txn: txn);
 
       if (doc.status == DocumentStatus.cancelled) {
         throw StateError('Document is already cancelled');
@@ -5062,6 +5085,7 @@ class DatabaseHelper {
   }) async {
     final db = await database;
     await db.transaction((txn) async {
+      await assertPeriodOpen(DateTime.now(), txn: txn);
       final docRows = await txn.query(
         'documents',
         where: 'id = ?',
@@ -5184,6 +5208,7 @@ class DatabaseHelper {
     );
     if (docRows.isEmpty) throw StateError('Document not found');
     final doc = Document.fromMap(docRows.first);
+    await assertPeriodOpen(DateTime.now(), txn: txn);
 
     if (doc.type != 'invoice' && doc.type != 'purchase') {
       throw StateError(
@@ -6872,6 +6897,7 @@ class DatabaseHelper {
   }) async {
     final db = await database;
     return db.transaction((txn) async {
+      await assertPeriodOpen(DateTime.now(), txn: txn);
       final sessionRow = await txn.query(
         'stocktake_sessions',
         where: 'id = ?',

@@ -76,6 +76,13 @@ class ErrorUtils {
       return l10n.cannotEditPurchaseWithSubsequentSales;
     }
 
+    // Accounting period lock
+    if (lower.contains('period is closed') ||
+        lower.contains('books_closed_through') ||
+        lower.contains('accounting period is closed')) {
+      return l10n.errorPeriodClosed;
+    }
+
     // Active payment receipts / vouchers guard on cancellation
     final activeVouchersMatch = RegExp(
       r'active payment receipts/vouchers \(([^)]+)\)',

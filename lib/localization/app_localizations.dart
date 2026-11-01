@@ -2229,6 +2229,53 @@ class AppLocalizations {
     'Do you want to switch the financial reports source? Statements will be generated directly from the persisted double-entry journal.',
   );
 
+  // ========== STOCK ADJUSTMENT REASONS & PERIOD LOCK ==========
+  String get adjustmentReasonCountGain =>
+      _t('تسوية جرد (زيادة مخزون)', 'Stock Count (Gain)');
+  String get adjustmentReasonCountLoss =>
+      _t('تسوية جرد (عجز مخزون)', 'Stock Count (Loss)');
+  String get adjustmentReasonDamageLoss =>
+      _t('تلف مخزون', 'Damaged Goods');
+  String get adjustmentReasonExpiryLoss =>
+      _t('انتهاء الصلاحية', 'Expired Stock');
+  String get adjustmentReasonOpeningStock =>
+      _t('بضاعة أول المدة', 'Opening Stock');
+  String get adjustmentReasonCorrection =>
+      _t('تصحيح خطأ سابق', 'Entry Correction');
+  String get adjustmentReasonOther =>
+      _t('أخرى (يتطلب ملاحظة)', 'Other (Note required)');
+
+  String get periodLockSection =>
+      _t('إقفال الفترة المحاسبية', 'Accounting Period Lock');
+  String get periodLockSectionDesc => _t(
+    'منع التعديل أو الحذف أو الإضافة في الفترات المحاسبية المغلقة',
+    'Prevent adding, modifying, or cancelling transactions in closed periods',
+  );
+  String get periodLockClosedThrough =>
+      _t('الدفاتر مقفلة حتى', 'Books closed through');
+  String get periodLockOpen =>
+      _t('الفترة مفتوحة بالكامل (لا يوجد إقفال)', 'All periods open (No lock)');
+  String get setPeriodLock =>
+      _t('تحديد تاريخ الإقفال', 'Set Lock Date');
+  String get clearPeriodLock =>
+      _t('فتح الفترة (إلغاء الإقفال)', 'Clear Period Lock');
+  String get confirmSetPeriodLockTitle =>
+      _t('تأكيد إقفال الفترة المحاسبية', 'Confirm Period Lock');
+  String get confirmSetPeriodLockMessage => _t(
+    'إقفال الفترة حتى هذا التاريخ سيمنع إنشاء أو تعديل أو إلغاء أي فواتير أو مدفوعات أو تسويات مخزون مؤرخة في هذا التاريخ أو قبله. هل تريد المتابعة؟',
+    'Closing books through this date will prevent posting, modifying, or cancelling any transactions dated on or before this date. Do you want to proceed?',
+  );
+  String get confirmClearPeriodLockTitle =>
+      _t('فتح الفترة المحاسبية', 'Unlock Accounting Period');
+  String get confirmClearPeriodLockMessage => _t(
+    'هل أنت متأكد من إلغاء قفل الفترة المحاسبية؟ سيمكن حينها إضافة وتعديل المستندات في الفترات السابقة.',
+    'Are you sure you want to clear the period lock? Transactions in prior periods will become editable again.',
+  );
+  String get errorPeriodClosed => _t(
+    'الفترة المحاسبية مقفلة حتى هذا التاريخ. لا يمكن إضافة أو تعديل أو إلغاء المعاملات.',
+    'Accounting period is closed through this date. Transactions cannot be posted, revised, or cancelled.',
+  );
+
   bool get isArabic => langCode == 'ar';
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;

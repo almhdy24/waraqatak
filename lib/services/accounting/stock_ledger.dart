@@ -121,7 +121,9 @@ class StockLedger {
           decimalDigits: 2,
           date: movementDate,
           nextEntryNo: (prefix) => '$prefix-MOV-$movementId',
-          memo: notes,
+          memo: notes != null && notes.isNotEmpty
+              ? '$notes ($effectiveReason)'
+              : 'Stock adjustment ($effectiveReason)',
           targetMovementId: targetMovementId,
         );
         if (draft != null) {

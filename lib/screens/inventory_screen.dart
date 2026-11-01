@@ -28,9 +28,30 @@ class InventoryScreen extends StatefulWidget {
     final l10n = AppLocalizations.of(context);
     final deltaCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
+    String selectedReason = 'count_gain';
     bool adjusted = false;
     bool isSaving = false;
     String? validationError;
+
+    String reasonLabel(String key) {
+      switch (key) {
+        case 'count_gain':
+          return l10n.adjustmentReasonCountGain;
+        case 'count_loss':
+          return l10n.adjustmentReasonCountLoss;
+        case 'damage_loss':
+          return l10n.adjustmentReasonDamageLoss;
+        case 'expiry_loss':
+          return l10n.adjustmentReasonExpiryLoss;
+        case 'opening_stock':
+          return l10n.adjustmentReasonOpeningStock;
+        case 'entry_correction':
+          return l10n.adjustmentReasonCorrection;
+        case 'other':
+        default:
+          return l10n.adjustmentReasonOther;
+      }
+    }
 
     await showModalBottomSheet<void>(
       context: context,
@@ -122,14 +143,76 @@ class InventoryScreen extends StatefulWidget {
                     keyboardType: const TextInputType.numberWithOptions(
                         signed: true, decimal: true),
                     autofocus: true,
-                    onChanged: (_) => setSheet(() {}),
+                    onChanged: (_) => setSheet(() {
+                      final curDelta = double.tryParse(deltaCtrl.text) ?? 0;
+                      if (curDelta < 0 && selectedReason == 'count_gain') {
+                        selectedReason = 'count_loss';
+                      } else if (curDelta >= 0 && selectedReason == 'count_loss') {
+                        selectedReason = 'count_gain';
+                      }
+                    }),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: (delta < 0
+                            ? const [
+                                'count_loss',
+                                'damage_loss',
+                                'expiry_loss',
+                                'entry_correction',
+                                'other',
+                              ]
+                            : const [
+                                'count_gain',
+                                'opening_stock',
+                                'entry_correction',
+                                'other',
+                              ])
+                        .contains(selectedReason)
+                        ? selectedReason
+                        : (delta < 0 ? 'count_loss' : 'count_gain'),
+                    decoration: InputDecoration(
+                      labelText: l10n.adjustmentReason,
+                      prefixIcon: const Icon(Icons.category_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: (delta < 0
+                            ? const [
+                                'count_loss',
+                                'damage_loss',
+                                'expiry_loss',
+                                'entry_correction',
+                                'other',
+                              ]
+                            : const [
+                                'count_gain',
+                                'opening_stock',
+                                'entry_correction',
+                                'other',
+                              ])
+                        .map(
+                          (r) => DropdownMenuItem(
+                            value: r,
+                            child: Text(reasonLabel(r)),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setSheet(() => selectedReason = val);
+                      }
+                    },
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: notesCtrl,
                     decoration: InputDecoration(
-                      labelText: l10n.adjustmentReason,
-                      hintText: l10n.adjustmentReasonRequired,
+                      labelText: l10n.notes,
+                      hintText: selectedReason == 'other'
+                          ? l10n.adjustmentReasonRequired
+                          : null,
                       prefixIcon: const Icon(Icons.notes_outlined),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12)),
@@ -169,7 +252,7 @@ class InventoryScreen extends StatefulWidget {
                           ? null
                           : () async {
                               final d = double.tryParse(deltaCtrl.text);
-                              final reason = notesCtrl.text.trim();
+                              final notes = notesCtrl.text.trim();
                               if (d == null || d == 0) {
                                 setSheet(() => validationError = l10n.enterAdjustmentDelta);
                                 return;
@@ -178,7 +261,7 @@ class InventoryScreen extends StatefulWidget {
                                 setSheet(() => validationError = l10n.stockCannotBeNegative);
                                 return;
                               }
-                              if (reason.isEmpty) {
+                              if (selectedReason == 'other' && notes.isEmpty) {
                                 setSheet(() => validationError = l10n.adjustmentReasonRequired);
                                 return;
                               }
@@ -190,7 +273,8 @@ class InventoryScreen extends StatefulWidget {
                                 await InventoryService.adjust(
                                   productId: product.id!,
                                   delta: d,
-                                  notes: reason,
+                                  reason: selectedReason,
+                                  notes: notes.isNotEmpty ? notes : null,
                                 );
                                 adjusted = true;
                                 if (ctx.mounted) Navigator.pop(ctx);
