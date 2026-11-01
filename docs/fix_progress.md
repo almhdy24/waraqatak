@@ -20,9 +20,9 @@ Base Commit: `e2ce47fc19084bc5badae196a68769d3abafebc4` (contains `v1.1.5-beta+1
 | 2.5 | Structural Invariants (INV-10..13) & Source Guard | COMPLETE | - | Added P2 to `units_wholesale_invariants_test.dart`, `document_edit_guard_test.dart` passes (6s), docs updated |
 | 2.6 | Diagnostics for Corrupted Data | COMPLETE | - | Read-only mismatch detection in `DatabaseDiagnosticService` (`document_movement_mismatch`, `ledger_movement_inventory_mismatch`) |
 | 2.7 | Guided Safe Repair Service & Fixture Test | COMPLETE | - | Guided repair tool in `DatabaseRepairService` (Option A & B) + 5 tests in `purchase_repair_test.dart` pass (11s) |
-| Part 2 Commit | `fix(accounting): atomic stock delta on document edit and guided repair` | IN_PROGRESS | - | Tree clean and verified |
-| 3.1 | Read-Only Accounting Spec Addendum | PENDING | - | docs/accounting_spec_addendum.md |
-| Part 3 Commit | `docs(accounting): posting rules addendum` | PENDING | - | - |
+| Part 2 Commit | `fix(accounting): atomic stock delta on document edit and guided repair` | COMPLETE | 0b4e0bd | 13 purchase edit tests, 5 repair tests, 2 invariants P1+P2 pass |
+| 3.1 | Read-Only Accounting Spec Addendum | COMPLETE | - | `docs/accounting_spec_addendum.md` documents all posting rules & file:line citations |
+| Part 3 Commit | `docs(accounting): posting rules addendum` | IN_PROGRESS | - | Canonical reference completed |
 | 4.0 | Full Verification, Report & Docs | PENDING | - | run_tests_one_by_one, analyze, compliance, final report |
 
 ## Test Mapping Updates
