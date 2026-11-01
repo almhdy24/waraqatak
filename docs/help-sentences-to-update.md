@@ -67,3 +67,44 @@ This document lists:
 3. **نطاق المشتريات والموردين (Purchases Scope):**
    - تم في هذا الإصدار شمول فواتير الشراء المسددة بحوار الإلغاء التحذيري وتوثيق حالة رد أموال المورد في `audit_log` وبطاقة تفاصيل المستند.
    - **المطلوب مستقبلاً:** بناء خدمة كشف حساب مخصصة للموردين (`SupplierStatementService`) على غرار `CustomerStatementService`.
+
+---
+
+## Part 3: Backup Encryption Help Guide Updates (`help/settings/backup-restore.html`)
+## تحديثات دليل المساعدة لخاصية تشفير النسخ الاحتياطية
+
+### 1. File: `help/settings/backup-restore.html` (النسخ الاحتياطي والاستعادة)
+
+#### Updated Text (النص بعد التحديث):
+> **النسخ الاحتياطي المحلي وحماية النسخ بكلمة مرور:**
+> - لم تعد النسخ الاحتياطية غير مشفرة دائماً؛ يمكنك الآن اختيار حماية نسختك الاحتياطية بكلمة مرور قوية (تشفير AES-256-GCM مع اشتقاق PBKDF2-HMAC-SHA256).
+> - عند إنشاء نسخة احتياطية جديدة، يسألك التطبيق: *"هل تريد حماية النسخة بكلمة سر؟"*، والخيار الافتراضي هو بدون كلمة سر.
+> - إذا اخترت حماية النسخة، يلزم إدخال كلمة مرور من 8 أحرف أو أكثر وتأكيدها.
+> - **تنبيه حاسم لا رجعة فيه:** *"إذا نسيت كلمة المرور فلن يستطيع أحد فتح هذه النسخة، لا أنت ولا نحن."* لا يقوم التطبيق بحفظ أو تخزين كلمة المرور في أي مكان ولا توجد أي وسيلة لاسترجاعها.
+> - **تلميح لوحة المفاتيح:** استخدام الأحرف والأرقام الإنجليزية يجنبك اختلاف لوحات المفاتيح والأرقام بين الهواتف.
+>
+> **النسخ السحابي عبر Google Drive:**
+> - تدعم النسخ السحابية المرفوعة يدوياً إلى Google Drive نفس خيار الحماية بكلمة مرور.
+>
+> **استعادة النسخ المشفرة:**
+> - يتعرف التطبيق تلقائياً على النسخ المشفرة عند اختيارها ويطلب إدخال كلمة المرور.
+> - في حال إدخال كلمة مرور خاطئة، يظهر تنبيه: *"كلمة المرور غير صحيحة أو الملف تالف"*، ويسمح لك التطبيق بإعادة المحاولة فوراً دون الحاجة لإعادة اختيار الملف أو إعادة تنزيله من Google Drive.
+> - لا يتم إجراء أي تعديل على قاعدة البيانات الحالية ولا يتم استبدال البيانات حتى يتم التحقق التام من صحة فك التشفير وسلامة ملف النسخة.
+>
+> **رسالة تحديث التطبيق:**
+> - إذا تم فتح نسخة احتياطية مشفرة بصيغة أحدث من إصدار التطبيق الحالي، تظهر رسالة: *"حدّث التطبيق لفتح هذه النسخة"* لمنع أي أخطاء استعادة جزئية.
+>
+> **النسخ الاحتياطية الوقائية التلقائية (Safety Backups):**
+> - النسخ الاحتياطية الوقائية التي يُنشئها التطبيق تلقائياً داخل الذاكرة الداخلية الخاصة قبل أي عملية استعادة أو إصلاح لقاعدة البيانات تبقى دائماً غير مشفرة لتأمين استرجاع النظام تلقائياً دون طلب كلمة مرور.
+
+#### English Help Guide Updates:
+> **Backup Encryption & Password Protection:**
+> - Backups are no longer strictly unencrypted. You can optionally protect your `.waraq` backup file with AES-256-GCM encryption.
+> - When creating a backup, the app asks: *"Do you want to protect this backup with a password?"* (Default: unencrypted).
+> - If password protection is selected, enter a password of at least 8 characters.
+> - **Critical Warning:** *"If you forget the password, nobody can open this backup, neither you nor us."* The app never stores or transmits passwords; forgotten passwords cannot be recovered.
+> - **Keyboard Tip:** Using English letters and digits avoids keyboard layout and numeral differences across devices.
+> - **Google Drive Cloud Backups:** Manual cloud uploads to Google Drive support optional password encryption identically to local backups.
+> - **Restoring Encrypted Backups:** Encrypted backups are auto-detected. An incorrect password displays an error and allows immediate retry without re-picking the file. The local database is never touched until decryption and validation succeed.
+> - **Update App Message:** Encrypted backups created with newer format versions show: *"Update the app to open this backup"*.
+> - **Automated Safety Backups:** Pre-restore and pre-repair safety backups remain unencrypted in app-private storage for automated recovery.
