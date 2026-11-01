@@ -9,6 +9,6 @@
 | FIX-3: Quotation Parity (BUG-3/GAP-1) | DONE | 92cbdc0 | `lib/screens/quotation_screen.dart` | `dart analyze` (0 issues), `units_wholesale_fix_test.dart` (7/7 passed) | Solved BUG-3/GAP-1 with quotation unit/tier parity |
 | FIX-4: Show Unit & Tier in Detail (GAP-2) | DONE | 8029678 | `lib/screens/document_detail_screen.dart`, `lib/localization/app_localizations.dart` | `dart analyze` (0 issues) | Displays sale unit and tier badge on document detail lines |
 | FIX-5: Bulk Pricing Unit Warning (GAP-3) | DONE | 161bf3e | `lib/screens/bulk_pricing_screen.dart`, `lib/localization/app_localizations.dart` | `dart analyze` (0 issues) | Added custom unit warning banner and dialog note; logged to skipped |
-| FIX-6: Prevent Duplicate Unit Names (GAP-4) | DONE | pending | `lib/screens/product_form_screen.dart`, `lib/localization/app_localizations.dart` | `dart analyze` (0 issues) | Added dialog and save-time duplicate unit validation |
-| P1..P4: Prevention Invariants & Guards | PENDING | - | `test/invariants/`, `test/guards/`, `docs/` | - | - |
+| FIX-6: Prevent Duplicate Unit Names (GAP-4) | DONE | b45569f | `lib/screens/product_form_screen.dart`, `lib/localization/app_localizations.dart` | `dart analyze` (0 issues) | Added dialog and save-time duplicate unit validation |
+| P1..P4: Prevention Invariants & Guards | DONE | pending | `test/invariants/units_wholesale_invariants_test.dart`, `test/guards/architecture_guards_test.dart`, `docs/invariants_units_wholesale.md`, `CLAUDE.md`, `AGENTS.md` | `units_wholesale_invariants_test.dart` (60/60 iterations passed), `architecture_guards_test.dart` (3/3 passed) | Invariants INV-1..9 and architecture source guards |
 | Mutation Check & Final Report | PENDING | - | `docs/fix_units_report.md` | - | - |
