@@ -160,3 +160,69 @@ Comparing `git diff --name-only main..<branch>` across all three branches:
 - `fix/ui-cleanup-settings-support`: Touched `financial_settings_screen`, `settings_screen`, `activation_screen`, `license_screen`, `locked_feature_screen`, `pro_upgrade_sheet`, `docs/ui_cleanup_log.md`.
 - `fix/android-app-label-arabic`: Touched `android/app/src/main/res/values/strings.xml` and deleted `android/app/src/main/res/values-ar/strings.xml`.
 - **Intersection:** Exactly 0 overlapping files. Merge conflicts will be non-existent.
+
+
+## Merge & Release Execution Report (1.1.5-beta+17)
+
+### 1. Merge History & Commit SHAs
+- **Merge 1 (Accounting Audit & Single Currency):** `736d1af` (`Merge branch 'feat/single-currency-accounting-audit' into release/1.1.5-beta+17`)
+- **Merge 2 (UI Settings & Support Cleanup):** `0eef86f` (`Merge branch 'fix/ui-cleanup-settings-support' into release/1.1.5-beta+17`)
+- **Merge 3 (Arabic Launcher Label):** `54273fe` (`Merge branch 'fix/android-app-label-arabic' into release/1.1.5-beta+17`)
+- **Version Bump Commit:** `d082647` (`chore(release): 1.1.5-beta+17`)
+- **Fast-forward Merge into `main`:** `d082647`
+- **Release Tag:** `v1.1.5-beta+17` (Tag object SHA: `fbf4fb37e345e7f9e6fe082fa04d48d186ba9998`, Target commit SHA: `d082647cbd359574bd00127374dcecb85e8813da`)
+
+### 2. Verification & CI Status
+- **Play Compliance Guard:** PASS (`Play compliance guard: OK`)
+- **Static Analysis:** PASS (`dart analyze lib/... test` - 0 errors, 1 preexisting info in elmahdi_pay_flutter)
+- **GitHub Actions CI (Main Push Gate):** [Run 41291610756](https://github.com/almhdy24/waraqatak/actions/runs/41291610756)
+  - `Analyze & Test`: PASS in 3m39s (100% tests passed)
+  - `Build Release APKs`: PASS in 10m2s
+- **GitHub Actions Release Workflow:** [Run 41291978233](https://github.com/almhdy24/waraqatak/actions/runs/41291978233)
+  - `Build & Publish Release`: PASS in 17m28s
+  - All artifacts built and signed:
+    - `Waraqatak-v1.1.5-beta+17-arm64-v8a.apk` (30.11 MiB)
+    - `Waraqatak-v1.1.5-beta+17.apk` (83.99 MiB)
+    - `Waraqatak-v1.1.5-beta+17.aab` (57.79 MiB)
+    - `mapping-v1.1.5-beta+17.txt` (25.31 MiB)
+
+### 3. GitHub Release
+- **Release URL:** https://github.com/almhdy24/waraqatak/releases/tag/v1.1.5-beta%2B17
+- **Type:** Pre-release
+- **Tag:** `v1.1.5-beta+17`
+
+### 4. Git Command History
+```bash
+# Branch & Preflight
+git checkout -b release/1.1.5-beta+17 main
+# Merges
+git merge --no-ff feat/single-currency-accounting-audit -m "Merge branch 'feat/single-currency-accounting-audit' into release/1.1.5-beta+17"
+git merge --no-ff fix/ui-cleanup-settings-support -m "Merge branch 'fix/ui-cleanup-settings-support' into release/1.1.5-beta+17"
+git merge --no-ff fix/android-app-label-arabic -m "Merge branch 'fix/android-app-label-arabic' into release/1.1.5-beta+17"
+# Version Bump
+# (updated pubspec.yaml, app_constants.dart, version_matcher_test.dart, release-notes-1.1.5-beta+17.md)
+git commit -am "chore(release): 1.1.5-beta+17"
+# Merge to main & Push
+git checkout main
+git merge --ff-only release/1.1.5-beta+17
+git push origin main
+git push origin release/1.1.5-beta+17
+# Tag & Release
+git tag -a v1.1.5-beta+17 -m "1.1.5-beta+17"
+git push origin v1.1.5-beta+17
+```
+
+### 5. Rollback Instructions
+In case an unforeseen issue is discovered requiring a rollback:
+```bash
+# 1. Rollback release tag on remote (if deleting the pre-release is required):
+gh release delete v1.1.5-beta+17 --yes
+git push origin :refs/tags/v1.1.5-beta+17
+
+# 2. Revert the release commits on main:
+git checkout main
+git revert -m 1 54273fe # Revert Arabic launcher label merge if needed
+git revert -m 1 0eef86f # Revert UI cleanup merge if needed
+git revert -m 1 736d1af # Revert accounting audit merge if needed
+git push origin main
+```
