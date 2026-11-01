@@ -8,7 +8,7 @@
 | Phase 3 | Single-Currency Refactor | COMPLETE | e35e10a | Removed UI multi-currency selectors/pickers; enforced base currency with legacy preservation; all mapped tests pass |
 | Phase 4 | Fix Proven Defects | COMPLETE | c76db19 | Fixed BUG-01 (DocumentItemInput decimalDigits); skipped BUG-03 & BUG-05 per historical-number rule; money_oracle and invariant tests pass |
 | Phase 5 | Structural Guards | COMPLETE | 3be0a41 | Created single_currency_guard_test (8 guards); static scan, test preservation, runtime isolation; mutation verified; play_compliance OK |
-| Phase 6 | Final Verification & Docs | PENDING | - | - |
+| Phase 6 | Final Verification & Docs | COMPLETE | pending-commit | 68 files / 901 tests passed; dart analyze OK; play_compliance OK |
 
 ---
 
