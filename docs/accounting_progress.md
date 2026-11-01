@@ -3,7 +3,7 @@
 | Phase | Description | Status | Commit SHA | Checks Run |
 |---|---|---|---|---|
 | Phase 0 | Baseline, Test Runner, CI Failure Root-Cause | COMPLETE | dde0020 (amended) | 63 files / 881 tests passed; play_compliance OK; analyze OK |
-| Phase 1 | Read-Only Audit & Specification | PENDING | - | - |
+| Phase 1 | Read-Only Audit & Specification | COMPLETE | 522616c | Completed comprehensive audit and as-implemented spec |
 | Phase 2 | Red-First Oracle & Invariant Harness | PENDING | - | - |
 | Phase 3 | Single-Currency Refactor | PENDING | - | - |
 | Phase 4 | Fix Proven Defects | PENDING | - | - |
@@ -30,4 +30,12 @@
   - Executed baseline run across all 63 discovered test files.
   - Results: 63 / 63 test files passed, 881 tests passed, 0 failed, 0 skipped.
   - Play compliance guard passed: `bash tool/check_play_compliance.sh` -> OK.
-  - Dart analyze passed on all modified files.
+  - **Dart analyze passed on all modified files.**
+
+### Phase 1: Read-Only Audit & Specification
+- Audited Sections A through E with line-by-line evidence from source code.
+- Mapped currency architecture, locking mechanism, creation invariants, and nominal segregation of legacy records.
+- Verified MoneyUtils half-up rounding, epsilon compensation, and Hamilton-Hare Largest-Remainder discount distribution.
+- Cataloged the 13-account chart of accounts, IAS perpetual moving-average costing, and proof of 6 accounting identities.
+- Cataloged transaction boundaries, atomic document number generation, foreign key cascading, and diagnostic coverage.
+- Created `docs/accounting_audit.md` (audit report & defect catalog BUG-01 through BUG-05) and `docs/accounting_spec.md` (formal as-implemented specification).
