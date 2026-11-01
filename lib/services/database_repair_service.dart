@@ -6,6 +6,7 @@ import '../localization/app_localizations.dart';
 import '../models/database_diagnostic.dart';
 import '../models/document_status.dart';
 import '../models/stock_movement.dart';
+import 'accounting/stock_ledger.dart';
 import 'backup_service.dart';
 import 'database_diagnostic_service.dart';
 
@@ -1395,24 +1396,19 @@ class DatabaseRepairService {
           final unitCost = (preview.affectedMovements.lastOrNull?['unit_cost'] as num?)?.toDouble() ?? 0.0;
           final totalCost = (unitCost * preview.surplusMovement.abs());
 
-          await txn.insert('stock_movements', {
-            'product_id': preview.productId,
-            'quantity': -preview.surplusMovement,
-            'unit_cost': unitCost,
-            'total_cost': totalCost,
-            'date': DateTime.now().toIso8601String(),
-            'type': StockMovement.typeCancellation,
-            'notes': '[REPAIR-OPTION-A] Neutralize duplicate purchase edit movement for ${preview.documentNumber}',
-            'reference_document_id': preview.documentId,
-            'cost_status': StockMovement.costStatusKnown,
-          });
-
-          // Adjust product stock_quantity
-          await txn.rawUpdate('''
-            UPDATE products
-            SET stock_quantity = stock_quantity - ?
-            WHERE id = ?
-          ''', [preview.surplusMovement, preview.productId]);
+          await StockLedger.record(
+            txn,
+            productId: preview.productId,
+            deltaQuantity: -preview.surplusMovement,
+            type: StockMovement.typeCancellation,
+            unitCost: unitCost,
+            totalCost: totalCost,
+            costStatus: StockMovement.costStatusKnown,
+            date: DateTime.now(),
+            notes: '[REPAIR-OPTION-A] Neutralize duplicate purchase edit movement for ${preview.documentNumber}',
+            referenceDocumentId: preview.documentId,
+            reason: 'entry_correction',
+          );
 
           // Audit log inside txn
           await txn.insert('audit_log', {

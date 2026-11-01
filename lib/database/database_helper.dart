@@ -20,6 +20,7 @@ import '../models/app_notification.dart';
 import '../models/diagnostic_report.dart';
 import '../models/product_unit.dart';
 import '../models/stocktake.dart';
+import '../services/accounting/stock_ledger.dart';
 import '../services/inventory_costing_service.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
@@ -2848,22 +2849,25 @@ class DatabaseHelper {
     String costStatus = StockMovement.costStatusUnknown,
     String? provenance,
     DateTime? date,
+    String? reason,
+    int? targetMovementId,
   }) async {
-    await txn.insert('stock_movements', {
-      'product_id': productId,
-      'type': type,
-      'quantity': quantity,
-      'reference_document_id': referenceDocumentId,
-      'date': (date ?? DateTime.now()).toIso8601String(),
-      'notes': notes,
-      'unit_cost': unitCost,
-      'total_cost': totalCost,
-      'cost_status': costStatus,
-      'provenance': provenance,
-    });
-    if (quantity != 0) {
-      await _lockCurrencyTxn(txn);
-    }
+    await StockLedger.record(
+      txn,
+      productId: productId,
+      deltaQuantity: quantity,
+      type: type,
+      referenceDocumentId: referenceDocumentId,
+      notes: notes,
+      unitCost: unitCost,
+      totalCost: totalCost,
+      costStatus: costStatus,
+      provenance: provenance,
+      date: date,
+      reason: reason,
+      targetMovementId: targetMovementId,
+      skipProductUpdate: true, // Product row managed by calling context
+    );
   }
 
   Future<List<StockMovement>> getStockMovements(int productId) async {
@@ -6771,28 +6775,22 @@ class DatabaseHelper {
           discrepantCount++;
           adjustedCount++;
 
-          // 1. Atomically update product stock
-          await txn.update(
-            'products',
-            {'stock_quantity': counted, 'updated_at': now.toIso8601String()},
-            where: 'id = ?',
-            whereArgs: [productId],
-          );
-
-          // 2. Insert stock movement
+          // Atomically update product stock and record stock movement through single stock writer
           final totalCost = avgCost != null ? (variance.abs() * avgCost) : null;
-
-          await txn.insert('stock_movements', {
-            'product_id': productId,
-            'type': StockMovement.typeAdjustment,
-            'quantity': variance,
-            'unit_cost': avgCost,
-            'total_cost': totalCost,
-            'cost_status': costStatus,
-            'provenance': 'stocktake',
-            'date': now.toIso8601String(),
-            'notes': 'تسوية جرد المخزون: ${session.sessionNumber}',
-          });
+          await StockLedger.record(
+            txn,
+            productId: productId,
+            deltaQuantity: variance,
+            newStockQuantity: counted,
+            type: StockMovement.typeAdjustment,
+            unitCost: avgCost,
+            totalCost: totalCost,
+            costStatus: costStatus,
+            provenance: 'stocktake',
+            date: now,
+            notes: 'تسوية جرد المخزون: ${session.sessionNumber}',
+            reason: variance > 0 ? 'count_gain' : 'count_loss',
+          );
 
           // 3. Update stocktake item record
           await txn.update(

@@ -4,6 +4,7 @@ import '../models/document.dart';
 import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
+import 'accounting/stock_ledger.dart';
 
 /// Summary of current inventory valuation at cost.
 class InventoryValuationSummary {
@@ -185,18 +186,21 @@ class InventoryCostingService {
       whereArgs: [productId],
     );
 
-    await txn.insert('stock_movements', {
-      'product_id': productId,
-      'type': StockMovement.typeOpening,
-      'quantity': openingStock,
-      'reference_document_id': null,
-      'date': (date ?? DateTime.now()).toIso8601String(),
-      'notes': null,
-      'unit_cost': avgCost,
-      'total_cost': hasKnownPrice ? openingStock * purchasePrice : null,
-      'cost_status': costStatus,
-      'provenance': 'opening_stock',
-    });
+    await StockLedger.record(
+      txn,
+      productId: productId,
+      deltaQuantity: openingStock,
+      type: StockMovement.typeOpening,
+      referenceDocumentId: null,
+      date: date ?? DateTime.now(),
+      notes: null,
+      unitCost: avgCost,
+      totalCost: hasKnownPrice ? openingStock * purchasePrice : null,
+      costStatus: costStatus,
+      provenance: 'opening_stock',
+      reason: 'opening_stock',
+      skipProductUpdate: true,
+    );
   }
 
   /// Hook called when a manual stock adjustment is recorded.
@@ -206,6 +210,7 @@ class InventoryCostingService {
     required double delta,
     String? notes,
     DateTime? date,
+    String? reason,
   }) async {
     final pRows = await txn.query(
       'products',
@@ -226,33 +231,28 @@ class InventoryCostingService {
       throw StateError('Stock cannot be negative');
     }
 
-    final newStock = currentStock + delta;
-    await txn.update(
-      'products',
-      {'stock_quantity': newStock},
-      where: 'id = ?',
-      whereArgs: [productId],
-    );
-
     final isCostKnown =
         costStatus == StockMovement.costStatusKnown && avgCost != null;
     final unitCost = isCostKnown ? avgCost : null;
     final totalCost = isCostKnown ? delta.abs() * avgCost : null;
 
-    await txn.insert('stock_movements', {
-      'product_id': productId,
-      'type': StockMovement.typeAdjustment,
-      'quantity': delta,
-      'reference_document_id': null,
-      'date': (date ?? DateTime.now()).toIso8601String(),
-      'notes': notes,
-      'unit_cost': unitCost,
-      'total_cost': totalCost,
-      'cost_status': isCostKnown
+    final effectiveReason = reason ?? (delta > 0 ? 'count_gain' : 'count_loss');
+    await StockLedger.record(
+      txn,
+      productId: productId,
+      deltaQuantity: delta,
+      type: StockMovement.typeAdjustment,
+      referenceDocumentId: null,
+      date: date ?? DateTime.now(),
+      notes: notes,
+      unitCost: unitCost,
+      totalCost: totalCost,
+      costStatus: isCostKnown
           ? StockMovement.costStatusKnown
           : StockMovement.costStatusUnknown,
-      'provenance': 'manual_adjustment',
-    });
+      provenance: 'manual_adjustment',
+      reason: effectiveReason,
+    );
   }
 
   /// Reconciles the cost basis for a product (e.g. legacy products with unknown cost).
