@@ -226,3 +226,46 @@ git revert -m 1 0eef86f # Revert UI cleanup merge if needed
 git revert -m 1 736d1af # Revert accounting audit merge if needed
 git push origin main
 ```
+
+---
+
+## Release 1.1.5-beta+18 (2026-11-01)
+
+### 1. Merged Branches & Commits
+- **Timestamp:** 2026-11-01T21:22:00Z
+- **Branch:** `fix/snackbar-and-purchase-edit` (Head SHA: `22339f3`)
+  - Commit `7e58229`: `fix(ui): central 5-second snackbar with countdown`
+  - Commit `254b3ef`: `fix(accounting): atomic stock delta on document edit and guided repair`
+  - Commit `b5b0fc0`: `docs(accounting): posting rules addendum`
+  - Commit `e36f6c5`: `docs: final verification report and completed progress tracking`
+  - Commit `6d3efe3`: `test(accounting): e2e scenario verifying purchase metadata edits and idempotency`
+  - Commit `15ac072`: `feat(diagnostics): guided repair UI with dry-run preview and confirmation dialog`
+  - Commit `22339f3`: `chore(release): 1.1.5-beta+18`
+- **Merge Commit into `main`:** `993f9c364ab1e582dca0de142d0e0b7491c16d34` (`Merge fix/snackbar-and-purchase-edit: 5-second snackbars, atomic stock deltas on edit, reconciliation diagnostics and guided repair (1.1.5-beta+18)`)
+- **Pushed `main` SHA:** `993f9c364ab1e582dca0de142d0e0b7491c16d34`
+- **Release Tag:** `v1.1.5-beta+18` (Tag object SHA: `b03fa844361251a2e1665c1467fb0a11ee30a459`, Target commit: `993f9c364ab1e582dca0de142d0e0b7491c16d34`)
+- **Previous Tag:** `v1.1.5-beta+17` (Tag object SHA: `fbf4fb37e345e7f9e6fe082fa04d48d186ba9998`, Target commit: `d082647cbd359574bd00127374dcecb85e8813da`)
+
+### 2. Verification & CI Status
+- **Play Compliance Guard:** PASS (`Play compliance guard: OK`)
+- **Static Analysis:** PASS (`dart analyze lib test` - 0 issues found)
+- **Automated Tests:** 77 test files, 965 tests passed, 0 failed, 0 skipped
+- **GitHub Actions Release Workflow:** [Run 41349694656](https://github.com/almhdy24/waraqatak/actions/runs/41349694656)
+  - `Build & Publish Release`: PASS in 21m50s
+  - All artifacts built, signed, and published:
+    - `Waraqatak-v1.1.5-beta+18-arm64-v8a.apk` (31,991,571 bytes) — SHA-256: `0c0084f4b6c4a5786732ec302aa3049e0e14d710fe4f20833bbfcc93b3b5cf99`
+    - `Waraqatak-v1.1.5-beta+18.apk` (89,336,547 bytes) — SHA-256: `6b84a59edc34bfbbba1b2416311228a6469ab7f3575c481542093846ce7dfda1`
+    - `Waraqatak-v1.1.5-beta+18.aab` (61,139,525 bytes) — SHA-256: `9c7ecd7b76b248519df8ff588b2a80a7b0ed44bc0e4f029dce38ba1c44d19c87`
+    - `mapping-v1.1.5-beta+18.txt` (26,588,630 bytes) — SHA-256: `ee191755647ea497bb0ef5cf28f2bd2faa4030632cd541bbf3345030627f3c28`
+
+### 3. GitHub Release
+- **Release URL:** https://github.com/almhdy24/waraqatak/releases/tag/v1.1.5-beta%2B18
+- **Type:** Pre-release
+- **Tag:** `v1.1.5-beta+18`
+
+### 4. Manual Verification Checklist
+1. **Auto-Dismissing SnackBars:** Trigger a snackbar with an action (e.g. deleting an invoice line); verify circular countdown animates and auto-dismisses at 5s. Tap action; verify immediate dismissal and single callback execution.
+2. **Accessibility Navigation:** Turn on accessible navigation in device settings; verify snackbar duration extends to 10s.
+3. **Purchase Invoice Edit:** Issue a purchase invoice (qty 100), edit supplier name, edit notes, edit date; verify stock quantity remains 100 and stock movement count remains exactly 1.
+4. **Diagnostic Screen Guided Repair:** In Database Diagnostics, open review guidance for movement discrepancies; preview exact affected rows, toggle Option A vs Option B, and verify confirmation dialog before execution.
+
