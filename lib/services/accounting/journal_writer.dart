@@ -1,6 +1,14 @@
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
+import '../../models/document.dart';
+import '../../models/document_item.dart';
+import '../../models/document_payment.dart';
+import '../../models/document_status.dart';
+import '../../models/journal_entry_entity.dart';
+import '../../models/journal_line_entity.dart';
+import '../../models/product.dart';
 import 'journal_draft.dart';
+import 'posting_service.dart';
 
 /// Exception thrown when an attempt is made to post or modify records in a closed period.
 class PeriodClosedException implements Exception {
@@ -95,5 +103,179 @@ class JournalWriter {
     }
 
     return entryId;
+  }
+
+  /// Generates and persists journal entries for an issued document (invoice, purchase, receipt, voucher).
+  static Future<List<int>> postDocumentIssued(
+    DatabaseExecutor txn,
+    Document doc,
+    List<DocumentItem> items, {
+    Document? parentDoc,
+    DateTime? now,
+    String origin = 'live',
+  }) async {
+    final shadowEnabled =
+        await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
+    if (!shadowEnabled) return const [];
+
+    if (doc.status == DocumentStatus.draft ||
+        doc.status == DocumentStatus.cancelled ||
+        doc.type == 'quotation') {
+      return const [];
+    }
+
+    final productIds =
+        items.map((i) => i.productId).whereType<int>().toSet();
+    final products = <int, Product>{};
+    if (productIds.isNotEmpty) {
+      final placeholders = List.filled(productIds.length, '?').join(',');
+      final pRows = await txn.query(
+        'products',
+        where: 'id IN ($placeholders)',
+        whereArgs: productIds.toList(),
+      );
+      for (final r in pRows) {
+        final p = Product.fromMap(r);
+        if (p.id != null) products[p.id!] = p;
+      }
+    }
+
+    Document? effectiveParentDoc = parentDoc;
+    if (effectiveParentDoc == null && doc.relatedDocumentId != null) {
+      final pDocRows = await txn.query(
+        'documents',
+        where: 'id = ?',
+        whereArgs: [doc.relatedDocumentId],
+      );
+      if (pDocRows.isNotEmpty) {
+        effectiveParentDoc = Document.fromMap(pDocRows.first);
+      }
+    }
+
+    var entrySeq = 1;
+    final drafts = PostingService.postDocumentIssued(
+      doc: doc,
+      items: items,
+      products: products,
+      parentDoc: effectiveParentDoc,
+      nextEntryNo: (prefix) =>
+          '$prefix-${doc.id ?? 0}-${DateTime.now().microsecondsSinceEpoch}-${entrySeq++}',
+      now: now,
+      origin: origin,
+    );
+
+    final ids = <int>[];
+    for (final draft in drafts) {
+      final id = await write(txn, draft);
+      ids.add(id);
+    }
+    return ids;
+  }
+
+  /// Generates and persists a journal entry for an unlinked payment on an issued document.
+  static Future<int?> postPaymentRecorded(
+    DatabaseExecutor txn, {
+    required DocumentPayment payment,
+    required Document parentDoc,
+    DateTime? now,
+    String origin = 'live',
+  }) async {
+    final shadowEnabled =
+        await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
+    if (!shadowEnabled) return null;
+
+    final timestamp = now ?? DateTime.now();
+    final draft = PostingService.postPaymentRecorded(
+      payment: payment,
+      parentDoc: parentDoc,
+      nextEntryNo: (prefix) =>
+          '$prefix-PAY-${payment.id ?? 0}-${timestamp.microsecondsSinceEpoch}',
+      now: timestamp,
+      origin: origin,
+    );
+
+    return await write(txn, draft);
+  }
+
+  /// Authoritatively reverses all active journal entries for a document (D3).
+  /// Reversals are effective-dated at the original entry's effective_date.
+  static Future<List<int>> reverseDocument(
+    DatabaseExecutor txn,
+    int documentId, {
+    DateTime? now,
+    String? memo,
+  }) async {
+    final shadowEnabled =
+        await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
+    if (!shadowEnabled) return const [];
+
+    final timestamp = now ?? DateTime.now();
+
+    final entryRows = await txn.rawQuery('''
+      SELECT e.* FROM journal_entries e
+      WHERE (e.source_id = ? AND e.source_type IN ('invoice', 'purchase', 'receipt', 'voucher', 'cogs', 'payment'))
+         OR (e.source_type = 'payment' AND e.source_id IN (
+              SELECT id FROM document_payments WHERE document_id = ?
+            ))
+      ORDER BY e.id ASC
+    ''', [documentId, documentId]);
+
+    if (entryRows.isEmpty) return const [];
+
+    final existingEntries = <JournalEntryEntity>[];
+    for (final r in entryRows) {
+      final eId = r['id'] as int;
+      final lineRows = await txn.query(
+        'journal_lines',
+        where: 'entry_id = ?',
+        whereArgs: [eId],
+        orderBy: 'id ASC',
+      );
+      final lines =
+          lineRows.map((lr) => JournalLineEntity.fromMap(lr)).toList();
+      existingEntries.add(JournalEntryEntity.fromMap(r, lines: lines));
+    }
+
+    final reversedIds = existingEntries
+        .where((e) => e.reversesEntryId != null)
+        .map((e) => e.reversesEntryId!)
+        .toSet();
+
+    final reversalIds = <int>[];
+    var seq = 1;
+    for (final e in existingEntries) {
+      if (reversedIds.contains(e.id)) continue;
+      if (e.reversesEntryId != null) continue;
+
+      final revLines = e.lines
+          .map(
+            (l) => JournalLineDraft(
+              accountCode: l.accountCode,
+              debitMinor: l.creditMinor,
+              creditMinor: l.debitMinor,
+              productId: l.productId,
+              contactId: l.contactId,
+            ),
+          )
+          .toList();
+
+      final revDraft = JournalEntryDraft(
+        entryNo: 'JE-REV-${e.id}-${timestamp.microsecondsSinceEpoch}-${seq++}',
+        effectiveDate: e.effectiveDate, // D3: dated at original entry's effective date
+        postedAt: timestamp,
+        sourceType: e.sourceType,
+        sourceId: e.sourceId,
+        revision: e.revision + 1,
+        memo: memo ?? 'Reversal of entry ${e.entryNo}',
+        reversesEntryId: e.id,
+        origin: 'live',
+        lines: revLines,
+      );
+
+      final revId = await write(txn, revDraft);
+      reversalIds.add(revId);
+    }
+
+    return reversalIds;
   }
 }

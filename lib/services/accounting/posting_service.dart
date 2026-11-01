@@ -37,6 +37,7 @@ class PostingService {
     required String Function(String prefix) nextEntryNo,
     DateTime? now,
     String origin = 'live',
+    Document? parentDoc,
   }) {
     // Drafts and quotations post nothing
     if (doc.status == DocumentStatus.draft ||
@@ -84,6 +85,7 @@ class PostingService {
           nextEntryNo: nextEntryNo,
           origin: origin,
           out: results,
+          parentDoc: parentDoc,
         );
         break;
 
@@ -95,6 +97,7 @@ class PostingService {
           nextEntryNo: nextEntryNo,
           origin: origin,
           out: results,
+          parentDoc: parentDoc,
         );
         break;
     }

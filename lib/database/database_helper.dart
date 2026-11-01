@@ -20,6 +20,7 @@ import '../models/app_notification.dart';
 import '../models/diagnostic_report.dart';
 import '../models/product_unit.dart';
 import '../models/stocktake.dart';
+import '../services/accounting/journal_writer.dart';
 import '../services/accounting/stock_ledger.dart';
 import '../services/inventory_costing_service.dart';
 import '../utils/format_utils.dart';
@@ -3253,6 +3254,20 @@ class DatabaseHelper {
         });
       }
 
+      final itemRows = await txn.query(
+        'document_items',
+        where: 'document_id = ?',
+        whereArgs: [docId],
+      );
+      final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
+
+      final insertedDoc = newDoc.copyWith(id: docId);
+      await JournalWriter.postDocumentIssued(
+        txn,
+        insertedDoc,
+        persistedItems,
+      );
+
       return docId;
     });
   }
@@ -4199,7 +4214,101 @@ class DatabaseHelper {
           'base_quantity': item.effectiveBaseQuantity,
         });
       }
+
+      final shadowEnabled = await isJournalShadowWriteEnabled(txn: txn);
+      if (shadowEnabled) {
+        final wasIssued = oldDoc.status != DocumentStatus.draft &&
+            oldDoc.status != DocumentStatus.cancelled &&
+            oldDoc.type != 'quotation';
+        final isIssued = effectiveStatus != DocumentStatus.draft &&
+            effectiveStatus != DocumentStatus.cancelled &&
+            doc.type != 'quotation';
+
+        if (!wasIssued && isIssued) {
+          final itemRows = await txn.query(
+            'document_items',
+            where: 'document_id = ?',
+            whereArgs: [doc.id],
+          );
+          final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
+          final finalDoc = doc.copyWith(
+            paid: effectivePaid,
+            remaining: effectiveRemaining,
+            status: effectiveStatus,
+            subtotal: effectiveSubtotal,
+            total: effectiveTotal,
+          );
+          await JournalWriter.postDocumentIssued(txn, finalDoc, persistedItems);
+        } else if (wasIssued && isIssued) {
+          final isMetadataOnly = _isMetadataOnlyDocumentEdit(
+            oldDoc: oldDoc,
+            newDoc: doc,
+            oldItems: oldItems,
+            newItems: newItems,
+            effectivePaid: effectivePaid,
+            effectiveTotal: effectiveTotal,
+            effectiveSubtotal: effectiveSubtotal,
+          );
+
+          if (!isMetadataOnly) {
+            await JournalWriter.reverseDocument(txn, doc.id!);
+            final itemRows = await txn.query(
+              'document_items',
+              where: 'document_id = ?',
+              whereArgs: [doc.id],
+            );
+            final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
+            final finalDoc = doc.copyWith(
+              paid: effectivePaid,
+              remaining: effectiveRemaining,
+              status: effectiveStatus,
+              subtotal: effectiveSubtotal,
+              total: effectiveTotal,
+            );
+            await JournalWriter.postDocumentIssued(txn, finalDoc, persistedItems);
+          }
+        }
+      }
     });
+  }
+
+  bool _isMetadataOnlyDocumentEdit({
+    required Document oldDoc,
+    required Document newDoc,
+    required List<Map<String, Object?>> oldItems,
+    required List<DocumentItem> newItems,
+    required double effectivePaid,
+    required double effectiveTotal,
+    required double effectiveSubtotal,
+  }) {
+    if (oldDoc.date != newDoc.date) return false;
+    if (oldDoc.paymentMethod != newDoc.paymentMethod) return false;
+    if (oldDoc.contactId != newDoc.contactId) return false;
+    if ((oldDoc.total - effectiveTotal).abs() > 1e-6) return false;
+    if ((oldDoc.subtotal - effectiveSubtotal).abs() > 1e-6) return false;
+    if ((oldDoc.taxAmount - newDoc.taxAmount).abs() > 1e-6) return false;
+    if ((oldDoc.paid - effectivePaid).abs() > 1e-6) return false;
+    if (oldDoc.status != newDoc.status) return false;
+
+    if (oldItems.length != newItems.length) return false;
+    for (var i = 0; i < oldItems.length; i++) {
+      final o = oldItems[i];
+      final n = newItems[i];
+      final oProductId = o['product_id'] as int?;
+      final oQty = (o['quantity'] as num?)?.toDouble() ?? 0.0;
+      final oPrice = (o['price'] as num?)?.toDouble() ?? 0.0;
+      final oTotal = (o['total'] as num?)?.toDouble() ?? 0.0;
+      final oSaleUnit = o['sale_unit'] as String?;
+      final oFactor = (o['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
+
+      if (oProductId != n.productId) return false;
+      if ((oQty - n.quantity).abs() > 1e-6) return false;
+      if ((oPrice - n.price).abs() > 1e-6) return false;
+      if ((oTotal - n.total).abs() > 1e-6) return false;
+      if (oSaleUnit != n.saleUnit) return false;
+      if ((oFactor - n.unitConversionFactor).abs() > 1e-6) return false;
+    }
+    return true;
   }
 
   Future<int> deleteDocument(int id) async {
@@ -4470,6 +4579,12 @@ class DatabaseHelper {
       await txn.rawUpdate(
         'UPDATE documents SET related_document_id = NULL WHERE related_document_id = ?',
         [id],
+      );
+
+      await JournalWriter.reverseDocument(
+        txn,
+        id,
+        memo: 'Document hard deleted',
       );
 
       return txn.delete('documents', where: 'id = ?', whereArgs: [id]);
@@ -4761,6 +4876,8 @@ class DatabaseHelper {
         whereArgs: [id],
       );
 
+      await JournalWriter.reverseDocument(txn, id);
+
       if (refundStatus != null && doc.paid > 0) {
         await txn.insert('audit_log', {
           'action': 'document_refund_status',
@@ -4929,6 +5046,8 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [receiptId],
     );
+
+    await JournalWriter.reverseDocument(txn, receiptId);
   }
 
   Future<void> recordPayment({
@@ -4972,11 +5091,12 @@ class DatabaseHelper {
         throw ArgumentError('Payment cannot exceed remaining amount');
       }
 
-      await _insertDocumentPaymentTxn(txn, {
+      final paymentDate = DateTime.now();
+      final paymentId = await _insertDocumentPaymentTxn(txn, {
         'document_id': documentId,
         'amount': canonicalAmount,
         'payment_method': paymentMethod,
-        'date': DateTime.now().toIso8601String(),
+        'date': paymentDate.toIso8601String(),
         'notes': notes,
         'payment_origin': PaymentOrigin.receipt,
       });
@@ -4999,6 +5119,20 @@ class DatabaseHelper {
         {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
         where: 'id = ?',
         whereArgs: [documentId],
+      );
+
+      final payment = DocumentPayment(
+        id: paymentId,
+        documentId: documentId,
+        amount: canonicalAmount,
+        paymentMethod: paymentMethod,
+        date: paymentDate,
+        notes: notes,
+      );
+      await JournalWriter.postPaymentRecorded(
+        txn,
+        payment: payment,
+        parentDoc: doc,
       );
     });
   }
@@ -5120,6 +5254,36 @@ class DatabaseHelper {
       {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
       where: 'id = ?',
       whereArgs: [documentId],
+    );
+
+    final receiptDoc = Document(
+      id: receiptId,
+      type: linkedType,
+      documentNumber: linkedNumber,
+      date: now,
+      contactId: doc.contactId,
+      recipientName: doc.recipientName,
+      recipientPhone: doc.recipientPhone,
+      subtotal: canonicalAmount,
+      discount: 0.0,
+      taxRate: 0.0,
+      taxAmount: 0.0,
+      total: canonicalAmount,
+      paid: canonicalAmount,
+      remaining: 0.0,
+      paymentMethod: paymentMethod,
+      validUntil: null,
+      notes: doc.documentNumber,
+      relatedDocumentId: documentId,
+      status: DocumentStatus.issued,
+      currencyCode: doc.currencyCode,
+    );
+
+    await JournalWriter.postDocumentIssued(
+      txn,
+      receiptDoc,
+      const [],
+      parentDoc: doc,
     );
 
     return receiptId;
