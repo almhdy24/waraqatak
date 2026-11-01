@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/constants/app_constants.dart';
 import '../database/database_helper.dart';
 import '../models/diagnostic_report.dart';
 import 'app_ops_service.dart';
@@ -366,7 +367,7 @@ class AppDiagnosticsService {
       if (!await isConsentGranted() || syncGen != _syncGeneration) return;
 
       final payload = {
-        'product': AppOpsService.appSlug,
+        'product': AppConstants.appId,
         'reports': pending.map((r) => r.toApiPayload()).toList(),
       };
 

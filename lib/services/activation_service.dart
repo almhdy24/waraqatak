@@ -1,6 +1,7 @@
 import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/constants/app_constants.dart';
 import 'license_key.dart';
 import 'license_notification_service.dart';
 import 'license_service.dart';
@@ -41,8 +42,8 @@ enum ActivationOutcome {
 class ActivationService {
   ActivationService._();
 
-  /// App slug the licensing server issues Waraqatak keys under.
-  static const String appSlug = 'com.elmahdi.waraqatak';
+  /// App identifier the licensing server issues Waraqatak keys under.
+  static const String appSlug = AppConstants.appId;
 
   /// HTTPS base URL for the licensing server.
   static const String _serverUrl = 'https://api.almhdy24.com';
@@ -148,7 +149,7 @@ class ActivationService {
       // Long key path: payload must parse and be valid for this app.
       claims = LicenseKeyClaims.tryParse(key);
       if (claims == null ||
-          !claims.allowsActivation(DateTime.now(), expectedAppSlug: appSlug)) {
+          !claims.allowsActivation(DateTime.now(), expectedAppId: AppConstants.appId)) {
         return ActivationOutcome.invalid;
       }
       serverKey = key;
@@ -163,7 +164,7 @@ class ActivationService {
           machineId: deviceId,
           deviceName: deviceModel,
           deviceModel: deviceModel,
-          product: appSlug,
+          product: AppConstants.appId,
         ),
       );
     } on ElmahdiPayRateLimitException {
@@ -232,7 +233,7 @@ class ActivationService {
         DeactivateLicenseRequest(
           licenseKey: serverKey,
           machineId: deviceId,
-          product: appSlug,
+          product: AppConstants.appId,
           reason: 'user_removed',
         ),
       );
@@ -252,7 +253,7 @@ class ActivationService {
         VerifyLicenseRequest(
           tokenOrKey: tokenOrKey,
           machineId: deviceId,
-          product: appSlug,
+          product: AppConstants.appId,
         ),
       );
     } catch (_) {
@@ -268,7 +269,7 @@ class ActivationService {
     try {
       return await _sdk.public.claimTrial(
         TrialClaimRequest(
-          product: appSlug,
+          product: AppConstants.appId,
           machineId: deviceId,
           deviceName: deviceModel,
           deviceModel: deviceModel,
@@ -286,7 +287,7 @@ class ActivationService {
     try {
       return await _sdk.public.getTrialStatus(
         TrialStatusRequest(
-          product: appSlug,
+          product: AppConstants.appId,
           machineId: deviceId,
         ),
       );

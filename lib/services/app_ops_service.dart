@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/constants/app_constants.dart';
 import '../database/database_helper.dart';
 import '../models/app_notification.dart';
 import '../models/entitlement.dart';
@@ -21,7 +22,7 @@ class AppOpsService {
   AppOpsService._();
   static final AppOpsService instance = AppOpsService._();
 
-  static const String appSlug = 'com.elmahdi.waraqatak';
+  static const String appSlug = AppConstants.appId;
   static const String apiBaseUrl = 'https://api.almhdy24.com';
   static const Duration requestTimeout = Duration(seconds: 10);
 
@@ -121,7 +122,7 @@ class AppOpsService {
 
     HttpClient? client;
     try {
-      final uri = Uri.parse('$apiBaseUrl/api/v1/ops/config?product=$appSlug');
+      final uri = Uri.parse('$apiBaseUrl/api/v1/ops/config?product=${AppConstants.appId}');
       client = HttpClient()..connectionTimeout = requestTimeout;
 
       final req = await client.getUrl(uri).timeout(requestTimeout);
@@ -211,7 +212,7 @@ class AppOpsService {
       }
 
       final payload = <String, dynamic>{
-        'product': appSlug,
+        'product': AppConstants.appId,
         'machine_id': machineId,
         'app_version': '1.1.3',
         'client_reported_status': clientStatus,

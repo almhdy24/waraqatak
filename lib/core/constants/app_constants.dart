@@ -1,6 +1,7 @@
 class AppConstants {
   static const String appName = 'Waraqatak';
   static const String packageName = 'com.elmahdi.waraqatak';
+  static const String appId = 'com.elmahdi.waraqatak';
 
   /// Short display name of the developer / publisher.
   static const String developerName = 'Elmahdi Abdallh';
