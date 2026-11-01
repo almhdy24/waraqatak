@@ -7,6 +7,8 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/database_diagnostic.dart';
 import '../models/product.dart';
+import '../services/accounting/journal_backfill_service.dart';
+import '../services/accounting/ledger_service.dart';
 import '../services/database_diagnostic_service.dart';
 import '../services/database_repair_service.dart';
 import '../utils/error_utils.dart';
@@ -42,6 +44,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
   Object? _error;
   _RepairTabFilter _currentTab = _RepairTabFilter.all;
   DiagnosticCategory? _selectedCategory;
+  ParityStatus? _parityStatus;
 
   static final _dateTimeFmt = DateFormat('dd/MM/yyyy HH:mm:ss');
 
@@ -64,12 +67,16 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
       final report = await DatabaseDiagnosticService.runDiagnostics(
         db: widget.db,
       );
+      final parity = await JournalBackfillService.checkParityStatus(
+        executor: widget.db,
+      );
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
       final issues = DatabaseRepairService.categorizeReport(report, l10n);
       setState(() {
         _report = report;
         _issues = issues;
+        _parityStatus = parity;
         _loading = false;
         _isScanning = false;
       });
@@ -1054,7 +1061,9 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                 color: cs.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+            _buildAccountingBooksCard(context, l10n, theme, cs),
+            const SizedBox(height: 24),
             OutlinedButton.icon(
               icon: const Icon(Icons.refresh),
               label: Text(l10n.diagnosticsRefresh),
@@ -1083,6 +1092,10 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
       children: [
         // Summary Cards
         _buildSummaryCards(report, l10n, theme, cs),
+        const SizedBox(height: 12),
+
+        // Accounting Books Section
+        _buildAccountingBooksCard(context, l10n, theme, cs),
         const SizedBox(height: 12),
 
         // Action banner: Fix All Safe Issues
@@ -2187,6 +2200,251 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
         ],
       ],
     );
+  }
+
+  Widget _buildAccountingBooksCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    ThemeData theme,
+    ColorScheme cs,
+  ) {
+    final parity = _parityStatus;
+    final isParity = parity?.isParity ?? false;
+    final reportsFromJournal = parity?.reportsFromJournal ?? false;
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: cs.primaryContainer,
+                  radius: 18,
+                  child: Icon(
+                    Icons.menu_book_rounded,
+                    size: 20,
+                    color: cs.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.accountingBooksSection,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        l10n.accountingBooksSectionDesc,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isParity
+                        ? Colors.green.withValues(alpha: 0.12)
+                        : Colors.orange.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isParity
+                            ? Icons.check_circle_outline
+                            : Icons.warning_amber_rounded,
+                        size: 16,
+                        color: isParity ? Colors.green : Colors.orange,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isParity ? '100% OK' : 'Drift',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isParity ? Colors.green : Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            // Parity row
+            Row(
+              children: [
+                Icon(
+                  isParity
+                      ? Icons.verified_outlined
+                      : Icons.sync_problem_outlined,
+                  size: 18,
+                  color: isParity ? Colors.green : cs.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isParity
+                        ? l10n.journalParityVerified
+                        : l10n.journalParityMismatch,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: isParity ? cs.onSurface : cs.error,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${parity?.entryCount ?? 0} entries',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            if (!isParity && parity?.mismatchReason != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                parity!.mismatchReason!,
+                style: theme.textTheme.bodySmall?.copyWith(color: cs.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            // Report switch row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    reportsFromJournal
+                        ? Icons.storage_rounded
+                        : Icons.auto_awesome_motion_rounded,
+                    size: 20,
+                    color: cs.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.journalReportSource,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          reportsFromJournal
+                              ? l10n.journalSourcePersisted
+                              : l10n.journalSourceDerived,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: reportsFromJournal,
+                    onChanged: (val) => _toggleJournalReports(val),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Backfill trigger button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.history_edu_rounded, size: 18),
+                label: Text(l10n.triggerJournalBackfill),
+                onPressed: _triggerBackfill,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleJournalReports(bool enabled) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.switchJournalReportsTitle,
+      message: l10n.switchJournalReportsConfirm,
+      confirmLabel: l10n.confirm,
+      isDestructive: false,
+    );
+    if (!confirmed) return;
+
+    await LedgerService.setJournalReportsEnabled(enabled);
+    await _runDiagnostics();
+    if (!mounted) return;
+    AppSnackBar.show(
+      context,
+      enabled ? l10n.journalSourcePersisted : l10n.journalSourceDerived,
+      severity: AppSnackBarSeverity.success,
+    );
+  }
+
+  Future<void> _triggerBackfill() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.triggerJournalBackfill,
+      message: l10n.accountingNote,
+      confirmLabel: l10n.confirm,
+      isDestructive: false,
+    );
+    if (!confirmed) return;
+
+    setState(() => _loading = true);
+    try {
+      final db = (widget.db is Database)
+          ? (widget.db as Database)
+          : await DatabaseHelper.instance.database;
+      await JournalBackfillService.runBackfill(db);
+      await _runDiagnostics();
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        l10n.journalBackfillSuccess,
+        severity: AppSnackBarSeverity.success,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+        severity: AppSnackBarSeverity.error,
+      );
+    }
   }
 
   Widget _buildDisclaimer(

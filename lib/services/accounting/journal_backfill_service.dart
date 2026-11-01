@@ -8,6 +8,23 @@ import 'journal_writer.dart';
 import 'ledger.dart';
 import 'ledger_service.dart';
 
+/// Diagnostic parity snapshot between the persisted journal and derived ledger.
+class ParityStatus {
+  final bool isParity;
+  final bool isBackfilled;
+  final bool reportsFromJournal;
+  final int entryCount;
+  final String? mismatchReason;
+
+  const ParityStatus({
+    required this.isParity,
+    required this.isBackfilled,
+    required this.reportsFromJournal,
+    required this.entryCount,
+    this.mismatchReason,
+  });
+}
+
 /// Authoritative backfill engine that populates the persisted double-entry journal
 /// from historical documents and stock movements (P4).
 ///
@@ -210,7 +227,8 @@ class JournalBackfillService {
     final selectedCurrency = currencyCode ?? base;
     final decimalDigits = Currency.decimalDigitsForCode(selectedCurrency);
 
-    final book = await LedgerService.load(currencyCode: selectedCurrency);
+    // Always compare against derived reference
+    final book = await LedgerService.buildDerived(currencyCode: selectedCurrency);
     final derivedTB = AccountingReports.trialBalance(book.entries);
 
     final journalRows = await db.rawQuery('''
@@ -247,6 +265,42 @@ class JournalBackfillService {
           'Parity mismatch on account ${acct.code}: derived=$derivedMinor, journal=$journalMinor',
         );
       }
+    }
+  }
+
+  /// Diagnostic check returning full parity status, entry count, and flags.
+  static Future<ParityStatus> checkParityStatus({
+    DatabaseExecutor? executor,
+    String? currencyCode,
+  }) async {
+    final db = executor ?? await DatabaseHelper.instance.database;
+    final isBackfilled = await isBackfillCompleted(txn: db);
+    final isReports = await LedgerService.isJournalReportsEnabled();
+
+    int count = 0;
+    try {
+      final res = await db.rawQuery('SELECT COUNT(*) as c FROM journal_entries');
+      if (res.isNotEmpty) {
+        count = (res.first['c'] as num?)?.toInt() ?? 0;
+      }
+    } catch (_) {}
+
+    try {
+      await verifyParity(executor: db, currencyCode: currencyCode);
+      return ParityStatus(
+        isParity: true,
+        isBackfilled: isBackfilled,
+        reportsFromJournal: isReports,
+        entryCount: count,
+      );
+    } catch (e) {
+      return ParityStatus(
+        isParity: false,
+        isBackfilled: isBackfilled,
+        reportsFromJournal: isReports,
+        entryCount: count,
+        mismatchReason: e.toString(),
+      );
     }
   }
 

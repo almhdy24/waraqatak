@@ -2199,6 +2199,36 @@ class AppLocalizations {
   String get pdfCommercialRegLabel => _t('السجل التجاري:', 'CR:');
   String get pdfBranchLabel => _t('الفرع:', 'Branch:');
 
+  // ========== ACCOUNTING BACKBONE & DIAGNOSTICS ==========
+  String get accountingBooksSection =>
+      _t('الدفاتر المحاسبية', 'Accounting Books');
+  String get accountingBooksSectionDesc => _t(
+    'حالة مطابقة دفتر اليومية المزدوج ومصدر تقارير القوائم المالية',
+    'Double-entry journal parity status and financial report source',
+  );
+  String get journalParityVerified =>
+      _t('مطابقة تامة (100%) مع الدفتر المشتق', 'Exact 100% parity with derived ledger');
+  String get journalParityMismatch =>
+      _t('يوجد عدم تطابق بين الدفتر واليومية', 'Parity mismatch between ledger and journal');
+  String get journalReportSource =>
+      _t('مصدر التقارير المالية', 'Financial Reports Source');
+  String get journalSourceDerived =>
+      _t('الدفتر المشتق (افتراضي)', 'Derived Ledger (Default)');
+  String get journalSourcePersisted =>
+      _t('دفتر اليومية الدائم (مُفعل)', 'Persisted Journal (Active)');
+  String get triggerJournalBackfill =>
+      _t('إعادة إنشاء دفتر اليومية', 'Rebuild Journal (Backfill)');
+  String get journalBackfillSuccess => _t(
+    'تمت إعادة إنشاء القيود بنجاح ومطابقة الأرصدة',
+    'Journal entries rebuilt successfully with verified parity',
+  );
+  String get switchJournalReportsTitle =>
+      _t('تبديل مصدر التقارير المالية', 'Switch Financial Reports Source');
+  String get switchJournalReportsConfirm => _t(
+    'هل تريد تغيير مصدر التقارير المالية؟ سيتم احتساب القوائم مباشرة من دفتر اليومية الدائم بدلاً من إنشائها لحظياً.',
+    'Do you want to switch the financial reports source? Statements will be generated directly from the persisted double-entry journal.',
+  );
+
   bool get isArabic => langCode == 'ar';
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
