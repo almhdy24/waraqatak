@@ -4,7 +4,7 @@
 |---|---|---|---|---|
 | Phase 0 | Baseline, Test Runner, CI Failure Root-Cause | COMPLETE | dde0020 (amended) | 63 files / 881 tests passed; play_compliance OK; analyze OK |
 | Phase 1 | Read-Only Audit & Specification | COMPLETE | 522616c | Completed comprehensive audit and as-implemented spec |
-| Phase 2 | Red-First Oracle & Invariant Harness | PENDING | - | - |
+| Phase 2 | Red-First Oracle & Invariant Harness | COMPLETE | 57ad95a | 4 suites / 11 tests passed, 1 skipped (BUG-01) |
 | Phase 3 | Single-Currency Refactor | PENDING | - | - |
 | Phase 4 | Fix Proven Defects | PENDING | - | - |
 | Phase 5 | Structural Guards | PENDING | - | - |
@@ -39,3 +39,21 @@
 - Cataloged the 13-account chart of accounts, IAS perpetual moving-average costing, and proof of 6 accounting identities.
 - Cataloged transaction boundaries, atomic document number generation, foreign key cascading, and diagnostic coverage.
 - Created `docs/accounting_audit.md` (audit report & defect catalog BUG-01 through BUG-05) and `docs/accounting_spec.md` (formal as-implemented specification).
+
+### Phase 2: Red-First Oracle & Invariant Harness
+- Created independent integer-only minor-unit oracle (`test/accounting/money_oracle_test.dart`):
+  - 50+ property-based random tests checking round-half-up, line total, proportional discount (Hamilton-Hare), tax, and grand total.
+  - Exposes BUG-01 with `skip: 'BUG-01: DocumentItemInput.total hardcodes 2 decimals'`.
+  - 4 passed, 1 skipped.
+- Created cross-layer consistency test (`test/accounting/cross_layer_consistency_test.dart`):
+  - Injected an invoice with line discount, document discount, and tax.
+  - Proved identical numbers across DocumentService calculation, SQLite row, PDF builder, Period summary, and Ledger journal entries.
+  - 1 passed.
+- Created accounting identities test (`test/accounting/accounting_identities_test.dart`):
+  - Validated 5 core accounting identities under mixed operations (10 invoices, 5 purchases, 2 cancellations, partial payments, and stock adjustments).
+  - Validated zero-sum journal entries, AR/AP subledger reconciliation, inventory valuation asset match, and profit equation.
+  - 1 passed.
+- Created edge cases test (`test/accounting/edge_cases_test.dart`):
+  - Validated 100% discount, zero unit price, fractional quantities (0.001), 10-line Hamilton-Hare largest remainder apportionment, and end-of-period date boundaries.
+  - 5 passed.
+- All 4 test suites pass analysis (`dart analyze test/accounting/`) and pass tests.
