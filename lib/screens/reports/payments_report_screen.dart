@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../models/business.dart';
 import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../models/payment_method.dart';
@@ -21,6 +22,7 @@ class PaymentsReportScreen extends StatefulWidget {
 class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   DateRangeFilter _range = DateRangeFilter.thisMonth();
   List<Map<String, dynamic>>? _rows;
+  Business? _business;
   Map<String, PaymentMethod> _methodsMap = {};
   String? _error;
 
@@ -36,15 +38,22 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   Future<void> _load() async {
     setState(() { _rows = null; _error = null; });
     try {
-      final rows = await DatabaseHelper.instance.getPaymentReport(
-        from: _range.from,
-        to: _range.to,
-      );
-      final methods = await DatabaseHelper.instance.getPaymentMethods();
+      final results = await Future.wait([
+        DatabaseHelper.instance.getPaymentReport(
+          from: _range.from,
+          to: _range.to,
+        ),
+        DatabaseHelper.instance.getPaymentMethods(),
+        DatabaseHelper.instance.getFirstBusiness(),
+      ]);
       if (!mounted) return;
+      final rows = results[0] as List<Map<String, dynamic>>;
+      final methods = results[1] as List<PaymentMethod>;
+      final business = results[2] as Business?;
       setState(() {
         _rows = rows;
         _methodsMap = {for (final m in methods) m.key: m};
+        _business = business;
       });
     } catch (e) {
       if (!mounted) return;
@@ -55,6 +64,8 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final baseCurrency = _business?.currencyCode ?? 'SDG';
+    final baseSymbol = _business?.currencySymbol ?? 'ج.س';
 
     final totalsByCurrency = <String, ({double inAmount, double outAmount})>{};
     if (_rows != null) {
@@ -71,6 +82,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       }
     }
 
+    final baseTotals = totalsByCurrency[baseCurrency] ?? (inAmount: 0.0, outAmount: 0.0);
+    final legacyEntries = totalsByCurrency.entries.where((e) => e.key != baseCurrency).toList();
+
     return Scaffold(
       appBar: AppBar(title: Text(l10n.paymentsReport), centerTitle: true),
       body: ResponsiveCenter(child: Column(
@@ -79,26 +93,73 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             range: _range,
             onChanged: (r) { setState(() => _range = r); _load(); },
           ),
-          if (totalsByCurrency.isNotEmpty)
+          if (_rows != null && _rows!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Column(
-                children: totalsByCurrency.entries.map((entry) {
-                  final code = entry.key;
-                  final symbol = Currency.symbolForCode(code);
-                  final inAmt = entry.value.inAmount;
-                  final outAmt = entry.value.outAmount;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        _chip('${l10n.receivedPayments} ($symbol)', inAmt, Colors.green),
-                        const SizedBox(width: 8),
-                        _chip('${l10n.madePayments} ($symbol)', outAmt, Colors.orange),
-                      ],
+                children: [
+                  Row(
+                    children: [
+                      _chip('${l10n.receivedPayments} ($baseSymbol)', baseTotals.inAmount, Colors.green),
+                      const SizedBox(width: 8),
+                      _chip('${l10n.madePayments} ($baseSymbol)', baseTotals.outAmount, Colors.orange),
+                    ],
+                  ),
+                  if (legacyEntries.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.history, size: 14, color: Theme.of(context).colorScheme.primary),
+                                const SizedBox(width: 6),
+                                Text(
+                                  l10n.langCode == 'ar'
+                                      ? 'دفعات قديمة بعملات أخرى'
+                                      : 'Legacy payments in other currencies',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ...legacyEntries.map((entry) {
+                              final code = entry.key;
+                              final symbol = Currency.symbolForCode(code);
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  children: [
+                                    _chip('${l10n.receivedPayments} ($symbol)', entry.value.inAmount, Colors.green),
+                                    const SizedBox(width: 8),
+                                    _chip('${l10n.madePayments} ($symbol)', entry.value.outAmount, Colors.orange),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
                     ),
-                  );
-                }).toList(),
+                ],
               ),
             ),
           Expanded(child: _buildList(context, l10n)),

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../models/business.dart';
 import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../models/document_status.dart';
@@ -68,6 +69,7 @@ class SalesReportScreen extends StatefulWidget {
 class _SalesReportScreenState extends State<SalesReportScreen> {
   DateRangeFilter _range = DateRangeFilter.thisMonth();
   List<SaleProfitSummary>? _sales;
+  Business? _business;
   String? _error;
 
   static final _numFmt = NumberFormat('#,##0.##');
@@ -85,14 +87,19 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       _error = null;
     });
     try {
-      final sales = await InventoryCostingService.instance
-          .getSalesReportWithCost(
-            from: _range.from,
-            to: _range.to,
-            includeCancelled: true,
-          );
+      final results = await Future.wait([
+        InventoryCostingService.instance.getSalesReportWithCost(
+          from: _range.from,
+          to: _range.to,
+          includeCancelled: true,
+        ),
+        DatabaseHelper.instance.getFirstBusiness(),
+      ]);
       if (!mounted) return;
-      setState(() => _sales = sales);
+      setState(() {
+        _sales = results[0] as List<SaleProfitSummary>;
+        _business = results[1] as Business?;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -104,30 +111,34 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final business = await DatabaseHelper.instance.getFirstBusiness();
     if (business == null || _sales == null) return;
 
+    final baseCurrency = business.currencyCode;
+    final baseSymbol = business.currencySymbol;
     final finalized = _sales!
         .where((s) => s.document.status != DocumentStatus.cancelled)
         .toList();
-    final currencies = finalized.map((s) => s.document.currencyCode).toSet();
-    final salesByCurrency = SalesReportScreen.aggregateByCurrency(finalized);
+    final baseFinalized = finalized
+        .where((s) => s.document.currencyCode == baseCurrency)
+        .toList();
+    final legacyFinalized = finalized
+        .where((s) => s.document.currencyCode != baseCurrency)
+        .toList();
+    final hasLegacyForeign = legacyFinalized.isNotEmpty;
 
-    final totalSales = finalized.fold(
+    final totalSales = baseFinalized.fold(
       0.0,
       (s, item) => s + item.document.total,
     );
-    final totalCogs = finalized.fold(0.0, (s, item) => s + item.cogs);
-    // Only include gross profit from fully-costed invoices in aggregate totals.
-    // Invoices with unknown cost contribute null (trustedGrossProfit) and are
-    // excluded from the sum so the header never shows an overstated figure.
-    final totalTrustedProfit = finalized.fold(
+    final totalCogs = baseFinalized.fold(0.0, (s, item) => s + item.cogs);
+    final totalTrustedProfit = baseFinalized.fold(
       0.0,
       (s, item) => s + (item.trustedGrossProfit ?? 0.0),
     );
-    final totalPaid = finalized.fold(0.0, (s, item) => s + item.document.paid);
-    final totalRemaining = finalized.fold(
+    final totalPaid = baseFinalized.fold(0.0, (s, item) => s + item.document.paid);
+    final totalRemaining = baseFinalized.fold(
       0.0,
       (s, item) => s + item.document.remaining,
     );
-    final hasIncompleteCost = finalized.any((s) => !s.isCostReliable);
+    final hasIncompleteCost = baseFinalized.any((s) => !s.isCostReliable);
 
     final columns = [
       PdfReportColumn(title: l10n.date, flex: 1.2),
@@ -176,45 +187,27 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     final data = PdfReportData(
       title: l10n.salesReport,
       dateRange: _range.label(l10n),
-      warningNotice: hasIncompleteCost ? l10n.unknownCostNotice : null,
+      warningNotice: hasIncompleteCost
+          ? l10n.unknownCostNotice
+          : (hasLegacyForeign ? l10n.mixedCurrenciesNotice : null),
       summaryCards: [
         PdfReportSummaryCard(
           label: l10n.totalSales,
-          value: currencies.length > 1
-              ? salesByCurrency.entries
-                    .map((e) => '${_numFmt.format(e.value.sales)} ${e.key}')
-                    .join(' · ')
-              : _numFmt.format(totalSales),
+          value: '${_numFmt.format(totalSales)} $baseSymbol',
         ),
         PdfReportSummaryCard(
           label: l10n.cogs,
-          value: currencies.length > 1
-              ? salesByCurrency.entries
-                    .map((e) => '${_numFmt.format(e.value.cogs)} ${e.key}')
-                    .join(' · ')
-              : _numFmt.format(totalCogs),
+          value: '${_numFmt.format(totalCogs)} $baseSymbol',
         ),
         PdfReportSummaryCard(
           label: l10n.grossProfit,
-          // Only sum gross profit from fully-costed invoices.
-          value: currencies.length > 1
-              ? salesByCurrency.entries
-                    .map(
-                      (e) =>
-                          '${_numFmt.format(e.value.trustedProfit)}${e.value.hasIncompleteCost ? '*' : ''} ${e.key}',
-                    )
-                    .join(' · ')
-              : (hasIncompleteCost
-                    ? '${_numFmt.format(totalTrustedProfit)}*'
-                    : _numFmt.format(totalTrustedProfit)),
+          value: hasIncompleteCost
+              ? '${_numFmt.format(totalTrustedProfit)}* $baseSymbol'
+              : '${_numFmt.format(totalTrustedProfit)} $baseSymbol',
         ),
         PdfReportSummaryCard(
           label: l10n.totalPaid,
-          value: currencies.length > 1
-              ? salesByCurrency.entries
-                    .map((e) => '${_numFmt.format(e.value.paid)} ${e.key}')
-                    .join(' · ')
-              : _numFmt.format(totalPaid),
+          value: '${_numFmt.format(totalPaid)} $baseSymbol',
         ),
       ],
       columns: columns,
@@ -223,36 +216,13 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         l10n.total,
         '',
         '',
-        currencies.length > 1
-            ? salesByCurrency.entries
-                  .map((e) => '${_numFmt.format(e.value.sales)} ${e.key}')
-                  .join('\n')
-            : _numFmt.format(totalSales),
-        currencies.length > 1
-            ? salesByCurrency.entries
-                  .map((e) => '${_numFmt.format(e.value.cogs)} ${e.key}')
-                  .join('\n')
-            : _numFmt.format(totalCogs),
-        currencies.length > 1
-            ? salesByCurrency.entries
-                  .map(
-                    (e) =>
-                        '${_numFmt.format(e.value.trustedProfit)}${e.value.hasIncompleteCost ? '*' : ''} ${e.key}',
-                  )
-                  .join('\n')
-            : (hasIncompleteCost
-                  ? '${_numFmt.format(totalTrustedProfit)}*'
-                  : _numFmt.format(totalTrustedProfit)),
-        currencies.length > 1
-            ? salesByCurrency.entries
-                  .map((e) => '${_numFmt.format(e.value.paid)} ${e.key}')
-                  .join('\n')
-            : _numFmt.format(totalPaid),
-        currencies.length > 1
-            ? salesByCurrency.entries
-                  .map((e) => '${_numFmt.format(e.value.remaining)} ${e.key}')
-                  .join('\n')
-            : _numFmt.format(totalRemaining),
+        '${_numFmt.format(totalSales)} $baseSymbol',
+        '${_numFmt.format(totalCogs)} $baseSymbol',
+        hasIncompleteCost
+            ? '${_numFmt.format(totalTrustedProfit)}* $baseSymbol'
+            : '${_numFmt.format(totalTrustedProfit)} $baseSymbol',
+        '${_numFmt.format(totalPaid)} $baseSymbol',
+        '${_numFmt.format(totalRemaining)} $baseSymbol',
       ],
     );
 
@@ -273,6 +243,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final baseCurrency = _business?.currencyCode ?? 'SDG';
+    final baseSymbol = _business?.currencySymbol ?? 'ج.س';
 
     final finalized =
         _sales
@@ -284,24 +256,27 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             ?.where((s) => s.document.status == DocumentStatus.cancelled)
             .toList() ??
         [];
-    final currencies = finalized.map((s) => s.document.currencyCode).toSet();
+    final baseFinalized =
+        finalized.where((s) => s.document.currencyCode == baseCurrency).toList();
+    final legacyFinalized =
+        finalized.where((s) => s.document.currencyCode != baseCurrency).toList();
     final salesByCurrency = SalesReportScreen.aggregateByCurrency(finalized);
-    final totalSales = finalized.fold(
+    final totalSales = baseFinalized.fold(
       0.0,
       (s, item) => s + item.document.total,
     );
-    final totalCogs = finalized.fold(0.0, (s, item) => s + item.cogs);
+    final totalCogs = baseFinalized.fold(0.0, (s, item) => s + item.cogs);
     // Only include gross profit from fully-costed invoices in aggregate totals.
-    final totalTrustedProfit = finalized.fold(
+    final totalTrustedProfit = baseFinalized.fold(
       0.0,
       (s, item) => s + (item.trustedGrossProfit ?? 0.0),
     );
-    final totalPaid = finalized.fold(0.0, (s, item) => s + item.document.paid);
-    final totalRemaining = finalized.fold(
+    final totalPaid = baseFinalized.fold(0.0, (s, item) => s + item.document.paid);
+    final totalRemaining = baseFinalized.fold(
       0.0,
       (s, item) => s + item.document.remaining,
     );
-    final hasIncompleteCost = finalized.any((s) => !s.isCostReliable);
+    final hasIncompleteCost = baseFinalized.any((s) => !s.isCostReliable);
 
     return Scaffold(
       appBar: AppBar(
@@ -326,66 +301,55 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               },
             ),
             if (_sales != null && _sales!.isNotEmpty) ...[
-              if (currencies.length <= 1) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  child: Row(
-                    children: [
-                      _summaryChip(
-                        l10n.totalSales,
-                        totalSales,
-                        Colors.green,
-                        symbol: currencies.isNotEmpty
-                            ? Currency.symbolForCode(currencies.first)
-                            : '',
-                      ),
-                      const SizedBox(width: 8),
-                      _summaryChip(
-                        l10n.cogs,
-                        totalCogs,
-                        Colors.blueGrey,
-                        symbol: currencies.isNotEmpty
-                            ? Currency.symbolForCode(currencies.first)
-                            : '',
-                      ),
-                      const SizedBox(width: 8),
-                      _summaryChip(
-                        l10n.grossProfit,
-                        totalTrustedProfit,
-                        Colors.teal,
-                        symbol: currencies.isNotEmpty
-                            ? Currency.symbolForCode(currencies.first)
-                            : '',
-                      ),
-                    ],
-                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Row(
+                  children: [
+                    _summaryChip(
+                      l10n.totalSales,
+                      totalSales,
+                      Colors.green,
+                      symbol: baseSymbol,
+                    ),
+                    const SizedBox(width: 8),
+                    _summaryChip(
+                      l10n.cogs,
+                      totalCogs,
+                      Colors.blueGrey,
+                      symbol: baseSymbol,
+                    ),
+                    const SizedBox(width: 8),
+                    _summaryChip(
+                      l10n.grossProfit,
+                      totalTrustedProfit,
+                      Colors.teal,
+                      symbol: baseSymbol,
+                    ),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                  child: Row(
-                    children: [
-                      _summaryChip(
-                        l10n.totalPaid,
-                        totalPaid,
-                        Colors.teal,
-                        symbol: currencies.isNotEmpty
-                            ? Currency.symbolForCode(currencies.first)
-                            : '',
-                      ),
-                      const SizedBox(width: 8),
-                      _summaryChip(
-                        l10n.totalOutstanding,
-                        totalRemaining,
-                        Theme.of(context).colorScheme.error,
-                        symbol: currencies.isNotEmpty
-                            ? Currency.symbolForCode(currencies.first)
-                            : '',
-                      ),
-                    ],
-                  ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                child: Row(
+                  children: [
+                    _summaryChip(
+                      l10n.totalPaid,
+                      totalPaid,
+                      Colors.teal,
+                      symbol: baseSymbol,
+                    ),
+                    const SizedBox(width: 8),
+                    _summaryChip(
+                      l10n.totalOutstanding,
+                      totalRemaining,
+                      Theme.of(context).colorScheme.error,
+                      symbol: baseSymbol,
+                    ),
+                  ],
                 ),
-              ] else ...[
-                // Multi-currency segregated summary
+              ),
+              if (legacyFinalized.isNotEmpty) ...[
+                // Segregated read-only section for historical legacy currencies
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: Container(
@@ -407,13 +371,15 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         Row(
                           children: [
                             Icon(
-                              Icons.currency_exchange,
+                              Icons.history,
                               size: 16,
                               color: Theme.of(context).colorScheme.primary,
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              l10n.totalSales,
+                              l10n.langCode == 'ar'
+                                  ? 'وثائق قديمة بعملات أخرى'
+                                  : 'Legacy documents in other currencies',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -422,18 +388,18 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                             ),
                             const Spacer(),
                             Text(
-                              '${currencies.length} ${l10n.currency}',
+                              '${legacyFinalized.length} ${l10n.invoice}',
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        ...salesByCurrency.entries.map((e) {
+                        ...salesByCurrency.entries
+                            .where((e) => e.key != baseCurrency)
+                            .map((e) {
                           final sym = Currency.symbolForCode(e.key);
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 6),
@@ -460,9 +426,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primaryContainer,
+                                      color: Theme.of(context).colorScheme.primaryContainer,
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
@@ -470,17 +434,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onPrimaryContainer,
+                                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                                       ),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           '${l10n.totalSales}: ${_numFmt.format(e.value.sales)} $sym',
@@ -491,22 +452,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          '${l10n.cogs}: ${_numFmt.format(e.value.cogs)} $sym • ${l10n.grossProfit}: ${_numFmt.format(e.value.trustedProfit)}${e.value.hasIncompleteCost ? '*' : ''} $sym',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
                                           '${l10n.paid}: ${_numFmt.format(e.value.paid)} $sym • ${l10n.totalOutstanding}: ${_numFmt.format(e.value.remaining)} $sym',
                                           style: TextStyle(
                                             fontSize: 11,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                                           ),
                                         ),
                                       ],

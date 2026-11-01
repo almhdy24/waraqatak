@@ -18,6 +18,7 @@ import 'package:warqatek/screens/reports/sales_report_screen.dart';
 import 'package:warqatek/screens/reports/supplier_report_screen.dart';
 import 'package:warqatek/services/business_reporting_service.dart';
 import 'package:warqatek/services/inventory_costing_service.dart';
+import 'package:warqatek/widgets/app_amount_text.dart';
 
 Widget _buildTestApp({String langCode = 'ar', required Widget child}) {
   return LanguageProvider(
@@ -300,10 +301,13 @@ void main() {
       expect(summary.totalsByCurrency.containsKey('EUR'), isFalse);
       expect(summary.cancelledCount, 1);
 
-      // Verify that nominal cross-currency addition was prevented in totalsByCurrency
+      // Verify that nominal cross-currency addition was prevented in totalPurchases
       expect(sdgTotals.purchases, 200000.0);
       expect(usdTotals.purchases, 500.0);
-      expect(sdgTotals.purchases, isNot(equals(summary.totalPurchases)));
+      // Under single base currency, totalPurchases reflects the base currency (SDG: 200,000)
+      // and strictly prevents nominal addition with foreign currency (200,500).
+      expect(summary.totalPurchases, 200000.0);
+      expect(summary.totalPurchases, isNot(equals(200500.0)));
     });
   });
 
@@ -538,11 +542,28 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
 
-      // Verify that each document tile renders its own currency symbol
+      // Verify that each document tile renders its own currency symbol and formatted amount
+      // via AppAmountText with canonical fullText, semantics, and exact numeric/symbol tokens.
       expect(
         find.descendant(
           of: find.byType(Card),
-          matching: find.textContaining('50,000'),
+          matching: find.byWidgetPredicate(
+            (w) => w is AppAmountText && w.fullText == '50,000 ج.س',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.bySemanticsLabel('50,000 ج.س'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.text('50,000'),
         ),
         findsOneWidget,
       );
@@ -553,10 +574,27 @@ void main() {
         ),
         findsOneWidget,
       );
+
       expect(
         find.descendant(
           of: find.byType(Card),
-          matching: find.textContaining('100'),
+          matching: find.byWidgetPredicate(
+            (w) => w is AppAmountText && w.fullText == '100 \$',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.bySemanticsLabel('100 \$'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.text('100'),
         ),
         findsOneWidget,
       );
@@ -567,10 +605,27 @@ void main() {
         ),
         findsOneWidget,
       );
+
       expect(
         find.descendant(
           of: find.byType(Card),
-          matching: find.textContaining('80'),
+          matching: find.byWidgetPredicate(
+            (w) => w is AppAmountText && w.fullText == '80 ر.س',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.bySemanticsLabel('80 ر.س'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(Card),
+          matching: find.text('80'),
         ),
         findsOneWidget,
       );

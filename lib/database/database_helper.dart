@@ -5315,24 +5315,21 @@ class DatabaseHelper {
     double customerOutstanding = 0.0;
     double supplierPayable = 0.0;
 
-    if (currencyCode != null && currencyCode.isNotEmpty) {
-      final target = totalsByCurrency[currencyCode];
-      if (target != null) {
-        sales = target.sales;
-        purchases = target.purchases;
-        paymentsIn = target.paymentsIn;
-        paymentsOut = target.paymentsOut;
-        customerOutstanding = target.customerOutstanding;
-        supplierPayable = target.supplierPayable;
-      }
-    } else if (totalsByCurrency.length == 1) {
-      final single = totalsByCurrency.values.first;
-      sales = single.sales;
-      purchases = single.purchases;
-      paymentsIn = single.paymentsIn;
-      paymentsOut = single.paymentsOut;
-      customerOutstanding = single.customerOutstanding;
-      supplierPayable = single.supplierPayable;
+    final biz = await getFirstBusiness();
+    final baseCurrency = (biz != null && biz.currencyCode.trim().isNotEmpty)
+        ? biz.currencyCode.trim()
+        : 'SDG';
+    final targetCode = (currencyCode != null && currencyCode.trim().isNotEmpty)
+        ? currencyCode.trim()
+        : baseCurrency;
+    final target = totalsByCurrency[targetCode];
+    if (target != null) {
+      sales = target.sales;
+      purchases = target.purchases;
+      paymentsIn = target.paymentsIn;
+      paymentsOut = target.paymentsOut;
+      customerOutstanding = target.customerOutstanding;
+      supplierPayable = target.supplierPayable;
     }
 
     // Inventory snapshot (physical products only)

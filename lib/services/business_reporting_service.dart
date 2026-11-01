@@ -556,16 +556,17 @@ class BusinessReportingService {
     bool hasIncompleteCosts = false;
     int unvaluedSalesTotal = 0;
 
-    if (currencyCode != null && currencyCode.isNotEmpty) {
-      final curTotals = summaryTotalsByCurrency[currencyCode];
-      if (curTotals != null) {
-        totalRevenue = curTotals.revenue;
-        totalCogs = curTotals.cogs;
-        totalGrossProfit = curTotals.grossProfit;
-        totalTrustedGrossProfit = curTotals.trustedProfit;
-        hasIncompleteCosts = curTotals.hasIncompleteCost;
-        unvaluedSalesTotal = curTotals.unvaluedSalesCount;
-      }
+    final targetCode = (currencyCode != null && currencyCode.trim().isNotEmpty)
+        ? currencyCode.trim()
+        : baseCurrency;
+    final curTotals = summaryTotalsByCurrency[targetCode];
+    if (curTotals != null) {
+      totalRevenue = curTotals.revenue;
+      totalCogs = curTotals.cogs;
+      totalGrossProfit = curTotals.grossProfit;
+      totalTrustedGrossProfit = curTotals.trustedProfit;
+      hasIncompleteCosts = curTotals.hasIncompleteCost;
+      unvaluedSalesTotal = curTotals.unvaluedSalesCount;
     } else if (summaryTotalsByCurrency.length == 1) {
       final single = summaryTotalsByCurrency.values.first;
       totalRevenue = single.revenue;
@@ -574,14 +575,6 @@ class BusinessReportingService {
       totalTrustedGrossProfit = single.trustedProfit;
       hasIncompleteCosts = single.hasIncompleteCost;
       unvaluedSalesTotal = single.unvaluedSalesCount;
-    } else if (summaryTotalsByCurrency.length > 1) {
-      // Multi-currency without filter: never sum nominally across currencies
-      hasIncompleteCosts = summaryTotalsByCurrency.values.any((e) => e.hasIncompleteCost);
-      unvaluedSalesTotal = summaryTotalsByCurrency.values.fold(0, (s, e) => s + e.unvaluedSalesCount);
-      totalRevenue = 0.0;
-      totalCogs = 0.0;
-      totalGrossProfit = 0.0;
-      totalTrustedGrossProfit = 0.0;
     }
 
     return ProductPerformanceSummary(
@@ -650,6 +643,10 @@ class BusinessReportingService {
     ''';
 
     final rows = await db.rawQuery(sql, args);
+    final biz = await DatabaseHelper.instance.getFirstBusiness();
+    final baseCurrency = (biz != null && biz.currencyCode.trim().isNotEmpty)
+        ? biz.currencyCode.trim()
+        : 'SDG';
 
     double totalPurchases = 0.0;
     double totalPaid = 0.0;
@@ -672,9 +669,11 @@ class BusinessReportingService {
       if (isCancelled) {
         cancelledCount++;
       } else {
-        totalPurchases += doc.total;
-        totalPaid += doc.paid;
-        totalRemaining += doc.remaining;
+        if (doc.currencyCode == baseCurrency) {
+          totalPurchases += doc.total;
+          totalPaid += doc.paid;
+          totalRemaining += doc.remaining;
+        }
 
         final prev = totalsByCurrency[doc.currencyCode] ??
             (purchases: 0.0, paid: 0.0, remaining: 0.0);
@@ -693,6 +692,13 @@ class BusinessReportingService {
         paidAmount: doc.paid,
         remainingAmount: doc.remaining,
       ));
+    }
+
+    if (totalPurchases == 0.0 && totalsByCurrency.length == 1) {
+      final single = totalsByCurrency.values.first;
+      totalPurchases = single.purchases;
+      totalPaid = single.paid;
+      totalRemaining = single.remaining;
     }
 
     return PurchaseReportSummary(

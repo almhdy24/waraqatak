@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../models/business.dart';
 import '../../models/contact.dart';
 import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
@@ -27,6 +28,7 @@ class PurchasesReportScreen extends StatefulWidget {
 class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
   DateRangeFilter _range = DateRangeFilter.thisMonth();
   PurchaseReportSummary? _summary;
+  Business? _business;
   List<Contact> _suppliers = [];
   int? _selectedSupplierId;
   String _selectedDocStatus = 'all';
@@ -58,11 +60,13 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
           documentStatus: _selectedDocStatus,
           paymentStatus: _selectedPaymentStatus,
         ),
+        DatabaseHelper.instance.getFirstBusiness(),
       ]);
       if (!mounted) return;
       setState(() {
         _suppliers = futures[0] as List<Contact>;
         _summary = futures[1] as PurchaseReportSummary;
+        _business = futures[2] as Business?;
         _loading = false;
       });
     } catch (e) {
@@ -102,7 +106,15 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
       ];
     }).toList();
 
-    final hasMultipleCurrencies = _summary!.currencies.length > 1;
+    final baseCurrency = business.currencyCode;
+    final baseSymbol = business.currencySymbol;
+    final baseTotals = _summary!.totalsByCurrency[baseCurrency] ??
+        (
+          purchases: _summary!.totalPurchases,
+          paid: _summary!.totalPaid,
+          remaining: _summary!.totalRemaining,
+        );
+    final hasLegacyForeign = _summary!.totalsByCurrency.keys.any((c) => c != baseCurrency);
 
     final data = PdfReportData(
       title: l10n.purchasesReport,
@@ -110,31 +122,19 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
           ? _suppliers.where((s) => s.id == _selectedSupplierId).firstOrNull?.name
           : l10n.allSuppliers,
       dateRange: _range.label(l10n),
-      warningNotice: hasMultipleCurrencies ? l10n.mixedCurrenciesNotice : null,
+      warningNotice: hasLegacyForeign ? l10n.mixedCurrenciesNotice : null,
       summaryCards: [
         PdfReportSummaryCard(
           label: l10n.totalPurchasesAmt,
-          value: hasMultipleCurrencies
-              ? _summary!.totalsByCurrency.entries
-                  .map((e) => '${_numFmt.format(e.value.purchases)} ${e.key}')
-                  .join(' · ')
-              : _numFmt.format(_summary!.totalPurchases),
+          value: '${_numFmt.format(baseTotals.purchases)} $baseSymbol',
         ),
         PdfReportSummaryCard(
           label: l10n.totalPaid,
-          value: hasMultipleCurrencies
-              ? _summary!.totalsByCurrency.entries
-                  .map((e) => '${_numFmt.format(e.value.paid)} ${e.key}')
-                  .join(' · ')
-              : _numFmt.format(_summary!.totalPaid),
+          value: '${_numFmt.format(baseTotals.paid)} $baseSymbol',
         ),
         PdfReportSummaryCard(
           label: l10n.totalOutstanding,
-          value: hasMultipleCurrencies
-              ? _summary!.totalsByCurrency.entries
-                  .map((e) => '${_numFmt.format(e.value.remaining)} ${e.key}')
-                  .join(' · ')
-              : _numFmt.format(_summary!.totalRemaining),
+          value: '${_numFmt.format(baseTotals.remaining)} $baseSymbol',
         ),
       ],
       columns: columns,
@@ -144,21 +144,9 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
         '',
         '',
         '',
-        hasMultipleCurrencies
-            ? _summary!.totalsByCurrency.entries
-                .map((e) => '${_numFmt.format(e.value.purchases)} ${e.key}')
-                .join('\n')
-            : _numFmt.format(_summary!.totalPurchases),
-        hasMultipleCurrencies
-            ? _summary!.totalsByCurrency.entries
-                .map((e) => '${_numFmt.format(e.value.paid)} ${e.key}')
-                .join('\n')
-            : _numFmt.format(_summary!.totalPaid),
-        hasMultipleCurrencies
-            ? _summary!.totalsByCurrency.entries
-                .map((e) => '${_numFmt.format(e.value.remaining)} ${e.key}')
-                .join('\n')
-            : _numFmt.format(_summary!.totalRemaining),
+        '${_numFmt.format(baseTotals.purchases)} $baseSymbol',
+        '${_numFmt.format(baseTotals.paid)} $baseSymbol',
+        '${_numFmt.format(baseTotals.remaining)} $baseSymbol',
       ],
     );
 
@@ -182,9 +170,6 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
     final cs = Theme.of(context).colorScheme;
 
     final summary = _summary;
-    final totalPurchases = summary?.totalPurchases ?? 0.0;
-    final totalPaid = summary?.totalPaid ?? 0.0;
-    final totalRemaining = summary?.totalRemaining ?? 0.0;
     final cancelledCount = summary?.cancelledCount ?? 0;
     final finalizedCount = (summary?.items.length ?? 0) - cancelledCount;
 
@@ -310,76 +295,125 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
 
             // Summary Cards
             if (summary != null && summary.items.isNotEmpty) ...[
-              if (summary.currencies.length <= 1)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                  child: Row(
-                    children: [
-                      _chip(
-                        l10n.totalPurchasesAmt,
-                        totalPurchases,
-                        Colors.orange,
-                        symbol: summary.currencies.isNotEmpty
-                            ? Currency.symbolForCode(summary.currencies.first)
-                            : '',
+              () {
+                final baseCurrency = _business?.currencyCode ?? 'SDG';
+                final baseSymbol = _business?.currencySymbol ?? 'ج.س';
+                final baseTotals = summary.totalsByCurrency[baseCurrency] ??
+                    (
+                      purchases: summary.totalPurchases,
+                      paid: summary.totalPaid,
+                      remaining: summary.totalRemaining,
+                    );
+                final legacyEntries = summary.totalsByCurrency.entries
+                    .where((e) => e.key != baseCurrency)
+                    .toList();
+
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                      child: Row(
+                        children: [
+                          _chip(
+                            l10n.totalPurchasesAmt,
+                            baseTotals.purchases,
+                            Colors.orange,
+                            symbol: baseSymbol,
+                          ),
+                          const SizedBox(width: 8),
+                          _chip(
+                            l10n.totalPaid,
+                            baseTotals.paid,
+                            Colors.teal,
+                            symbol: baseSymbol,
+                          ),
+                          const SizedBox(width: 8),
+                          _chip(
+                            l10n.totalOutstanding,
+                            baseTotals.remaining,
+                            Theme.of(context).colorScheme.error,
+                            symbol: baseSymbol,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      _chip(
-                        l10n.totalPaid,
-                        totalPaid,
-                        Colors.teal,
-                        symbol: summary.currencies.isNotEmpty
-                            ? Currency.symbolForCode(summary.currencies.first)
-                            : '',
-                      ),
-                      const SizedBox(width: 8),
-                      _chip(
-                        l10n.totalOutstanding,
-                        totalRemaining,
-                        Theme.of(context).colorScheme.error,
-                        symbol: summary.currencies.isNotEmpty
-                            ? Currency.symbolForCode(summary.currencies.first)
-                            : '',
-                      ),
-                    ],
-                  ),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                  child: Column(
-                    children: summary.totalsByCurrency.entries.map((e) {
-                      final sym = Currency.symbolForCode(e.key);
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          children: [
-                            _chip(
-                              '${l10n.totalPurchasesAmt} (${e.key})',
-                              e.value.purchases,
-                              Colors.orange,
-                              symbol: sym,
+                    ),
+                    if (legacyEntries.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.outlineVariant,
                             ),
-                            const SizedBox(width: 8),
-                            _chip(
-                              '${l10n.totalPaid} (${e.key})',
-                              e.value.paid,
-                              Colors.teal,
-                              symbol: sym,
-                            ),
-                            const SizedBox(width: 8),
-                            _chip(
-                              '${l10n.totalOutstanding} (${e.key})',
-                              e.value.remaining,
-                              Theme.of(context).colorScheme.error,
-                              symbol: sym,
-                            ),
-                          ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.history,
+                                    size: 16,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    l10n.langCode == 'ar'
+                                        ? 'وثائق قديمة بعملات أخرى'
+                                        : 'Legacy documents in other currencies',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              ...legacyEntries.map((e) {
+                                final sym = Currency.symbolForCode(e.key);
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    children: [
+                                      _chip(
+                                        '${l10n.totalPurchasesAmt} (${e.key})',
+                                        e.value.purchases,
+                                        Colors.orange,
+                                        symbol: sym,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _chip(
+                                        '${l10n.totalPaid} (${e.key})',
+                                        e.value.paid,
+                                        Colors.teal,
+                                        symbol: sym,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _chip(
+                                        '${l10n.totalOutstanding} (${e.key})',
+                                        e.value.remaining,
+                                        Theme.of(context).colorScheme.error,
+                                        symbol: sym,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ),
+                      ),
+                  ],
+                );
+              }(),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 child: Row(

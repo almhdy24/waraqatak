@@ -46,7 +46,6 @@ class AccountingScreen extends StatefulWidget {
 class _AccountingScreenState extends State<AccountingScreen> {
   late DateRangeFilter _range =
       widget.initialRange ?? DateRangeFilter.thisMonth();
-  String? _currency;
   LedgerBook? _book;
   bool _failed = false;
 
@@ -59,7 +58,7 @@ class _AccountingScreenState extends State<AccountingScreen> {
   Future<void> _load() async {
     setState(() => _failed = false);
     try {
-      final book = await LedgerService.load(currencyCode: _currency);
+      final book = await LedgerService.load();
       if (!mounted) return;
       setState(() => _book = book);
     } catch (_) {
@@ -116,23 +115,33 @@ class _AccountingScreenState extends State<AccountingScreen> {
         if (book.currencies.length > 1)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-            child: Row(
-              children: [
-                Text(l10n.currency),
-                const SizedBox(width: 12),
-                DropdownButton<String>(
-                  value: book.currencyCode,
-                  items: [
-                    for (final c in book.currencies)
-                      DropdownMenuItem(value: c, child: Text(c)),
-                  ],
-                  onChanged: (c) {
-                    if (c == null || c == book.currencyCode) return;
-                    _currency = c;
-                    _load();
-                  },
-                ),
-              ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.langCode == 'ar'
+                          ? 'دفتر الحسابات يعرض العملة الأساسية (${book.currencyCode}). الوثائق القديمة بعملات أخرى مستبعدة.'
+                          : 'Ledger shows base currency (${book.currencyCode}). Legacy foreign currency documents are excluded.',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         Expanded(

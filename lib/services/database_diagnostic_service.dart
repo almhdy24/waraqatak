@@ -555,6 +555,61 @@ class DatabaseDiagnosticService {
       );
     }
 
+    // 3.4 Legacy foreign currency documents
+    checks++;
+    final hasBusinesses =
+        Sqflite.firstIntValue(
+          await db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='businesses'"),
+        ) ==
+        1;
+    final hasDocuments =
+        Sqflite.firstIntValue(
+          await db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='documents'"),
+        ) ==
+        1;
+    if (hasBusinesses && hasDocuments) {
+      final docCols = await db.rawQuery("PRAGMA table_info('documents')");
+      final hasDocCurrency = docCols.any((c) => c['name'] == 'currency_code');
+      if (hasDocCurrency) {
+        final bizRows = await db.rawQuery('SELECT currency_code FROM businesses LIMIT 1');
+        final baseCurrency = (bizRows.isNotEmpty ? (bizRows.first['currency_code'] as String?)?.trim() : null) ?? 'SDG';
+        final resolvedBase = baseCurrency.isNotEmpty ? baseCurrency : 'SDG';
+        final foreignDocs = await db.rawQuery('''
+          SELECT id, document_number, currency_code, total
+          FROM documents
+          WHERE currency_code IS NOT NULL
+            AND TRIM(currency_code) != ''
+            AND TRIM(currency_code) != ?
+        ''', [resolvedBase]);
+        if (foreignDocs.isNotEmpty) {
+          final ids = foreignDocs.map((r) => r['id'] as int).toList();
+          final foreignCurrencies = foreignDocs
+              .map((r) => ((r['currency_code'] as String?) ?? '').trim())
+              .where((c) => c.isNotEmpty)
+              .toSet()
+              .toList();
+          findings.add(
+            DiagnosticFinding(
+              code: 'legacy_foreign_currency_documents',
+              category: DiagnosticCategory.documentStatusMismatch,
+              severity: DiagnosticSeverity.info,
+              entityType: 'documents',
+              affectedIds: ids,
+              title: 'Legacy documents stored in non-base currencies',
+              explanation:
+                  'Found ${ids.length} document(s) recorded in foreign currencies ($foreignCurrencies) different from active business base currency ($resolvedBase). These records remain preserved as historical snapshots and are segregated from base-currency totals.',
+              requiresManualReview: true,
+              metadata: {
+                'baseCurrency': resolvedBase,
+                'foreignCurrencies': foreignCurrencies,
+                'count': ids.length,
+              },
+            ),
+          );
+        }
+      }
+    }
+
     return checks;
   }
 

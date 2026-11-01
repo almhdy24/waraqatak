@@ -84,11 +84,7 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
         fallbackCurrency: fallback,
       );
 
-      if (!_availableCurrencies.contains(_selectedCurrency)) {
-        _selectedCurrency = _availableCurrencies.isNotEmpty
-            ? _availableCurrencies.first
-            : fallback;
-      }
+      _selectedCurrency = fallback;
 
       _computeStatement();
     } catch (e) {
@@ -309,41 +305,35 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
               ),
               const SizedBox(height: 12),
 
-              // Currency Selector (if multiple exist)
+              // Legacy currency notice (if multiple exist)
               if (_availableCurrencies.length > 1) ...[
-                Row(
-                  children: [
-                    Text(
-                      '${l10n.selectCurrency}:',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    DropdownButton<String>(
-                      value: _selectedCurrency,
-                      isDense: true,
-                      items: _availableCurrencies
-                          .map(
-                            (c) => DropdownMenuItem(
-                              value: c,
-                              child: Text(
-                                '$c (${CustomerStatement.symbolFor(c)})',
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _selectedCurrency = val;
-                            _computeStatement();
-                          });
-                        }
-                      },
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.langCode == 'ar'
+                              ? 'كشف الحساب يعرض العملة الأساسية ($_selectedCurrency). الوثائق القديمة بعملات أخرى مستبعدة.'
+                              : 'Statement shows base currency ($_selectedCurrency). Legacy foreign currency documents are excluded.',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 10),
               ],

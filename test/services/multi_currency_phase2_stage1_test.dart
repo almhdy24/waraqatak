@@ -200,13 +200,17 @@ void main() {
       // Part B: Unfiltered call with multiple currencies
       final unfilteredSummary = await db.getPeriodSummary(from: from, to: to);
       expect(unfilteredSummary['hasMultipleCurrencies'], isTrue);
-      // Scalar fields MUST NOT combine 100,000 SDG with 500 USD nominally!
-      expect(unfilteredSummary['sales'], 0.0);
-      expect(unfilteredSummary['purchases'], 0.0);
-      expect(unfilteredSummary['paymentsIn'], 0.0);
-      expect(unfilteredSummary['paymentsOut'], 0.0);
-      expect(unfilteredSummary['customerOutstanding'], 0.0);
-      expect(unfilteredSummary['supplierPayable'], 0.0);
+      // Under single base currency, scalar fields reflect the base currency (SDG)
+      // and MUST NOT nominally add foreign currencies (100,000 SDG + 500 USD)!
+      expect(unfilteredSummary['sales'], 100000.0);
+      expect(unfilteredSummary['sales'], isNot(equals(100500.0)));
+      expect(unfilteredSummary['purchases'], 40000.0);
+      expect(unfilteredSummary['purchases'], isNot(equals(40200.0)));
+      expect(unfilteredSummary['paymentsIn'], 60000.0);
+      expect(unfilteredSummary['paymentsIn'], isNot(equals(60300.0)));
+      expect(unfilteredSummary['paymentsOut'], 30000.0);
+      expect(unfilteredSummary['customerOutstanding'], 40000.0);
+      expect(unfilteredSummary['supplierPayable'], 10000.0);
     });
   });
 
@@ -464,9 +468,11 @@ void main() {
         to: to,
       );
       expect(allSummary.hasMultipleCurrencies, isTrue);
-      // Scalars MUST NOT nominally sum 300 SDG + 110 USD into 410!
-      expect(allSummary.totalSalesRevenue, 0.0);
-      expect(allSummary.totalCogs, 0.0);
+      // Under single base currency, scalars reflect the base currency (SDG: 300 revenue, 200 cogs)
+      // and MUST NOT nominally add foreign currencies (300 SDG + 110 USD = 410)!
+      expect(allSummary.totalSalesRevenue, 300.0);
+      expect(allSummary.totalSalesRevenue, isNot(equals(410.0)));
+      expect(allSummary.totalCogs, 200.0);
 
       // Verify segregated breakdown in totalsByCurrency
       final sdgTotals = allSummary.totalsByCurrency['SDG']!;
