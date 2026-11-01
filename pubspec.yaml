@@ -48,6 +48,10 @@ dependencies:
   # Secure storage — device ID, trial start, license key
   flutter_secure_storage: ^11.2.0
 
+  # Cryptography — backup encryption (AES-256-GCM + PBKDF2)
+  cryptography: ^2.7.0
+  cryptography_flutter: ^2.3.4
+
   # Elmahdi Pay — subscription & license SDK
   elmahdi_pay_flutter:
     path: packages/elmahdi_pay_flutter
