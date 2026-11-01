@@ -39,5 +39,21 @@ void main() {
       expect(VersionMatcher.isRangeValid(minVersion: null, maxVersion: '1.2.0'), isTrue);
       expect(VersionMatcher.isRangeValid(minVersion: '1.1.0', maxVersion: null), isTrue);
     });
+
+    test('Orders 1.1.5-alpha+15 < 1.1.5-beta+16 correctly', () {
+      final v15 = ParsedVersion.tryParse('1.1.5-alpha+15')!;
+      final v16 = ParsedVersion.tryParse('1.1.5-beta+16')!;
+      expect(v15.compareTo(v16, compareBuild: true), lessThan(0));
+      expect(v16.compareTo(v15, compareBuild: true), greaterThan(0));
+
+      expect(
+        VersionMatcher.matches(appVersion: '1.1.5-alpha+15', minVersion: '1.1.5+16'),
+        isFalse,
+      );
+      expect(
+        VersionMatcher.matches(appVersion: '1.1.5-beta+16', minVersion: '1.1.5+16'),
+        isTrue,
+      );
+    });
   });
 }
