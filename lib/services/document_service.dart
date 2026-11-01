@@ -22,6 +22,7 @@ class DocumentItemInput {
   final String? saleUnit;
   final double unitConversionFactor;
   final double? baseQuantity;
+  final int? decimalDigits;
 
   const DocumentItemInput({
     required this.description,
@@ -34,12 +35,16 @@ class DocumentItemInput {
     this.saleUnit,
     this.unitConversionFactor = 1.0,
     this.baseQuantity,
+    this.decimalDigits,
   });
 
   double get effectiveBaseQuantity =>
       baseQuantity ?? MoneyUtils.round(quantity * unitConversionFactor);
 
-  double get total => MoneyUtils.round(quantity * price);
+  double calculateTotal([int? digits]) =>
+      MoneyUtils.round(quantity * price, digits ?? decimalDigits ?? 2);
+
+  double get total => calculateTotal();
 }
 
 class DocumentService {

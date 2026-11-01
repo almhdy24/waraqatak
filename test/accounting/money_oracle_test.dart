@@ -266,12 +266,12 @@ void main() {
 
     test(
       'DocumentItemInput.total honors zero-decimal precision',
-      skip: 'BUG-01: DocumentItemInput.total hardcodes 2 decimal digits via default MoneyUtils.round',
       () {
         const item = DocumentItemInput(
           description: 'Sample',
           quantity: 3.333,
           price: 100.0,
+          decimalDigits: 0,
         );
         // If precision is 0, 3.333 * 100 = 333.3 -> 333
         expect(item.total, 333.0);

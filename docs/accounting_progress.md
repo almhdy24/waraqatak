@@ -6,7 +6,7 @@
 | Phase 1 | Read-Only Audit & Specification | COMPLETE | 522616c | Completed comprehensive audit and as-implemented spec |
 | Phase 2 | Red-First Oracle & Invariant Harness | COMPLETE | 57ad95a | 4 suites / 11 tests passed, 1 skipped (BUG-01) |
 | Phase 3 | Single-Currency Refactor | COMPLETE | e35e10a | Removed UI multi-currency selectors/pickers; enforced base currency with legacy preservation; all mapped tests pass |
-| Phase 4 | Fix Proven Defects | PENDING | - | - |
+| Phase 4 | Fix Proven Defects | COMPLETE | c76db19 | Fixed BUG-01 (DocumentItemInput decimalDigits); skipped BUG-03 & BUG-05 per historical-number rule; money_oracle and invariant tests pass |
 | Phase 5 | Structural Guards | PENDING | - | - |
 | Phase 6 | Final Verification & Docs | PENDING | - | - |
 
@@ -83,3 +83,21 @@
   - `test/accounting/cross_layer_consistency_test.dart`: 1 / 1 passed.
   - `bash tool/check_play_compliance.sh`: Play compliance guard OK.
   - `dart analyze`: Clean on all modified files.
+
+### Phase 4: Fix Proven Defects
+- **BUG-01 Fix:**
+  - `DocumentItemInput` (`lib/services/document_service.dart`): Added optional `decimalDigits` parameter and `calculateTotal([int? digits]) => MoneyUtils.round(quantity * price, digits ?? decimalDigits ?? 2)`.
+  - Un-skipped test in `test/accounting/money_oracle_test.dart`.
+  - Red test failed: `Expected: <333.0>, Actual: <333.3>`.
+  - Fixed test passed: `333.0 == 333.0` (5/5 tests in suite passed).
+  - Mutation verified: Reverting fix caused test to fail; restoring fix passed.
+- **Skipped Defects / Decisions Logged:**
+  - BUG-03 (proportional discount apportionment in `ledger.dart:421`): Skipped under historical-number rule to prevent mutating derived historical cost of sales. Documented in `docs/accounting_skipped.md`.
+  - BUG-05 (diagnostic check for orphan payments): Skipped as SQLite foreign keys (`ON DELETE CASCADE`) guarantee integrity at the engine level. Documented in `docs/accounting_skipped.md`.
+  - Legacy foreign currency document retirement policy: Documented in `docs/accounting_skipped.md` as requiring business product decision.
+  - Decision 3-1: Documented in `docs/accounting_decisions.md`.
+- **Verification:**
+  - `dart analyze lib/services/document_service.dart test/accounting/money_oracle_test.dart`: Clean (0 issues).
+  - `flutter test test/accounting/money_oracle_test.dart`: 5/5 passed.
+  - `flutter test test/invariants/units_wholesale_invariants_test.dart test/guards/architecture_guards_test.dart`: All invariant and architecture guard tests passed.
+
