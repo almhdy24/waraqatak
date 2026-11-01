@@ -10,6 +10,7 @@ import '../models/product.dart';
 import '../services/database_diagnostic_service.dart';
 import '../services/database_repair_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
@@ -456,10 +457,386 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                 ),
               ),
             ),
+            if (issue.finding.code == 'document_movement_mismatch' ||
+                issue.finding.code == 'ledger_movement_inventory_mismatch') ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  key: const Key('repairMovementActionButton'),
+                  icon: const Icon(Icons.auto_fix_high),
+                  label: Text(l10n.repairMovementAction),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _openPurchaseMovementRepairPreview(issue);
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _openPurchaseMovementRepairPreview(RepairableIssue issue) async {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final db = await _resolveDb();
+
+    // 1. Resolve documentId and productId
+    int? docId;
+    int? prodId;
+
+    final mismatches = issue.finding.metadata?['mismatches'] as List?;
+    if (mismatches != null && mismatches.isNotEmpty) {
+      final first = mismatches.first as Map<String, dynamic>;
+      docId = first['document_id'] as int?;
+      prodId = first['product_id'] as int?;
+    }
+
+    if (docId == null || prodId == null) {
+      if (issue.finding.code == 'document_movement_mismatch' &&
+          issue.affectedIds.isNotEmpty) {
+        docId = issue.affectedIds.first;
+        final items = await db.query(
+          'document_items',
+          columns: ['product_id'],
+          where: 'document_id = ? AND product_id IS NOT NULL',
+          whereArgs: [docId],
+          limit: 1,
+        );
+        if (items.isNotEmpty) {
+          prodId = items.first['product_id'] as int?;
+        }
+      } else if (issue.finding.code == 'ledger_movement_inventory_mismatch' &&
+          issue.affectedIds.isNotEmpty) {
+        prodId = issue.affectedIds.first;
+        final docs = await db.rawQuery('''
+          SELECT di.document_id
+          FROM document_items di
+          JOIN documents d ON di.document_id = d.id
+          WHERE di.product_id = ? AND d.type = 'purchase'
+          ORDER BY d.id DESC LIMIT 1
+        ''', [prodId]);
+        if (docs.isNotEmpty) {
+          docId = docs.first['document_id'] as int?;
+        }
+      }
+    }
+
+    if (docId == null || prodId == null) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.repairFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+      return;
+    }
+
+    // Default option is B (neutralize duplicate & adjustment, no P&L loss)
+    var chosenOption = PurchaseRepairOption.optionB;
+
+    MovementRepairPreview preview;
+    try {
+      preview = await DatabaseRepairService.previewPurchaseMovementRepair(
+        db: db,
+        documentId: docId,
+        productId: prodId,
+        option: chosenOption,
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Show preview dialog with Option A and Option B selection
+    final shouldProceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.preview_outlined, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.repairMovementPreviewTitle,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${l10n.documents}: #${preview.documentNumber}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      preview.productName,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          l10n.repairExpectedMovement,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          '${preview.expectedMovement}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          l10n.repairActualMovement,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          '${preview.actualMovement}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          l10n.repairSurplusMovement,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          '${preview.surplusMovement}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: cs.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Text(
+                      l10n.repairPlannedChange,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: cs.primary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // ignore: deprecated_member_use
+                    RadioListTile<PurchaseRepairOption>(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        l10n.repairOptionNeutralize,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: PurchaseRepairOption.optionB,
+                      // ignore: deprecated_member_use
+                      groupValue: chosenOption,
+                      // ignore: deprecated_member_use
+                      onChanged: (val) async {
+                        if (val == null) return;
+                        final updated =
+                            await DatabaseRepairService
+                                .previewPurchaseMovementRepair(
+                          db: db,
+                          documentId: docId!,
+                          productId: prodId!,
+                          option: val,
+                        );
+                        setDialogState(() {
+                          chosenOption = val;
+                          preview = updated;
+                        });
+                      },
+                    ),
+                    // ignore: deprecated_member_use
+                    RadioListTile<PurchaseRepairOption>(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        l10n.repairOptionCompensate,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      value: PurchaseRepairOption.optionA,
+                      // ignore: deprecated_member_use
+                      groupValue: chosenOption,
+                      // ignore: deprecated_member_use
+                      onChanged: (val) async {
+                        if (val == null) return;
+                        final updated =
+                            await DatabaseRepairService
+                                .previewPurchaseMovementRepair(
+                          db: db,
+                          documentId: docId!,
+                          productId: prodId!,
+                          option: val,
+                        );
+                        setDialogState(() {
+                          chosenOption = val;
+                          preview = updated;
+                        });
+                      },
+                    ),
+                    const Divider(height: 16),
+                    Text(
+                      '${l10n.repairAffectedMovementsCount} (${preview.affectedMovements.length})',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    ...preview.affectedMovements.map(
+                      (m) => Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'ID #${m['id']} • ${m['type']}',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                            Text(
+                              '${m['quantity']}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  key: const Key('repairPreviewCancelButton'),
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(80, 48),
+                  ),
+                  child: Text(l10n.cancel),
+                ),
+                FilledButton(
+                  key: const Key('repairPreviewProceedButton'),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(88, 48),
+                  ),
+                  child: Text(l10n.confirm),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldProceed != true || !mounted) return;
+
+    // Show AppConfirmDialog for user confirmation
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.repairConfirmTitle,
+      message: l10n.repairConfirmMovementBody,
+      confirmLabel: l10n.confirm,
+      cancelLabel: l10n.cancel,
+    );
+
+    if (!confirmed || !mounted) return;
+
+    // Execute repair with confirmation token
+    setState(() => _isRepairing = true);
+    try {
+      final result =
+          await DatabaseRepairService.executePurchaseMovementRepair(
+        db: db,
+        preview: preview,
+        confirmationToken: preview.confirmationToken,
+        createSafetyBackup: true,
+        l10n: l10n,
+      );
+
+      if (!mounted) return;
+
+      if (result.success) {
+        AppSnackBar.show(
+          context,
+          '${l10n.repairSuccess}${result.safetyBackupPath != null ? "\n${l10n.repairSafetyBackupCreated}${result.safetyBackupPath}" : ""}',
+          severity: AppSnackBarSeverity.success,
+        );
+      } else {
+        AppSnackBar.show(
+          context,
+          result.message,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+
+      await _runDiagnostics();
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+        severity: AppSnackBarSeverity.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isRepairing = false);
+    }
   }
 
   String _categoryLabel(DiagnosticCategory cat, AppLocalizations l10n) {
