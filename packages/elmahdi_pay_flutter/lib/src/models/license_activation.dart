@@ -72,11 +72,13 @@ class ActivateLicenseResult {
   final String? activationToken;
   final String? token;
   final LicenseData? license;
+  final String? correlationId;
 
   const ActivateLicenseResult({
     this.activationToken,
     this.token,
     this.license,
+    this.correlationId,
   });
 
   /// The active token returned by the server, whether under `token` or `activation_token`.
@@ -91,11 +93,14 @@ class ActivateLicenseResult {
     final licMap = data['license'] is Map<String, dynamic>
         ? data['license'] as Map<String, dynamic>
         : null;
+    final corrId = json['correlation_id']?.toString() ??
+        data['correlation_id']?.toString();
 
     return ActivateLicenseResult(
       activationToken: actToken ?? tok,
       token: tok,
       license: licMap != null ? LicenseData.fromJson(licMap) : null,
+      correlationId: corrId,
     );
   }
 }

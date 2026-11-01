@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import 'activation_screen.dart';
 import 'transparency_screen.dart';
 import '../widgets/responsive.dart';
+import '../widgets/support_guidance_card.dart';
 
 /// Neutral locked screen shown when a Pro feature is accessed without an
 /// active trial or valid activation. Contains only approved copy — no
@@ -104,6 +105,8 @@ class LockedFeatureScreen extends StatelessWidget {
                 icon: const Icon(Icons.info_outline, size: 18),
                 label: Text(l10n.seeFreeVsPro),
               ),
+              const SizedBox(height: 12),
+              const SupportGuidanceCard(compact: true),
               const SizedBox(height: 16),
             ],
           ),

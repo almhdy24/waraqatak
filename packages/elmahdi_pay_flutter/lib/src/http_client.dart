@@ -93,8 +93,13 @@ class HttpClient {
 
   Map<String, dynamic> _handleResponse(http.Response response) {
     final body = _parseBody(response);
+    final correlationId = body['correlation_id'] as String? ??
+        response.headers['x-correlation-id'];
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (correlationId != null && !body.containsKey('correlation_id')) {
+        body['correlation_id'] = correlationId;
+      }
       return body;
     }
 
@@ -108,26 +113,42 @@ class HttpClient {
           message: message,
           errorCode: body['error'] as String?,
           rawBody: body,
+          correlationId: correlationId,
         );
       case 403:
         throw ElmahdiPayForbiddenException(
           message: message,
           maxDevices: body['max_devices'] as int?,
           activeDevices: body['active'] as int?,
+          correlationId: correlationId,
         );
       case 404:
-        throw ElmahdiPayNotFoundException(message: message);
+        throw ElmahdiPayNotFoundException(
+          message: message,
+          correlationId: correlationId,
+        );
       case 409:
-        throw ElmahdiPayAlreadyActivatedException(message: message);
+        throw ElmahdiPayAlreadyActivatedException(
+          message: message,
+          correlationId: correlationId,
+        );
       case 422:
-        throw ElmahdiPayValidationException(message: message, errors: errors);
+        throw ElmahdiPayValidationException(
+          message: message,
+          errors: errors,
+          correlationId: correlationId,
+        );
       case 429:
-        throw ElmahdiPayRateLimitException(message: message);
+        throw ElmahdiPayRateLimitException(
+          message: message,
+          correlationId: correlationId,
+        );
       default:
         throw ElmahdiPayApiException(
           statusCode: response.statusCode,
           message: message,
           errors: errors,
+          correlationId: correlationId,
         );
     }
   }

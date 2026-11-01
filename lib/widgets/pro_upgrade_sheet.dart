@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
 import '../services/feature_access.dart';
+import 'support_guidance_card.dart';
 
 class ProBadge extends StatelessWidget {
   const ProBadge({super.key});
@@ -143,6 +144,8 @@ class ProUpgradeSheet extends StatelessWidget {
               child: Text(l10n.cancel,
                   style: TextStyle(color: Colors.grey.shade600)),
             ),
+            const SizedBox(height: 12),
+            const SupportGuidanceCard(compact: true),
           ],
         ),
       ),

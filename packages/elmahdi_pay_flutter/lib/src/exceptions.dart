@@ -14,11 +14,13 @@ class ElmahdiPayNetworkException extends ElmahdiPayException {
 class ElmahdiPayApiException extends ElmahdiPayException {
   final int statusCode;
   final Map<String, dynamic>? errors;
+  final String? correlationId;
 
   const ElmahdiPayApiException({
     required this.statusCode,
     required String message,
     this.errors,
+    this.correlationId,
   }) : super(message);
 }
 
@@ -26,10 +28,14 @@ class ElmahdiPayUnauthorizedException extends ElmahdiPayApiException {
   final String? errorCode;
 
   const ElmahdiPayUnauthorizedException({
-    String message = 'Unauthorized',
+    super.message = 'Unauthorized',
     this.errorCode,
     Map<String, dynamic>? rawBody,
-  }) : super(statusCode: 401, message: message, errors: rawBody);
+    super.correlationId,
+  }) : super(
+          statusCode: 401,
+          errors: rawBody,
+        );
 }
 
 /// Thrown for 403 responses — license revoked, expired, or device limit reached.
@@ -40,33 +46,49 @@ class ElmahdiPayForbiddenException extends ElmahdiPayApiException {
   final int? activeDevices;
 
   const ElmahdiPayForbiddenException({
-    required String message,
+    required super.message,
     this.maxDevices,
     this.activeDevices,
-  }) : super(statusCode: 403, message: message);
+    super.correlationId,
+  }) : super(
+          statusCode: 403,
+        );
 }
 
 class ElmahdiPayNotFoundException extends ElmahdiPayApiException {
-  const ElmahdiPayNotFoundException({String message = 'Not found'})
-      : super(statusCode: 404, message: message);
+  const ElmahdiPayNotFoundException({
+    super.message = 'Not found',
+    super.correlationId,
+  }) : super(
+          statusCode: 404,
+        );
 }
 
 class ElmahdiPayValidationException extends ElmahdiPayApiException {
   const ElmahdiPayValidationException({
-    required String message,
-    Map<String, dynamic>? errors,
-  }) : super(statusCode: 422, message: message, errors: errors);
+    required super.message,
+    super.errors,
+    super.correlationId,
+  }) : super(
+          statusCode: 422,
+        );
 }
 
 /// Thrown for 409 responses — license already activated on another device.
 class ElmahdiPayAlreadyActivatedException extends ElmahdiPayApiException {
   const ElmahdiPayAlreadyActivatedException({
-    String message = 'License already activated on another device',
-  }) : super(statusCode: 409, message: message);
+    super.message = 'License already activated on another device',
+    super.correlationId,
+  }) : super(
+          statusCode: 409,
+        );
 }
 
 class ElmahdiPayRateLimitException extends ElmahdiPayApiException {
   const ElmahdiPayRateLimitException({
-    String message = 'Rate limit exceeded — try again later',
-  }) : super(statusCode: 429, message: message);
+    super.message = 'Rate limit exceeded — try again later',
+    super.correlationId,
+  }) : super(
+          statusCode: 429,
+        );
 }

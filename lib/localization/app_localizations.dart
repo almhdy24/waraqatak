@@ -956,6 +956,16 @@ class AppLocalizations {
   String get copyDeviceId => _t('نسخ معرّف الجهاز', 'Copy device identifier');
   String get deviceIdCopied =>
       _t('تم نسخ معرّف الجهاز إلى الحافظة', 'Device identifier copied to clipboard');
+  String get supportFromAboutPage => _t(
+    'إذا استمرت المشكلة، يمكنك طلب الدعم الفني من صفحة "حول التطبيق".',
+    'If the problem continues, contact support from the About page.',
+  );
+  String get openAboutPage => _t('صفحة حول التطبيق', 'About page');
+  String get copySupportInfo => _t('نسخ معلومات الدعم الفني', 'Copy support info');
+  String get supportInfoCopied =>
+      _t('تم نسخ معلومات الدعم الفني للحافظة', 'Support info copied to clipboard');
+  String referenceIdLabel(String id) => _t('الرقم المرجعي: $id', 'Reference ID: $id');
+  String get copiedToClipboard => _t('تم النسخ للحافظة', 'Copied to clipboard');
   String get transferNoticeTitle => _t('نقل الترخيص إلى جهاز آخر', 'License Transfer');
   String get transferNoticeBody => _t(
     'لترخيص جهاز جديد، يرجى إزالة المفتاح من هذا الجهاز أولاً عبر الزر أدناه لتتمكن من تفعيله على جهازك الآخر.',
