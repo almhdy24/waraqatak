@@ -129,6 +129,7 @@ class AppLocalizations {
   String get bankTransfer => _t('تحويل بنكي', 'Bank Transfer');
   String get bankak => _t('بنكك', 'Bankak');
   String get okash => _t('أوكاش', 'O-Cash');
+  String get cheque => _t('شيك', 'Cheque');
 
   // New payment methods
   String get mada => _t('مدى', 'Mada');

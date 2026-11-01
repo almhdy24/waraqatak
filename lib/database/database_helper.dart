@@ -28,7 +28,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 23;
+  static const int dbVersion = 24;
 
   static Database? _database;
 
@@ -55,91 +55,162 @@ class DatabaseHelper {
       'label_en': 'Cash',
       'is_enabled': 1,
       'is_default': 1,
-      'sort_order': 0,
-      'is_predefined': 1,
-    },
-    {
-      'key': 'bank',
-      'label_ar': 'تحويل بنكي',
-      'label_en': 'Bank Transfer',
-      'is_enabled': 1,
-      'is_default': 0,
       'sort_order': 1,
-      'is_predefined': 1,
-    },
-    {
-      'key': 'card',
-      'label_ar': 'بطاقة ائتمان',
-      'label_en': 'Credit/Debit Card',
-      'is_enabled': 0,
-      'is_default': 0,
-      'sort_order': 2,
-      'is_predefined': 1,
-    },
-    {
-      'key': 'mobile',
-      'label_ar': 'محفظة جوّال',
-      'label_en': 'Mobile Wallet',
-      'is_enabled': 0,
-      'is_default': 0,
-      'sort_order': 3,
       'is_predefined': 1,
     },
     {
       'key': 'bankak',
       'label_ar': 'بنكك',
       'label_en': 'Bankak',
-      'is_enabled': 0,
+      'is_enabled': 1,
       'is_default': 0,
-      'sort_order': 4,
-      'is_predefined': 1,
-    },
-    {
-      'key': 'okash',
-      'label_ar': 'أوكاش',
-      'label_en': 'oCash',
-      'is_enabled': 0,
-      'is_default': 0,
-      'sort_order': 5,
-      'is_predefined': 1,
-    },
-    {
-      'key': 'mada',
-      'label_ar': 'مدى',
-      'label_en': 'Mada',
-      'is_enabled': 0,
-      'is_default': 0,
-      'sort_order': 6,
+      'sort_order': 2,
       'is_predefined': 1,
     },
     {
       'key': 'fawry',
       'label_ar': 'فوري',
       'label_en': 'Fawry',
-      'is_enabled': 0,
+      'is_enabled': 1,
       'is_default': 0,
-      'sort_order': 7,
+      'sort_order': 3,
       'is_predefined': 1,
     },
     {
-      'key': 'paypal',
-      'label_ar': 'باي بال',
-      'label_en': 'PayPal',
-      'is_enabled': 0,
+      'key': 'okash',
+      'label_ar': 'أوكاش',
+      'label_en': 'O-Cash',
+      'is_enabled': 1,
       'is_default': 0,
-      'sort_order': 8,
+      'sort_order': 4,
+      'is_predefined': 1,
+    },
+    {
+      'key': 'bank',
+      'label_ar': 'تحويل بنكي',
+      'label_en': 'Bank transfer',
+      'is_enabled': 1,
+      'is_default': 0,
+      'sort_order': 5,
+      'is_predefined': 1,
+    },
+    {
+      'key': 'cheque',
+      'label_ar': 'شيك',
+      'label_en': 'Cheque',
+      'is_enabled': 1,
+      'is_default': 0,
+      'sort_order': 6,
       'is_predefined': 1,
     },
   ];
 
-  static Future<void> _seedPaymentMethods(DatabaseExecutor db) async {
-    for (final seed in _paymentMethodSeeds) {
-      await db.insert(
-        'payment_methods',
-        seed,
-        conflictAlgorithm: ConflictAlgorithm.ignore,
+  static Future<bool> _isPaymentMethodReferenced(
+    DatabaseExecutor db,
+    String key,
+  ) async {
+    try {
+      final d = await db.rawQuery(
+        'SELECT 1 FROM documents WHERE payment_method = ? LIMIT 1',
+        [key],
       );
+      if (d.isNotEmpty) return true;
+    } catch (_) {}
+    try {
+      final dp = await db.rawQuery(
+        'SELECT 1 FROM document_payments WHERE payment_method = ? LIMIT 1',
+        [key],
+      );
+      if (dp.isNotEmpty) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  /// Seeds or replaces the default payment methods:
+  /// 1. Cash (نقداً) - selected by default (sort_order: 1)
+  /// 2. Bankak (بنكك) - (sort_order: 2)
+  /// 3. Fawry (فوري) - (sort_order: 3)
+  /// 4. O-Cash (أوكاش) - (sort_order: 4)
+  /// 5. Bank transfer (تحويل بنكي) - (sort_order: 5)
+  /// 6. Cheque (شيك) - (sort_order: 6)
+  ///
+  /// Removes legacy seeded payment methods (deactivating them if referenced by existing records).
+  /// Leaves user-added custom payment methods (is_predefined = 0) untouched.
+  /// Runs idempotently without duplicate records on repeated invocations.
+  static Future<void> replaceDefaultPaymentMethods(DatabaseExecutor db) async {
+    const newKeys = {'cash', 'bankak', 'fawry', 'okash', 'bank', 'cheque'};
+
+    // 1. Identify existing predefined payment methods
+    final existingPredefined = await db.query(
+      'payment_methods',
+      where: 'is_predefined = 1',
+    );
+
+    for (final row in existingPredefined) {
+      final key = row['key'] as String;
+      if (!newKeys.contains(key)) {
+        final inUse = await _isPaymentMethodReferenced(db, key);
+        if (inUse) {
+          // Deactivate/hide so old records and reports don't break
+          await db.update(
+            'payment_methods',
+            {
+              'is_enabled': 0,
+              'is_default': 0,
+              'sort_order': 900 + (row['sort_order'] as int? ?? 0),
+            },
+            where: 'key = ?',
+            whereArgs: [key],
+          );
+        } else {
+          // Unused legacy predefined method: remove
+          await db.delete(
+            'payment_methods',
+            where: 'key = ?',
+            whereArgs: [key],
+          );
+        }
+      }
     }
+
+    // 2. Clear default flag on existing predefined methods
+    await db.update(
+      'payment_methods',
+      {'is_default': 0},
+      where: 'is_predefined = 1',
+    );
+
+    // 3. Seed / upsert the 6 new defaults in exact order (sort_order 1 to 6)
+    for (final seed in _paymentMethodSeeds) {
+      final existing = await db.query(
+        'payment_methods',
+        where: 'key = ?',
+        whereArgs: [seed['key']],
+        limit: 1,
+      );
+
+      if (existing.isEmpty) {
+        await db.insert('payment_methods', seed);
+      } else {
+        await db.update(
+          'payment_methods',
+          {
+            'label_ar': seed['label_ar'],
+            'label_en': seed['label_en'],
+            'is_enabled': seed['is_enabled'],
+            'is_default': seed['is_default'],
+            'sort_order': seed['sort_order'],
+            'is_predefined': 1,
+          },
+          where: 'key = ?',
+          whereArgs: [seed['key']],
+        );
+      }
+    }
+  }
+
+  static Future<void> _seedPaymentMethods(DatabaseExecutor db) async {
+    await replaceDefaultPaymentMethods(db);
   }
 
   Future<void> _createTables(Database db, int version) async {
@@ -1123,6 +1194,10 @@ class DatabaseHelper {
             base_quantity = quantity
         WHERE unit_conversion_factor IS NULL OR base_quantity IS NULL
       ''');
+    }
+
+    if (oldVersion < 24 && newVersion >= 24) {
+      await replaceDefaultPaymentMethods(db);
     }
   }
 

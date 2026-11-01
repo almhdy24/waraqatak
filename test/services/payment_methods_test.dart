@@ -9,8 +9,14 @@ void main() {
     });
 
     test('predefined keys are not custom', () {
-      const predefined = ['cash', 'bank', 'card', 'mobile', 'bankak',
-        'okash', 'mada', 'fawry', 'paypal'];
+      const predefined = [
+        'cash',
+        'bankak',
+        'fawry',
+        'okash',
+        'bank',
+        'cheque',
+      ];
       for (final k in predefined) {
         expect(k.startsWith('custom_'), isFalse);
       }

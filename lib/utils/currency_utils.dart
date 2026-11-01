@@ -3,7 +3,7 @@ import '../localization/app_localizations.dart';
 
 class CurrencyUtils {
   static const List<String> allMethods = [
-    'cash', 'bank', 'card', 'mobile', 'bankak', 'okash', 'mada', 'fawry', 'paypal',
+    'cash', 'bankak', 'fawry', 'okash', 'bank', 'cheque',
   ];
 
   static String getPaymentMethodLabel(
@@ -14,13 +14,14 @@ class CurrencyUtils {
   }) {
     switch (method) {
       case 'cash':   return l10n.cash;
-      case 'bank':   return l10n.bankTransfer;
       case 'bankak': return l10n.bankak;
+      case 'fawry':  return l10n.fawry;
       case 'okash':  return l10n.okash;
+      case 'bank':   return l10n.bankTransfer;
+      case 'cheque': return l10n.cheque;
       case 'mada':   return l10n.mada;
       case 'card':   return l10n.creditCard;
       case 'mobile': return l10n.mobileWallet;
-      case 'fawry':  return l10n.fawry;
       case 'paypal': return l10n.paypal;
       default:
         if (l10n.langCode == 'ar' && customLabelAr != null) return customLabelAr;
