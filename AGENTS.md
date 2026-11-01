@@ -118,3 +118,11 @@ For every task:
 
 Read `docs/architecture.md` when architectural context is needed.
 Read `docs/development.md` when development workflow details are needed.
+
+## Hard Invariants (Units, Wholesale Pricing & Inventory)
+
+Any changes touching sales, stock, pricing, or units code must preserve the core invariants INV-1..INV-9 detailed in `docs/invariants_units_wholesale.md`:
+- Authoritative stock availability validation must reside strictly in `DatabaseHelper._assertSaleStockAvailable`.
+- Line-level repricing must route strictly through `DocumentService.resolveLinePrice`.
+- All snapshot fields (`sale_unit`, `unit_conversion_factor`, `base_quantity`, `pricing_category`) must be preserved across create, edit, duplicate, and quotation conversion.
+- `test/invariants/units_wholesale_invariants_test.dart` and `test/guards/architecture_guards_test.dart` MUST pass before committing any changes.

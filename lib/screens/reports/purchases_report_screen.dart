@@ -4,11 +4,15 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/contact.dart';
+import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../models/document_status.dart';
 import '../../services/business_reporting_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_error_state.dart';
+import '../../widgets/app_loading_view.dart';
 import '../../widgets/responsive.dart';
 import '../document_detail_screen.dart';
 import 'report_date_filter.dart';
@@ -110,15 +114,27 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
       summaryCards: [
         PdfReportSummaryCard(
           label: l10n.totalPurchasesAmt,
-          value: _numFmt.format(_summary!.totalPurchases),
+          value: hasMultipleCurrencies
+              ? _summary!.totalsByCurrency.entries
+                  .map((e) => '${_numFmt.format(e.value.purchases)} ${e.key}')
+                  .join(' · ')
+              : _numFmt.format(_summary!.totalPurchases),
         ),
         PdfReportSummaryCard(
           label: l10n.totalPaid,
-          value: _numFmt.format(_summary!.totalPaid),
+          value: hasMultipleCurrencies
+              ? _summary!.totalsByCurrency.entries
+                  .map((e) => '${_numFmt.format(e.value.paid)} ${e.key}')
+                  .join(' · ')
+              : _numFmt.format(_summary!.totalPaid),
         ),
         PdfReportSummaryCard(
           label: l10n.totalOutstanding,
-          value: _numFmt.format(_summary!.totalRemaining),
+          value: hasMultipleCurrencies
+              ? _summary!.totalsByCurrency.entries
+                  .map((e) => '${_numFmt.format(e.value.remaining)} ${e.key}')
+                  .join(' · ')
+              : _numFmt.format(_summary!.totalRemaining),
         ),
       ],
       columns: columns,
@@ -128,9 +144,21 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
         '',
         '',
         '',
-        _numFmt.format(_summary!.totalPurchases),
-        _numFmt.format(_summary!.totalPaid),
-        _numFmt.format(_summary!.totalRemaining),
+        hasMultipleCurrencies
+            ? _summary!.totalsByCurrency.entries
+                .map((e) => '${_numFmt.format(e.value.purchases)} ${e.key}')
+                .join('\n')
+            : _numFmt.format(_summary!.totalPurchases),
+        hasMultipleCurrencies
+            ? _summary!.totalsByCurrency.entries
+                .map((e) => '${_numFmt.format(e.value.paid)} ${e.key}')
+                .join('\n')
+            : _numFmt.format(_summary!.totalPaid),
+        hasMultipleCurrencies
+            ? _summary!.totalsByCurrency.entries
+                .map((e) => '${_numFmt.format(e.value.remaining)} ${e.key}')
+                .join('\n')
+            : _numFmt.format(_summary!.totalRemaining),
       ],
     );
 
@@ -282,18 +310,76 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
 
             // Summary Cards
             if (summary != null && summary.items.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                child: Row(
-                  children: [
-                    _chip(l10n.totalPurchasesAmt, totalPurchases, Colors.orange),
-                    const SizedBox(width: 8),
-                    _chip(l10n.totalPaid, totalPaid, Colors.teal),
-                    const SizedBox(width: 8),
-                    _chip(l10n.totalOutstanding, totalRemaining, Theme.of(context).colorScheme.error),
-                  ],
+              if (summary.currencies.length <= 1)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                  child: Row(
+                    children: [
+                      _chip(
+                        l10n.totalPurchasesAmt,
+                        totalPurchases,
+                        Colors.orange,
+                        symbol: summary.currencies.isNotEmpty
+                            ? Currency.symbolForCode(summary.currencies.first)
+                            : '',
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.totalPaid,
+                        totalPaid,
+                        Colors.teal,
+                        symbol: summary.currencies.isNotEmpty
+                            ? Currency.symbolForCode(summary.currencies.first)
+                            : '',
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.totalOutstanding,
+                        totalRemaining,
+                        Theme.of(context).colorScheme.error,
+                        symbol: summary.currencies.isNotEmpty
+                            ? Currency.symbolForCode(summary.currencies.first)
+                            : '',
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                  child: Column(
+                    children: summary.totalsByCurrency.entries.map((e) {
+                      final sym = Currency.symbolForCode(e.key);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            _chip(
+                              '${l10n.totalPurchasesAmt} (${e.key})',
+                              e.value.purchases,
+                              Colors.orange,
+                              symbol: sym,
+                            ),
+                            const SizedBox(width: 8),
+                            _chip(
+                              '${l10n.totalPaid} (${e.key})',
+                              e.value.paid,
+                              Colors.teal,
+                              symbol: sym,
+                            ),
+                            const SizedBox(width: 8),
+                            _chip(
+                              '${l10n.totalOutstanding} (${e.key})',
+                              e.value.remaining,
+                              Theme.of(context).colorScheme.error,
+                              symbol: sym,
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
-              ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 child: Row(
@@ -323,7 +409,8 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
     );
   }
 
-  Widget _chip(String label, double value, Color color) {
+  Widget _chip(String label, double value, Color color, {String symbol = ''}) {
+    final symStr = symbol.isNotEmpty ? ' $symbol' : '';
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(8),
@@ -334,8 +421,8 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(fontSize: 10, color: color)),
-            Text(_numFmt.format(value),
+            Text(label, style: TextStyle(fontSize: 10, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text('${_numFmt.format(value)}$symStr',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
           ],
         ),
@@ -344,34 +431,19 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const AppLoadingView();
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(l10n.operationFailed),
-            const SizedBox(height: 10),
-            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-          ],
-        ),
+      return AppErrorState(
+        message: l10n.operationFailed,
+        onRetry: _load,
       );
     }
     final items = _summary?.items ?? [];
     if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.shopping_cart_outlined, size: 64, color: Colors.grey.shade300),
-              const SizedBox(height: 12),
-              Text(l10n.noDataForPeriod, textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.grey)),
-            ],
-          ),
-        ),
+      return AppEmptyState(
+        icon: Icons.shopping_cart_outlined,
+        title: l10n.noReportData,
+        description: l10n.noDataForPeriod,
       );
     }
 

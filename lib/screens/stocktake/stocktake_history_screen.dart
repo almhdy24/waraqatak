@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/stocktake.dart';
 import '../../services/stocktake_service.dart';
+import '../../widgets/app_icons.dart';
 import '../../widgets/responsive.dart';
 import 'stocktake_screen.dart';
 
@@ -126,9 +127,7 @@ class _StocktakeHistoryScreenState extends State<StocktakeHistoryScreen> {
                               ],
                             ),
                             trailing: Icon(
-                              l10n.isArabic
-                                  ? Icons.chevron_left
-                                  : Icons.chevron_right,
+                              AppIcons.chevronForward(context),
                               size: 18,
                             ),
                             onTap: () async {

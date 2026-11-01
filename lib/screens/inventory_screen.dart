@@ -596,6 +596,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear, size: 18),
+                        tooltip: MaterialLocalizations.of(context).closeButtonLabel,
                         onPressed: () {
                           _debounceTimer?.cancel();
                           _searchCtrl.clear();

@@ -28,7 +28,7 @@ class ReportDateFilter extends StatelessWidget {
           ...presets.map((p) {
             final selected = range.preset == p.$1;
             return Padding(
-              padding: const EdgeInsets.only(right: 6),
+              padding: const EdgeInsetsDirectional.only(end: 6),
               child: FilterChip(
                 label: Text(p.$2, style: const TextStyle(fontSize: 12)),
                 selected: selected,

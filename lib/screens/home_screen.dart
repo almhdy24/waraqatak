@@ -10,6 +10,9 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_error_state.dart';
+import '../widgets/app_icons.dart';
+import '../widgets/app_loading_view.dart';
 import '../widgets/app_metric_card.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/pro_upgrade_sheet.dart';
@@ -92,9 +95,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     try {
       final db = DatabaseHelper.instance;
+      final business = await db.getFirstBusiness();
       final results = await Future.wait([
-        db.getFirstBusiness(),
-        db.getPeriodSummary(from: _dateRange.from, to: _dateRange.to),
+        Future.value(business),
+        db.getPeriodSummary(
+          from: _dateRange.from,
+          to: _dateRange.to,
+          currencyCode: business?.currencyCode,
+        ),
         db.getRecentDocuments(limit: 5),
       ]);
 
@@ -259,54 +267,73 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: AppLoadingView());
     }
 
     if (_error != null) {
       return Scaffold(
         body: ResponsiveCenter(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(l10n.operationFailed),
-                const SizedBox(height: 12),
-                FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-              ],
-            ),
+          child: AppErrorState(
+            message: l10n.operationFailed,
+            onRetry: _load,
           ),
         ),
       );
     }
 
     if (_business == null) {
+      final theme = Theme.of(context);
       return Scaffold(
         appBar: AppBar(title: Text(l10n.appTitle), centerTitle: true),
         body: ResponsiveCenter(
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.business_center_outlined,
-                    size: 64,
-                    color: Colors.grey,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(l10n.welcomeFirstTime, textAlign: TextAlign.center),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton.icon(
-                      onPressed: () => _openScreen(const BusinessSetupScreen()),
-                      icon: const Icon(Icons.add_business),
-                      label: Text(l10n.setupBusiness),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.add_business_rounded,
+                        size: 44,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    Text(
+                      l10n.appTitle,
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.welcomeFirstTime,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton.icon(
+                        onPressed: () => _openScreen(const BusinessSetupScreen()),
+                        icon: const Icon(Icons.store_rounded),
+                        label: Text(l10n.setupBusiness),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -582,11 +609,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               ),
                             const SizedBox(width: 4),
                             Icon(
-                              l10n.isArabic
-                                  ? Icons.chevron_left
-                                  : Icons.chevron_right,
+                              AppIcons.chevronForward(context),
                               size: 18,
-                              color: Colors.grey,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ],
                         ),

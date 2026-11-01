@@ -1345,4 +1345,702 @@ void main() {
 
     await db.close();
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Finding 4 / Migration v20 Real SQLite Tests
+  // ──────────────────────────────────────────────────────────────────────────
+
+  Future<void> initV19Schema(Database db) async {
+    await db.execute('''
+      CREATE TABLE products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT DEFAULT 'product',
+        stock_quantity REAL DEFAULT 0,
+        average_cost REAL,
+        cost_status TEXT DEFAULT 'unknown'
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        document_number TEXT NOT NULL,
+        date TEXT NOT NULL,
+        subtotal REAL DEFAULT 0,
+        total REAL DEFAULT 0,
+        paid REAL DEFAULT 0,
+        remaining REAL DEFAULT 0,
+        status TEXT DEFAULT 'issued'
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE document_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        product_id INTEGER,
+        quantity REAL NOT NULL,
+        price REAL NOT NULL,
+        total REAL NOT NULL,
+        unit_cost REAL,
+        total_cost REAL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE document_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL,
+        payment_origin TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        reference_document_id INTEGER,
+        date TEXT NOT NULL,
+        unit_cost REAL,
+        total_cost REAL,
+        cost_status TEXT DEFAULT 'unknown',
+        provenance TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id INTEGER,
+        details TEXT,
+        timestamp TEXT NOT NULL
+      )
+    ''');
+  }
+
+  test('21. Real SQLite v14 -> v20 upgrade safely reconstructs history with opening stock and purchase cancellation', () async {
+    final migDbPath = '${tempDir.path}/mig_v14_to_v20_test.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+
+    // v14 products table (no costing columns)
+    await db.execute('''
+      CREATE TABLE products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT DEFAULT 'product',
+        stock_quantity REAL DEFAULT 0,
+        created_at TEXT
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        document_number TEXT NOT NULL,
+        date TEXT NOT NULL,
+        status TEXT DEFAULT 'issued'
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE document_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        product_id INTEGER,
+        quantity REAL NOT NULL,
+        price REAL NOT NULL,
+        total REAL NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        reference_document_id INTEGER,
+        date TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        entity_type TEXT,
+        entity_id INTEGER,
+        details TEXT,
+        timestamp TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE document_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        date TEXT NOT NULL
+      )
+    ''');
+
+    // Product with 15 units remaining:
+    // Opening 10 @ 50 = 500
+    // Purchase 1: 10 @ 100 = 1000
+    // Purchase 2: 10 @ 200 = 2000
+    // Cancel Purchase 2: -10 @ 200 = -2000
+    // Sale: -5
+    // Expected stock = 15, expected avg = (500 + 1000) / 20 = 75.0
+    final pid = await db.insert('products', {
+      'name': 'سلعة v14 إلى v20',
+      'stock_quantity': 15.0,
+    });
+
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'opening',
+      'quantity': 10.0,
+      'date': '2026-01-01',
+    });
+
+    final docP1 = await db.insert('documents', {'type': 'purchase', 'document_number': 'P1', 'date': '2026-01-02'});
+    await db.insert('document_items', {'document_id': docP1, 'product_id': pid, 'quantity': 10.0, 'price': 100.0, 'total': 1000.0});
+    await db.insert('stock_movements', {'product_id': pid, 'type': 'purchase', 'quantity': 10.0, 'reference_document_id': docP1, 'date': '2026-01-02'});
+
+    final docP2 = await db.insert('documents', {'type': 'purchase', 'document_number': 'P2', 'date': '2026-01-03'});
+    await db.insert('document_items', {'document_id': docP2, 'product_id': pid, 'quantity': 10.0, 'price': 200.0, 'total': 2000.0});
+    await db.insert('stock_movements', {'product_id': pid, 'type': 'purchase', 'quantity': 10.0, 'reference_document_id': docP2, 'date': '2026-01-03'});
+
+    // Cancel P2
+    await db.insert('stock_movements', {'product_id': pid, 'type': 'cancellation', 'quantity': -10.0, 'reference_document_id': docP2, 'date': '2026-01-03'});
+
+    // Sale
+    final docS1 = await db.insert('documents', {'type': 'invoice', 'document_number': 'S1', 'date': '2026-01-04'});
+    await db.insert('document_items', {'document_id': docS1, 'product_id': pid, 'quantity': 5.0, 'price': 300.0, 'total': 1500.0});
+    await db.insert('stock_movements', {'product_id': pid, 'type': 'sale', 'quantity': -5.0, 'reference_document_id': docS1, 'date': '2026-01-04'});
+
+    // Upgrade v14 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 14, 20);
+    });
+
+    // Check product average cost
+    // Note: Opening stock in v14 has no price in document_items so it is marked unknown in step 3.
+    // Therefore unknownCount > 0, so cost basis safely remains NULL / unknown without fabricating cost.
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 15.0);
+    expect(prod['cost_status'], Product.costStatusUnknown);
+    expect(prod['average_cost'], isNull);
+
+    await db.close();
+  });
+
+  test('22. Real SQLite v19 -> v20 repair corrects average_cost for product with purchase cancellation', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_purch_cancel.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    // Product had flawed cost 116.6667 because legacy v15 ignored purchase cancellation
+    final pid = await db.insert('products', {
+      'name': 'منتج شراء ملغي',
+      'stock_quantity': 10.0,
+      'average_cost': 116.6667,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    // Purchase 1: 10 @ 50 = 500
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'purchase',
+      'quantity': 10.0,
+      'unit_cost': 50.0,
+      'total_cost': 500.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-01',
+    });
+
+    // Purchase 2: 10 @ 100 = 1000
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'purchase',
+      'quantity': 10.0,
+      'unit_cost': 100.0,
+      'total_cost': 1000.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-02',
+    });
+
+    // Cancel Purchase 2: -10 @ 100 = -1000
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'cancellation',
+      'quantity': -10.0,
+      'unit_cost': 100.0,
+      'total_cost': -1000.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-02',
+    });
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 10.0);
+    // Correct average cost after cancelling P2 is 50.0!
+    expect(prod['average_cost'], closeTo(50.0, 0.001));
+    expect(prod['cost_status'], Product.costStatusKnown);
+
+    await db.close();
+  });
+
+  test('23. Real SQLite v19 -> v20 preserves runtime sale-cancellation quantity restoration without new return policy', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_sale_cancel.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج بيع ملغي',
+      'stock_quantity': 15.0,
+      'average_cost': 100.0,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    // Purchase 1: 10 @ 50.0
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'purchase',
+      'quantity': 10.0,
+      'unit_cost': 50.0,
+      'total_cost': 500.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-01',
+    });
+
+    // Sale: -5
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'sale',
+      'quantity': -5.0,
+      'unit_cost': 50.0,
+      'total_cost': 250.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-02',
+    });
+
+    // Sale cancellation: +5
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'cancellation',
+      'quantity': 5.0,
+      'unit_cost': 50.0,
+      'total_cost': 250.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-02',
+    });
+
+    // Purchase 2: 5 @ 100.0 -> stock becomes 15, avg becomes (10*50 + 5*100)/15 = 66.6667
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'purchase',
+      'quantity': 5.0,
+      'unit_cost': 100.0,
+      'total_cost': 500.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-03',
+    });
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 15.0);
+    expect(prod['average_cost'], closeTo(66.6667, 0.001));
+    expect(prod['cost_status'], Product.costStatusKnown);
+
+    await db.close();
+  });
+
+  test('24. Real SQLite v19 -> v20: backdated purchase after an earlier sale rejects replay and preserves live cost', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_backdated_purch.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج شراء بأثر رجعي',
+      'stock_quantity': 15.0,
+      'average_cost': 13.3333,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    // P1 on Jan 10 (id: 1), 10 @ 20.0
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'purchase',
+      'quantity': 10.0,
+      'unit_cost': 20.0,
+      'total_cost': 200.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-10',
+    });
+
+    // S1 on Jan 15 (id: 2), -5 @ 20.0
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'sale',
+      'quantity': -5.0,
+      'unit_cost': 20.0,
+      'total_cost': 100.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-15',
+    });
+
+    // Backdated adjustment on Jan 05, entered on Jan 20 (id: 3): 10 @ 10.0
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'adjustment',
+      'quantity': 10.0,
+      'unit_cost': 10.0,
+      'total_cost': 100.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-05',
+    });
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 15.0, reason: 'Physical stock must be preserved');
+    // Monotonicity check detects inversion (1 < 3) and rejects replay.
+    // Because there is no proven legacy defect, existing live cost is preserved.
+    expect(prod['average_cost'], 13.3333, reason: 'Ambiguous replay order: must preserve live-maintained cost');
+    expect(prod['cost_status'], Product.costStatusKnown);
+
+    await db.close();
+  });
+
+  test('25. Real SQLite v19 -> v20: backdated cancellation rejects replay and preserves live cost', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_backdated_cancel.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج إلغاء بأثر رجعي',
+      'stock_quantity': 5.0,
+      'average_cost': 20.0,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    // P1: Jan 1 (id: 1), 10 @ 10.0
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'purchase',
+      'quantity': 10.0,
+      'unit_cost': 10.0,
+      'total_cost': 100.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-01',
+    });
+
+    // S1: Jan 5 (id: 2), -5 @ 10.0
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'sale',
+      'quantity': -5.0,
+      'unit_cost': 10.0,
+      'total_cost': 50.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-05',
+    });
+
+    // P2: Jan 10 (id: 3), 10 @ 20.0
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'purchase',
+      'quantity': 10.0,
+      'unit_cost': 20.0,
+      'total_cost': 200.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-10',
+    });
+
+    // Cancel P1 on Jan 20 (id: 4), but backdated to doc.date = Jan 01 (-10 @ 10.0)
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'cancellation',
+      'quantity': -10.0,
+      'unit_cost': 10.0,
+      'total_cost': -100.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-01',
+    });
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 5.0, reason: 'Physical stock must be preserved');
+    // In date order: Cancel P1 (id 4) is placed at Jan 1, preceding S1 (id 2) at Jan 5 -> id 4 precedes id 2!
+    // Monotonicity check detects inversion (2 < 4) and rejects replay.
+    // Live-maintained average_cost (20.0) is safely preserved!
+    expect(prod['average_cost'], 20.0, reason: 'Ambiguous replay order: must preserve live-maintained cost');
+    expect(prod['cost_status'], Product.costStatusKnown);
+
+    await db.close();
+  });
+
+  test('26. Real SQLite v19 -> v20: ambiguous history with valid existing cost preserves both cost fields', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_preserve_both.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج الحفاظ على الحقول',
+      'stock_quantity': 8.0,
+      'average_cost': 14.5,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    // Two movements with date inversion entered during operation
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'adjustment',
+      'quantity': 10.0,
+      'unit_cost': 14.5,
+      'total_cost': 145.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-10',
+    });
+
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'sale',
+      'quantity': -2.0,
+      'unit_cost': 14.5,
+      'total_cost': 29.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-05',
+    });
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 8.0);
+    expect(prod['average_cost'], 14.5, reason: 'Ambiguity must not overwrite valid live average_cost');
+    expect(prod['cost_status'], Product.costStatusKnown, reason: 'Ambiguity must not downgrade valid cost_status');
+
+    await db.close();
+  });
+
+  test('27. Real SQLite v19 -> v20: proven legacy migration defect safely marks unknown', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_proven_defect.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج عيب هجرة سابق',
+      'stock_quantity': 10.0,
+      'average_cost': 85.0, // Leaked/fabricated cost despite unknown opening movement
+      'cost_status': Product.costStatusKnown,
+    });
+
+    // Legacy opening stock created by v18 migration (has_legacy_provenance) with unknown cost
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'opening',
+      'quantity': 10.0,
+      'unit_cost': null,
+      'total_cost': null,
+      'cost_status': StockMovement.costStatusUnknown,
+      'provenance': 'migration_legacy_opening',
+      'date': '2026-01-01',
+    });
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 10.0, reason: 'Physical stock must be preserved');
+    expect(prod['average_cost'], isNull, reason: 'Proven legacy defect with unknown history must be marked unknown');
+    expect(prod['cost_status'], Product.costStatusUnknown);
+
+    await db.close();
+  });
+
+  test('28. Real SQLite v19 -> v20: clean post-v15 product with opening stock is completely unchanged', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_clean_post15.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج ما بعد v15 سليم',
+      'stock_quantity': 10.0,
+      'average_cost': 99.0,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    // Normal product creation opening movement (provenance == 'opening_stock')
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'opening',
+      'quantity': 10.0,
+      'unit_cost': 99.0,
+      'total_cost': 990.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'provenance': 'opening_stock',
+      'date': '2026-01-01',
+    });
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final prod = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first;
+    expect(prod['stock_quantity'], 10.0);
+    expect(prod['average_cost'], 99.0, reason: 'Normal post-v15 product must not be touched or downgraded');
+    expect(prod['cost_status'], Product.costStatusKnown);
+
+    await db.close();
+  });
+
+  test('29. Real SQLite v19 -> v20: migration idempotency and rollback safety', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_idempotent.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج اختبار التكرار',
+      'stock_quantity': 10.0,
+      'average_cost': 150.0,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'opening',
+      'quantity': 10.0,
+      'unit_cost': 90.0,
+      'total_cost': 900.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-01',
+    });
+
+    // Run Migration v19 -> v20 first time
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final state1 = await db.query('products');
+
+    // Run Migration v19 -> v20 second time (idempotency)
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    final state2 = await db.query('products');
+    expect(state2, equals(state1), reason: 'Running migration twice must yield 100% identical state');
+
+    // Test rollback safety: transaction failure rolls back cleanly
+    try {
+      await db.transaction((txn) async {
+        await txn.update('products', {'average_cost': 999.0});
+        throw StateError('Simulated failure');
+      });
+    } catch (_) {}
+
+    final stateAfterRollback = await db.query('products');
+    expect(stateAfterRollback, equals(state1), reason: 'Rollback must preserve pre-transaction state');
+
+    await db.close();
+  });
+
+  test('30. Real SQLite v19 -> v20: physical stock and all financial documents remain strictly unchanged', () async {
+    final migDbPath = '${tempDir.path}/mig_v19_to_v20_immutability.db';
+    final db = await databaseFactory.openDatabase(migDbPath);
+    await initV19Schema(db);
+
+    final pid = await db.insert('products', {
+      'name': 'منتج غير متغير',
+      'stock_quantity': 12.5,
+      'average_cost': 100.0,
+      'cost_status': Product.costStatusKnown,
+    });
+
+    final docId = await db.insert('documents', {
+      'type': 'invoice',
+      'document_number': 'INV-IMMUTABLE-01',
+      'date': '2026-01-01',
+      'subtotal': 1000.0,
+      'total': 1000.0,
+      'paid': 500.0,
+      'remaining': 500.0,
+      'status': 'issued',
+    });
+
+    await db.insert('document_items', {
+      'document_id': docId,
+      'product_id': pid,
+      'quantity': 2.5,
+      'price': 400.0,
+      'total': 1000.0,
+      'unit_cost': 80.0,
+      'total_cost': 200.0,
+    });
+
+    await db.insert('document_payments', {
+      'document_id': docId,
+      'amount': 500.0,
+      'date': '2026-01-01',
+      'payment_origin': 'upfront',
+    });
+
+    await db.insert('stock_movements', {
+      'product_id': pid,
+      'type': 'cancellation',
+      'quantity': 2.5,
+      'unit_cost': 80.0,
+      'total_cost': 200.0,
+      'cost_status': StockMovement.costStatusKnown,
+      'date': '2026-01-01',
+    });
+
+    // Snapshot pre-migration state
+    final preDocs = await db.query('documents');
+    final preItems = await db.query('document_items');
+    final prePayments = await db.query('document_payments');
+    final preMovements = await db.query('stock_movements');
+    final preStock = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first['stock_quantity'];
+
+    // Run Migration v19 -> v20
+    await db.transaction((txn) async {
+      await DatabaseHelper.instance.upgradeTablesForTest(txn, 19, 20);
+    });
+
+    // Snapshot post-migration state
+    final postDocs = await db.query('documents');
+    final postItems = await db.query('document_items');
+    final postPayments = await db.query('document_payments');
+    final postMovements = await db.query('stock_movements');
+    final postStock = (await db.query('products', where: 'id = ?', whereArgs: [pid])).first['stock_quantity'];
+
+    expect(postDocs, equals(preDocs), reason: 'documents table must be strictly untouched');
+    expect(postItems, equals(preItems), reason: 'document_items table must be strictly untouched');
+    expect(postPayments, equals(prePayments), reason: 'document_payments table must be strictly untouched');
+    expect(postMovements, equals(preMovements), reason: 'stock_movements table must be strictly untouched');
+    expect(postStock, equals(preStock), reason: 'products.stock_quantity must be strictly untouched');
+
+    await db.close();
+  });
 }

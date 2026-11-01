@@ -5,8 +5,11 @@ import '../localization/app_localizations.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_amount_text.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_error_state.dart';
+import '../widgets/app_loading_view.dart';
 import '../widgets/app_search_bar.dart';
 import '../widgets/status_badge.dart';
 import 'document_detail_screen.dart';
@@ -113,33 +116,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
   Widget _buildList(AppLocalizations l10n, ThemeData theme) {
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline_rounded, size: 48, color: theme.colorScheme.error),
-              const SizedBox(height: 12),
-              Text(
-                ErrorUtils.toFriendlyMessage(_error!, l10n),
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              FilledButton.tonalIcon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(l10n.retry),
-              ),
-            ],
-          ),
-        ),
+      return AppErrorState(
+        message: ErrorUtils.toFriendlyMessage(_error!, l10n),
+        onRetry: _load,
       );
     }
 
     if (_documents == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingView();
     }
 
     final docs = _documents!;
@@ -235,12 +219,11 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
+                          AppAmountText(
+                            amount: doc.total,
+                            currencySymbol: doc.currencySymbol,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
                           ),
                           const SizedBox(height: 4),
                           StatusBadge(status: doc.status),

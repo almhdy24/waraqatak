@@ -12,6 +12,7 @@ class AppNotification {
   final bool isRead;
   final DateTime? readAt;
   final DateTime syncedAt;
+  final bool dismissible;
 
   const AppNotification({
     this.id,
@@ -26,6 +27,7 @@ class AppNotification {
     this.isRead = false,
     this.readAt,
     required this.syncedAt,
+    this.dismissible = true,
   });
 
   bool get isExpired {
@@ -33,13 +35,22 @@ class AppNotification {
     return expiresAt!.isBefore(DateTime.now());
   }
 
+  /// Whether this notification can be dismissed / deleted by the user.
+  /// Critical alerts are strictly non-dismissible.
+  bool get isDismissible => dismissible && category != 'critical';
+
   factory AppNotification.fromJson(Map<String, dynamic> json) {
+    final rawDismissible = json['dismissible'];
+    final isDismissible = rawDismissible is bool
+        ? rawDismissible
+        : (rawDismissible == 1 || rawDismissible == null);
+
     return AppNotification(
       serverId: (json['id'] as num).toInt(),
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',
       category: json['category'] as String? ?? 'announcement',
-      actionUrl: json['action_url'] as String?,
+      actionUrl: json['action_url'] as String? ?? json['action'] as String?,
       targetAudience: json['target_audience'] as String?,
       publishedAt:
           DateTime.tryParse(json['published_at'] as String? ?? '') ??
@@ -52,16 +63,18 @@ class AppNotification {
           ? DateTime.tryParse(json['read_at'] as String)
           : null,
       syncedAt: DateTime.now(),
+      dismissible: isDismissible,
     );
   }
 
   factory AppNotification.fromDb(Map<String, dynamic> map) {
+    final cat = map['category'] as String? ?? 'announcement';
     return AppNotification(
       id: map['id'] as int?,
       serverId: map['server_id'] as int,
       title: map['title'] as String,
       body: map['body'] as String,
-      category: map['category'] as String,
+      category: cat,
       actionUrl: map['action_url'] as String?,
       targetAudience: map['target_audience'] as String?,
       publishedAt:
@@ -77,6 +90,7 @@ class AppNotification {
       syncedAt:
           DateTime.tryParse(map['synced_at'] as String? ?? '') ??
           DateTime.now(),
+      dismissible: cat != 'critical',
     );
   }
 
@@ -113,6 +127,7 @@ class AppNotification {
     bool? isRead,
     DateTime? readAt,
     DateTime? syncedAt,
+    bool? dismissible,
   }) {
     return AppNotification(
       id: id ?? this.id,
@@ -127,6 +142,7 @@ class AppNotification {
       isRead: isRead ?? this.isRead,
       readAt: readAt ?? this.readAt,
       syncedAt: syncedAt ?? this.syncedAt,
+      dismissible: dismissible ?? this.dismissible,
     );
   }
 }

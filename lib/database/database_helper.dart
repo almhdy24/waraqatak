@@ -18,6 +18,7 @@ import '../models/document_status.dart';
 import '../models/tax_profile.dart';
 import '../models/app_notification.dart';
 import '../models/diagnostic_report.dart';
+import '../models/product_unit.dart';
 import '../models/stocktake.dart';
 import '../services/inventory_costing_service.dart';
 import '../utils/format_utils.dart';
@@ -27,7 +28,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 17;
+  static const int dbVersion = 23;
 
   static Database? _database;
 
@@ -188,8 +189,10 @@ class DatabaseHelper {
         taxes_enabled INTEGER DEFAULT 0,
         prices_include_tax INTEGER DEFAULT 0,
         default_tax_profile_id INTEGER,
+        wholesale_pricing_enabled INTEGER NOT NULL DEFAULT 0,
         invoice_title TEXT,
-        legal_footer TEXT
+        legal_footer TEXT,
+        currency_locked_at TEXT
       )
     ''');
 
@@ -202,6 +205,7 @@ class DatabaseHelper {
         address TEXT,
         notes TEXT,
         type TEXT DEFAULT 'customer',
+        pricing_category TEXT NOT NULL DEFAULT 'retail',
         active INTEGER DEFAULT 1,
         legal_name TEXT,
         tax_id TEXT,
@@ -219,6 +223,8 @@ class DatabaseHelper {
         barcode TEXT,
         unit TEXT,
         sale_price REAL DEFAULT 0,
+        wholesale_price REAL,
+        wholesale_min_quantity REAL,
         purchase_price REAL DEFAULT 0,
         stock_quantity REAL DEFAULT 0,
         min_stock REAL DEFAULT 0,
@@ -237,6 +243,22 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_products_barcode ON products(barcode)');
     await db.execute(
       'CREATE INDEX idx_products_category ON products(category)',
+    );
+
+    await db.execute('''
+      CREATE TABLE product_units (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER NOT NULL,
+        unit_name TEXT NOT NULL,
+        conversion_factor REAL NOT NULL,
+        sale_price REAL,
+        wholesale_price REAL,
+        is_default_sale INTEGER DEFAULT 0,
+        FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX idx_product_units_product ON product_units(product_id)',
     );
 
     await db.execute('''
@@ -261,6 +283,12 @@ class DatabaseHelper {
     );
     await db.execute(
       'CREATE INDEX idx_stock_movements_cost ON stock_movements(cost_status)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_stock_movements_ref_doc ON stock_movements(reference_document_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_stock_movements_date ON stock_movements(date)',
     );
 
     await db.execute('''
@@ -289,6 +317,11 @@ class DatabaseHelper {
         FOREIGN KEY (related_document_id) REFERENCES documents (id)
       )
     ''');
+    await db.execute('CREATE INDEX idx_documents_contact ON documents(contact_id)');
+    await db.execute('CREATE INDEX idx_documents_related ON documents(related_document_id)');
+    await db.execute(
+      'CREATE INDEX idx_documents_type_status_date ON documents(type, status, date)',
+    );
 
     await db.execute('''
       CREATE TABLE document_items (
@@ -303,10 +336,20 @@ class DatabaseHelper {
         tax_rate REAL,
         unit_cost REAL,
         total_cost REAL,
+        pricing_category TEXT,
+        sale_unit TEXT,
+        unit_conversion_factor REAL DEFAULT 1.0,
+        base_quantity REAL,
         FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products (id)
       )
     ''');
+    await db.execute(
+      'CREATE INDEX idx_document_items_doc ON document_items(document_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_document_items_prod ON document_items(product_id)',
+    );
 
     await db.execute('''
       CREATE TABLE document_counters (
@@ -324,10 +367,23 @@ class DatabaseHelper {
         date TEXT NOT NULL,
         notes TEXT,
         receipt_document_id INTEGER,
+        payment_origin TEXT,
         FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE,
         FOREIGN KEY (receipt_document_id) REFERENCES documents (id)
       )
     ''');
+    await db.execute(
+      'CREATE INDEX idx_document_payments_doc ON document_payments(document_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_document_payments_receipt ON document_payments(receipt_document_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_document_payments_date ON document_payments(date)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_document_payments_origin ON document_payments(payment_origin)',
+    );
 
     await db.execute('''
       CREATE TABLE audit_log (
@@ -451,6 +507,14 @@ class DatabaseHelper {
     Future<bool> columnExists(String table, String column) async {
       final columns = await db.rawQuery('PRAGMA table_info($table)');
       return columns.any((c) => c['name'] == column);
+    }
+
+    Future<bool> tableExists(String table) async {
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+        [table],
+      );
+      return tables.isNotEmpty;
     }
 
     if (oldVersion < 2) {
@@ -878,15 +942,19 @@ class DatabaseHelper {
       await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_stocktake_items_product ON stocktake_items(product_id)',
       );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)',
-      );
-      await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
-      );
+      if (await columnExists('audit_log', 'action')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action)',
+        );
+      }
+      if (await columnExists('audit_log', 'timestamp')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)',
+        );
+      }
     }
 
-    if (oldVersion < 17) {
+    if (oldVersion < 17 && newVersion >= 17) {
       // v1.1.3 hotfix: Re-run the historical invoice item costing repair for
       // databases that were upgraded to v15/v16 before step 6 of
       // _migrateLegacyCosting (invoice item cost reconstruction) was
@@ -901,6 +969,330 @@ class DatabaseHelper {
       //     crash mid-migration will not leave partial data.
       await _repairInvoiceItemCosts(db);
     }
+
+    if (oldVersion < 18 && newVersion >= 18) {
+      // Performance indexes for foreign keys, cascading deletes, and common queries
+      if (await columnExists('documents', 'contact_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_documents_contact ON documents(contact_id)',
+        );
+      }
+      if (await columnExists('documents', 'related_document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_documents_related ON documents(related_document_id)',
+        );
+      }
+      if (await columnExists('documents', 'type') &&
+          await columnExists('documents', 'status') &&
+          await columnExists('documents', 'date')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_documents_type_status_date ON documents(type, status, date)',
+        );
+      }
+      if (await columnExists('document_items', 'document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_items_doc ON document_items(document_id)',
+        );
+      }
+      if (await columnExists('document_items', 'product_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_items_prod ON document_items(product_id)',
+        );
+      }
+      if (await columnExists('document_payments', 'document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_doc ON document_payments(document_id)',
+        );
+      }
+      if (await columnExists('document_payments', 'receipt_document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_receipt ON document_payments(receipt_document_id)',
+        );
+      }
+      if (await columnExists('document_payments', 'date')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_date ON document_payments(date)',
+        );
+      }
+      if (await columnExists('stock_movements', 'reference_document_id')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_stock_movements_ref_doc ON stock_movements(reference_document_id)',
+        );
+      }
+      if (await columnExists('stock_movements', 'date')) {
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_stock_movements_date ON stock_movements(date)',
+        );
+      }
+
+      // Safe legacy stock reconciliation: create opening movement only for clean legacy
+      // products that have stock > 0 but ZERO stock movements recorded in history.
+      await _reconcileLegacyOpeningStock(db);
+    }
+
+    if (oldVersion < 19 && newVersion >= 19) {
+      if (await tableExists('document_payments')) {
+        if (!await columnExists('document_payments', 'payment_origin')) {
+          await db.execute(
+            'ALTER TABLE document_payments ADD COLUMN payment_origin TEXT',
+          );
+        }
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_document_payments_origin ON document_payments(payment_origin)',
+        );
+      }
+    }
+
+    if (oldVersion < 20 && newVersion >= 20) {
+      await _repairLegacyCostingReplay(db);
+    }
+
+    if (oldVersion < 21 && newVersion >= 21) {
+      if (!await columnExists('businesses', 'currency_locked_at')) {
+        await db.execute(
+          'ALTER TABLE businesses ADD COLUMN currency_locked_at TEXT',
+        );
+      }
+      await backfillCurrencyLockIfNeeded(db);
+    }
+
+    if (oldVersion < 22 && newVersion >= 22) {
+      if (!await columnExists('businesses', 'wholesale_pricing_enabled')) {
+        await db.execute(
+          'ALTER TABLE businesses ADD COLUMN wholesale_pricing_enabled INTEGER NOT NULL DEFAULT 0',
+        );
+      }
+      if (!await columnExists('products', 'wholesale_price')) {
+        await db.execute(
+          'ALTER TABLE products ADD COLUMN wholesale_price REAL',
+        );
+      }
+      if (!await columnExists('products', 'wholesale_min_quantity')) {
+        await db.execute(
+          'ALTER TABLE products ADD COLUMN wholesale_min_quantity REAL',
+        );
+      }
+      if (!await columnExists('contacts', 'pricing_category')) {
+        await db.execute(
+          "ALTER TABLE contacts ADD COLUMN pricing_category TEXT NOT NULL DEFAULT 'retail'",
+        );
+      }
+      if (!await columnExists('document_items', 'pricing_category')) {
+        await db.execute(
+          'ALTER TABLE document_items ADD COLUMN pricing_category TEXT',
+        );
+      }
+    }
+
+    if (oldVersion < 23 && newVersion >= 23) {
+      if (!await tableExists('product_units')) {
+        await db.execute('''
+          CREATE TABLE product_units (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            unit_name TEXT NOT NULL,
+            conversion_factor REAL NOT NULL,
+            sale_price REAL,
+            wholesale_price REAL,
+            is_default_sale INTEGER DEFAULT 0,
+            FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+          )
+        ''');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_product_units_product ON product_units(product_id)',
+        );
+      }
+      if (!await columnExists('document_items', 'sale_unit')) {
+        await db.execute(
+          'ALTER TABLE document_items ADD COLUMN sale_unit TEXT',
+        );
+      }
+      if (!await columnExists('document_items', 'unit_conversion_factor')) {
+        await db.execute(
+          'ALTER TABLE document_items ADD COLUMN unit_conversion_factor REAL DEFAULT 1.0',
+        );
+      }
+      if (!await columnExists('document_items', 'base_quantity')) {
+        await db.execute(
+          'ALTER TABLE document_items ADD COLUMN base_quantity REAL',
+        );
+      }
+      await db.rawUpdate('''
+        UPDATE document_items
+        SET unit_conversion_factor = 1.0,
+            base_quantity = quantity
+        WHERE unit_conversion_factor IS NULL OR base_quantity IS NULL
+      ''');
+    }
+  }
+
+  static Future<void> backfillCurrencyLockIfNeeded(DatabaseExecutor db) async {
+    final bRows = await db.rawQuery(
+      'SELECT id, currency_locked_at FROM businesses LIMIT 1',
+    );
+    if (bRows.isEmpty) return;
+    if (bRows.first['currency_locked_at'] != null) return;
+
+    final docRows = await db.rawQuery(
+      "SELECT 1 FROM documents WHERE status != '${DocumentStatus.draft}' LIMIT 1",
+    );
+    final payRows = await db.rawQuery('SELECT 1 FROM document_payments LIMIT 1');
+    final smRows = await db.rawQuery(
+      'SELECT 1 FROM stock_movements WHERE quantity != 0 LIMIT 1',
+    );
+
+    if (docRows.isNotEmpty || payRows.isNotEmpty || smRows.isNotEmpty) {
+      final now = DateTime.now().toIso8601String();
+      await db.rawUpdate(
+        'UPDATE businesses SET currency_locked_at = ? WHERE currency_locked_at IS NULL',
+        [now],
+      );
+    }
+  }
+
+  static Future<void> _lockCurrencyTxn(DatabaseExecutor txn) async {
+    final now = DateTime.now().toIso8601String();
+    await txn.rawUpdate(
+      'UPDATE businesses SET currency_locked_at = ? WHERE currency_locked_at IS NULL',
+      [now],
+    );
+  }
+
+  static Future<int> _insertDocumentPaymentTxn(
+    DatabaseExecutor txn,
+    Map<String, Object?> values,
+  ) async {
+    final id = await txn.insert('document_payments', values);
+    final amount = (values['amount'] as num?)?.toDouble() ?? 0.0;
+    if (amount > 0) {
+      await _lockCurrencyTxn(txn);
+    }
+    return id;
+  }
+
+  static Future<bool> _isCurrencyLockedTxn(
+    DatabaseExecutor txn,
+    Business business,
+  ) async {
+    if (business.isCurrencyLocked) return true;
+
+    final docRows = await txn.rawQuery(
+      "SELECT 1 FROM documents WHERE status != '${DocumentStatus.draft}' LIMIT 1",
+    );
+    if (docRows.isNotEmpty) return true;
+
+    final payRows = await txn.rawQuery(
+      'SELECT 1 FROM document_payments LIMIT 1',
+    );
+    if (payRows.isNotEmpty) return true;
+
+    final smRows = await txn.rawQuery(
+      'SELECT 1 FROM stock_movements WHERE quantity != 0 LIMIT 1',
+    );
+    return smRows.isNotEmpty;
+  }
+
+  static Future<void> _reconcileLegacyOpeningStock(DatabaseExecutor db) async {
+    final columns = await db.rawQuery('PRAGMA table_info(products)');
+    final hasCreatedAt = columns.any((c) => c['name'] == 'created_at');
+    final createdAtCol = hasCreatedAt ? 'p.created_at' : 'NULL AS created_at';
+    final productsWithMissingOpening = await db.rawQuery('''
+      SELECT p.id, p.stock_quantity, $createdAtCol
+      FROM products p
+      LEFT JOIN stock_movements sm ON sm.product_id = p.id
+      WHERE (p.type = 'product' OR p.type IS NULL)
+        AND p.stock_quantity > 0.0001
+        AND sm.id IS NULL
+    ''');
+
+    if (productsWithMissingOpening.isEmpty) return;
+
+    for (final row in productsWithMissingOpening) {
+      final pid = row['id'] as int;
+      final qty = (row['stock_quantity'] as num).toDouble();
+      final createdAtStr = row['created_at'] as String?;
+
+      // Query earliest finalized inventory-affecting document (invoice or purchase).
+      // Drafts, quotations, vouchers, and cancelled documents never affect stock.
+      final productDocRows = await db.rawQuery('''
+        SELECT MIN(d.date) AS min_date
+        FROM document_items di
+        JOIN documents d ON d.id = di.document_id
+        WHERE di.product_id = ?
+          AND d.type IN ('invoice', 'purchase')
+          AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+      ''', [pid]);
+      final productEarliestDocStr = productDocRows.isNotEmpty
+          ? productDocRows.first['min_date'] as String?
+          : null;
+
+      final String movementDate;
+      if (productEarliestDocStr != null && productEarliestDocStr.isNotEmpty) {
+        // Document exists. Determine same-day or preceding calendar date:
+        final docDatePart = productEarliestDocStr.length >= 10
+            ? productEarliestDocStr.substring(0, 10)
+            : productEarliestDocStr;
+        final createdDatePart = (createdAtStr != null && createdAtStr.length >= 10)
+            ? createdAtStr.substring(0, 10)
+            : null;
+
+        if (createdDatePart != null && createdDatePart.compareTo(docDatePart) < 0) {
+          // Authentic catalog creation date occurred on a calendar day before first transaction.
+          movementDate = createdAtStr!;
+        } else {
+          // Opening stock belongs to the earliest document's calendar day.
+          // Anchor to T00:00:00.000 on that same day, preserving timezone suffix.
+          movementDate = _startOfCalendarDay(productEarliestDocStr);
+        }
+      } else if (createdAtStr != null && createdAtStr.isNotEmpty) {
+        // Authentic catalog creation date exists with zero conflicting documents.
+        movementDate = createdAtStr;
+      } else {
+        // No defensible historical date exists (NULL created_at and zero finalized documents).
+        // Defer reconciliation for this product: preserve stock_quantity and unknown cost
+        // without fabricating timestamps or substituting Unix epoch / migration time.
+        continue;
+      }
+
+      await db.insert('stock_movements', {
+        'product_id': pid,
+        'type': StockMovement.typeOpening,
+        'quantity': qty,
+        'reference_document_id': null,
+        'date': movementDate,
+        'notes': 'Legacy opening stock reconciliation',
+        'unit_cost': null,
+        'total_cost': null,
+        'cost_status': StockMovement.costStatusUnknown,
+        'provenance': 'migration_legacy_opening',
+      });
+    }
+  }
+
+  /// Formats the start of the calendar day (T00:00:00.000) for a given ISO date string,
+  /// preserving any explicit trailing timezone suffix ('Z', '+HH:MM', '-HH:MM').
+  static String _startOfCalendarDay(String dateStr) {
+    final trimmed = dateStr.trim();
+    final tIdx = trimmed.indexOf('T');
+    if (tIdx < 0) {
+      return '${trimmed}T00:00:00.000';
+    }
+    final datePart = trimmed.substring(0, tIdx);
+    final timeAndZone = trimmed.substring(tIdx + 1);
+
+    String tzSuffix = '';
+    if (timeAndZone.endsWith('Z')) {
+      tzSuffix = 'Z';
+    } else {
+      final plusIdx = timeAndZone.indexOf('+');
+      final minusIdx = timeAndZone.lastIndexOf('-');
+      if (plusIdx >= 0) {
+        tzSuffix = timeAndZone.substring(plusIdx);
+      } else if (minusIdx >= 0) {
+        tzSuffix = timeAndZone.substring(minusIdx);
+      }
+    }
+    return '${datePart}T00:00:00.000$tzSuffix';
   }
 
   Future<void> _migrateLegacyCosting(DatabaseExecutor db) async {
@@ -970,8 +1362,8 @@ class DatabaseHelper {
         AND unit_cost IS NULL
     ''');
 
-    // 5. Products: if a product only has reconstructed purchases and no unknown movements,
-    // and stock > 0, calculate its current average cost. Otherwise, leave as unknown.
+    // 5. Products: reconstruct current average cost for products with demonstrably
+    // clean, solvent history. Otherwise, leave or mark as unknown.
     final products = await db.query(
       'products',
       columns: ['id', 'stock_quantity'],
@@ -981,58 +1373,28 @@ class DatabaseHelper {
       final stock = (p['stock_quantity'] as num?)?.toDouble() ?? 0.0;
       if (stock <= 0) continue;
 
-      final unknownCount =
-          Sqflite.firstIntValue(
-            await db.rawQuery(
-              '''
-        SELECT COUNT(*) FROM stock_movements
-        WHERE product_id = ? AND (cost_status = '${StockMovement.costStatusUnknown}' OR cost_status IS NULL)
-      ''',
-              [pid],
-            ),
-          ) ??
-          0;
-
-      if (unknownCount == 0) {
-        final movements = await db.rawQuery(
-          '''
-          SELECT type, quantity, unit_cost FROM stock_movements
-          WHERE product_id = ?
-          ORDER BY date ASC, id ASC
-        ''',
-          [pid],
+      final reconstructedAvg =
+          await _reconstructProductCostBasis(db, pid, stock);
+      if (reconstructedAvg != null) {
+        await db.update(
+          'products',
+          {
+            'average_cost': reconstructedAvg,
+            'cost_status': Product.costStatusKnown,
+          },
+          where: 'id = ?',
+          whereArgs: [pid],
         );
-
-        double runningStock = 0;
-        double? runningAvg;
-        for (final m in movements) {
-          final mType = m['type'] as String;
-          final mQty = (m['quantity'] as num).toDouble();
-          final mCost = (m['unit_cost'] as num?)?.toDouble();
-          if (mType == StockMovement.typePurchase && mCost != null) {
-            runningAvg = InventoryCostingService.calculateNewWeightedAverage(
-              currentStock: runningStock,
-              currentAvgCost: runningAvg,
-              incomingQty: mQty,
-              incomingUnitCost: mCost,
-            );
-            runningStock += mQty;
-          } else if (mType == StockMovement.typeSale) {
-            runningStock += mQty;
-          }
-        }
-
-        if (runningAvg != null && runningAvg > 0) {
-          await db.update(
-            'products',
-            {
-              'average_cost': runningAvg,
-              'cost_status': Product.costStatusKnown,
-            },
-            where: 'id = ?',
-            whereArgs: [pid],
-          );
-        }
+      } else {
+        await db.update(
+          'products',
+          {
+            'average_cost': null,
+            'cost_status': Product.costStatusUnknown,
+          },
+          where: 'id = ?',
+          whereArgs: [pid],
+        );
       }
     }
 
@@ -1040,6 +1402,251 @@ class DatabaseHelper {
     // _repairInvoiceItemCosts in the v17 migration branch. This prevents legacy
     // step 6 from prematurely populating invoice costs with catalog averages
     // during a direct v14-to-v17 upgrade.
+  }
+
+  /// Safely replays stock movements for a product to compute its perpetual
+  /// moving weighted-average cost.
+  ///
+  /// Invariants:
+  /// 1. Replays costs only when the complete movement history is demonstrably clean,
+  ///    solvent, and reconciles with physical stock.
+  /// 2. If any movement has missing or unknown cost, returns null (indeterminate).
+  ///    Zero-cost (0.0) is accepted ONLY when explicitly marked with cost_status='known'.
+  ///    Negative costs are rejected.
+  /// 3. If running stock drops below zero at any point, returns null (overselling / date ambiguity).
+  /// 4. If purchase cancellation makes valuation negative (prevVal < removedCost), returns null (insolvent).
+  /// 5. For sale cancellations (mQty > 0), preserves current runtime behavior (restores quantity
+  ///    without applying an unverified weighted-average return policy).
+  /// 6. If final replayed stock differs from physical stock_quantity, returns null (unexplained discrepancy).
+  static Future<double?> _reconstructProductCostBasis(
+    DatabaseExecutor db,
+    int productId,
+    double currentStock,
+  ) async {
+    if (currentStock <= 0) return null;
+
+    final invalidOrUnknownCount =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            '''
+      SELECT COUNT(*) FROM stock_movements
+      WHERE product_id = ?
+        AND (
+          cost_status = '${StockMovement.costStatusUnknown}'
+          OR cost_status IS NULL
+          OR unit_cost IS NULL
+          OR unit_cost < 0
+          OR (unit_cost = 0 AND cost_status != '${StockMovement.costStatusKnown}')
+        )
+    ''',
+            [productId],
+          ),
+        ) ??
+        0;
+
+    if (invalidOrUnknownCount > 0) return null;
+
+    final movements = await db.rawQuery(
+      '''
+      SELECT id, type, quantity, unit_cost, total_cost, cost_status
+      FROM stock_movements
+      WHERE product_id = ?
+      ORDER BY date ASC, id ASC
+    ''',
+      [productId],
+    );
+
+    if (movements.isEmpty) return null;
+
+    // Temporal ordering invariant: verify movement IDs are monotonically
+    // non-decreasing across the date-ordered sequence.
+    // If an entry created later in real time (higher id) has an earlier date
+    // than a previously created entry, a backdated insertion occurred and
+    // chronological consistency cannot be proven unambiguously.
+    int? prevId;
+    for (final m in movements) {
+      final mId = m['id'] as int;
+      if (prevId != null && mId < prevId) {
+        return null; // Ambiguous historical execution order: reject replay.
+      }
+      prevId = mId;
+    }
+
+    double runningStock = 0.0;
+    double? runningAvg;
+
+    for (final m in movements) {
+      final mType = m['type'] as String;
+      final mQty = (m['quantity'] as num).toDouble();
+      final mCost = (m['unit_cost'] as num?)?.toDouble();
+      final tCost = (m['total_cost'] as num?)?.toDouble();
+
+      if (mType == StockMovement.typePurchase ||
+          (mType == StockMovement.typeOpening && mQty > 0) ||
+          (mType == StockMovement.typeAdjustment && mQty > 0)) {
+        if (mCost == null || mCost < 0) return null;
+        runningAvg = InventoryCostingService.calculateNewWeightedAverage(
+          currentStock: runningStock,
+          currentAvgCost: runningAvg,
+          incomingQty: mQty,
+          incomingUnitCost: mCost,
+        );
+        runningStock += mQty;
+      } else if (mType == StockMovement.typeSale ||
+          (mType == StockMovement.typeAdjustment && mQty < 0)) {
+        runningStock += mQty; // mQty is negative
+        if (runningStock < -0.0001) {
+          // Historical negative stock: timeline is ambiguous or oversold
+          return null;
+        }
+        if (runningStock.abs() <= 0.0001) {
+          runningStock = 0.0;
+          runningAvg = null;
+        }
+      } else if (mType == StockMovement.typeCancellation) {
+        if (mQty > 0) {
+          // Sale cancellation: restore quantity without applying a new return policy
+          runningStock += mQty;
+        } else if (mQty < 0) {
+          // Purchase cancellation / reversal
+          final removedQty = -mQty;
+          final removedCost =
+              tCost != null ? tCost.abs() : (removedQty * (mCost ?? 0.0));
+          final newStock = runningStock - removedQty;
+          if (newStock < -0.0001) {
+            return null;
+          }
+          if (newStock.abs() <= 0.0001) {
+            runningStock = 0.0;
+            runningAvg = null;
+          } else {
+            final prevVal = runningStock * (runningAvg ?? 0.0);
+            if (prevVal - removedCost < -0.001) {
+              // Insolvent valuation: subsequent transactions consumed the purchase value
+              return null;
+            }
+            final remainVal =
+                (prevVal - removedCost).clamp(0.0, double.infinity);
+            runningAvg = remainVal / newStock;
+            runningStock = newStock;
+          }
+        }
+      } else {
+        // Unknown movement type
+        return null;
+      }
+    }
+
+    // Final reconciliation check: movement net sum must explain physical stock
+    if ((runningStock - currentStock).abs() > 0.01) {
+      return null;
+    }
+    if (runningAvg == null || runningAvg < 0) {
+      return null;
+    }
+
+    return runningAvg;
+  }
+
+  /// Migration v20: Narrow, fail-safe repair of historical product average_cost.
+  ///
+  /// Targets candidate products with evidence of legacy migration defects:
+  /// - Products with cancellations, adjustments, or legacy opening stock (from v18 or pre-v15).
+  /// - Products with average_cost populated despite having unknown-cost movements.
+  ///
+  /// Invariants:
+  /// - Replays only when temporal monotonicity and solvent history are proven.
+  /// - If reconstruction fails due to temporal ambiguity, preserves existing live-maintained cost.
+  /// - Sets average_cost = NULL and cost_status = 'unknown' ONLY when concrete evidence
+  ///   of a defect exists (e.g. populated average_cost with unknown-cost movements).
+  /// - Preserves physical stock_quantity.
+  /// - Does NOT modify movements, documents, document_items, or document_payments.
+  static Future<void> _repairLegacyCostingReplay(DatabaseExecutor db) async {
+    final candidateProducts = await db.rawQuery('''
+      SELECT p.id, p.stock_quantity, p.average_cost, p.cost_status,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM stock_movements sm_unk
+          WHERE sm_unk.product_id = p.id
+            AND (
+              sm_unk.cost_status = '${StockMovement.costStatusUnknown}'
+              OR sm_unk.cost_status IS NULL
+              OR sm_unk.unit_cost IS NULL
+              OR sm_unk.unit_cost < 0
+              OR (sm_unk.unit_cost = 0 AND sm_unk.cost_status != '${StockMovement.costStatusKnown}')
+            )
+        ) THEN 1 ELSE 0 END AS has_unknown_movements
+      FROM products p
+      WHERE (p.type = 'product' OR p.type IS NULL)
+        AND p.stock_quantity > 0.0001
+        AND (
+          EXISTS (
+            SELECT 1 FROM stock_movements sm
+            WHERE sm.product_id = p.id
+              AND (
+                sm.type IN ('${StockMovement.typeCancellation}', '${StockMovement.typeAdjustment}')
+                OR sm.provenance IN ('legacy_opening', 'migration_legacy_opening')
+              )
+          )
+          OR (
+            p.average_cost IS NOT NULL AND EXISTS (
+              SELECT 1 FROM stock_movements sm_unk
+              WHERE sm_unk.product_id = p.id
+                AND (
+                  sm_unk.cost_status = '${StockMovement.costStatusUnknown}'
+                  OR sm_unk.cost_status IS NULL
+                  OR sm_unk.unit_cost IS NULL
+                  OR sm_unk.unit_cost < 0
+                  OR (sm_unk.unit_cost = 0 AND sm_unk.cost_status != '${StockMovement.costStatusKnown}')
+                )
+            )
+          )
+        )
+    ''');
+
+    if (candidateProducts.isEmpty) return;
+
+    for (final cp in candidateProducts) {
+      final pid = cp['id'] as int;
+      final stock = (cp['stock_quantity'] as num).toDouble();
+      final currentAvg = (cp['average_cost'] as num?)?.toDouble();
+      final currentStatus =
+          cp['cost_status'] as String? ?? Product.costStatusUnknown;
+      final hasProvenDefect = (cp['has_unknown_movements'] as int? ?? 0) == 1;
+
+      final reconstructed = await _reconstructProductCostBasis(db, pid, stock);
+
+      if (reconstructed != null) {
+        if (currentAvg == null ||
+            (currentAvg - reconstructed).abs() > 0.0001 ||
+            currentStatus != Product.costStatusKnown) {
+          await db.update(
+            'products',
+            {
+              'average_cost': reconstructed,
+              'cost_status': Product.costStatusKnown,
+            },
+            where: 'id = ?',
+            whereArgs: [pid],
+          );
+        }
+      } else if (hasProvenDefect) {
+        // Concrete evidence of defect (average_cost populated despite unknown movements):
+        // safely mark unknown, preserving physical stock_quantity.
+        if (currentAvg != null || currentStatus != Product.costStatusUnknown) {
+          await db.update(
+            'products',
+            {
+              'average_cost': null,
+              'cost_status': Product.costStatusUnknown,
+            },
+            where: 'id = ?',
+            whereArgs: [pid],
+          );
+        }
+      }
+      // If reconstructed == null due to temporal ambiguity without a proven defect,
+      // preserve the existing live-maintained average_cost and cost_status.
+    }
   }
 
   /// Narrowly-scoped, idempotent repair of historical invoice document_items
@@ -1118,7 +1725,7 @@ class DatabaseHelper {
         WHERE product_id = ?
           AND quantity > 0
           AND type IN ('${StockMovement.typeOpening}', '${StockMovement.typeAdjustment}', '${StockMovement.typeCancellation}')
-          AND (cost_status = '${StockMovement.costStatusUnknown}' OR cost_status IS NULL OR unit_cost IS NULL OR unit_cost <= 0)
+          AND (cost_status = '${StockMovement.costStatusUnknown}' OR cost_status IS NULL OR unit_cost IS NULL OR unit_cost < 0 OR (unit_cost = 0 AND cost_status != '${StockMovement.costStatusKnown}'))
           AND date <= ?
       ''',
                   [productId, docDate],
@@ -1155,7 +1762,7 @@ class DatabaseHelper {
             AND type IN ('${StockMovement.typeOpening}', '${StockMovement.typeAdjustment}', '${StockMovement.typeCancellation}')
             AND cost_status = '${StockMovement.costStatusKnown}'
             AND unit_cost IS NOT NULL
-            AND unit_cost > 0
+            AND unit_cost >= 0
             AND date <= ?
           ORDER BY date ASC, id ASC
         ''',
@@ -1310,14 +1917,42 @@ class DatabaseHelper {
     return Business.fromMap(maps.first);
   }
 
+  Future<bool> isCurrencyLocked() async {
+    final db = await database;
+    final b = await getFirstBusiness();
+    if (b == null) return false;
+    return _isCurrencyLockedTxn(db, b);
+  }
+
   Future<int> updateBusiness(Business b) async {
     final db = await database;
-    return db.update(
-      'businesses',
-      b.toMap(),
-      where: 'id = ?',
-      whereArgs: [b.id],
-    );
+    return db.transaction((txn) async {
+      final currentRows = await txn.query(
+        'businesses',
+        where: 'id = ?',
+        whereArgs: [b.id],
+        limit: 1,
+      );
+      if (currentRows.isEmpty) return 0;
+
+      final current = Business.fromMap(currentRows.first);
+      if (current.currencyCode != b.currencyCode) {
+        final isLocked = await _isCurrencyLockedTxn(txn, current);
+        if (isLocked) {
+          throw StateError(
+            'Business currency is permanent and cannot be modified after '
+            'financial transactions or stock movements are recorded.',
+          );
+        }
+      }
+
+      return txn.update(
+        'businesses',
+        b.toMap(),
+        where: 'id = ?',
+        whereArgs: [b.id],
+      );
+    });
   }
 
   // ========== Contacts ==========
@@ -1692,7 +2327,177 @@ class DatabaseHelper {
     );
   }
 
+  // ========== Product Units ==========
+  Future<Map<int, List<ProductUnit>>> getAllProductUnits() async {
+    final db = await database;
+    final rows = await db.query(
+      'product_units',
+      orderBy: 'is_default_sale DESC, id ASC',
+    );
+    final map = <int, List<ProductUnit>>{};
+    for (final r in rows) {
+      final u = ProductUnit.fromMap(r);
+      map.putIfAbsent(u.productId, () => []).add(u);
+    }
+    return map;
+  }
+
+  Future<List<ProductUnit>> getProductUnits(int productId) async {
+    final db = await database;
+    final rows = await db.query(
+      'product_units',
+      where: 'product_id = ?',
+      whereArgs: [productId],
+      orderBy: 'is_default_sale DESC, id ASC',
+    );
+    return rows.map((r) => ProductUnit.fromMap(r)).toList();
+  }
+
+  Future<int> insertProductUnit(ProductUnit unit) async {
+    if (unit.conversionFactor <= 0) {
+      throw ArgumentError('Conversion factor must be greater than zero');
+    }
+    if (unit.unitName.trim().isEmpty) {
+      throw ArgumentError('Unit name cannot be empty');
+    }
+    final db = await database;
+    return await db.insert('product_units', unit.toMap());
+  }
+
+  Future<int> updateProductUnit(ProductUnit unit) async {
+    if (unit.id == null) throw ArgumentError('Unit id required for update');
+    if (unit.conversionFactor <= 0) {
+      throw ArgumentError('Conversion factor must be greater than zero');
+    }
+    if (unit.unitName.trim().isEmpty) {
+      throw ArgumentError('Unit name cannot be empty');
+    }
+    final db = await database;
+    return await db.update(
+      'product_units',
+      unit.toMap(),
+      where: 'id = ?',
+      whereArgs: [unit.id],
+    );
+  }
+
+  Future<int> deleteProductUnit(int id) async {
+    final db = await database;
+    return await db.delete(
+      'product_units',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> syncProductUnits(
+    int productId,
+    List<ProductUnit> units,
+  ) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'product_units',
+        where: 'product_id = ?',
+        whereArgs: [productId],
+      );
+      for (final u in units) {
+        if (u.conversionFactor <= 0) {
+          throw ArgumentError('Conversion factor must be greater than zero');
+        }
+        if (u.unitName.trim().isEmpty) {
+          throw ArgumentError('Unit name cannot be empty');
+        }
+        final map = u.toMap();
+        map['product_id'] = productId;
+        map.remove('id');
+        await txn.insert('product_units', map);
+      }
+    });
+  }
+
   // ========== Stock Movements ==========
+  /// Validates that sufficient physical inventory is available for sale items.
+  ///
+  /// Aggregates required base quantities across all lines by product ID.
+  /// If [documentId] is provided (e.g. during an update), any existing sale
+  /// movements previously deducted by that document are added back to current
+  /// stock to calculate true available stock before new writes occur.
+  Future<void> _assertSaleStockAvailable(
+    DatabaseExecutor txn,
+    Iterable<dynamic> items, {
+    int? documentId,
+  }) async {
+    final Map<int, double> requiredBaseQtyByProduct = {};
+    for (final raw in items) {
+      final int? productId;
+      final double qty;
+      final double effectiveBaseQty;
+      if (raw is DocumentItem) {
+        productId = raw.productId;
+        qty = raw.quantity;
+        effectiveBaseQty = raw.effectiveBaseQuantity;
+      } else if (raw is Map<String, dynamic>) {
+        productId = raw['product_id'] as int?;
+        qty = (raw['quantity'] as num?)?.toDouble() ?? 0.0;
+        effectiveBaseQty = (raw['base_quantity'] as num?)?.toDouble() ??
+            (qty * ((raw['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0));
+      } else {
+        continue;
+      }
+
+      if (productId == null || qty <= 0 || effectiveBaseQty <= 0) continue;
+      requiredBaseQtyByProduct[productId] =
+          (requiredBaseQtyByProduct[productId] ?? 0.0) + effectiveBaseQty;
+    }
+
+    if (requiredBaseQtyByProduct.isEmpty) return;
+
+    final Map<int, double> previouslyDeductedByProduct = {};
+    if (documentId != null) {
+      final oldMovements = await txn.query(
+        'stock_movements',
+        where: 'reference_document_id = ? AND type = ?',
+        whereArgs: [documentId, StockMovement.typeSale],
+      );
+      for (final m in oldMovements) {
+        final pId = m['product_id'] as int?;
+        final mQty = (m['quantity'] as num?)?.toDouble() ?? 0.0;
+        if (pId != null && mQty < 0) {
+          previouslyDeductedByProduct[pId] =
+              (previouslyDeductedByProduct[pId] ?? 0.0) + (-mQty);
+        }
+      }
+    }
+
+    for (final entry in requiredBaseQtyByProduct.entries) {
+      final productId = entry.key;
+      final requiredBaseQty = entry.value;
+
+      final pRows = await txn.query(
+        'products',
+        columns: ['name', 'type', 'stock_quantity'],
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+      if (pRows.isEmpty) continue;
+      final pType = pRows.first['type'] as String? ?? 'product';
+      if (pType != 'product') continue;
+
+      final currentStock =
+          (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+      final previouslyDeducted = previouslyDeductedByProduct[productId] ?? 0.0;
+      final availableStock = currentStock + previouslyDeducted;
+
+      if (availableStock < requiredBaseQty) {
+        final name = pRows.first['name'] as String? ?? '';
+        throw StateError(
+          'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(availableStock)}, required ${FormatUtils.formatQuantity(requiredBaseQty)}',
+        );
+      }
+    }
+  }
+
   Future<void> _insertStockMovement(
     DatabaseExecutor txn, {
     required int productId,
@@ -1718,6 +2523,9 @@ class DatabaseHelper {
       'cost_status': costStatus,
       'provenance': provenance,
     });
+    if (quantity != 0) {
+      await _lockCurrencyTxn(txn);
+    }
   }
 
   Future<List<StockMovement>> getStockMovements(int productId) async {
@@ -1841,6 +2649,16 @@ class DatabaseHelper {
   }) async {
     final db = await database;
     return db.transaction((txn) async {
+      final bRows = await txn.query('businesses', limit: 1);
+      final baseCurrency = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      if (doc.currencyCode != baseCurrency) {
+        throw ArgumentError(
+          'Document currency (${doc.currencyCode}) must match business base currency ($baseCurrency).',
+        );
+      }
+
       int? contactId = doc.contactId;
       if (contact != null) {
         contactId = contact.id ?? await txn.insert('contacts', contact.toMap());
@@ -1871,29 +2689,13 @@ class DatabaseHelper {
 
       final docId = await txn.insert('documents', newDoc.toMap());
       final isDraft = doc.status == DocumentStatus.draft;
+      if (!isDraft || doc.paid > 0) {
+        await _lockCurrencyTxn(txn);
+      }
 
       // Pre-check stock availability for non-draft invoices
       if (doc.type == 'invoice' && !isDraft && strictStock) {
-        for (final item in items) {
-          if (item.productId == null || item.quantity <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['name', 'type', 'stock_quantity'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty &&
-              (pRows.first['type'] as String? ?? 'product') == 'product') {
-            final stock =
-                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-            if (stock < item.quantity) {
-              final name = pRows.first['name'] as String? ?? '';
-              throw StateError(
-                'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(item.quantity)}',
-              );
-            }
-          }
-        }
+        await _assertSaleStockAvailable(txn, items);
       }
 
       for (final item in items) {
@@ -1923,26 +2725,27 @@ class DatabaseHelper {
               final isCostKnown =
                   costStatus == Product.costStatusKnown && avgCost != null;
 
+              final effectiveBaseQty = item.effectiveBaseQuantity;
               final double deductQty;
               if (strictStock) {
-                deductQty = item.quantity;
+                deductQty = effectiveBaseQty;
               } else {
                 deductQty = currentStock > 0
-                    ? (currentStock >= item.quantity
-                          ? item.quantity
+                    ? (currentStock >= effectiveBaseQty
+                          ? effectiveBaseQty
                           : currentStock)
                     : 0.0;
               }
-              final bool isFullyBacked = deductQty >= item.quantity;
+              final bool isFullyBacked = deductQty >= effectiveBaseQty;
               if (deductQty > 0) {
                 // If stock was partially oversold, cost for the whole line is incomplete
                 // and must NOT be marked as fully trusted on document_items.
                 itemUnitCost = (isCostKnown && isFullyBacked) ? avgCost : null;
                 itemTotalCost = (isCostKnown && isFullyBacked)
-                    ? item.quantity * avgCost
+                    ? effectiveBaseQty * avgCost
                     : null;
                 final movementCost = isCostKnown ? deductQty * avgCost : null;
-                final movementCostStatus = (isCostKnown && isFullyBacked)
+                final movementCostStatus = isCostKnown
                     ? StockMovement.costStatusKnown
                     : StockMovement.costStatusUnknown;
 
@@ -1994,8 +2797,7 @@ class DatabaseHelper {
 
               final double newAvgCost;
               final String newCostStatus;
-              if (priorCostStatus == Product.costStatusKnown ||
-                  currentStock <= 0) {
+              if (priorCostStatus == Product.costStatusKnown) {
                 newAvgCost =
                     InventoryCostingService.calculateNewWeightedAverage(
                       currentStock: currentStock,
@@ -2004,6 +2806,30 @@ class DatabaseHelper {
                       incomingUnitCost: incomingUnitCost,
                     );
                 newCostStatus = Product.costStatusKnown;
+              } else if (currentStock <= 0) {
+                final movementSumRows = await txn.rawQuery(
+                  'SELECT COALESCE(SUM(quantity), 0) AS total_qty FROM stock_movements WHERE product_id = ?',
+                  [item.productId],
+                );
+                final movementTotal =
+                    (movementSumRows.first['total_qty'] as num).toDouble();
+                final isCleanLedger =
+                    (movementTotal - currentStock).abs() <= 0.001 &&
+                    movementTotal >= -0.0001;
+
+                final unknownCostRows = await txn.rawQuery(
+                  "SELECT 1 FROM stock_movements WHERE product_id = ? AND (cost_status != '${StockMovement.costStatusKnown}' OR unit_cost IS NULL) LIMIT 1",
+                  [item.productId],
+                );
+                final hasUnknownHistory = unknownCostRows.isNotEmpty;
+
+                if (isCleanLedger && !hasUnknownHistory) {
+                  newAvgCost = incomingUnitCost;
+                  newCostStatus = Product.costStatusKnown;
+                } else {
+                  newAvgCost = incomingUnitCost;
+                  newCostStatus = Product.costStatusUnknown;
+                }
               } else {
                 newAvgCost = incomingUnitCost;
                 newCostStatus = Product.costStatusUnknown;
@@ -2047,6 +2873,10 @@ class DatabaseHelper {
           'tax_rate': item.taxRate,
           'unit_cost': itemUnitCost,
           'total_cost': itemTotalCost,
+          'pricing_category': item.pricingCategory,
+          'sale_unit': item.saleUnit,
+          'unit_conversion_factor': item.unitConversionFactor,
+          'base_quantity': item.effectiveBaseQuantity,
         });
       }
 
@@ -2068,7 +2898,7 @@ class DatabaseHelper {
           (doc.type == 'invoice' || doc.type == 'purchase') &&
           doc.paid > 0) {
         // Record upfront down payment on invoice/purchase creation
-        await txn.insert('document_payments', {
+        await _insertDocumentPaymentTxn(txn, {
           'document_id': docId,
           'amount': doc.paid,
           'payment_method': doc.paymentMethod,
@@ -2077,6 +2907,7 @@ class DatabaseHelper {
               ? 'Initial payment'
               : 'Initial purchase payment',
           'receipt_document_id': null,
+          'payment_origin': PaymentOrigin.upfront,
         });
       }
 
@@ -2104,17 +2935,54 @@ class DatabaseHelper {
       );
       final existingRows = await txn.query(
         'documents',
-        columns: ['type', 'status'],
         where: 'id = ?',
         whereArgs: [doc.id],
       );
       if (existingRows.isEmpty) throw StateError('Document not found');
 
-      final oldType = existingRows.first['type'] as String;
-      final oldStatus =
-          existingRows.first['status'] as String? ?? DocumentStatus.issued;
+      final oldDoc = Document.fromMap(existingRows.first);
+      final oldType = oldDoc.type;
+      final oldStatus = oldDoc.status;
+
+      if (oldStatus == DocumentStatus.cancelled) {
+        throw StateError('Cannot edit a cancelled document');
+      }
+      if (oldStatus != DocumentStatus.draft && doc.status == DocumentStatus.draft) {
+        throw StateError('Cannot convert an issued document to draft');
+      }
+      if (oldStatus != DocumentStatus.draft && doc.currencyCode != oldDoc.currencyCode) {
+        throw ArgumentError(
+          'Cannot change currency of an issued document (${oldDoc.currencyCode} to ${doc.currencyCode}).',
+        );
+      }
+
+      if ((oldType == 'payment_receipt' || oldType == 'expense_voucher') &&
+          doc.relatedDocumentId != oldDoc.relatedDocumentId) {
+        throw StateError(
+          'Cannot reassign an existing payment receipt or expense voucher to a different parent document.',
+        );
+      }
 
       final newIsDraft = doc.status == DocumentStatus.draft;
+      if (oldStatus == DocumentStatus.draft && !newIsDraft) {
+        final bRows = await txn.query('businesses', limit: 1);
+        final baseCurrency = bRows.isNotEmpty
+            ? (bRows.first['currency_code'] as String? ?? 'SDG')
+            : 'SDG';
+        if (doc.currencyCode != baseCurrency) {
+          throw ArgumentError(
+            'Cannot finalize draft with currency (${doc.currencyCode}) that does not match business base currency ($baseCurrency).',
+          );
+        }
+      }
+      if (!newIsDraft || doc.paid > 0) {
+        await _lockCurrencyTxn(txn);
+      }
+
+      // Authoritative stock availability check before any writes or reversals occur
+      if (doc.type == 'invoice' && !newIsDraft && strictStock) {
+        await _assertSaleStockAvailable(txn, newItems, documentId: doc.id);
+      }
 
       final affectsStock =
           (oldType == 'invoice' || oldType == 'purchase') &&
@@ -2153,162 +3021,452 @@ class DatabaseHelper {
                   costStatus: costStatus,
                   provenance: 'sale_reversal',
                   referenceDocumentId: doc.id,
+                  date: doc.date,
                 );
               }
             }
-          } else {
-            for (final old in oldItems) {
-              final productId = old['product_id'] as int?;
-              final qty = (old['quantity'] as num?)?.toDouble() ?? 0;
-              if (productId == null || qty <= 0) continue;
-              final pRows = await txn.query(
-                'products',
-                columns: ['type'],
-                where: 'id = ?',
-                whereArgs: [productId],
-              );
-              if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
-              await txn.rawUpdate(
-                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-                [qty, productId],
-              );
-              await _insertStockMovement(
-                txn,
-                productId: productId,
-                type: StockMovement.typeCancellation,
-                quantity: qty,
-                provenance: 'sale_reversal',
-                referenceDocumentId: doc.id,
-              );
-            }
           }
         } else if (oldType == 'purchase') {
-          // Pre-check: if reducing purchased quantity for any product, verify that
-          // the product currently has sufficient stock and that the stock was not
-          // already sold or consumed.
           final oldProductQuantities = <int, double>{};
+          final oldProductCosts = <int, double>{};
           for (final old in oldItems) {
             final pid = old['product_id'] as int?;
-            final qty = (old['quantity'] as num?)?.toDouble() ?? 0;
+            final qty = (old['quantity'] as num?)?.toDouble() ?? 0.0;
+            final price = (old['price'] as num?)?.toDouble() ?? 0.0;
             if (pid != null && qty > 0) {
               oldProductQuantities[pid] =
                   (oldProductQuantities[pid] ?? 0.0) + qty;
+              oldProductCosts[pid] =
+                  (oldProductCosts[pid] ?? 0.0) + (qty * price);
             }
           }
 
           final newProductQuantities = <int, double>{};
+          final newProductCosts = <int, double>{};
           if (doc.type == 'purchase' && !newIsDraft) {
             for (final newItem in newItems) {
               final pid = newItem.productId;
               final qty = newItem.quantity;
+              final price = newItem.price;
               if (pid != null && qty > 0) {
                 newProductQuantities[pid] =
                     (newProductQuantities[pid] ?? 0.0) + qty;
+                newProductCosts[pid] =
+                    (newProductCosts[pid] ?? 0.0) + (qty * price);
               }
             }
           }
 
-          for (final entry in oldProductQuantities.entries) {
-            final pid = entry.key;
-            final oldQty = entry.value;
-            final newQty = newProductQuantities[pid] ?? 0.0;
-            if (oldQty > newQty) {
-              final netReduction = oldQty - newQty;
+          bool itemsChanged =
+              oldProductQuantities.length != newProductQuantities.length;
+          if (!itemsChanged) {
+            for (final entry in oldProductQuantities.entries) {
+              final pid = entry.key;
+              final oldQty = entry.value;
+              final newQty = newProductQuantities[pid];
+              if (newQty == null || (newQty - oldQty).abs() > 0.0001) {
+                itemsChanged = true;
+                break;
+              }
+              final oldCost = oldProductCosts[pid] ?? 0.0;
+              final newCost = newProductCosts[pid] ?? 0.0;
+              if ((newCost - oldCost).abs() > 0.0001) {
+                itemsChanged = true;
+                break;
+              }
+            }
+          }
+
+          if (itemsChanged) {
+            // Guard: ensure physical stock has not been sold/consumed below purchased quantity
+            for (final entry in oldProductQuantities.entries) {
+              final pid = entry.key;
+              final oldQty = entry.value;
               final pRows = await txn.query(
                 'products',
-                columns: ['name', 'type', 'stock_quantity'],
+                columns: [
+                  'name',
+                  'type',
+                  'stock_quantity',
+                  'average_cost',
+                  'cost_status',
+                ],
                 where: 'id = ?',
                 whereArgs: [pid],
               );
               if (pRows.isNotEmpty &&
                   (pRows.first['type'] as String? ?? 'product') == 'product') {
-                final stock =
+                final currentStock =
                     (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
-                if (stock < netReduction) {
-                  final name = pRows.first['name'] as String? ?? '';
+                final name = pRows.first['name'] as String? ?? '';
+                if (currentStock < oldQty) {
                   throw StateError(
-                    'Insufficient stock to edit purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required reduction ${FormatUtils.formatQuantity(netReduction)}',
+                    'Cannot edit purchase for "$name" because subsequent sales or movements consumed this stock '
+                    '(available: ${FormatUtils.formatQuantity(currentStock)}, purchased: ${FormatUtils.formatQuantity(oldQty)})',
                   );
                 }
+
+                final currentAvg =
+                    (pRows.first['average_cost'] as num?)?.toDouble();
+                final currentStatus =
+                    pRows.first['cost_status'] as String? ??
+                    Product.costStatusUnknown;
+                final removedCost = oldProductCosts[pid]!;
+                final newStock = currentStock - oldQty;
+
+                double? newAvgCost = currentAvg;
+                String newCostStatus = currentStatus;
+
+                if (newStock <= 0) {
+                  newAvgCost = null;
+                  newCostStatus = Product.costStatusUnknown;
+                } else if (currentAvg != null &&
+                    currentStatus == Product.costStatusKnown) {
+                  final prevVal = currentStock * currentAvg;
+                  if (prevVal - removedCost < -0.001) {
+                    throw StateError(
+                      'Cannot edit purchase for "$name" because subsequent sales or movements consumed this stock value',
+                    );
+                  }
+                  final remainVal =
+                      (prevVal - removedCost).clamp(0.0, double.infinity);
+                  newAvgCost = remainVal / newStock;
+                  newCostStatus = (newAvgCost > 0)
+                      ? Product.costStatusKnown
+                      : Product.costStatusUnknown;
+                }
+
+                await txn.update(
+                  'products',
+                  {
+                    'stock_quantity': newStock,
+                    'average_cost': newAvgCost,
+                    'cost_status': newCostStatus,
+                  },
+                  where: 'id = ?',
+                  whereArgs: [pid],
+                );
+
+                final avgUnitCost =
+                    oldQty > 0 ? removedCost / oldQty : null;
+                await _insertStockMovement(
+                  txn,
+                  productId: pid,
+                  type: StockMovement.typeCancellation,
+                  quantity: -oldQty,
+                  unitCost: avgUnitCost,
+                  totalCost: -removedCost,
+                  costStatus: newCostStatus,
+                  provenance: 'purchase_reversal',
+                  referenceDocumentId: doc.id,
+                  date: doc.date,
+                );
               }
             }
           }
+        }
+      }
 
-          for (final old in oldItems) {
-            final productId = old['product_id'] as int?;
-            final qty = (old['quantity'] as num?)?.toDouble() ?? 0;
-            if (productId == null || qty <= 0) continue;
-            final pRows = await txn.query(
-              'products',
-              columns: [
-                'type',
-                'stock_quantity',
-                'average_cost',
-                'cost_status',
-              ],
+      double effectiveSubtotal = doc.subtotal;
+      double effectiveTotal = doc.total;
+      double effectivePaid = doc.paid;
+      double effectiveRemaining = doc.remaining;
+      String effectiveStatus = doc.status;
+
+      if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
+        final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
+        final canonicalAmount = MoneyUtils.round(doc.paid, decimalDigits);
+        if (canonicalAmount <= 0) {
+          throw ArgumentError('Payment amount must be greater than zero');
+        }
+
+        final paymentRows = await txn.query(
+          'document_payments',
+          where: 'receipt_document_id = ?',
+          whereArgs: [doc.id],
+        );
+
+        if (paymentRows.isNotEmpty) {
+          final pRow = paymentRows.first;
+          final oldAmount = (pRow['amount'] as num).toDouble();
+          final amountDiff = canonicalAmount - oldAmount;
+
+          if (oldDoc.relatedDocumentId != null) {
+            final parentRows = await txn.query(
+              'documents',
               where: 'id = ?',
-              whereArgs: [productId],
+              whereArgs: [oldDoc.relatedDocumentId],
             );
-            if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
-
-            final origMovements = await txn.query(
-              'stock_movements',
-              where:
-                  'reference_document_id = ? AND product_id = ? AND type = ?',
-              whereArgs: [doc.id, productId, StockMovement.typePurchase],
-            );
-            final origUnitCost = origMovements.isNotEmpty
-                ? (origMovements.first['unit_cost'] as num?)?.toDouble()
-                : (old['price'] as num?)?.toDouble();
-            final origCostStatus = origMovements.isNotEmpty
-                ? (origMovements.first['cost_status'] as String? ??
-                      StockMovement.costStatusKnown)
-                : StockMovement.costStatusKnown;
-
-            final currentStock =
-                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
-            final currentAvg = (pRows.first['average_cost'] as num?)
-                ?.toDouble();
-            final newStock = currentStock - qty;
-
-            double? newAvgCost = currentAvg;
-            String newCostStatus =
-                pRows.first['cost_status'] as String? ??
-                Product.costStatusUnknown;
-            if (newStock <= 0) {
-              newAvgCost = null;
-              newCostStatus = Product.costStatusUnknown;
-            } else if (currentAvg != null && origUnitCost != null) {
-              final prevVal = currentStock * currentAvg;
-              final removedVal = qty * origUnitCost;
-              final remainVal = (prevVal - removedVal).clamp(
-                0.0,
-                double.infinity,
+            if (parentRows.isNotEmpty) {
+              final parent = Document.fromMap(parentRows.first);
+              if (parent.status == DocumentStatus.cancelled) {
+                throw StateError(
+                  'Cannot modify payment for a cancelled parent document',
+                );
+              }
+              final parentDecimalDigits =
+                  Currency.decimalDigitsForCode(parent.currencyCode);
+              final newParentPaid = MoneyUtils.round(
+                parent.paid + amountDiff,
+                parentDecimalDigits,
               );
-              newAvgCost = remainVal / newStock;
+              if (newParentPaid < 0) {
+                throw StateError(
+                  'Updated payment amount would result in negative paid balance on parent document',
+                );
+              }
+              if (MoneyUtils.isOverpayment(
+                newParentPaid,
+                parent.total,
+                parentDecimalDigits,
+              )) {
+                throw StateError(
+                  'Updated payment amount exceeds parent document remaining balance',
+                );
+              }
+              final newParentRemaining = MoneyUtils.calculateRemaining(
+                parent.total,
+                newParentPaid,
+                parentDecimalDigits,
+              );
+              final newParentStatus = DocumentStatus.fromPayment(
+                newParentPaid,
+                parent.total,
+                decimalDigits: parentDecimalDigits,
+              );
+
+              await txn.update(
+                'documents',
+                {
+                  'paid': newParentPaid,
+                  'remaining': newParentRemaining,
+                  'status': newParentStatus,
+                },
+                where: 'id = ?',
+                whereArgs: [oldDoc.relatedDocumentId],
+              );
+            }
+          }
+
+          await txn.update(
+            'document_payments',
+            {
+              'amount': canonicalAmount,
+              'payment_method': doc.paymentMethod,
+              'date': doc.date.toIso8601String(),
+              'notes': doc.notes,
+              'payment_origin': PaymentOrigin.receipt,
+            },
+            where: 'id = ?',
+            whereArgs: [pRow['id']],
+          );
+        }
+
+        effectivePaid = canonicalAmount;
+        effectiveRemaining = 0.0;
+        effectiveSubtotal = canonicalAmount;
+        effectiveTotal = canonicalAmount;
+        effectiveStatus = DocumentStatus.issued;
+      } else if (doc.type == 'invoice' || doc.type == 'purchase') {
+        final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
+        final canonicalIncomingPaid = MoneyUtils.round(doc.paid, decimalDigits);
+        final canonicalOldPaid = MoneyUtils.round(oldDoc.paid, decimalDigits);
+        final canonicalIncomingTotal = MoneyUtils.round(doc.total, decimalDigits);
+        final canonicalOldTotal = MoneyUtils.round(oldDoc.total, decimalDigits);
+        final epsilon = 1.0 / math.pow(10, decimalDigits + 1);
+
+        if (canonicalIncomingPaid < 0) {
+          throw ArgumentError('Paid amount cannot be negative');
+        }
+        if (MoneyUtils.isOverpayment(
+          canonicalIncomingPaid,
+          canonicalIncomingTotal,
+          decimalDigits,
+        )) {
+          throw ArgumentError('Paid amount cannot exceed total');
+        }
+
+        if (oldStatus == DocumentStatus.draft &&
+            doc.status == DocumentStatus.draft) {
+          effectivePaid = canonicalIncomingPaid;
+          effectiveRemaining = MoneyUtils.calculateRemaining(
+            canonicalIncomingTotal,
+            canonicalIncomingPaid,
+            decimalDigits,
+          );
+          effectiveStatus = DocumentStatus.draft;
+        } else {
+          final paymentRows = await txn.query(
+            'document_payments',
+            where: 'document_id = ?',
+            whereArgs: [doc.id],
+            orderBy: 'id ASC',
+          );
+
+          final totalExistingLedgerPaid = MoneyUtils.round(
+            paymentRows.fold<double>(
+              0.0,
+              (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
+            ),
+            decimalDigits,
+          );
+
+          final isUserAlteringPaid =
+              (canonicalIncomingPaid - canonicalOldPaid).abs() > epsilon;
+          final isUserAlteringTotal =
+              (canonicalIncomingTotal - canonicalOldTotal).abs() > epsilon;
+          final isLedgerDiscrepant =
+              (canonicalOldPaid - totalExistingLedgerPaid).abs() > epsilon;
+
+          // 1. Genuine upfront rows: explicitly recorded upfront down-payments (must have no linked receipt)
+          final upfrontRows = paymentRows
+              .where((r) =>
+                  r['payment_origin'] == PaymentOrigin.upfront &&
+                  r['receipt_document_id'] == null)
+              .toList();
+
+          // 2. Receipt and reversal rows: associated with payment receipts or expense vouchers
+          final linkedReceiptRows = paymentRows
+              .where((r) =>
+                  r['receipt_document_id'] != null ||
+                  r['payment_origin'] == PaymentOrigin.receipt ||
+                  r['payment_origin'] == PaymentOrigin.reversal)
+              .toList();
+
+          // 3. Unclassified legacy rows: rows from older versions where payment_origin is NULL and receipt_document_id is NULL
+          final unclassifiedLegacyRows = paymentRows
+              .where((r) =>
+                  r['receipt_document_id'] == null &&
+                  r['payment_origin'] == null)
+              .toList();
+
+          final netLinkedReceiptPaid = MoneyUtils.round(
+            linkedReceiptRows.fold<double>(
+              0.0,
+              (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
+            ),
+            decimalDigits,
+          );
+
+          if (!isUserAlteringPaid) {
+            // User did NOT modify the paid amount.
+            if (isLedgerDiscrepant) {
+              // Document has pre-existing discrepancy between documents.paid and document_payments.
+              if (isUserAlteringTotal) {
+                // Modifying total requires computing remaining, which cannot be done reliably without choosing a balance.
+                throw StateError(
+                  'Cannot modify financial totals: document has discrepant payment records (document paid: $canonicalOldPaid, recorded payments: $totalExistingLedgerPaid). Please resolve payment records before modifying totals.',
+                );
+              }
+              // Harmless non-financial edit (notes, contact, date, items with identical total):
+              // NEVER fabricate, mutate, or delete payment rows. Preserve existing financial values intact!
+              effectivePaid = oldDoc.paid;
+              effectiveRemaining = oldDoc.remaining;
+              effectiveStatus = oldDoc.status;
+            } else {
+              // Clean document (ledger matches documents.paid).
+              if (MoneyUtils.isOverpayment(
+                totalExistingLedgerPaid,
+                canonicalIncomingTotal,
+                decimalDigits,
+              )) {
+                throw StateError(
+                  'Cannot reduce total ($canonicalIncomingTotal) below recorded payments ($totalExistingLedgerPaid). '
+                  'Please refund or reverse payments first.',
+                );
+              }
+
+              effectivePaid = totalExistingLedgerPaid;
+              effectiveRemaining = MoneyUtils.calculateRemaining(
+                canonicalIncomingTotal,
+                totalExistingLedgerPaid,
+                decimalDigits,
+              );
+              effectiveStatus = DocumentStatus.fromPayment(
+                totalExistingLedgerPaid,
+                canonicalIncomingTotal,
+                decimalDigits: decimalDigits,
+              );
+            }
+          } else {
+            // User actively attempted to alter the paid amount.
+            if (isLedgerDiscrepant) {
+              throw StateError(
+                'Cannot modify paid amount: document has discrepant payment records (document paid: $canonicalOldPaid, recorded payments: $totalExistingLedgerPaid). Please review payment records.',
+              );
             }
 
-            await txn.update(
-              'products',
-              {
-                'stock_quantity': newStock,
-                'average_cost': newAvgCost,
-                'cost_status': newCostStatus,
-              },
-              where: 'id = ?',
-              whereArgs: [productId],
-            );
+            if (unclassifiedLegacyRows.isNotEmpty) {
+              throw StateError(
+                'Cannot modify paid amount: document contains legacy unclassified payment records. '
+                'Please record payments via payment receipts instead.',
+              );
+            }
 
-            await _insertStockMovement(
-              txn,
-              productId: productId,
-              type: StockMovement.typeCancellation,
-              quantity: -qty,
-              unitCost: origUnitCost,
-              totalCost: origUnitCost != null ? -qty * origUnitCost : null,
-              costStatus: origCostStatus,
-              provenance: 'purchase_reversal',
-              referenceDocumentId: doc.id,
+            if (netLinkedReceiptPaid > epsilon) {
+              throw StateError(
+                'Cannot modify paid amount directly on a document with active linked payment receipts/vouchers '
+                '(active receipts total: $netLinkedReceiptPaid). '
+                'Please record, cancel, or delete payment receipts instead.',
+              );
+            }
+
+            if (upfrontRows.length > 1) {
+              throw StateError(
+                'Cannot modify paid amount: multiple historical upfront payment records exist. '
+                'Please review payment records.',
+              );
+            }
+
+            if (canonicalIncomingPaid == 0) {
+              if (upfrontRows.isNotEmpty) {
+                await txn.delete(
+                  'document_payments',
+                  where: 'id = ?',
+                  whereArgs: [upfrontRows.first['id']],
+                );
+              }
+            } else {
+              if (upfrontRows.isNotEmpty) {
+                await txn.update(
+                  'document_payments',
+                  {
+                    'amount': canonicalIncomingPaid,
+                    'payment_method': doc.paymentMethod,
+                    'date': doc.date.toIso8601String(),
+                    'payment_origin': PaymentOrigin.upfront,
+                  },
+                  where: 'id = ?',
+                  whereArgs: [upfrontRows.first['id']],
+                );
+                if (canonicalIncomingPaid > 0) {
+                  await _lockCurrencyTxn(txn);
+                }
+              } else {
+                await _insertDocumentPaymentTxn(txn, {
+                  'document_id': doc.id,
+                  'amount': canonicalIncomingPaid,
+                  'payment_method': doc.paymentMethod,
+                  'date': doc.date.toIso8601String(),
+                  'notes': doc.type == 'invoice'
+                      ? 'Initial payment'
+                      : 'Initial purchase payment',
+                  'receipt_document_id': null,
+                  'payment_origin': PaymentOrigin.upfront,
+                });
+              }
+            }
+
+            effectivePaid = canonicalIncomingPaid;
+            effectiveRemaining = MoneyUtils.calculateRemaining(
+              canonicalIncomingTotal,
+              canonicalIncomingPaid,
+              decimalDigits,
+            );
+            effectiveStatus = DocumentStatus.fromPayment(
+              canonicalIncomingPaid,
+              canonicalIncomingTotal,
+              decimalDigits: decimalDigits,
             );
           }
         }
@@ -2323,18 +3481,18 @@ class DatabaseHelper {
           'contact_id': contactId,
           'recipient_name': contact?.name ?? doc.recipientName,
           'recipient_phone': contact?.phone ?? doc.recipientPhone,
-          'subtotal': doc.subtotal,
+          'subtotal': effectiveSubtotal,
           'discount': doc.discount,
           'tax_rate': doc.taxRate,
           'tax_amount': doc.taxAmount,
-          'total': doc.total,
-          'paid': doc.paid,
-          'remaining': doc.remaining,
+          'total': effectiveTotal,
+          'paid': effectivePaid,
+          'remaining': effectiveRemaining,
           'payment_method': doc.paymentMethod,
           'valid_until': doc.validUntil?.toIso8601String(),
           'notes': doc.notes,
           'related_document_id': doc.relatedDocumentId,
-          'status': doc.status,
+          'status': effectiveStatus,
           'currency_code': doc.currencyCode,
         },
         where: 'id = ?',
@@ -2346,30 +3504,6 @@ class DatabaseHelper {
         where: 'document_id = ?',
         whereArgs: [doc.id],
       );
-
-      // Pre-check stock availability for non-draft invoices
-      if (doc.type == 'invoice' && !newIsDraft && strictStock) {
-        for (final item in newItems) {
-          if (item.productId == null || item.quantity <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['name', 'type', 'stock_quantity'],
-            where: 'id = ?',
-            whereArgs: [item.productId],
-          );
-          if (pRows.isNotEmpty &&
-              (pRows.first['type'] as String? ?? 'product') == 'product') {
-            final stock =
-                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-            if (stock < item.quantity) {
-              final name = pRows.first['name'] as String? ?? '';
-              throw StateError(
-                'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(item.quantity)}',
-              );
-            }
-          }
-        }
-      }
 
       for (final item in newItems) {
         double? itemUnitCost;
@@ -2398,26 +3532,27 @@ class DatabaseHelper {
               final isCostKnown =
                   costStatus == Product.costStatusKnown && avgCost != null;
 
+              final effectiveBaseQty = item.effectiveBaseQuantity;
               final double deductQty;
               if (strictStock) {
-                deductQty = item.quantity;
+                deductQty = effectiveBaseQty;
               } else {
                 deductQty = currentStock > 0
-                    ? (currentStock >= item.quantity
-                          ? item.quantity
+                    ? (currentStock >= effectiveBaseQty
+                          ? effectiveBaseQty
                           : currentStock)
                     : 0.0;
               }
-              final bool isFullyBacked = deductQty >= item.quantity;
+              final bool isFullyBacked = deductQty >= effectiveBaseQty;
               if (deductQty > 0) {
                 // If stock was partially oversold, cost for the whole line is incomplete
                 // and must NOT be marked as fully trusted on document_items.
                 itemUnitCost = (isCostKnown && isFullyBacked) ? avgCost : null;
                 itemTotalCost = (isCostKnown && isFullyBacked)
-                    ? item.quantity * avgCost
+                    ? effectiveBaseQty * avgCost
                     : null;
                 final movementCost = isCostKnown ? deductQty * avgCost : null;
-                final movementCostStatus = (isCostKnown && isFullyBacked)
+                final movementCostStatus = isCostKnown
                     ? StockMovement.costStatusKnown
                     : StockMovement.costStatusUnknown;
 
@@ -2469,8 +3604,7 @@ class DatabaseHelper {
 
               final double newAvgCost;
               final String newCostStatus;
-              if (priorCostStatus == Product.costStatusKnown ||
-                  currentStock <= 0) {
+              if (priorCostStatus == Product.costStatusKnown) {
                 newAvgCost =
                     InventoryCostingService.calculateNewWeightedAverage(
                       currentStock: currentStock,
@@ -2479,6 +3613,30 @@ class DatabaseHelper {
                       incomingUnitCost: incomingUnitCost,
                     );
                 newCostStatus = Product.costStatusKnown;
+              } else if (currentStock <= 0) {
+                final movementSumRows = await txn.rawQuery(
+                  'SELECT COALESCE(SUM(quantity), 0) AS total_qty FROM stock_movements WHERE product_id = ?',
+                  [item.productId],
+                );
+                final movementTotal =
+                    (movementSumRows.first['total_qty'] as num).toDouble();
+                final isCleanLedger =
+                    (movementTotal - currentStock).abs() <= 0.001 &&
+                    movementTotal >= -0.0001;
+
+                final unknownCostRows = await txn.rawQuery(
+                  "SELECT 1 FROM stock_movements WHERE product_id = ? AND (cost_status != '${StockMovement.costStatusKnown}' OR unit_cost IS NULL) LIMIT 1",
+                  [item.productId],
+                );
+                final hasUnknownHistory = unknownCostRows.isNotEmpty;
+
+                if (isCleanLedger && !hasUnknownHistory) {
+                  newAvgCost = incomingUnitCost;
+                  newCostStatus = Product.costStatusKnown;
+                } else {
+                  newAvgCost = incomingUnitCost;
+                  newCostStatus = Product.costStatusUnknown;
+                }
               } else {
                 newAvgCost = incomingUnitCost;
                 newCostStatus = Product.costStatusUnknown;
@@ -2522,6 +3680,10 @@ class DatabaseHelper {
           'tax_rate': item.taxRate,
           'unit_cost': itemUnitCost,
           'total_cost': itemTotalCost,
+          'pricing_category': item.pricingCategory,
+          'sale_unit': item.saleUnit,
+          'unit_conversion_factor': item.unitConversionFactor,
+          'base_quantity': item.effectiveBaseQuantity,
         });
       }
     });
@@ -2538,80 +3700,53 @@ class DatabaseHelper {
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
 
-      // Payment receipts & expense vouchers: reverse the linked payment from the parent
-      // invoice/purchase and recalculate its paid/status.
-      // For all other document types: just null out any stray receipt references
-      // so the receipt_document_id FK (which has no cascade) never blocks deletion.
+      // Payment receipts & expense vouchers: block hard deletion if financial ledger history exists.
+      // Financial history must remain intact and auditable; cancellations must be used instead.
       if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
-        if (doc.status != DocumentStatus.cancelled) {
-          final paymentRows = await txn.query(
-            'document_payments',
-            where: 'receipt_document_id = ?',
-            whereArgs: [id],
-          );
-          final pTotal = paymentRows.fold<double>(
-            0.0,
-            (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
-          );
-          final amountToReverse = pTotal > 0 ? pTotal : doc.total;
-
-          await txn.delete(
-            'document_payments',
-            where: 'receipt_document_id = ?',
-            whereArgs: [id],
-          );
-
-          if (doc.relatedDocumentId != null) {
-            final parentRows = await txn.query(
-              'documents',
-              where: 'id = ?',
-              whereArgs: [doc.relatedDocumentId],
-            );
-            if (parentRows.isNotEmpty) {
-              final parent = Document.fromMap(parentRows.first);
-              if (parent.status != DocumentStatus.cancelled) {
-                final newPaid = (parent.paid - amountToReverse).clamp(
-                  0.0,
-                  parent.total,
-                );
-                final newRemaining = (parent.total - newPaid).clamp(
-                  0.0,
-                  double.infinity,
-                );
-                final newStatus = DocumentStatus.fromPayment(
-                  newPaid,
-                  parent.total,
-                );
-                await txn.update(
-                  'documents',
-                  {
-                    'paid': newPaid,
-                    'remaining': newRemaining,
-                    'status': newStatus,
-                  },
-                  where: 'id = ?',
-                  whereArgs: [doc.relatedDocumentId],
-                );
-              }
-            }
-          }
-        } else {
-          // If the voucher was ALREADY cancelled, its payment row and parent paid
-          // amount were already reversed during cancelDocument.
-          // Clean up any remaining payment row without deducting again.
-          await txn.delete(
-            'document_payments',
-            where: 'receipt_document_id = ?',
-            whereArgs: [id],
+        final paymentHistory = await txn.query(
+          'document_payments',
+          columns: ['id'],
+          where: 'receipt_document_id = ?',
+          whereArgs: [id],
+          limit: 1,
+        );
+        if (paymentHistory.isNotEmpty) {
+          throw StateError(
+            'Cannot delete ${doc.type} with recorded payment history. Please cancel the document instead to preserve accounting records.',
           );
         }
-      } else {
-        // Non-voucher document may still be referenced by a payment row's
-        // receipt_document_id (no ON DELETE cascade on that column).
-        await txn.rawUpdate(
-          'UPDATE document_payments SET receipt_document_id = NULL WHERE receipt_document_id = ?',
-          [id],
+      }
+
+      // Guard against deleting an invoice or purchase with active payment receipts/vouchers or payment history
+      if (doc.type == 'invoice' || doc.type == 'purchase') {
+        final activeReceipts = await txn.query(
+          'documents',
+          columns: ['id', 'document_number'],
+          where:
+              "related_document_id = ? AND type IN ('payment_receipt', 'expense_voucher') AND status != '${DocumentStatus.cancelled}'",
+          whereArgs: [id],
         );
+        if (activeReceipts.isNotEmpty) {
+          final receiptNums = activeReceipts
+              .map((r) => r['document_number'] as String)
+              .join(', ');
+          throw StateError(
+            'Cannot delete document with active payment receipts/vouchers ($receiptNums). Please cancel or delete the receipts first.',
+          );
+        }
+
+        final paymentHistory = await txn.query(
+          'document_payments',
+          columns: ['id'],
+          where: 'document_id = ?',
+          whereArgs: [id],
+          limit: 1,
+        );
+        if (paymentHistory.isNotEmpty || doc.paid > 0) {
+          throw StateError(
+            'Cannot delete ${doc.type} with recorded payment history. Please cancel the document instead to preserve accounting records.',
+          );
+        }
       }
 
       // Stock reversion for non-draft, non-cancelled invoices and purchases
@@ -2627,115 +3762,163 @@ class DatabaseHelper {
         );
         if (doc.type == 'purchase') {
           final netPurchaseQtyByProduct = <int, double>{};
-          for (final m in movements) {
-            final productId = m['product_id'] as int;
-            final mType = m['type'] as String;
-            final mQty = (m['quantity'] as num).toDouble();
-            if (mType == StockMovement.typePurchase) {
+          final netPurchaseCostByProduct = <int, double?>{};
+          if (movements.isNotEmpty) {
+            for (final m in movements) {
+              final productId = m['product_id'] as int;
+              final mType = m['type'] as String;
+              final mQty = (m['quantity'] as num).toDouble();
+              final uCost = (m['unit_cost'] as num?)?.toDouble();
+              final tCost = (m['total_cost'] as num?)?.toDouble() ??
+                  (uCost != null ? mQty * uCost : null);
+              if (mType == StockMovement.typePurchase) {
+                netPurchaseQtyByProduct[productId] =
+                    (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
+                if (tCost != null) {
+                  netPurchaseCostByProduct[productId] =
+                      (netPurchaseCostByProduct[productId] ?? 0.0) + tCost;
+                }
+              } else if (mType == StockMovement.typeCancellation && mQty < 0) {
+                netPurchaseQtyByProduct[productId] =
+                    (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
+                if (tCost != null) {
+                  netPurchaseCostByProduct[productId] =
+                      (netPurchaseCostByProduct[productId] ?? 0.0) + tCost;
+                }
+              }
+            }
+          } else {
+            final items = await txn.query(
+              'document_items',
+              where: 'document_id = ?',
+              whereArgs: [id],
+            );
+            for (final item in items) {
+              final productId = item['product_id'] as int?;
+              final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+              final price = (item['price'] as num?)?.toDouble();
+              if (productId == null || qty <= 0) continue;
               netPurchaseQtyByProduct[productId] =
-                  (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
-            } else if (mType == StockMovement.typeCancellation && mQty < 0) {
-              netPurchaseQtyByProduct[productId] =
-                  (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
+                  (netPurchaseQtyByProduct[productId] ?? 0.0) + qty;
+              if (price != null) {
+                netPurchaseCostByProduct[productId] =
+                    (netPurchaseCostByProduct[productId] ?? 0.0) +
+                    (qty * price);
+              }
             }
           }
+
           for (final entry in netPurchaseQtyByProduct.entries) {
             final productId = entry.key;
             final netQty = entry.value;
             if (netQty <= 0) continue;
             final pRows = await txn.query(
               'products',
-              columns: ['name', 'type', 'stock_quantity'],
+              columns: [
+                'name',
+                'type',
+                'stock_quantity',
+                'average_cost',
+                'cost_status',
+              ],
               where: 'id = ?',
               whereArgs: [productId],
             );
             if (pRows.isNotEmpty &&
                 (pRows.first['type'] as String? ?? 'product') == 'product') {
+              final name = pRows.first['name'] as String? ?? '';
               final stock =
-                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
               if (stock < netQty) {
-                final name = pRows.first['name'] as String? ?? '';
                 throw StateError(
                   'Insufficient stock to reverse purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(netQty)}',
                 );
               }
-            }
-          }
-        }
-        if (movements.isNotEmpty) {
-          for (final m in movements) {
-            final productId = m['product_id'] as int;
-            final mType = m['type'] as String;
-            final mQty = (m['quantity'] as num).toDouble();
-            if (mType == StockMovement.typeSale) {
-              await txn.rawUpdate(
-                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-                [-mQty, productId],
-              );
-            } else if (mType == StockMovement.typePurchase) {
-              await txn.rawUpdate(
-                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-                [mQty, productId],
-              );
-            } else if (mType == StockMovement.typeCancellation &&
-                doc.type == 'purchase') {
-              await txn.rawUpdate(
-                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-                [mQty, productId],
-              );
-            }
-          }
-        } else {
-          final items = await txn.query(
-            'document_items',
-            where: 'document_id = ?',
-            whereArgs: [id],
-          );
-          if (doc.type == 'purchase') {
-            for (final item in items) {
-              final productId = item['product_id'] as int?;
-              final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-              if (productId == null || qty <= 0) continue;
-              final pRows = await txn.query(
+
+              final currentAvg =
+                  (pRows.first['average_cost'] as num?)?.toDouble();
+              final currentStatus =
+                  pRows.first['cost_status'] as String? ??
+                  Product.costStatusUnknown;
+              final removedCost = netPurchaseCostByProduct[productId];
+              final newStock = stock - netQty;
+
+              double? newAvgCost = currentAvg;
+              String newCostStatus = currentStatus;
+
+              if (newStock <= 0) {
+                newAvgCost = null;
+                newCostStatus = Product.costStatusUnknown;
+              } else if (currentAvg != null && removedCost != null) {
+                final prevVal = stock * currentAvg;
+                if (prevVal - removedCost < -0.001) {
+                  throw StateError(
+                    'Cannot delete purchase for "$name" because subsequent sales or movements consumed this stock',
+                  );
+                }
+                final remainVal =
+                    (prevVal - removedCost).clamp(0.0, double.infinity);
+                newAvgCost = remainVal / newStock;
+                newCostStatus = (newAvgCost > 0)
+                    ? Product.costStatusKnown
+                    : Product.costStatusUnknown;
+              }
+
+              await txn.update(
                 'products',
-                columns: ['name', 'type', 'stock_quantity'],
+                {
+                  'stock_quantity': newStock,
+                  'average_cost': newAvgCost,
+                  'cost_status': newCostStatus,
+                },
                 where: 'id = ?',
                 whereArgs: [productId],
               );
-              if (pRows.isNotEmpty &&
-                  (pRows.first['type'] as String? ?? 'product') == 'product') {
-                final stock =
-                    (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-                if (stock < qty) {
-                  final name = pRows.first['name'] as String? ?? '';
-                  throw StateError(
-                    'Insufficient stock to reverse purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(qty)}',
-                  );
-                }
-              }
             }
           }
-          for (final item in items) {
-            final productId = item['product_id'] as int?;
-            final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-            if (productId == null || qty <= 0) continue;
-            final pRows = await txn.query(
-              'products',
-              columns: ['type'],
-              where: 'id = ?',
-              whereArgs: [productId],
+        } else if (doc.type == 'invoice') {
+          if (movements.isNotEmpty) {
+            final netSalesQtyByProduct = <int, double>{};
+            for (final m in movements) {
+              final productId = m['product_id'] as int;
+              final mType = m['type'] as String;
+              final mQty = (m['quantity'] as num).toDouble();
+              if (mType == StockMovement.typeSale ||
+                  mType == StockMovement.typeCancellation) {
+                netSalesQtyByProduct[productId] =
+                    (netSalesQtyByProduct[productId] ?? 0.0) + mQty;
+              }
+            }
+            for (final entry in netSalesQtyByProduct.entries) {
+              final productId = entry.key;
+              final netQty = entry.value;
+              final revertQty = -netQty;
+              if (revertQty > 0) {
+                await txn.rawUpdate(
+                  'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                  [revertQty, productId],
+                );
+              }
+            }
+          } else {
+            final items = await txn.query(
+              'document_items',
+              where: 'document_id = ?',
+              whereArgs: [id],
             );
-            if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
-            if (doc.type == 'invoice') {
-              await txn.rawUpdate(
-                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-                [qty, productId],
-              );
-            } else if (doc.type == 'purchase') {
-              await txn.rawUpdate(
-                'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-                [qty, productId],
-              );
+            for (final item in items) {
+              final productId = item['product_id'] as int?;
+              final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+              final factor =
+                  (item['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
+              final baseQty = (item['base_quantity'] as num?)?.toDouble() ??
+                  (qty * factor);
+              if (productId != null && baseQty > 0) {
+                await txn.rawUpdate(
+                  'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                  [baseQty, productId],
+                );
+              }
             }
           }
         }
@@ -2748,6 +3931,25 @@ class DatabaseHelper {
         where: 'reference_document_id = ?',
         whereArgs: [id],
       );
+
+      // Guard against deleting an invoice or purchase with active payment receipts/vouchers
+      if (doc.type == 'invoice' || doc.type == 'purchase') {
+        final activeReceipts = await txn.query(
+          'documents',
+          columns: ['id', 'document_number'],
+          where:
+              "related_document_id = ? AND type IN ('payment_receipt', 'expense_voucher') AND status != '${DocumentStatus.cancelled}'",
+          whereArgs: [id],
+        );
+        if (activeReceipts.isNotEmpty) {
+          final receiptNums = activeReceipts
+              .map((r) => r['document_number'] as String)
+              .join(', ');
+          throw StateError(
+            'Cannot delete document with active payment receipts/vouchers ($receiptNums). Please cancel or delete the receipts first.',
+          );
+        }
+      }
 
       // Nullify related_document_id on any documents that reference this one.
       // Without this, the FK constraint prevents deletion when other documents
@@ -2783,6 +3985,25 @@ class DatabaseHelper {
         return;
       }
 
+      // Guard against cancelling an invoice or purchase with active payment receipts/vouchers
+      if (doc.type == 'invoice' || doc.type == 'purchase') {
+        final activeReceipts = await txn.query(
+          'documents',
+          columns: ['id', 'document_number'],
+          where:
+              "related_document_id = ? AND type IN ('payment_receipt', 'expense_voucher') AND status != '${DocumentStatus.cancelled}'",
+          whereArgs: [id],
+        );
+        if (activeReceipts.isNotEmpty) {
+          final receiptNums = activeReceipts
+              .map((r) => r['document_number'] as String)
+              .join(', ');
+          throw StateError(
+            'Cannot cancel document with active payment receipts/vouchers ($receiptNums). Please cancel or delete the receipts first.',
+          );
+        }
+      }
+
       final affectsStock =
           (doc.type == 'invoice' || doc.type == 'purchase') &&
           doc.status != DocumentStatus.draft;
@@ -2793,140 +4014,225 @@ class DatabaseHelper {
           whereArgs: [id],
         );
 
-        // Guard against cancelling a purchase whose stock has already been consumed
         if (doc.type == 'purchase') {
-          for (final item in items) {
-            final productId = item['product_id'] as int?;
-            final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-            if (productId == null || qty <= 0) continue;
+          final netPurchaseQtyByProduct = <int, double>{};
+          final netPurchaseCostByProduct = <int, double?>{};
+          final movements = await txn.query(
+            'stock_movements',
+            where: 'reference_document_id = ?',
+            whereArgs: [id],
+          );
+          if (movements.isNotEmpty) {
+            for (final m in movements) {
+              final productId = m['product_id'] as int;
+              final mType = m['type'] as String;
+              final mQty = (m['quantity'] as num).toDouble();
+              final uCost = (m['unit_cost'] as num?)?.toDouble();
+              final tCost = (m['total_cost'] as num?)?.toDouble() ??
+                  (uCost != null ? mQty * uCost : null);
+              if (mType == StockMovement.typePurchase) {
+                netPurchaseQtyByProduct[productId] =
+                    (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
+                if (tCost != null) {
+                  netPurchaseCostByProduct[productId] =
+                      (netPurchaseCostByProduct[productId] ?? 0.0) + tCost;
+                }
+              } else if (mType == StockMovement.typeCancellation && mQty < 0) {
+                netPurchaseQtyByProduct[productId] =
+                    (netPurchaseQtyByProduct[productId] ?? 0.0) + mQty;
+                if (tCost != null) {
+                  netPurchaseCostByProduct[productId] =
+                      (netPurchaseCostByProduct[productId] ?? 0.0) + tCost;
+                }
+              }
+            }
+          } else {
+            for (final item in items) {
+              final productId = item['product_id'] as int?;
+              final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+              final price = (item['price'] as num?)?.toDouble();
+              if (productId == null || qty <= 0) continue;
+              netPurchaseQtyByProduct[productId] =
+                  (netPurchaseQtyByProduct[productId] ?? 0.0) + qty;
+              if (price != null) {
+                netPurchaseCostByProduct[productId] =
+                    (netPurchaseCostByProduct[productId] ?? 0.0) +
+                    (qty * price);
+              }
+            }
+          }
+
+          for (final entry in netPurchaseQtyByProduct.entries) {
+            final productId = entry.key;
+            final netQty = entry.value;
+            if (netQty <= 0) continue;
             final pRows = await txn.query(
               'products',
-              columns: ['name', 'type', 'stock_quantity'],
+              columns: [
+                'name',
+                'type',
+                'stock_quantity',
+                'average_cost',
+                'cost_status',
+              ],
               where: 'id = ?',
               whereArgs: [productId],
             );
             if (pRows.isNotEmpty &&
                 (pRows.first['type'] as String? ?? 'product') == 'product') {
+              final name = pRows.first['name'] as String? ?? '';
               final stock =
-                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-              if (stock < qty) {
-                final name = pRows.first['name'] as String? ?? '';
+                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
+              if (stock < netQty) {
                 throw StateError(
-                  'Insufficient stock to cancel purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(qty)}',
+                  'Insufficient stock to cancel purchase for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(netQty)}',
                 );
               }
-            }
-          }
-        }
 
-        for (final item in items) {
-          final productId = item['product_id'] as int?;
-          final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-          if (productId == null || qty <= 0) continue;
-          final pRows = await txn.query(
-            'products',
-            columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
-            where: 'id = ?',
-            whereArgs: [productId],
-          );
-          if (pRows.isEmpty || pRows.first['type'] != 'product') continue;
-          if (doc.type == 'invoice') {
-            final mRows = await txn.query(
-              'stock_movements',
-              where:
-                  'reference_document_id = ? AND product_id = ? AND type = ?',
-              whereArgs: [id, productId, StockMovement.typeSale],
-            );
-            final double revertQty;
-            double? unitCost;
-            double? totalCost;
-            String costStatus = StockMovement.costStatusUnknown;
-            if (mRows.isNotEmpty) {
-              revertQty = -(mRows.first['quantity'] as num).toDouble();
-              unitCost = (mRows.first['unit_cost'] as num?)?.toDouble();
-              totalCost = (mRows.first['total_cost'] as num?)?.toDouble();
-              costStatus =
-                  mRows.first['cost_status'] as String? ??
-                  StockMovement.costStatusUnknown;
-            } else {
-              revertQty = qty;
-            }
-            if (revertQty > 0) {
-              await txn.rawUpdate(
-                'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
-                [revertQty, productId],
+              final currentAvg =
+                  (pRows.first['average_cost'] as num?)?.toDouble();
+              final currentStatus =
+                  pRows.first['cost_status'] as String? ??
+                  Product.costStatusUnknown;
+              final removedCost = netPurchaseCostByProduct[productId];
+              final newStock = stock - netQty;
+
+              double? newAvgCost = currentAvg;
+              String newCostStatus = currentStatus;
+
+              if (newStock <= 0) {
+                newAvgCost = null;
+                newCostStatus = Product.costStatusUnknown;
+              } else if (currentAvg != null && removedCost != null) {
+                final prevVal = stock * currentAvg;
+                if (prevVal - removedCost < -0.001) {
+                  throw StateError(
+                    'Cannot cancel purchase for "$name" because subsequent sales or movements consumed this stock',
+                  );
+                }
+                final remainVal =
+                    (prevVal - removedCost).clamp(0.0, double.infinity);
+                newAvgCost = remainVal / newStock;
+                newCostStatus = (newAvgCost > 0)
+                    ? Product.costStatusKnown
+                    : Product.costStatusUnknown;
+              }
+
+              await txn.update(
+                'products',
+                {
+                  'stock_quantity': newStock,
+                  'average_cost': newAvgCost,
+                  'cost_status': newCostStatus,
+                },
+                where: 'id = ?',
+                whereArgs: [productId],
               );
+
+              final avgUnitCost = (removedCost != null && netQty > 0)
+                  ? removedCost / netQty
+                  : null;
               await _insertStockMovement(
                 txn,
                 productId: productId,
                 type: StockMovement.typeCancellation,
-                quantity: revertQty,
-                unitCost: unitCost,
-                totalCost: totalCost,
-                costStatus: costStatus,
-                provenance: 'sale_cancellation',
+                quantity: -netQty,
+                unitCost: avgUnitCost,
+                totalCost: removedCost != null ? -removedCost : null,
+                costStatus: newCostStatus,
+                provenance: 'purchase_cancellation',
                 referenceDocumentId: id,
+                date: doc.date,
               );
             }
-          } else if (doc.type == 'purchase') {
-            final mRows = await txn.query(
-              'stock_movements',
-              where:
-                  'reference_document_id = ? AND product_id = ? AND type = ?',
-              whereArgs: [id, productId, StockMovement.typePurchase],
-            );
-            final unitCost = mRows.isNotEmpty
-                ? (mRows.first['unit_cost'] as num?)?.toDouble()
-                : (item['price'] as num?)?.toDouble();
-            final costStatus = mRows.isNotEmpty
-                ? (mRows.first['cost_status'] as String? ??
-                      StockMovement.costStatusKnown)
-                : StockMovement.costStatusKnown;
+          }
+        } else if (doc.type == 'invoice') {
+          final movements = await txn.query(
+            'stock_movements',
+            where:
+                'reference_document_id = ? AND type IN (?, ?)',
+            whereArgs: [
+              id,
+              StockMovement.typeSale,
+              StockMovement.typeCancellation,
+            ],
+          );
+          if (movements.isNotEmpty) {
+            final netSalesQtyByProduct = <int, double>{};
+            final lastCostByProduct = <int, double?>{};
+            final lastStatusByProduct = <int, String>{};
 
-            final currentStock =
-                (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0;
-            final currentAvg = (pRows.first['average_cost'] as num?)
-                ?.toDouble();
-            final newStock = currentStock - qty;
-
-            double? newAvgCost = currentAvg;
-            String newCostStatus =
-                pRows.first['cost_status'] as String? ??
-                Product.costStatusUnknown;
-            if (newStock <= 0) {
-              newAvgCost = null;
-              newCostStatus = Product.costStatusUnknown;
-            } else if (currentAvg != null && unitCost != null) {
-              final prevVal = currentStock * currentAvg;
-              final removedVal = qty * unitCost;
-              final remainVal = (prevVal - removedVal).clamp(
-                0.0,
-                double.infinity,
-              );
-              newAvgCost = remainVal / newStock;
+            for (final m in movements) {
+              final productId = m['product_id'] as int;
+              final mQty = (m['quantity'] as num).toDouble();
+              netSalesQtyByProduct[productId] =
+                  (netSalesQtyByProduct[productId] ?? 0.0) + mQty;
+              if (m['unit_cost'] != null) {
+                lastCostByProduct[productId] =
+                    (m['unit_cost'] as num).toDouble();
+              }
+              if (m['cost_status'] != null) {
+                lastStatusByProduct[productId] =
+                    m['cost_status'] as String;
+              }
             }
 
-            await txn.update(
-              'products',
-              {
-                'stock_quantity': newStock,
-                'average_cost': newAvgCost,
-                'cost_status': newCostStatus,
-              },
-              where: 'id = ?',
-              whereArgs: [productId],
-            );
-            await _insertStockMovement(
-              txn,
-              productId: productId,
-              type: StockMovement.typeCancellation,
-              quantity: -qty,
-              unitCost: unitCost,
-              totalCost: unitCost != null ? -qty * unitCost : null,
-              costStatus: costStatus,
-              provenance: 'purchase_cancellation',
-              referenceDocumentId: id,
-            );
+            for (final entry in netSalesQtyByProduct.entries) {
+              final productId = entry.key;
+              final netQty = entry.value;
+              final revertQty = -netQty;
+              if (revertQty > 0) {
+                final unitCost = lastCostByProduct[productId];
+                final totalCost =
+                    unitCost != null ? revertQty * unitCost : null;
+                final costStatus = lastStatusByProduct[productId] ??
+                    StockMovement.costStatusUnknown;
+
+                await txn.rawUpdate(
+                  'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                  [revertQty, productId],
+                );
+                await _insertStockMovement(
+                  txn,
+                  productId: productId,
+                  type: StockMovement.typeCancellation,
+                  quantity: revertQty,
+                  unitCost: unitCost,
+                  totalCost: totalCost,
+                  costStatus: costStatus,
+                  provenance: 'sale_cancellation',
+                  referenceDocumentId: id,
+                  date: doc.date,
+                );
+              }
+            }
+          } else {
+            for (final item in items) {
+              final productId = item['product_id'] as int?;
+              final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
+              final factor =
+                  (item['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
+              final baseQty = (item['base_quantity'] as num?)?.toDouble() ??
+                  (qty * factor);
+              if (productId != null && baseQty > 0) {
+                await txn.rawUpdate(
+                  'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+                  [baseQty, productId],
+                );
+                await _insertStockMovement(
+                  txn,
+                  productId: productId,
+                  type: StockMovement.typeCancellation,
+                  quantity: baseQty,
+                  unitCost: (item['unit_cost'] as num?)?.toDouble(),
+                  totalCost: (item['total_cost'] as num?)?.toDouble(),
+                  costStatus: StockMovement.costStatusUnknown,
+                  provenance: 'sale_cancellation_legacy',
+                  referenceDocumentId: id,
+                  date: doc.date,
+                );
+              }
+            }
           }
         }
       }
@@ -2945,21 +4251,23 @@ class DatabaseHelper {
     int receiptId,
     int invoiceId,
   ) async {
+    final receiptRows = await txn.query(
+      'documents',
+      where: 'id = ?',
+      whereArgs: [receiptId],
+    );
+    final receipt =
+        receiptRows.isNotEmpty ? Document.fromMap(receiptRows.first) : null;
+
     final paymentRows = await txn.query(
       'document_payments',
       where: 'receipt_document_id = ?',
       whereArgs: [receiptId],
+      orderBy: 'id ASC',
     );
     final pTotal = paymentRows.fold<double>(
       0.0,
       (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
-    );
-
-    // Delete the payment row linked to this receipt/voucher
-    await txn.delete(
-      'document_payments',
-      where: 'receipt_document_id = ?',
-      whereArgs: [receiptId],
     );
 
     // Recalculate parent invoice/purchase without destroying upfront payments
@@ -2970,40 +4278,52 @@ class DatabaseHelper {
     );
     if (invoiceRows.isNotEmpty) {
       final invoice = Document.fromMap(invoiceRows.first);
-      if (invoice.status != DocumentStatus.cancelled) {
-        final receiptRows = await txn.query(
-          'documents',
-          columns: ['total'],
-          where: 'id = ?',
-          whereArgs: [receiptId],
-        );
-        final receiptTotal = receiptRows.isNotEmpty
-            ? ((receiptRows.first['total'] as num?)?.toDouble() ?? 0.0)
-            : 0.0;
-        final decimalDigits = Currency.decimalDigitsForCode(invoice.currencyCode);
-        final amountToReverse = pTotal > 0 ? pTotal : receiptTotal;
-        final canonicalReverse = MoneyUtils.round(amountToReverse, decimalDigits);
+      final decimalDigits = Currency.decimalDigitsForCode(invoice.currencyCode);
+      final receiptTotal = receipt?.total ?? 0.0;
+      final amountToReverse = pTotal > 0 ? pTotal : receiptTotal;
+      final canonicalReverse = MoneyUtils.round(amountToReverse, decimalDigits);
 
-        final newPaid = math.max(
-          0.0,
-          MoneyUtils.round(invoice.paid - canonicalReverse, decimalDigits),
-        );
-        final newRemaining = MoneyUtils.calculateRemaining(
-          invoice.total,
-          newPaid,
-          decimalDigits,
-        );
-        final newStatus = DocumentStatus.fromPayment(
-          newPaid,
-          invoice.total,
-          decimalDigits: decimalDigits,
-        );
-        await txn.update(
-          'documents',
-          {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
-          where: 'id = ?',
-          whereArgs: [invoiceId],
-        );
+      if (canonicalReverse > 0) {
+        final now = DateTime.now();
+        final method = paymentRows.isNotEmpty
+            ? paymentRows.first['payment_method'] as String?
+            : receipt?.paymentMethod;
+        final docNum = receipt?.documentNumber ?? receiptId.toString();
+        final docType = receipt?.type ?? 'receipt';
+
+        // Auditable reversal entry in document_payments linked to original receipt
+        await _insertDocumentPaymentTxn(txn, {
+          'document_id': invoiceId,
+          'amount': -canonicalReverse,
+          'payment_method': method,
+          'date': now.toIso8601String(),
+          'notes': 'Reversal: cancelled $docType $docNum',
+          'receipt_document_id': receiptId,
+          'payment_origin': PaymentOrigin.reversal,
+        });
+
+        if (invoice.status != DocumentStatus.cancelled) {
+          final newPaid = math.max(
+            0.0,
+            MoneyUtils.round(invoice.paid - canonicalReverse, decimalDigits),
+          );
+          final newRemaining = MoneyUtils.calculateRemaining(
+            invoice.total,
+            newPaid,
+            decimalDigits,
+          );
+          final newStatus = DocumentStatus.fromPayment(
+            newPaid,
+            invoice.total,
+            decimalDigits: decimalDigits,
+          );
+          await txn.update(
+            'documents',
+            {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
+            where: 'id = ?',
+            whereArgs: [invoiceId],
+          );
+        }
       }
     }
 
@@ -3043,24 +4363,41 @@ class DatabaseHelper {
       if (doc.status == DocumentStatus.draft) {
         throw StateError('Cannot record payment on a draft document');
       }
-      if (amount <= 0) {
+      final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
+      final canonicalAmount = MoneyUtils.round(amount, decimalDigits);
+
+      if (canonicalAmount <= 0) {
         throw ArgumentError('Payment amount must be greater than zero');
       }
-      if (amount > doc.remaining) {
+      if (MoneyUtils.isOverpayment(
+        canonicalAmount,
+        doc.remaining,
+        decimalDigits,
+      )) {
         throw ArgumentError('Payment cannot exceed remaining amount');
       }
 
-      await txn.insert('document_payments', {
+      await _insertDocumentPaymentTxn(txn, {
         'document_id': documentId,
-        'amount': amount,
+        'amount': canonicalAmount,
         'payment_method': paymentMethod,
         'date': DateTime.now().toIso8601String(),
         'notes': notes,
+        'payment_origin': PaymentOrigin.receipt,
       });
 
-      final newPaid = doc.paid + amount;
-      final newRemaining = (doc.total - newPaid).clamp(0.0, double.infinity);
-      final newStatus = DocumentStatus.fromPayment(newPaid, doc.total);
+      final newPaid =
+          MoneyUtils.round(doc.paid + canonicalAmount, decimalDigits);
+      final newRemaining = MoneyUtils.calculateRemaining(
+        doc.total,
+        newPaid,
+        decimalDigits,
+      );
+      final newStatus = DocumentStatus.fromPayment(
+        newPaid,
+        doc.total,
+        decimalDigits: decimalDigits,
+      );
 
       await txn.update(
         'documents',
@@ -3168,13 +4505,14 @@ class DatabaseHelper {
     });
 
     // Record the payment row linked to the receipt
-    await txn.insert('document_payments', {
+    await _insertDocumentPaymentTxn(txn, {
       'document_id': documentId,
       'amount': canonicalAmount,
       'payment_method': paymentMethod,
       'date': now.toIso8601String(),
       'notes': notes,
       'receipt_document_id': receiptId,
+      'payment_origin': PaymentOrigin.receipt,
     });
 
     // Update invoice totals
@@ -3283,6 +4621,17 @@ class DatabaseHelper {
         throw StateError('Already converted: ${inv.documentNumber}');
       }
 
+      final bRows = await txn.query('businesses', limit: 1);
+      final baseCurrency = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      if (quotation.currencyCode != baseCurrency) {
+        throw StateError(
+          'Cannot convert quotation with legacy currency (${quotation.currencyCode}) '
+          'to invoice because active business currency is ($baseCurrency).',
+        );
+      }
+
       final invoiceNumber = await getNextDocumentNumber(txn, 'invoice');
       final now = DateTime.now();
 
@@ -3324,6 +4673,10 @@ class DatabaseHelper {
           'total': item['total'],
           'taxable': item['taxable'],
           'tax_rate': item['tax_rate'],
+          'pricing_category': item['pricing_category'],
+          'sale_unit': item['sale_unit'],
+          'unit_conversion_factor': item['unit_conversion_factor'] ?? 1.0,
+          'base_quantity': item['base_quantity'] ?? item['quantity'],
         });
       }
 
@@ -3347,6 +4700,17 @@ class DatabaseHelper {
         throw StateError('Document is not a draft');
       }
 
+      final bRows = await txn.query('businesses', limit: 1);
+      final baseCurrency = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      if (doc.currencyCode != baseCurrency) {
+        throw ArgumentError(
+          'Cannot issue draft with currency (${doc.currencyCode}) that does not match business base currency ($baseCurrency).',
+        );
+      }
+      await _lockCurrencyTxn(txn);
+
       final items = await txn.query(
         'document_items',
         where: 'document_id = ?',
@@ -3355,33 +4719,15 @@ class DatabaseHelper {
 
       if (doc.type == 'invoice') {
         if (strictStock) {
-          // Validate stock availability first
-          for (final item in items) {
-            final productId = item['product_id'] as int?;
-            final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
-            if (productId == null || qty <= 0) continue;
-            final pRows = await txn.query(
-              'products',
-              columns: ['name', 'type', 'stock_quantity'],
-              where: 'id = ?',
-              whereArgs: [productId],
-            );
-            if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
-              final stock =
-                  (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-              if (stock < qty) {
-                final name = pRows.first['name'] as String? ?? '';
-                throw StateError(
-                  'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(stock)}, required ${FormatUtils.formatQuantity(qty)}',
-                );
-              }
-            }
-          }
+          // Authoritative stock availability check
+          await _assertSaleStockAvailable(txn, items);
         }
         for (final item in items) {
           final productId = item['product_id'] as int?;
           final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
           if (productId == null || qty <= 0) continue;
+          final effectiveQty = (item['base_quantity'] as num?)?.toDouble() ??
+              (qty * ((item['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0));
           final pRows = await txn.query(
             'products',
             columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
@@ -3400,20 +4746,20 @@ class DatabaseHelper {
 
             final double deductQty;
             if (strictStock) {
-              deductQty = qty;
+              deductQty = effectiveQty;
             } else {
               deductQty = currentStock > 0
-                  ? (currentStock >= qty ? qty : currentStock)
+                  ? (currentStock >= effectiveQty ? effectiveQty : currentStock)
                   : 0.0;
             }
-            final bool isFullyBacked = deductQty >= qty;
+            final bool isFullyBacked = deductQty >= effectiveQty;
             if (deductQty > 0) {
               final unitCost = (isCostKnown && isFullyBacked) ? avgCost : null;
               final totalCost = (isCostKnown && isFullyBacked)
-                  ? qty * avgCost
+                  ? effectiveQty * avgCost
                   : null;
               final movementCost = isCostKnown ? deductQty * avgCost : null;
-              final movementCostStatus = (isCostKnown && isFullyBacked)
+              final movementCostStatus = isCostKnown
                   ? StockMovement.costStatusKnown
                   : StockMovement.costStatusUnknown;
 
@@ -3470,8 +4816,7 @@ class DatabaseHelper {
 
             final double newAvgCost;
             final String newCostStatus;
-            if (priorCostStatus == Product.costStatusKnown ||
-                currentStock <= 0) {
+            if (priorCostStatus == Product.costStatusKnown) {
               newAvgCost = InventoryCostingService.calculateNewWeightedAverage(
                 currentStock: currentStock,
                 currentAvgCost: currentAvg,
@@ -3479,6 +4824,30 @@ class DatabaseHelper {
                 incomingUnitCost: incomingUnitCost,
               );
               newCostStatus = Product.costStatusKnown;
+            } else if (currentStock <= 0) {
+              final movementSumRows = await txn.rawQuery(
+                'SELECT COALESCE(SUM(quantity), 0) AS total_qty FROM stock_movements WHERE product_id = ?',
+                [productId],
+              );
+              final movementTotal =
+                  (movementSumRows.first['total_qty'] as num).toDouble();
+              final isCleanLedger =
+                  (movementTotal - currentStock).abs() <= 0.001 &&
+                  movementTotal >= -0.0001;
+
+              final unknownCostRows = await txn.rawQuery(
+                "SELECT 1 FROM stock_movements WHERE product_id = ? AND (cost_status != '${StockMovement.costStatusKnown}' OR unit_cost IS NULL) LIMIT 1",
+                [productId],
+              );
+              final hasUnknownHistory = unknownCostRows.isNotEmpty;
+
+              if (isCleanLedger && !hasUnknownHistory) {
+                newAvgCost = incomingUnitCost;
+                newCostStatus = Product.costStatusKnown;
+              } else {
+                newAvgCost = incomingUnitCost;
+                newCostStatus = Product.costStatusUnknown;
+              }
             } else {
               newAvgCost = incomingUnitCost;
               newCostStatus = Product.costStatusUnknown;
@@ -3518,13 +4887,65 @@ class DatabaseHelper {
         }
       }
 
+      final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
+      final canonicalPaid = MoneyUtils.round(doc.paid, decimalDigits);
+      final canonicalTotal = MoneyUtils.round(doc.total, decimalDigits);
+      double effectivePaid = canonicalPaid;
+
+      // Ensure upfront payments recorded at draft creation are persisted to document_payments exactly once
+      if ((doc.type == 'invoice' || doc.type == 'purchase')) {
+        final existingPayments = await txn.query(
+          'document_payments',
+          where: 'document_id = ?',
+          whereArgs: [id],
+        );
+        final totalExistingPaid = MoneyUtils.round(
+          existingPayments.fold<double>(
+            0.0,
+            (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
+          ),
+          decimalDigits,
+        );
+
+        if (canonicalPaid > totalExistingPaid) {
+          final missingAmount =
+              MoneyUtils.round(canonicalPaid - totalExistingPaid, decimalDigits);
+          await _insertDocumentPaymentTxn(txn, {
+            'document_id': id,
+            'amount': missingAmount,
+            'payment_method': doc.paymentMethod,
+            'date': doc.date.toIso8601String(),
+            'notes': doc.type == 'invoice'
+                ? 'Initial payment'
+                : 'Initial purchase payment',
+            'receipt_document_id': null,
+            'payment_origin': PaymentOrigin.upfront,
+          });
+        } else if (totalExistingPaid > canonicalPaid) {
+          effectivePaid = totalExistingPaid;
+        }
+      }
+
+      final effectiveRemaining = MoneyUtils.calculateRemaining(
+        canonicalTotal,
+        effectivePaid,
+        decimalDigits,
+      );
       final newStatus = (doc.type == 'invoice' || doc.type == 'purchase')
-          ? DocumentStatus.fromPayment(doc.paid, doc.total)
+          ? DocumentStatus.fromPayment(
+              effectivePaid,
+              canonicalTotal,
+              decimalDigits: decimalDigits,
+            )
           : DocumentStatus.issued;
 
       await txn.update(
         'documents',
-        {'status': newStatus},
+        {
+          'status': newStatus,
+          'paid': effectivePaid,
+          'remaining': effectiveRemaining,
+        },
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -3542,6 +4963,17 @@ class DatabaseHelper {
       );
       if (rows.isEmpty) throw StateError('Document not found');
       final source = Document.fromMap(rows.first);
+
+      final bRows = await txn.query('businesses', limit: 1);
+      final baseCurrency = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      if (source.currencyCode != baseCurrency) {
+        throw StateError(
+          'Cannot duplicate document in legacy currency (${source.currencyCode}) '
+          'because active business currency is ($baseCurrency).',
+        );
+      }
 
       final newNumber = await getNextDocumentNumber(txn, source.type);
       final now = DateTime.now();
@@ -3595,6 +5027,10 @@ class DatabaseHelper {
             'total': item['total'],
             'taxable': item['taxable'],
             'tax_rate': item['tax_rate'],
+            'pricing_category': item['pricing_category'],
+            'sale_unit': item['sale_unit'],
+            'unit_conversion_factor': item['unit_conversion_factor'] ?? 1.0,
+            'base_quantity': item['base_quantity'] ?? item['quantity'],
           });
         }
       }
@@ -3705,22 +5141,32 @@ class DatabaseHelper {
     return maps.map((e) => Document.fromMap(e)).toList();
   }
 
-  Future<Map<String, double>> getTodaySummary() async {
+  Future<Map<String, double>> getTodaySummary({String? currencyCode}) async {
     final db = await database;
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
     final end = start.add(const Duration(days: 1));
+    final whereBuffer = StringBuffer(
+      '''
+      date >= ? AND date < ?
+        AND status != '${DocumentStatus.draft}'
+        AND status != '${DocumentStatus.cancelled}'
+      ''',
+    );
+    final args = <Object?>[start.toIso8601String(), end.toIso8601String()];
+    if (currencyCode != null && currencyCode.isNotEmpty) {
+      whereBuffer.write(' AND currency_code = ?');
+      args.add(currencyCode);
+    }
     final result = await db.rawQuery(
       '''
       SELECT
         SUM(CASE WHEN type = 'invoice' THEN total ELSE 0 END) as sales,
         SUM(CASE WHEN type = 'invoice' THEN remaining ELSE 0 END) as outstanding
       FROM documents
-      WHERE date >= ? AND date < ?
-        AND status != '${DocumentStatus.draft}'
-        AND status != '${DocumentStatus.cancelled}'
+      WHERE $whereBuffer
     ''',
-      [start.toIso8601String(), end.toIso8601String()],
+      args,
     );
     if (result.isEmpty || result.first['sales'] == null) {
       return {'sales': 0, 'outstanding': 0};
@@ -3745,51 +5191,149 @@ class DatabaseHelper {
   // ==================== Dashboard & Reports ====================
 
   /// Period-based financial summary for the dashboard.
-  /// Sales/purchases/payments respect the date range.
-  /// Customer/supplier outstanding is always all-time.
+  /// Computes segregated totals per currency code to prevent nominal cross-currency aggregation.
+  /// When [currencyCode] is provided, top-level scalar fields represent that currency.
+  /// When multiple currencies exist and [currencyCode] is null, top-level scalar fields remain 0.0
+  /// and callers inspect [totalsByCurrency] to prevent invalid cross-currency additions.
   Future<Map<String, dynamic>> getPeriodSummary({
     required DateTime from,
     required DateTime to,
+    String? currencyCode,
   }) async {
     final db = await database;
     final fromStr = from.toIso8601String();
     final toStr = to.toIso8601String();
 
-    // Period financial totals
+    // 1. Period financial totals (sales & purchases) grouped by currency
     final finRows = await db.rawQuery(
       '''
       SELECT
-        COALESCE(SUM(CASE WHEN type = 'invoice'         THEN total ELSE 0 END), 0) AS sales,
-        COALESCE(SUM(CASE WHEN type = 'purchase'        THEN total ELSE 0 END), 0) AS purchases,
-        COALESCE(SUM(CASE WHEN type = 'payment_receipt' THEN total ELSE 0 END), 0) AS paymentsIn,
-        COALESCE(SUM(CASE WHEN type = 'expense_voucher' THEN total ELSE 0 END), 0) AS paymentsOut
+        currency_code,
+        COALESCE(SUM(CASE WHEN type = 'invoice'  THEN total ELSE 0 END), 0) AS sales,
+        COALESCE(SUM(CASE WHEN type = 'purchase' THEN total ELSE 0 END), 0) AS purchases
       FROM documents
       WHERE status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
         AND date >= ? AND date <= ?
+      GROUP BY currency_code
     ''',
       [fromStr, toStr],
     );
 
-    final f = finRows.first;
-    final double sales = (f['sales'] as num?)?.toDouble() ?? 0;
-    final double purchases = (f['purchases'] as num?)?.toDouble() ?? 0;
-    final double paymentsIn = (f['paymentsIn'] as num?)?.toDouble() ?? 0;
-    final double paymentsOut = (f['paymentsOut'] as num?)?.toDouble() ?? 0;
+    // 2. Period payments in & out grouped by document currency
+    final payRows = await db.rawQuery(
+      '''
+      SELECT
+        d.currency_code,
+        COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN dp.amount ELSE 0 END), 0) AS paymentsIn,
+        COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN dp.amount ELSE 0 END), 0) AS paymentsOut
+      FROM document_payments dp
+      JOIN documents d ON d.id = dp.document_id
+      WHERE d.status != '${DocumentStatus.cancelled}'
+        AND dp.date >= ? AND dp.date <= ?
+      GROUP BY d.currency_code
+    ''',
+      [fromStr, toStr],
+    );
 
-    // All-time outstanding balances
+    // 3. All-time outstanding balances grouped by currency
     final balRows = await db.rawQuery('''
       SELECT
+        currency_code,
         COALESCE(SUM(CASE WHEN type = 'invoice'  THEN remaining ELSE 0 END), 0) AS customerOutstanding,
         COALESCE(SUM(CASE WHEN type = 'purchase' THEN remaining ELSE 0 END), 0) AS supplierPayable
       FROM documents
       WHERE status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+      GROUP BY currency_code
     ''');
 
-    final b = balRows.first;
-    final double customerOutstanding =
-        (b['customerOutstanding'] as num?)?.toDouble() ?? 0;
-    final double supplierPayable =
-        (b['supplierPayable'] as num?)?.toDouble() ?? 0;
+    final allCurrencies = <String>{};
+    final finMap = <String, ({double sales, double purchases})>{};
+    for (final r in finRows) {
+      final code = (r['currency_code'] as String?)?.trim() ?? 'SDG';
+      if (code.isNotEmpty) {
+        allCurrencies.add(code);
+        finMap[code] = (
+          sales: (r['sales'] as num?)?.toDouble() ?? 0.0,
+          purchases: (r['purchases'] as num?)?.toDouble() ?? 0.0,
+        );
+      }
+    }
+
+    final payMap = <String, ({double paymentsIn, double paymentsOut})>{};
+    for (final r in payRows) {
+      final code = (r['currency_code'] as String?)?.trim() ?? 'SDG';
+      if (code.isNotEmpty) {
+        allCurrencies.add(code);
+        payMap[code] = (
+          paymentsIn: (r['paymentsIn'] as num?)?.toDouble() ?? 0.0,
+          paymentsOut: (r['paymentsOut'] as num?)?.toDouble() ?? 0.0,
+        );
+      }
+    }
+
+    final balMap =
+        <String, ({double customerOutstanding, double supplierPayable})>{};
+    for (final r in balRows) {
+      final code = (r['currency_code'] as String?)?.trim() ?? 'SDG';
+      if (code.isNotEmpty) {
+        final cust = (r['customerOutstanding'] as num?)?.toDouble() ?? 0.0;
+        final supp = (r['supplierPayable'] as num?)?.toDouble() ?? 0.0;
+        if (cust > 0 || supp > 0) {
+          allCurrencies.add(code);
+        }
+        balMap[code] = (
+          customerOutstanding: cust,
+          supplierPayable: supp,
+        );
+      }
+    }
+
+    final totalsByCurrency = <String, ({
+      double sales,
+      double purchases,
+      double paymentsIn,
+      double paymentsOut,
+      double customerOutstanding,
+      double supplierPayable,
+    })>{};
+
+    for (final c in allCurrencies) {
+      totalsByCurrency[c] = (
+        sales: finMap[c]?.sales ?? 0.0,
+        purchases: finMap[c]?.purchases ?? 0.0,
+        paymentsIn: payMap[c]?.paymentsIn ?? 0.0,
+        paymentsOut: payMap[c]?.paymentsOut ?? 0.0,
+        customerOutstanding: balMap[c]?.customerOutstanding ?? 0.0,
+        supplierPayable: balMap[c]?.supplierPayable ?? 0.0,
+      );
+    }
+
+    double sales = 0.0;
+    double purchases = 0.0;
+    double paymentsIn = 0.0;
+    double paymentsOut = 0.0;
+    double customerOutstanding = 0.0;
+    double supplierPayable = 0.0;
+
+    if (currencyCode != null && currencyCode.isNotEmpty) {
+      final target = totalsByCurrency[currencyCode];
+      if (target != null) {
+        sales = target.sales;
+        purchases = target.purchases;
+        paymentsIn = target.paymentsIn;
+        paymentsOut = target.paymentsOut;
+        customerOutstanding = target.customerOutstanding;
+        supplierPayable = target.supplierPayable;
+      }
+    } else if (totalsByCurrency.length == 1) {
+      final single = totalsByCurrency.values.first;
+      sales = single.sales;
+      purchases = single.purchases;
+      paymentsIn = single.paymentsIn;
+      paymentsOut = single.paymentsOut;
+      customerOutstanding = single.customerOutstanding;
+      supplierPayable = single.supplierPayable;
+    }
 
     // Inventory snapshot (physical products only)
     final invRows = await db.rawQuery('''
@@ -3812,6 +5356,9 @@ class DatabaseHelper {
       'totalProducts': (i['totalProducts'] as num?)?.toInt() ?? 0,
       'lowStock': (i['lowStock'] as num?)?.toInt() ?? 0,
       'outOfStock': (i['outOfStock'] as num?)?.toInt() ?? 0,
+      'currencies': allCurrencies,
+      'totalsByCurrency': totalsByCurrency,
+      'hasMultipleCurrencies': allCurrencies.length > 1,
     };
   }
 
@@ -3833,18 +5380,48 @@ class DatabaseHelper {
     return maps.map((e) => Document.fromMap(e)).toList();
   }
 
-  /// Contact balance summary for customer/supplier report (all-time).
+  /// Contact balance summary for customer/supplier report (all-time), optionally filtered by currency.
+  /// When [currencyCode] is provided, balances are strictly filtered to that currency.
+  /// When [currencyCode] is null, results are grouped by (contact, currency) so amounts in different
+  /// currencies are NEVER aggregated nominally together into one row.
   Future<List<Map<String, dynamic>>> getContactBalances(
     String contactType,
-    String docType,
-  ) async {
+    String docType, {
+    String? currencyCode,
+  }) async {
     final db = await database;
+    if (currencyCode != null && currencyCode.isNotEmpty) {
+      return db.rawQuery(
+        '''
+        SELECT
+          c.id AS contact_id,
+          c.name,
+          c.phone,
+          ? AS currency_code,
+          COALESCE(SUM(d.total), 0)     AS total_amount,
+          COALESCE(SUM(d.paid), 0)      AS total_paid,
+          COALESCE(SUM(d.remaining), 0) AS outstanding,
+          COUNT(d.id)                   AS doc_count
+        FROM contacts c
+        LEFT JOIN documents d ON d.contact_id = c.id
+          AND d.type = ?
+          AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+          AND d.currency_code = ?
+        WHERE c.type = ?
+        GROUP BY c.id
+        ORDER BY outstanding DESC, c.name
+      ''',
+        [currencyCode, docType, currencyCode, contactType],
+      );
+    }
+
     return db.rawQuery(
       '''
       SELECT
         c.id AS contact_id,
         c.name,
         c.phone,
+        d.currency_code,
         COALESCE(SUM(d.total), 0)     AS total_amount,
         COALESCE(SUM(d.paid), 0)      AS total_paid,
         COALESCE(SUM(d.remaining), 0) AS outstanding,
@@ -3854,7 +5431,7 @@ class DatabaseHelper {
         AND d.type = ?
         AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
       WHERE c.type = ?
-      GROUP BY c.id
+      GROUP BY c.id, d.currency_code
       ORDER BY outstanding DESC, c.name
     ''',
       [docType, contactType],
@@ -3873,9 +5450,9 @@ class DatabaseHelper {
         p.id, p.name, p.type AS product_type,
         p.stock_quantity, p.min_stock, p.purchase_price,
         p.average_cost, p.cost_status,
-        COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN di.quantity ELSE 0 END), 0) AS sales_qty,
+        COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN COALESCE(di.base_quantity, di.quantity) ELSE 0 END), 0) AS sales_qty,
         COALESCE(SUM(CASE WHEN d.type = 'invoice'  THEN di.total    ELSE 0 END), 0) AS sales_value,
-        COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN di.quantity ELSE 0 END), 0) AS purchase_qty,
+        COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN COALESCE(di.base_quantity, di.quantity) ELSE 0 END), 0) AS purchase_qty,
         COALESCE(SUM(CASE WHEN d.type = 'purchase' THEN di.total    ELSE 0 END), 0) AS purchase_value,
         COALESCE(SUM(CASE WHEN d.type = 'invoice' AND di.total_cost IS NOT NULL THEN di.total_cost ELSE 0 END), 0) AS cogs,
         COUNT(CASE WHEN d.type = 'invoice' AND di.quantity > 0 AND di.total_cost IS NULL THEN 1 END) AS unknown_cost_count
@@ -3893,23 +5470,34 @@ class DatabaseHelper {
   }
 
   /// Payments recorded in the given period with their linked document info.
+  /// Excludes payments belonging to cancelled documents.
   Future<List<Map<String, dynamic>>> getPaymentReport({
     required DateTime from,
     required DateTime to,
+    String? currencyCode,
   }) async {
     final db = await database;
+    final whereBuffer = StringBuffer(
+      "d.status != '${DocumentStatus.cancelled}' AND dp.date >= ? AND dp.date <= ?",
+    );
+    final args = <Object?>[from.toIso8601String(), to.toIso8601String()];
+    if (currencyCode != null && currencyCode.isNotEmpty) {
+      whereBuffer.write(' AND d.currency_code = ?');
+      args.add(currencyCode);
+    }
     return db.rawQuery(
       '''
       SELECT
         dp.id, dp.amount, dp.payment_method, dp.date, dp.notes,
         dp.document_id,
-        d.document_number, d.type AS doc_type, d.recipient_name
+        d.document_number, d.type AS doc_type, d.recipient_name,
+        d.currency_code
       FROM document_payments dp
       JOIN documents d ON d.id = dp.document_id
-      WHERE dp.date >= ? AND dp.date <= ?
+      WHERE $whereBuffer
       ORDER BY dp.date DESC
     ''',
-      [from.toIso8601String(), to.toIso8601String()],
+      args,
     );
   }
 
@@ -4264,6 +5852,29 @@ class DatabaseHelper {
     );
     if (res.isEmpty) return 0;
     return (res.first['unread_count'] as num?)?.toInt() ?? 0;
+  }
+
+  /// Data-only deletion of a single cached notification row by its server ID.
+  Future<int> deleteCachedNotification(int serverId) async {
+    final db = await database;
+    return await db.delete(
+      'cached_notifications',
+      where: 'server_id = ?',
+      whereArgs: [serverId],
+    );
+  }
+
+  /// Data-only bulk deletion of cached notifications, optionally preserving critical alerts.
+  Future<int> deleteAllCachedNotifications({bool preserveCritical = true}) async {
+    final db = await database;
+    if (preserveCritical) {
+      return await db.delete(
+        'cached_notifications',
+        where: 'category != ?',
+        whereArgs: ['critical'],
+      );
+    }
+    return await db.delete('cached_notifications');
   }
 
   // ========== Diagnostic Reports (Milestone 2) ==========

@@ -297,8 +297,8 @@ class _AdvancedInventoryAnalyticsScreenState
           title: Text(it.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           subtitle: Text(
             '${l10n.stock}: ${FormatUtils.formatQuantity(it.stockQuantity)} • '
-            '${l10n.salesVelocity}: ${it.salesVelocity.toStringAsFixed(2)}/يوم • '
-            '${l10n.estimatedDaysRemaining}: ${it.estimatedDaysRemaining != null ? "~${it.estimatedDaysRemaining} يوم" : "—"}',
+            '${l10n.salesVelocity}: ${it.salesVelocity.toStringAsFixed(2)}${l10n.perDaySuffix} • '
+            '${l10n.estimatedDaysRemaining}: ${it.estimatedDaysRemaining != null ? l10n.daysRemainingCount(it.estimatedDaysRemaining!) : "—"}',
             style: const TextStyle(fontSize: 11),
           ),
           trailing: it.reorderSuggestion > 0
@@ -309,7 +309,7 @@ class _AdvancedInventoryAnalyticsScreenState
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'طلب: ${FormatUtils.formatQuantity(it.reorderSuggestion)}',
+                    l10n.reorderSuggestionTag(FormatUtils.formatQuantity(it.reorderSuggestion)),
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
                   ),
                 )
@@ -364,7 +364,7 @@ class _AdvancedInventoryAnalyticsScreenState
               const Icon(Icons.check_circle_outline, size: 48, color: Colors.teal),
               const SizedBox(height: 8),
               Text(
-                'ممتاز! لا توجد منتجات تباع بأقل من متوسط التكلفة',
+                l10n.noProductsBelowCost,
                 style: TextStyle(fontSize: 13, color: Colors.teal.shade800),
               ),
             ],
@@ -389,7 +389,7 @@ class _AdvancedInventoryAnalyticsScreenState
             style: const TextStyle(fontSize: 11),
           ),
           trailing: Text(
-            'خسارة: -${_numFmt.format(loss)}',
+            l10n.lossAmount(_numFmt.format(loss)),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red),
           ),
         );

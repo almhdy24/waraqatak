@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../models/tax_profile.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
@@ -31,6 +33,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _barcodeController = TextEditingController();
   final _unitController = TextEditingController();
   final _salePriceController = TextEditingController();
+  final _wholesalePriceController = TextEditingController();
+  final _wholesaleMinQuantityController = TextEditingController();
   final _purchasePriceController = TextEditingController();
   final _stockController = TextEditingController(text: '0');
   final _minStockController = TextEditingController(text: '0');
@@ -45,6 +49,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   List<TaxProfile> _taxProfiles = [];
   List<String> _existingCategories = [];
   double _currentStock = 0;
+  List<ProductUnit> _productUnits = [];
+  bool _wholesalePricingEnabled = false;
 
   @override
   void initState() {
@@ -58,6 +64,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _unitController.text = p.unit ?? '';
       _categoryController.text = p.category ?? '';
       _salePriceController.text = p.salePrice.toString();
+      _wholesalePriceController.text = p.wholesalePrice?.toString() ?? '';
+      _wholesaleMinQuantityController.text = p.wholesaleMinQuantity != null
+          ? FormatUtils.formatQuantity(p.wholesaleMinQuantity)
+          : '';
       _purchasePriceController.text = p.purchasePrice.toString();
       _currentStock = p.stockQuantity;
       _stockController.text = FormatUtils.formatQuantity(p.stockQuantity);
@@ -67,11 +77,31 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _taxable = p.isTaxable;
       _isActive = p.isActive;
       _taxProfileId = p.taxProfileId;
+      if (p.id != null) {
+        _loadProductUnits(p.id!);
+      }
     } else if (widget.initialBarcode != null) {
       _barcodeController.text = widget.initialBarcode!;
     }
     _loadTaxProfiles();
     _loadCategories();
+    _loadWholesaleStatus();
+  }
+
+  Future<void> _loadProductUnits(int productId) async {
+    try {
+      final units = await DatabaseHelper.instance.getProductUnits(productId);
+      if (mounted) setState(() => _productUnits = units);
+    } catch (_) {}
+  }
+
+  Future<void> _loadWholesaleStatus() async {
+    try {
+      final b = await DatabaseHelper.instance.getFirstBusiness();
+      if (mounted) {
+        setState(() => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadTaxProfiles() async {
@@ -97,6 +127,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _unitController.dispose();
     _categoryController.dispose();
     _salePriceController.dispose();
+    _wholesalePriceController.dispose();
+    _wholesaleMinQuantityController.dispose();
     _purchasePriceController.dispose();
     _stockController.dispose();
     _minStockController.dispose();
@@ -138,6 +170,27 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
+
+    final baseUnitName = _unitController.text.trim().toLowerCase();
+    final seenUnitNames = <String>{};
+    if (baseUnitName.isNotEmpty) {
+      seenUnitNames.add(baseUnitName);
+    }
+    for (final u in _productUnits) {
+      final name = u.unitName.trim().toLowerCase();
+      if (seenUnitNames.contains(name)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context).duplicateUnitNameError}: ${u.unitName}',
+            ),
+          ),
+        );
+        return;
+      }
+      seenUnitNames.add(name);
+    }
+
     setState(() => _saving = true);
 
     final isNew = widget.product == null;
@@ -180,6 +233,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       barcode: barcode,
       unit: _unitController.text.trim().isEmpty ? null : _unitController.text.trim(),
       salePrice: double.tryParse(_salePriceController.text) ?? 0,
+      wholesalePrice: _wholesalePricingEnabled
+          ? double.tryParse(_wholesalePriceController.text.trim())
+          : widget.product?.wholesalePrice,
+      wholesaleMinQuantity: _wholesalePricingEnabled
+          ? double.tryParse(_wholesaleMinQuantityController.text.trim())
+          : widget.product?.wholesaleMinQuantity,
       purchasePrice: double.tryParse(_purchasePriceController.text) ?? 0,
       stockQuantity: isNew
           ? (_type == Product.typeService
@@ -206,6 +265,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         await DatabaseHelper.instance.updateProduct(product);
         id = product.id!;
       }
+      await DatabaseHelper.instance.syncProductUnits(id, _productUnits);
       if (!mounted) return;
       Navigator.pop(context, id);
     } catch (e) {
@@ -215,6 +275,157 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _showUnitDialog([ProductUnit? existing, int? index]) async {
+    final l10n = AppLocalizations.of(context);
+    final nameCtrl = TextEditingController(text: existing?.unitName ?? '');
+    final factorCtrl = TextEditingController(
+      text: existing != null
+          ? FormatUtils.formatQuantity(existing.conversionFactor)
+          : '',
+    );
+    final saleCtrl = TextEditingController(
+      text: existing?.salePrice?.toString() ?? '',
+    );
+    final wholesaleCtrl = TextEditingController(
+      text: existing?.wholesalePrice?.toString() ?? '',
+    );
+    bool isDefault = existing?.isDefaultSale ?? false;
+    final formKey = GlobalKey<FormState>();
+
+    final res = await showDialog<ProductUnit>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: Text(existing == null ? l10n.addSalesUnit : l10n.editSalesUnit),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: l10n.salesUnitName,
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return l10n.required;
+                      final trimmed = v.trim().toLowerCase();
+                      final baseUnit =
+                          _unitController.text.trim().toLowerCase();
+                      if (baseUnit.isNotEmpty && trimmed == baseUnit) {
+                        return l10n.duplicateUnitNameError;
+                      }
+                      for (int i = 0; i < _productUnits.length; i++) {
+                        if (index != null && i == index) continue;
+                        if (_productUnits[i].unitName.trim().toLowerCase() ==
+                            trimmed) {
+                          return l10n.duplicateUnitNameError;
+                        }
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: factorCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: l10n.conversionFactor,
+                      helperText: l10n.conversionFactorHelp,
+                      helperMaxLines: 2,
+                      border: const OutlineInputBorder(),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return l10n.required;
+                      final f = double.tryParse(v.trim());
+                      if (f == null || f <= 0) {
+                        return l10n.invalidConversionFactor;
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: saleCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: '${l10n.unitPrice} (${l10n.optional})',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                  if (_wholesalePricingEnabled) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: wholesaleCtrl,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: '${l10n.wholesalePrice} (${l10n.optional})',
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    title: Text(l10n.defaultSaleUnit),
+                    value: isDefault,
+                    onChanged: (val) =>
+                        setDlgState(() => isDefault = val ?? false),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  final unit = ProductUnit(
+                    id: existing?.id,
+                    productId: widget.product?.id ?? 0,
+                    unitName: nameCtrl.text.trim(),
+                    conversionFactor: double.parse(factorCtrl.text.trim()),
+                    salePrice: double.tryParse(saleCtrl.text.trim()),
+                    wholesalePrice: _wholesalePricingEnabled
+                        ? double.tryParse(wholesaleCtrl.text.trim())
+                        : null,
+                    isDefaultSale: isDefault,
+                  );
+                  Navigator.pop(ctx, unit);
+                }
+              },
+              child: Text(l10n.save),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (res != null) {
+      setState(() {
+        if (res.isDefaultSale) {
+          _productUnits = _productUnits
+              .map((u) => u.copyWith(isDefaultSale: false))
+              .toList();
+        }
+        if (index != null) {
+          _productUnits[index] = res;
+        } else {
+          _productUnits.add(res);
+        }
+      });
     }
   }
 
@@ -254,29 +465,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
 
     if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.confirmDelete),
-        content: Text(l10n.deleteProductMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(l10n.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onPrimary,
-            ),
-            child: Text(l10n.delete),
-          ),
-        ],
-      ),
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.confirmDelete,
+      message: l10n.deleteProductMessage,
+      confirmLabel: l10n.delete,
+      isDestructive: true,
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       try {
         await DatabaseHelper.instance.deleteProduct(id);
         if (!mounted) return;
@@ -290,6 +487,49 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  bool get _isDirty {
+    if (widget.product == null) {
+      return _nameController.text.isNotEmpty ||
+          _codeController.text.isNotEmpty ||
+          _barcodeController.text.isNotEmpty ||
+          _unitController.text.isNotEmpty ||
+          _categoryController.text.isNotEmpty ||
+          _salePriceController.text.isNotEmpty ||
+          _wholesalePriceController.text.isNotEmpty ||
+          _purchasePriceController.text.isNotEmpty ||
+          _stockController.text != '0' ||
+          _minStockController.text != '0' ||
+          _notesController.text.isNotEmpty ||
+          _productUnits.isNotEmpty;
+    }
+    final p = widget.product!;
+    return _nameController.text != p.name ||
+        _type != p.type ||
+        _codeController.text != (p.code ?? '') ||
+        _barcodeController.text != (p.barcode ?? '') ||
+        _unitController.text != (p.unit ?? '') ||
+        _categoryController.text != (p.category ?? '') ||
+        _salePriceController.text != p.salePrice.toString() ||
+        _wholesalePriceController.text != (p.wholesalePrice?.toString() ?? '') ||
+        _purchasePriceController.text != p.purchasePrice.toString() ||
+        _taxable != p.isTaxable ||
+        _taxProfileId != p.taxProfileId ||
+        _isActive != p.isActive ||
+        _notesController.text != (p.notes ?? '');
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -300,20 +540,29 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         ? (isService ? l10n.addService : l10n.addProduct)
         : (isService ? l10n.editService : l10n.editProduct);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        centerTitle: true,
-        actions: [
-          if (!isNew)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: l10n.delete,
-              onPressed: _handleDelete,
-            ),
-        ],
-      ),
-      body: ResponsiveCenter(child: Form(
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(title),
+          centerTitle: true,
+          actions: [
+            if (!isNew)
+              IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: l10n.delete,
+                onPressed: _handleDelete,
+              ),
+          ],
+        ),
+        body: ResponsiveCenter(child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
@@ -513,6 +762,41 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         return null;
                       },
                     ),
+                    if (_wholesalePricingEnabled) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _wholesalePriceController,
+                        decoration: InputDecoration(
+                          labelText: l10n.wholesalePrice,
+                          prefixIcon: const Icon(Icons.storefront_outlined),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return null;
+                          final price = double.tryParse(v);
+                          if (price == null || price < 0) return l10n.invalidAmount;
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _wholesaleMinQuantityController,
+                        decoration: InputDecoration(
+                          labelText: l10n.wholesaleMinQuantity,
+                          helperText: l10n.wholesaleMinQuantityHelp,
+                          prefixIcon: const Icon(Icons.format_list_numbered),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return null;
+                          final q = double.tryParse(v);
+                          if (q == null || q < 0) return l10n.invalidQuantity;
+                          return null;
+                        },
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _purchasePriceController,
@@ -525,6 +809,117 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Additional Sales Units
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                side: BorderSide(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant
+                      .withValues(alpha: 0.7),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          l10n.additionalSalesUnits,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => _showUnitDialog(),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: Text(l10n.addSalesUnit),
+                        ),
+                      ],
+                    ),
+                    if (_productUnits.isEmpty)
+                      Text(
+                        l10n.noUnits,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: 13,
+                        ),
+                      )
+                    else
+                      ..._productUnits.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final u = entry.value;
+                        final baseName = _unitController.text.trim().isNotEmpty
+                            ? _unitController.text.trim()
+                            : l10n.baseUnit;
+                        final desc =
+                            '1 ${u.unitName} = ${FormatUtils.formatQuantity(u.conversionFactor)} $baseName';
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Row(
+                            children: [
+                              Text(
+                                u.unitName,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              if (u.isDefaultSale) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primaryContainer,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    l10n.defaultSaleUnit,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimaryContainer,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(desc),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 18),
+                                tooltip: l10n.edit,
+                                onPressed: () => _showUnitDialog(u, idx),
+                              ),
+                              IconButton(
+                                icon:
+                                    const Icon(Icons.delete_outline, size: 18),
+                                tooltip: l10n.delete,
+                                onPressed: () {
+                                  setState(() => _productUnits.removeAt(idx));
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
                   ],
                 ),
               ),
@@ -681,6 +1076,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ],
         ),
       )),
+      ),
     );
   }
 }

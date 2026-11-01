@@ -18,6 +18,7 @@ import '../widgets/responsive.dart';
 import 'audit_history_screen.dart';
 import 'reports/advanced_inventory_analytics_screen.dart';
 import '../widgets/app_design_tokens.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/app_section_header.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -186,9 +187,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       ),
     ];
 
-    final chevronIcon = Directionality.of(context) == TextDirection.rtl
-        ? Icons.chevron_left
-        : Icons.chevron_right;
+    final chevronIcon = AppIcons.chevronForward(context);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.reports), centerTitle: true),

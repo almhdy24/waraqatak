@@ -117,7 +117,7 @@ class _WarqatekAppState extends State<WarqatekApp> with WidgetsBindingObserver {
         onChangeThemeMode: changeThemeMode,
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'ورقتك',
+          onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: _themeMode,

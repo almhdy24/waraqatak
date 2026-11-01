@@ -15,8 +15,12 @@ import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
+import '../utils/url_launcher_utils.dart';
+import '../widgets/app_amount_text.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_error_state.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/customer_statement_dialog.dart';
 import '../widgets/pro_upgrade_sheet.dart';
@@ -344,9 +348,23 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   alignment: WrapAlignment.center,
                   children: [
                     if (widget.contact.phone != null)
-                      _InfoChip(Icons.phone_outlined, widget.contact.phone!),
+                      _InfoChip(
+                        Icons.phone_outlined,
+                        widget.contact.phone!,
+                        onTap: () => UrlLauncherUtils.launchUri(
+                          context,
+                          Uri(scheme: 'tel', path: widget.contact.phone!),
+                        ),
+                      ),
                     if (widget.contact.email != null)
-                      _InfoChip(Icons.email_outlined, widget.contact.email!),
+                      _InfoChip(
+                        Icons.email_outlined,
+                        widget.contact.email!,
+                        onTap: () => UrlLauncherUtils.launchUri(
+                          context,
+                          Uri(scheme: 'mailto', path: widget.contact.email!),
+                        ),
+                      ),
                     if (widget.contact.address != null)
                       _InfoChip(
                         Icons.location_on_outlined,
@@ -384,7 +402,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     : '(${relevantCurrencies.length})',
                 currency: singleCurrency ?? '',
                 icon: Icons.check_circle_outline,
-                color: Colors.green,
+                color: AppDesignTokens.semanticSuccess(context),
               ),
             ),
             const SizedBox(width: 8),
@@ -539,7 +557,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           ..._documents!.map(
             (doc) => _DocumentTile(
               doc: doc,
-              currency: currency,
+              currency: doc.currencySymbol,
               fmt: _fmt,
               dateFmt: _dateFmt,
               onTap: () => Navigator.push(
@@ -580,31 +598,40 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String text;
-  const _InfoChip(this.icon, this.text);
+  final VoidCallback? onTap;
+  const _InfoChip(this.icon, this.text, {this.onTap});
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.2),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: Colors.white),
-        const SizedBox(width: 5),
-        Flexible(
-          child: Text(
-            text,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+  Widget build(BuildContext context) {
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+    if (onTap == null) return chip;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: chip,
+    );
+  }
 }
 
 class _StatCard extends StatelessWidget {
@@ -741,12 +768,11 @@ class _DocumentTile extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '${fmt.format(doc.total)} $currency',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
+                  AppAmountText(
+                    amount: doc.total,
+                    currencySymbol: doc.currencySymbol,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                   const SizedBox(height: 4),
                   StatusBadge(status: doc.status),
@@ -754,11 +780,9 @@ class _DocumentTile extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Icon(
-                AppLocalizations.of(context).isArabic
-                    ? Icons.chevron_left
-                    : Icons.chevron_right,
+                AppIcons.chevronForward(context),
                 size: 18,
-                color: Colors.grey.shade400,
+                color: cs.onSurfaceVariant.withValues(alpha: 0.6),
               ),
             ],
           ),
@@ -783,19 +807,8 @@ class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.message, required this.onRetry});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.error_outline, size: 48, color: Colors.red),
-        const SizedBox(height: 12),
-        Text(message),
-        const SizedBox(height: 12),
-        FilledButton.tonal(
-          onPressed: onRetry,
-          child: Text(AppLocalizations.of(context).retry),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) => AppErrorState(
+        message: message,
+        onRetry: onRetry,
+      );
 }

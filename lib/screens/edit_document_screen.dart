@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/payment_method.dart';
+import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_confirm_dialog.dart';
+import '../widgets/app_loading_view.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
@@ -38,6 +42,12 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   final List<TextEditingController> _priceControllers = [];
   final List<bool> _taxableList = [];
   final List<int?> _productIds = [];
+  final List<String?> _pricingCategories = [];
+  final List<bool> _isManualPriceList = [];
+  final List<Product?> _cachedProducts = [];
+  final List<String?> _saleUnits = [];
+  final List<double> _conversionFactors = [];
+  final Map<int, List<ProductUnit>> _unitsCache = {};
 
   Business? _business;
   Document? _document;
@@ -139,6 +149,11 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                 : item.price.toString()));
         _taxableList.add(item.taxable);
         _productIds.add(item.productId);
+        _pricingCategories.add(item.pricingCategory);
+        _isManualPriceList.add(true);
+        _cachedProducts.add(null);
+        _saleUnits.add(item.saleUnit);
+        _conversionFactors.add(item.unitConversionFactor);
       }
     }
 
@@ -159,10 +174,47 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       _priceControllers.add(TextEditingController());
       _taxableList.add(true);
       _productIds.add(null);
+      _pricingCategories.add(
+        _business?.wholesalePricingEnabled == true
+            ? (_selectedContact?.pricingCategory ?? Contact.categoryRetail)
+            : null,
+      );
+      _isManualPriceList.add(false);
+      _cachedProducts.add(null);
+      _saleUnits.add(null);
+      _conversionFactors.add(1.0);
     });
   }
 
-  void _removeItem(int index) {
+  bool _hasChanges = false;
+
+  Future<bool> _onWillPop() async {
+    if (!_hasChanges || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
+  Future<void> _removeItem(int index) async {
+    final hasContent =
+        _descriptionControllers[index].text.isNotEmpty || _productIds[index] != null;
+    if (hasContent) {
+      final l10n = AppLocalizations.of(context);
+      final proceed = await AppConfirmDialog.show(
+        context,
+        title: l10n.confirmDeleteLine,
+        message: l10n.deleteLineWarning,
+        isDestructive: true,
+      );
+      if (!proceed) return;
+    }
+    if (!mounted) return;
+    _hasChanges = true;
     setState(() {
       _descriptionControllers[index].dispose();
       _quantityControllers[index].dispose();
@@ -173,6 +225,11 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       _priceControllers.removeAt(index);
       _taxableList.removeAt(index);
       _productIds.removeAt(index);
+      _pricingCategories.removeAt(index);
+      _isManualPriceList.removeAt(index);
+      _cachedProducts.removeAt(index);
+      _saleUnits.removeAt(index);
+      _conversionFactors.removeAt(index);
     });
   }
 
@@ -204,13 +261,20 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final items = <DocumentItemInput>[];
     if (isInvoice || isQuotation || isPurchase) {
       for (int i = 0; i < _descriptionControllers.length; i++) {
+        final q = double.parse(_quantityControllers[i].text);
+        final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
+        final unit = i < _saleUnits.length ? _saleUnits[i] : null;
         items.add(
           DocumentItemInput(
             description: _descriptionControllers[i].text.trim(),
-            quantity: double.parse(_quantityControllers[i].text),
+            quantity: q,
             price: double.parse(_priceControllers[i].text),
             taxable: _taxableList[i],
             productId: _productIds[i],
+            pricingCategory: _pricingCategories[i],
+            saleUnit: unit,
+            unitConversionFactor: factor,
+            baseQuantity: q * factor,
           ),
         );
       }
@@ -283,7 +347,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: AppLoadingView());
     }
 
     final type = _document!.type;
@@ -296,16 +360,25 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
 
     final allowedMethods = _enabledMethods;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${l10n.edit} - ${_document!.documentNumber}'),
-        centerTitle: true,
-      ),
-      body: ResponsiveCenter(child: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
+    return PopScope(
+      canPop: !_hasChanges || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('${l10n.edit} - ${_document!.documentNumber}'),
+          centerTitle: true,
+        ),
+        body: ResponsiveCenter(child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
             if (!isFinancial) ...[
               Card(
                 child: Padding(
@@ -322,13 +395,46 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                         initialContact: _selectedContact,
                         label: isSupplier ? l10n.supplier : l10n.customer,
                         type: isSupplier ? 'supplier' : 'customer',
-                        onContactChanged: (contact) {
+                        onContactChanged: (contact) async {
                           setState(() {
                             _selectedContact = contact;
                             _contactName = contact?.name;
                             _phoneController.text = contact?.phone ?? '';
                             _addressController.text = contact?.address ?? '';
                           });
+                          if (_business?.wholesalePricingEnabled == true && !isPurchase) {
+                            final newCat =
+                                contact?.pricingCategory ?? Contact.categoryRetail;
+                            for (int i = 0; i < _descriptionControllers.length; i++) {
+                              final p = _cachedProducts[i];
+                              if (!_isManualPriceList[i] && p != null) {
+                                _pricingCategories[i] = newCat;
+                                final q = double.tryParse(_quantityControllers[i].text) ?? 1.0;
+                                final currentP = double.tryParse(_priceControllers[i].text);
+                                List<ProductUnit> units = _unitsCache[p.id] ?? const [];
+                                if (units.isEmpty && p.id != null) {
+                                  try {
+                                    units = await DatabaseHelper.instance.getProductUnits(p.id!);
+                                    _unitsCache[p.id!] = units;
+                                  } catch (_) {}
+                                }
+                                final resolved = DocumentService.resolveLinePrice(
+                                  product: p,
+                                  availableUnits: units,
+                                  quantity: q,
+                                  currentPrice: currentP,
+                                  saleUnit: _saleUnits[i],
+                                  unitConversionFactor: _conversionFactors[i],
+                                  pricingCategory: _pricingCategories[i],
+                                  targetCategory: newCat,
+                                  isManualPrice: _isManualPriceList[i],
+                                  wholesalePricingEnabled: true,
+                                );
+                                _priceControllers[i].text = resolved.toStringAsFixed(2);
+                              }
+                            }
+                            if (mounted) setState(() {});
+                          }
                         },
                         onTextChanged: (value) {
                           if (_selectedContact?.name != value) {
@@ -445,8 +551,37 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                   taxable: _taxableList[index],
                   productId: _productIds[index],
                   usePurchasePrice: isPurchase,
+                  wholesalePricingEnabled:
+                      _business?.wholesalePricingEnabled ?? false,
+                  pricingCategory: _pricingCategories[index],
+                  onPricingCategoryChanged: (cat) {
+                    setState(() => _pricingCategories[index] = cat);
+                  },
+                  customerPricingCategory:
+                      _selectedContact?.pricingCategory ??
+                      Contact.categoryRetail,
+                  isManualPrice: _isManualPriceList[index],
+                  onManualPriceChanged: (manual) {
+                    setState(() => _isManualPriceList[index] = manual);
+                  },
+                  saleUnit: _saleUnits[index],
+                  onSaleUnitChanged: (unit) {
+                    setState(() => _saleUnits[index] = unit);
+                  },
+                  unitConversionFactor: _conversionFactors[index],
+                  onConversionFactorChanged: (factor) {
+                    setState(() => _conversionFactors[index] = factor);
+                  },
                   onProductChanged: (productId) {
                     setState(() => _productIds[index] = productId);
+                  },
+                  onProductSelected: (p) {
+                    setState(() => _cachedProducts[index] = p);
+                    if (p?.id != null) {
+                      DatabaseHelper.instance.getProductUnits(p!.id!).then((u) {
+                        _unitsCache[p.id!] = u;
+                      });
+                    }
                   },
                   onTaxableChanged: (value) {
                     setState(() => _taxableList[index] = value ?? true);
@@ -565,6 +700,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
           ],
         ),
       )),
+      ),
     );
   }
 

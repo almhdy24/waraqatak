@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../localization/app_localizations.dart';
+import '../widgets/app_icons.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   const BarcodeScannerScreen({super.key});
@@ -47,6 +48,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             valueListenable: _controller,
             builder: (_, state, __) {
               return IconButton(
+                tooltip: l10n.flashlight,
                 icon: Icon(
                   state.torchState == TorchState.on
                       ? Icons.flash_on
@@ -71,10 +73,10 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           // Semi-transparent overlay with scan window cutout
           _ScanOverlay(),
           // Scan hint at bottom
-          Positioned(
+          PositionedDirectional(
             bottom: bottomPadding + 24,
-            left: 0,
-            right: 0,
+            start: 0,
+            end: 0,
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -127,7 +129,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                 OutlinedButton.icon(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
-                  icon: const Icon(Icons.arrow_back),
+                  icon: Icon(AppIcons.arrowBack(context)),
                   label: Text(l10n.cancel),
                 ),
             ],

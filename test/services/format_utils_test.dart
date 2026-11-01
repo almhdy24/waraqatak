@@ -60,4 +60,26 @@ void main() {
       expect(FormatUtils.formatTaxRate(7.75), '7.75%');
     });
   });
+
+  group('FormatUtils date formatting', () {
+    final dt = DateTime(2026, 10, 31, 14, 45, 30);
+
+    test('formatDate formats dd/MM/yyyy or returns fallback', () {
+      expect(FormatUtils.formatDate(dt), '31/10/2026');
+      expect(FormatUtils.formatDate(null), '—');
+      expect(FormatUtils.formatDate(null, fallback: 'N/A'), 'N/A');
+    });
+
+    test('formatDateTime formats dd/MM/yyyy HH:mm or returns fallback', () {
+      expect(FormatUtils.formatDateTime(dt), '31/10/2026 14:45');
+      expect(FormatUtils.formatDateTime(null), '—');
+      expect(FormatUtils.formatDateTime(null, fallback: 'N/A'), 'N/A');
+    });
+
+    test('formatTimestamp formats dd/MM/yyyy HH:mm:ss or returns fallback', () {
+      expect(FormatUtils.formatTimestamp(dt), '31/10/2026 14:45:30');
+      expect(FormatUtils.formatTimestamp(null), '—');
+      expect(FormatUtils.formatTimestamp(null, fallback: 'N/A'), 'N/A');
+    });
+  });
 }

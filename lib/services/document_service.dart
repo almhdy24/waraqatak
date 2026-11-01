@@ -5,6 +5,8 @@ import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_status.dart';
+import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../utils/money_utils.dart';
 import 'feature_access.dart';
 import 'license_service.dart';
@@ -16,6 +18,10 @@ class DocumentItemInput {
   final bool taxable;
   final int? productId;
   final double? taxRate; // per-item rate snapshot; null = use business default
+  final String? pricingCategory; // 'retail' | 'wholesale' | null (legacy/manual)
+  final String? saleUnit;
+  final double unitConversionFactor;
+  final double? baseQuantity;
 
   const DocumentItemInput({
     required this.description,
@@ -24,7 +30,14 @@ class DocumentItemInput {
     this.taxable = true,
     this.productId,
     this.taxRate,
+    this.pricingCategory,
+    this.saleUnit,
+    this.unitConversionFactor = 1.0,
+    this.baseQuantity,
   });
+
+  double get effectiveBaseQuantity =>
+      baseQuantity ?? MoneyUtils.round(quantity * unitConversionFactor);
 
   double get total => MoneyUtils.round(quantity * price);
 }
@@ -199,6 +212,10 @@ class DocumentService {
       total: item.total,
       taxable: item.taxable,
       taxRate: item.taxRate,
+      pricingCategory: item.pricingCategory,
+      saleUnit: item.saleUnit,
+      unitConversionFactor: item.unitConversionFactor,
+      baseQuantity: item.effectiveBaseQuantity,
     )).toList();
 
     final bool enforceStock;
@@ -400,6 +417,10 @@ class DocumentService {
       total: item.total,
       taxable: item.taxable,
       taxRate: item.taxRate,
+      pricingCategory: item.pricingCategory,
+      saleUnit: item.saleUnit,
+      unitConversionFactor: item.unitConversionFactor,
+      baseQuantity: item.effectiveBaseQuantity,
     )).toList();
 
     final bool enforceStock;
@@ -570,6 +591,10 @@ class DocumentService {
                 taxable: false,
                 productId: item.productId,
                 taxRate: 0.0,
+                pricingCategory: item.pricingCategory,
+                saleUnit: item.saleUnit,
+                unitConversionFactor: item.unitConversionFactor,
+                baseQuantity: item.baseQuantity,
               ))
           .toList();
     }
@@ -595,6 +620,10 @@ class DocumentService {
               taxable: false,
               productId: item.productId,
               taxRate: 0.0,
+              pricingCategory: item.pricingCategory,
+              saleUnit: item.saleUnit,
+              unitConversionFactor: item.unitConversionFactor,
+              baseQuantity: item.baseQuantity,
             ));
             continue;
           }
@@ -610,6 +639,10 @@ class DocumentService {
                 taxable: true,
                 productId: item.productId,
                 taxRate: profile.rate,
+                pricingCategory: item.pricingCategory,
+                saleUnit: item.saleUnit,
+                unitConversionFactor: item.unitConversionFactor,
+                baseQuantity: item.baseQuantity,
               ));
               continue;
             }
@@ -683,4 +716,141 @@ class DocumentService {
     return MoneyUtils.round(totalTax < 0 ? 0.0 : totalTax, decimalDigits);
   }
 
+  /// Resolves the unit selling price for [product] given the requested [targetCategory],
+  /// line [quantity], and optional [unit] conversion factor, respecting the business
+  /// [wholesalePricingEnabled] toggle.
+  ///
+  /// Rules:
+  /// 1. If [unit] is provided with [conversionFactor] > 0:
+  ///    - Effective retail price is [unit.salePrice] or [product.salePrice * factor].
+  ///    - Effective wholesale candidate is [unit.wholesalePrice] or ([product.wholesalePrice * factor] if configured).
+  ///    - Minimum wholesale quantity is evaluated in base units: ([quantity * factor] >= minBaseQty).
+  /// 2. If [wholesalePricingEnabled] is false, always returns effective retail price.
+  /// 3. If [targetCategory] is 'wholesale':
+  ///    - If candidate wholesale price is available and base quantity meets minimum, applies wholesale price.
+  ///    - Otherwise falls back safely to effective retail price.
+  /// 4. Otherwise returns effective retail price.
+  static double resolveItemPrice({
+    required Product product,
+    required String? targetCategory,
+    required double quantity,
+    required bool wholesalePricingEnabled,
+    ProductUnit? unit,
+  }) {
+    final factor = (unit != null && unit.conversionFactor > 0)
+        ? unit.conversionFactor
+        : 1.0;
+    final baseQty = quantity * factor;
+
+    final double effectiveRetailPrice = (unit?.salePrice != null)
+        ? unit!.salePrice!
+        : product.salePrice * factor;
+
+    if (!wholesalePricingEnabled) {
+      return effectiveRetailPrice;
+    }
+
+    if (targetCategory == 'wholesale') {
+      final double? candidateWholesalePrice;
+      if (unit?.wholesalePrice != null) {
+        candidateWholesalePrice = unit!.wholesalePrice;
+      } else if (product.wholesalePrice != null) {
+        candidateWholesalePrice = product.wholesalePrice! * factor;
+      } else {
+        candidateWholesalePrice = null;
+      }
+
+      if (candidateWholesalePrice != null) {
+        final minBaseQty = product.wholesaleMinQuantity;
+        if (minBaseQty == null || baseQty >= minBaseQty) {
+          return candidateWholesalePrice;
+        }
+      }
+      return effectiveRetailPrice;
+    }
+
+    return effectiveRetailPrice;
+  }
+
+  /// Authoritative single entry point for line-level repricing across all document screens.
+  ///
+  /// Takes the full line state (product, current price, saleUnit, unitConversionFactor,
+  /// current pricingCategory, manual override flag) along with [availableUnits] and [targetCategory].
+  ///
+  /// Rules:
+  /// 1. Manual price overrides ([isManualPrice] == true) are NEVER overwritten.
+  /// 2. Legacy lines with null [pricingCategory] and an existing [currentPrice] are NEVER overwritten.
+  /// 3. If [saleUnit] is specified but does not match any unit in [availableUnits] (or product base unit),
+  ///    history wins and [currentPrice] is preserved.
+  /// 4. If the line's snapshot [unitConversionFactor] differs from the current unit's conversion factor,
+  ///    history wins and [currentPrice] is preserved.
+  /// 5. Otherwise, resolves price with the matching [ProductUnit] and [targetCategory] via [resolveItemPrice].
+  static double resolveLinePrice({
+    required Product product,
+    Iterable<ProductUnit> availableUnits = const [],
+    required double quantity,
+    double? currentPrice,
+    String? saleUnit,
+    double? unitConversionFactor,
+    String? pricingCategory,
+    required String? targetCategory,
+    bool isManualPrice = false,
+    bool wholesalePricingEnabled = false,
+    ProductUnit? unit,
+  }) {
+    if (isManualPrice && currentPrice != null) {
+      return currentPrice;
+    }
+    if (pricingCategory == null && currentPrice != null) {
+      return currentPrice;
+    }
+
+    ProductUnit? matchingUnit = unit;
+    if (matchingUnit == null) {
+      final isBaseUnit = saleUnit == null ||
+          saleUnit.trim().isEmpty ||
+          saleUnit.trim() == product.unit?.trim();
+
+      if (isBaseUnit) {
+        if (unitConversionFactor != null &&
+            (unitConversionFactor - 1.0).abs() > 0.0001) {
+          // Base unit factor mismatch with history
+          if (currentPrice != null) return currentPrice;
+        }
+        matchingUnit = null;
+      } else {
+        ProductUnit? found;
+        for (final u in availableUnits) {
+          if (u.unitName.trim() == saleUnit.trim()) {
+            found = u;
+            break;
+          }
+        }
+        if (found == null) {
+          // Unit no longer exists; preserve historical price
+          if (currentPrice != null) return currentPrice;
+        } else {
+          if (unitConversionFactor != null &&
+              (unitConversionFactor - found.conversionFactor).abs() > 0.0001) {
+            // Unit conversion factor changed since document line was created; preserve historical price
+            if (currentPrice != null) return currentPrice;
+          }
+          matchingUnit = found;
+        }
+      }
+    } else {
+      if (unitConversionFactor != null &&
+          (unitConversionFactor - matchingUnit.conversionFactor).abs() > 0.0001) {
+        if (currentPrice != null) return currentPrice;
+      }
+    }
+
+    return resolveItemPrice(
+      product: product,
+      targetCategory: targetCategory,
+      quantity: quantity,
+      wholesalePricingEnabled: wholesalePricingEnabled,
+      unit: matchingUnit,
+    );
+  }
 }

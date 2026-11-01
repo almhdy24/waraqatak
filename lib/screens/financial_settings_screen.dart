@@ -7,6 +7,7 @@ import '../models/tax_profile.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import 'tax_profiles_screen.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/responsive.dart';
 
 class FinancialSettingsScreen extends StatefulWidget {
@@ -37,6 +38,7 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
   bool _taxesEnabled = false;
   bool _pricesIncludeTax = false;
   int? _defaultTaxProfileId;
+  bool _wholesalePricingEnabled = false;
 
   @override
   void initState() {
@@ -76,6 +78,7 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
         _taxesEnabled = business.taxesEnabled;
         _pricesIncludeTax = business.pricesIncludeTax;
         _defaultTaxProfileId = business.defaultTaxProfileId;
+        _wholesalePricingEnabled = business.wholesalePricingEnabled;
       }
     });
   }
@@ -115,6 +118,7 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
         taxesEnabled: _taxesEnabled,
         pricesIncludeTax: _pricesIncludeTax,
         defaultTaxProfileId: _defaultTaxProfileId,
+        wholesalePricingEnabled: _wholesalePricingEnabled,
         invoiceTitle: _invoiceTitleCtrl.text.trim().isEmpty
             ? null
             : _invoiceTitleCtrl.text.trim(),
@@ -414,6 +418,56 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
               // Live Calculation Preview
               _buildTaxLivePreview(l10n),
             ],
+            const SizedBox(height: 14),
+
+            // Wholesale & Retail Pricing Card
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      value: _wholesalePricingEnabled,
+                      title: Text(
+                        l10n.wholesalePricing,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        l10n.wholesalePricingDesc,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      onChanged: (v) async {
+                        if (!v && _wholesalePricingEnabled) {
+                          final proceed = await AppConfirmDialog.show(
+                            context,
+                            title: l10n.wholesalePricing,
+                            message: l10n.wholesalePricingDisableWarning,
+                            confirmLabel: l10n.disableAction,
+                            isDestructive: false,
+                          );
+                          if (!proceed) return;
+                        }
+                        setState(() => _wholesalePricingEnabled = v);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
 
             // ── Section 2: Legal Identity & Tax Registration ──

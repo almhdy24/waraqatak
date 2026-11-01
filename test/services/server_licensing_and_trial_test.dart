@@ -238,6 +238,92 @@ void main() {
       final s = await service.checkEntitlement(force: true);
       expect(s.status, EntitlementStatus.licenseExpired);
     });
+
+    test(
+        'App restart online verification with valid token preserves active status and sends canonical appSlug',
+        () async {
+      storage.data['wq_device_id'] = 'test-lic-valid-uuid';
+      storage.data['wq_license_key'] = 'ABCD-EFGH-JKM5';
+      storage.data['wq_activation_token'] = 'signed.token.valid';
+      storage.data['wq_license_type'] = 'perpetual';
+      storage.data['wq_license_status'] = 'active';
+
+      http.Request? captured;
+      final mock = MockClient((request) async {
+        if (request.url.path.contains('/pay/licenses/verify')) {
+          captured = request;
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'valid': true,
+              'data': {
+                'license_id': 1,
+                'product': 'com.elmahdi.waraqatak',
+                'status': 'active',
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('{}', 404);
+      });
+
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: mock,
+        ),
+      );
+
+      // Simulates app restart startup verification
+      await service.verifyLicenseOnline();
+
+      expect(captured, isNotNull);
+      final reqBody = jsonDecode(captured!.body) as Map<String, dynamic>;
+      expect(reqBody['product'], 'com.elmahdi.waraqatak');
+      expect(reqBody['token'], 'signed.token.valid');
+      expect(reqBody['machine_id'], 'test-lic-valid-uuid');
+
+      // Crucial: Valid license MUST remain active across app restarts
+      expect(storage.data['wq_license_status'], 'active');
+      final s = await service.checkEntitlement(force: true);
+      expect(s.status, EntitlementStatus.licensed);
+    });
+
+    test('Device mismatch on verification revokes entitlement (fail closed)',
+        () async {
+      storage.data['wq_device_id'] = 'cloned-device-uuid';
+      storage.data['wq_license_key'] = 'ABCD-EFGH-JKM5';
+      storage.data['wq_activation_token'] = 'signed.token.valid';
+      storage.data['wq_license_status'] = 'active';
+
+      final mock = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'success': false,
+            'valid': false,
+            'error': 'device_mismatch',
+            'message': 'Token bound to different device',
+          }),
+          401,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: mock,
+        ),
+      );
+
+      await service.verifyLicenseOnline();
+
+      expect(storage.data['wq_license_status'], 'revoked');
+      final s = await service.checkEntitlement(force: true);
+      expect(s.status, EntitlementStatus.licenseRevoked);
+    });
   });
 
   group('Device Model Information Metadata', () {

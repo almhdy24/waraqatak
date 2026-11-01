@@ -1,0 +1,25 @@
+# License, Activation & Trial Verification Matrix
+
+**Date:** 2026-11-01  
+**Coverage Level:** 3-Layer (App Logic, API Server, Admin Panel)
+
+| Scenario | Layer: App Logic | Layer: API Server | Layer: Admin Panel | Status | Evidence / Test File |
+|---|---|---|---|---|---|
+| **Valid Short Key Activates** | `ActivationService.activate()` handles short Crockford Base32 key | `LicensesController::publicActivate` -> `ActivationService::activate` issues short token | Quick-issue form validates & copies short key | COVERED | `activation_service_test.dart:35`, `DeviceManagementTest.php:120` |
+| **Short Key Checksum Failure** | `ShortLicenseKey.verify()` rejects bad modulo-32 checksum locally | API validation rejects checksum mismatch | Form flags invalid checksum | COVERED | `license_key_test.dart:180`, `test_license_rejection_matrix.php` |
+| **Long Key Wrong App Claim** | `LicenseKeyClaims.allowsActivation()` rejects non-matching `appSlug` without network call | API `verify()` rejects `product_mismatch` | Product switcher isolates keys | COVERED | `app_identity_test.dart:30`, `SecurityAndConcurrencyTest.php:220` |
+| **Long Key Expired Claim** | `LicenseKeyClaims.allowsActivation()` rejects expired timestamp without network call | API `verify()` returns `license_expired` | Expired badge displayed | COVERED | `license_key_test.dart:115`, `license_correctness_matrix_test.dart:50` |
+| **Tampered Signature Rejected** | `LicenseKeyClaims.tryParse` / SDK rejects corrupt signature | `SigningService::verifyToken` openssl_verify returns 0 -> 401 | N/A | COVERED | `server_licensing_and_trial_test.dart:150`, `test_license_rejection_matrix.php` |
+| **Stored License Tampering** | Key/token corrupted in storage fails parse or verify | Server rejects altered token with 401 | N/A | COVERED | `license_service_test.dart:210`, `license_correctness_matrix_test.dart:25` |
+| **Revoked via Server Verify** | `verifyLicenseOnline` stores `'revoked'`; `_compute` yields `licenseRevoked` | `ActivationService::verify` returns `license_revoked` | Admin revoke action emits audit log | COVERED | `license_service_test.dart:180`, `license_correctness_matrix_test.dart:40` |
+| **Expired via Server Verify** | [F4 Fixed] `verifyLicenseOnline` stores `'expired'`; `_compute` yields `licenseExpired` | `ActivationService::verify` returns `license_expired` | Admin expiry filter lists license | COVERED | `license_correctness_matrix_test.dart:20`, `test_license_rejection_matrix.php` |
+| **Device Mismatch** | Hardware Android ID mismatch triggers 401 fail-closed | Token `did` / `machine_id` comparison fails with `device_mismatch` | Device unlinked in admin panel | COVERED | `activation_service_test.dart:90`, `DeviceManagementTest.php:220` |
+| **Device Limit Reached** | Client receives 401/403 with `device_limit_reached` | `ActivationService::activate` returns `device_limit_reached` when active devices >= max | Admin can reset devices or increase limit | COVERED | `activation_service_test.dart:110`, `DeviceManagementTest.php:227` |
+| **Offline Preserves Access** | Network failure returns null from verify; existing entitlement preserved | N/A (Server unreachable) | N/A | COVERED | `activation_service_test.dart:50`, `license_service_test.dart:120` |
+| **HTTP 429 & 5xx Never Revoke** | Handled as transient; `wq_license_status` is not altered | Rate limit filter returns 429 JSON | Rate limit exceptions logged in server errors | COVERED | `activation_service_test.dart:65`, `license_correctness_matrix_test.dart:75` |
+| **Clock Rollback Guard** | `_effectiveNow` compares clock to `wq_last_seen`; never moves backward | Database stores UTC `now` from server NTP | N/A | COVERED | `license_service_test.dart:90`, `license_correctness_matrix_test.dart:60` |
+| **Trial Starts Once / Reinstall** | Device ID derived from hardware Android ID SHA-256 hash; server finds existing `(product_id, machine_id)` | `AppTrialModel::claimOrGetTrial` returns original timestamps; rejects duplicate | Trials table displays original claim date | COVERED | `server_licensing_and_trial_test.dart:65`, `TrialManagementTest.php:44` |
+| **Trial Expiry Preserves Data** | Core bookkeeping features remain in `FeatureAccess.freeFeatures`; zero SQLite deletion | N/A | N/A | COVERED | `feature_access_test.dart:15`, `license_correctness_matrix_test.dart:90` |
+| **Licensed Device Skips Trial** | [F8 Evaluated] `syncTrialWithServer` skips claim when actively licensed | N/A | N/A | COVERED | `license_correctness_matrix_test.dart:45` |
+| **Malformed / Oversized JSON** | SDK handles invalid JSON payloads gracefully | `readInput()` handles malformed JSON without 500; 32KB payload size cap in inbox sync | N/A | COVERED | `test_license_rejection_matrix.php:40`, `InboxController.php:20` |
+| **Public Route Rate Limits** | `ElmahdiPayRateLimitException` handled | Filters applied: `activate: 10/hr`, `verify: 60/hr`, `trial_claim: 30/hr` | Admin routes rate-limited to 600/hr | COVERED | `Routes.php:28-32`, `RateLimit.php` |

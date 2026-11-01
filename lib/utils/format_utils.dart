@@ -2,6 +2,27 @@ import 'package:intl/intl.dart';
 
 class FormatUtils {
   static final NumberFormat _qtyFormat = NumberFormat('#,##0.####');
+  static final DateFormat _defaultDateFmt = DateFormat('dd/MM/yyyy');
+  static final DateFormat _defaultDateTimeFmt = DateFormat('dd/MM/yyyy HH:mm');
+  static final DateFormat _defaultTimestampFmt = DateFormat('dd/MM/yyyy HH:mm:ss');
+
+  /// Formats a [DateTime] into standard user-facing date 'dd/MM/yyyy'.
+  static String formatDate(DateTime? date, {String fallback = '—'}) {
+    if (date == null) return fallback;
+    return _defaultDateFmt.format(date);
+  }
+
+  /// Formats a [DateTime] into standard user-facing datetime 'dd/MM/yyyy HH:mm'.
+  static String formatDateTime(DateTime? dateTime, {String fallback = '—'}) {
+    if (dateTime == null) return fallback;
+    return _defaultDateTimeFmt.format(dateTime);
+  }
+
+  /// Formats a [DateTime] into standard timestamp with seconds 'dd/MM/yyyy HH:mm:ss'.
+  static String formatTimestamp(DateTime? dateTime, {String fallback = '—'}) {
+    if (dateTime == null) return fallback;
+    return _defaultTimestampFmt.format(dateTime);
+  }
 
   /// Formats a stock or movement quantity with up to 4 decimal places,
   /// omitting redundant trailing zeros.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
 import '../core/theme_mode_scope.dart';
+import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/backup_service.dart';
@@ -16,7 +17,9 @@ import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
 import 'pdf_customize_screen.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -29,12 +32,21 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   EntitlementState? _entitlement;
   bool _diagnosticConsent = false;
+  bool _wholesalePricingEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _loadEntitlement();
     _loadConsent();
+    _loadWholesaleStatus();
+  }
+
+  Future<void> _loadWholesaleStatus() async {
+    final b = await DatabaseHelper.instance.getFirstBusiness();
+    if (mounted) {
+      setState(() => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false);
+    }
   }
 
   Future<void> _loadConsent() async {
@@ -82,9 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
 
-    final chevronIcon = l10n.isArabic
-        ? Icons.chevron_left
-        : Icons.chevron_right;
+    final chevronIcon = AppIcons.chevronForward(context);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings), centerTitle: true),
@@ -192,6 +202,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    SwitchListTile(
+                      secondary: const Icon(Icons.storefront_outlined),
+                      title: Text(l10n.wholesalePricing),
+                      subtitle: Text(l10n.wholesalePricingDesc),
+                      value: _wholesalePricingEnabled,
+                      onChanged: (v) async {
+                        setState(() => _wholesalePricingEnabled = v);
+                        final b = await DatabaseHelper.instance.getFirstBusiness();
+                        if (b != null) {
+                          await DatabaseHelper.instance.updateBusiness(
+                            b.copyWith(wholesalePricingEnabled: v),
+                          );
+                        }
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -282,22 +308,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: const Icon(Icons.save_outlined),
                       title: Text(l10n.saveBackupTo),
                       onTap: () async {
-                        final proceed = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: Text(l10n.backupUnencryptedTitle),
-                            content: Text(l10n.backupUnencryptedWarning),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: Text(l10n.cancel),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                child: Text(l10n.continueAction),
-                              ),
-                            ],
-                          ),
+                        final proceed = await AppConfirmDialog.show(
+                          context,
+                          title: l10n.backupUnencryptedTitle,
+                          message: l10n.backupUnencryptedWarning,
+                          confirmLabel: l10n.continueAction,
+                          cancelLabel: l10n.cancel,
+                          isDestructive: false,
                         );
                         if (proceed != true) return;
                         try {
@@ -322,30 +339,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: const Icon(Icons.restore),
                       title: Text(l10n.restore),
                       onTap: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text(l10n.confirmRestore),
-                            content: Text(l10n.restoreWarning),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text(l10n.cancel),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.error,
-                                  foregroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimary,
-                                ),
-                                child: Text(l10n.restore),
-                              ),
-                            ],
-                          ),
+                        final confirmed = await AppConfirmDialog.show(
+                          context,
+                          title: l10n.confirmRestore,
+                          message: l10n.restoreWarning,
+                          confirmLabel: l10n.restore,
+                          cancelLabel: l10n.cancel,
+                          isDestructive: true,
                         );
                         if (confirmed == true) {
                           try {

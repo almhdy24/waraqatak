@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/models/business.dart';
+import 'package:warqatek/models/document_payment.dart';
 import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/services/accounting/ledger.dart';
 import 'package:warqatek/services/accounting/ledger_service.dart';
@@ -160,7 +161,7 @@ void main() {
   );
 
   test(
-    '3. Deleting an already-cancelled receipt does not double-reverse invoice paid amount',
+    '3. Hard deletion of cancelled payment receipt is strictly rejected, preserving receipt and reversal history',
     () async {
       final db = DatabaseHelper.instance;
 
@@ -189,21 +190,82 @@ void main() {
       var inv = (await db.getDocumentById(invoiceId))!;
       expect(inv.paid, 200.0);
 
-      // Delete the cancelled receipt: paid must remain 200
-      await db.deleteDocument(receiptId);
+      // Attempt hard deletion of cancelled receipt: MUST throw StateError
+      await expectLater(
+        () => db.deleteDocument(receiptId),
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('Cannot delete payment_receipt with recorded payment history'),
+        )),
+      );
+
+      // Verify the cancelled receipt document remains intact in documents table
+      final receiptDoc = await db.getDocumentById(receiptId);
+      expect(receiptDoc, isNotNull);
+      expect(receiptDoc!.status, DocumentStatus.cancelled);
+
+      // Verify original payment row and reversal row remain intact and linked
+      final database = await db.database;
+      final paymentRows = await database.query(
+        'document_payments',
+        where: 'receipt_document_id = ?',
+        whereArgs: [receiptId],
+        orderBy: 'id ASC',
+      );
+      expect(paymentRows.length, 2);
+      expect(paymentRows[0]['amount'], 150.0);
+      expect(paymentRows[0]['payment_origin'], PaymentOrigin.receipt);
+      expect(paymentRows[0]['receipt_document_id'], receiptId);
+      expect(paymentRows[1]['amount'], -150.0);
+      expect(paymentRows[1]['payment_origin'], PaymentOrigin.reversal);
+      expect(paymentRows[1]['receipt_document_id'], receiptId);
+
+      // Verify parent invoice paid is still 200.0
+      inv = (await db.getDocumentById(invoiceId))!;
+      expect(inv.paid, 200.0);
+
+      // Verify upfront payments can still be added and edited after receipt cancellation
+      final items = await db.getDocumentItems(invoiceId);
+      final itemInputs = items
+          .map((i) => DocumentItemInput(
+                description: i.description,
+                quantity: i.quantity,
+                price: i.price,
+                productId: i.productId,
+                taxable: i.taxable,
+                taxRate: i.taxRate,
+              ))
+          .toList();
+
+      // Edit upfront payment from 200 to 250
+      await DocumentService.updateDocument(
+        documentId: invoiceId,
+        type: 'invoice',
+        business: business,
+        items: itemInputs,
+        paid: 250.0,
+      );
 
       inv = (await db.getDocumentById(invoiceId))!;
-      expect(
-        inv.paid,
-        200.0,
-        reason:
-            'Deleting a cancelled receipt must not reverse invoice paid amount again',
+      expect(inv.paid, 250.0);
+      expect(inv.remaining, 250.0);
+
+      final allPayments = await database.query(
+        'document_payments',
+        where: 'document_id = ?',
+        whereArgs: [invoiceId],
       );
+      final totalLedger = allPayments.fold<double>(
+        0.0,
+        (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
+      );
+      expect(totalLedger, 250.0);
     },
   );
 
   test(
-    '4. Deleting an active (non-cancelled) payment receipt reverses only receipt amount and preserves upfront payment',
+    '4. Direct deletion of active payment receipt with payment history is rejected without side effects',
     () async {
       final db = DatabaseHelper.instance;
 
@@ -229,18 +291,38 @@ void main() {
 
       var inv = (await db.getDocumentById(invoiceId))!;
       expect(inv.paid, 300.0);
+      expect(inv.remaining, 100.0);
 
-      // Delete the active receipt directly
-      await db.deleteDocument(receiptId);
-
-      inv = (await db.getDocumentById(invoiceId))!;
-      expect(
-        inv.paid,
-        100.0,
-        reason:
-            'Deleting active receipt must reverse its 200 and keep initial 100',
+      // Attempt hard deletion of active receipt: MUST throw StateError
+      await expectLater(
+        () => db.deleteDocument(receiptId),
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('Cannot delete payment_receipt with recorded payment history'),
+        )),
       );
-      expect(inv.remaining, 300.0);
+
+      // Verify no side effects: receipt is still issued and active
+      final receiptDoc = await db.getDocumentById(receiptId);
+      expect(receiptDoc, isNotNull);
+      expect(receiptDoc!.status, DocumentStatus.issued);
+
+      // Verify parent invoice balance is untouched (still 300 paid, 100 remaining)
+      inv = (await db.getDocumentById(invoiceId))!;
+      expect(inv.paid, 300.0);
+      expect(inv.remaining, 100.0);
+
+      // Verify payment rows are completely untouched
+      final database = await db.database;
+      final receiptPayments = await database.query(
+        'document_payments',
+        where: 'receipt_document_id = ?',
+        whereArgs: [receiptId],
+      );
+      expect(receiptPayments.length, 1);
+      expect(receiptPayments.first['amount'], 200.0);
+      expect(receiptPayments.first['payment_origin'], PaymentOrigin.receipt);
     },
   );
 

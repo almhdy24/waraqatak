@@ -19,6 +19,7 @@ import '../utils/money_utils.dart';
 import '../widgets/status_badge.dart';
 import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 
 class DocumentDetailScreen extends StatefulWidget {
@@ -644,7 +645,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       ),
                       if (_contact != null)
                         Icon(
-                          l10n.isArabic ? Icons.chevron_left : Icons.chevron_right,
+                          AppIcons.chevronForward(context),
                           size: 20,
                           color: Theme.of(context).colorScheme.primary,
                         ),
@@ -671,22 +672,53 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 Text(l10n.items,
                     style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                ..._items.map((item) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: Text(item.description)),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${_fmt.format(item.quantity)} × ${_fmt.format(item.price)}',
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontSize: 13),
-                      ),
-                    ],
-                  ),
-                )),
+                ..._items.map((item) {
+                  final hasUnit = item.saleUnit != null && item.saleUnit!.trim().isNotEmpty;
+                  final qtyText = hasUnit
+                      ? '${_fmt.format(item.quantity)} ${item.saleUnit}'
+                      : _fmt.format(item.quantity);
+                  final tierText = item.pricingCategory == 'wholesale'
+                      ? l10n.itemTierWholesaleBadge
+                      : (item.pricingCategory == 'retail' ? l10n.itemTierRetailBadge : null);
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.description),
+                              if (tierText != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Text(
+                                    tierText,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: item.pricingCategory == 'wholesale'
+                                          ? Theme.of(context).colorScheme.primary
+                                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$qtyText × ${_fmt.format(item.price)}',
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
               ],
             )),
           ],
@@ -852,9 +884,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                 ),
               ),
               Icon(
-                AppLocalizations.of(context).isArabic
-                    ? Icons.chevron_left_rounded
-                    : Icons.chevron_right_rounded,
+                AppIcons.chevronForward(context),
                 color: colors.onSurfaceVariant,
                 size: 20,
               ),

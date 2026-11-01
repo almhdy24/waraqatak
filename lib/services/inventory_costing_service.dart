@@ -141,6 +141,28 @@ class InventoryCostingService {
     return (currentValue + incomingValue) / newStock;
   }
 
+  /// Calculates the new perpetual moving weighted-average cost after removing or cancelling a purchase.
+  /// Throws [StateError] if subsequent transactions have consumed the purchase value
+  /// (i.e. remaining total inventory value would be negative).
+  static double? calculateReversedWeightedAverage({
+    required double currentStock,
+    required double? currentAvgCost,
+    required double removedQty,
+    required double removedCost,
+  }) {
+    final newStock = currentStock - removedQty;
+    if (newStock <= 0) return null;
+    if (currentAvgCost == null) return null;
+    final prevVal = currentStock * currentAvgCost;
+    if (prevVal - removedCost < -0.001) {
+      throw StateError(
+        'Cannot reverse purchase because subsequent sales or movements consumed this stock',
+      );
+    }
+    final remainVal = (prevVal - removedCost).clamp(0.0, double.infinity);
+    return remainVal / newStock;
+  }
+
   /// Hook called when a product is created with opening stock.
   static Future<void> onProductCreatedWithStock(
     DatabaseExecutor txn, {
@@ -333,7 +355,7 @@ class InventoryCostingService {
         p.stock_quantity,
         p.average_cost,
         p.cost_status,
-        COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN di.quantity ELSE 0 END), 0) AS sales_qty,
+        COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN COALESCE(di.base_quantity, di.quantity) ELSE 0 END), 0) AS sales_qty,
         COALESCE(SUM(CASE WHEN d.type = 'invoice' THEN di.total ELSE 0 END), 0) AS sales_revenue,
         COALESCE(SUM(CASE WHEN d.type = 'invoice' AND di.total_cost IS NOT NULL THEN di.total_cost ELSE 0 END), 0) AS known_cogs,
         COUNT(CASE WHEN d.type = 'invoice' AND di.quantity > 0 AND di.total_cost IS NULL THEN 1 END) AS unknown_cost_sales_count

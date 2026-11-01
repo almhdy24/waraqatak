@@ -65,6 +65,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
   }
 
   Future<void> _pickAndPreviewCsv() async {
+    final l10n = AppLocalizations.of(context);
     setState(() => _loading = true);
     try {
       final file = await FilePicker.pickFile(
@@ -78,7 +79,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
 
       final bytes = await file.readAsBytes();
       if (bytes.isEmpty) {
-        throw Exception('الملف المحدد فارغ');
+        throw Exception(l10n.selectedFileEmpty);
       }
 
       final preview = await CsvService.instance.previewImport(bytes);
@@ -309,7 +310,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                                     return ListTile(
                                       dense: true,
                                       title: Text(
-                                        r.name.isEmpty ? '(صف غير صالح)' : r.name,
+                                        r.name.isEmpty ? l10n.invalidRow : r.name,
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 12,
@@ -318,7 +319,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                                       ),
                                       subtitle: Text(
                                         r.errorMessage ??
-                                            'سعر: ${r.salePrice} ${r.isExisting ? "• منتج موجود" : "• منتج جديد"}',
+                                            '${l10n.price}: ${r.salePrice} • ${r.isExisting ? l10n.existingProductTag : l10n.newProductTag}',
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: r.isValid ? Colors.grey : Colors.red,

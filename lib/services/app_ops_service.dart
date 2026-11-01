@@ -5,9 +5,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/constants/app_constants.dart';
 import '../database/database_helper.dart';
 import '../models/app_notification.dart';
 import '../models/entitlement.dart';
+import '../utils/version_matcher.dart';
 import 'app_diagnostics_service.dart';
 import 'license_service.dart';
 
@@ -21,13 +23,14 @@ class AppOpsService {
   AppOpsService._();
   static final AppOpsService instance = AppOpsService._();
 
-  static const String appSlug = 'com.elmahdi.waraqatak';
+  static const String appSlug = AppConstants.appId;
   static const String apiBaseUrl = 'https://api.almhdy24.com';
   static const Duration requestTimeout = Duration(seconds: 10);
 
   // Storage keys
   static const String _kRemoteConfig = 'ops_remote_config';
   static const String _kPendingReads = 'ops_pending_read_ids';
+  static const String _kTombstones = 'ops_notification_tombstones';
 
   // Recognized allowlisted remote configuration keys
   static const Set<String> allowedConfigKeys = {
@@ -121,7 +124,7 @@ class AppOpsService {
 
     HttpClient? client;
     try {
-      final uri = Uri.parse('$apiBaseUrl/api/v1/ops/config?product=$appSlug');
+      final uri = Uri.parse('$apiBaseUrl/api/v1/ops/config?product=${AppConstants.appId}');
       client = HttpClient()..connectionTimeout = requestTimeout;
 
       final req = await client.getUrl(uri).timeout(requestTimeout);
@@ -210,10 +213,15 @@ class AppOpsService {
         clientStatus = 'expired_license';
       }
 
+      final prefs = await SharedPreferences.getInstance();
+      final lang = prefs.getString('language') ?? 'ar';
+
       final payload = <String, dynamic>{
-        'product': appSlug,
+        'product': AppConstants.appId,
         'machine_id': machineId,
-        'app_version': '1.1.3',
+        'app_version': AppConstants.appVersion,
+        'app_build': AppConstants.appBuild,
+        'language': lang,
         'client_reported_status': clientStatus,
       };
 
@@ -244,12 +252,26 @@ class AppOpsService {
           }
 
           final data = json['data'];
-          if (data is Map<String, dynamic> && data['notifications'] is List) {
-            final list = data['notifications'] as List;
-            for (final item in list) {
-              if (item is Map<String, dynamic>) {
-                final notif = AppNotification.fromJson(item);
-                await DatabaseHelper.instance.upsertCachedNotification(notif);
+          if (data is Map<String, dynamic>) {
+            // Reconcile tombstones against active server IDs
+            if (data['active_ids'] is List) {
+              final activeIds = (data['active_ids'] as List)
+                  .map((e) => (e as num).toInt())
+                  .toList();
+              await reconcileTombstones(activeIds);
+            }
+
+            final tombstones = await getTombstones();
+
+            if (data['notifications'] is List) {
+              final list = data['notifications'] as List;
+              for (final item in list) {
+                if (item is Map<String, dynamic>) {
+                  final notif = AppNotification.fromJson(item);
+                  if (!tombstones.contains(notif.serverId)) {
+                    await DatabaseHelper.instance.upsertCachedNotification(notif);
+                  }
+                }
               }
             }
           }
@@ -314,5 +336,101 @@ class AppOpsService {
         current.map((id) => id.toString()).toList(),
       );
     } catch (_) {}
+  }
+
+  // ── Tombstones & Deletion ──────────────────────────────────────────────────
+
+  /// Returns the set of server IDs of deleted notifications blocked from re-insertion.
+  Future<Set<int>> getTombstones() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(_kTombstones) ?? [];
+      return list.map(int.tryParse).whereType<int>().toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Adds a notification server ID to the deletion tombstone set.
+  Future<void> addTombstone(int serverId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = (prefs.getStringList(_kTombstones) ?? []).toSet();
+      current.add(serverId.toString());
+      await prefs.setStringList(_kTombstones, current.toList());
+    } catch (_) {}
+  }
+
+  /// Removes a notification server ID from the tombstone set (used by undo / restore).
+  Future<void> removeTombstone(int serverId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = (prefs.getStringList(_kTombstones) ?? []).toSet();
+      current.remove(serverId.toString());
+      await prefs.setStringList(_kTombstones, current.toList());
+    } catch (_) {}
+  }
+
+  /// Prunes tombstone entries that are no longer active on the server.
+  Future<void> reconcileTombstones(List<int> activeIds) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = (prefs.getStringList(_kTombstones) ?? [])
+          .map(int.tryParse)
+          .whereType<int>()
+          .toSet();
+      final activeSet = activeIds.toSet();
+      final retained = current.intersection(activeSet);
+      await prefs.setStringList(
+        _kTombstones,
+        retained.map((id) => id.toString()).toList(),
+      );
+    } catch (_) {}
+  }
+
+  /// Deletes a single cached notification, recording a tombstone.
+  Future<void> deleteNotification(int serverId) async {
+    try {
+      await addTombstone(serverId);
+      await DatabaseHelper.instance.deleteCachedNotification(serverId);
+      await refreshUnreadCount();
+    } catch (_) {}
+  }
+
+  /// Restores a deleted notification (undo action).
+  Future<void> restoreNotification(AppNotification notif) async {
+    try {
+      await removeTombstone(notif.serverId);
+      await DatabaseHelper.instance.upsertCachedNotification(notif);
+      await refreshUnreadCount();
+    } catch (_) {}
+  }
+
+  /// Bulk deletes dismissible notifications, recording tombstones for each.
+  Future<void> deleteAllNotifications(List<AppNotification> notifications) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final current = (prefs.getStringList(_kTombstones) ?? []).toSet();
+
+      for (final n in notifications) {
+        if (n.isDismissible) {
+          current.add(n.serverId.toString());
+        }
+      }
+      await prefs.setStringList(_kTombstones, current.toList());
+      await DatabaseHelper.instance.deleteAllCachedNotifications(preserveCritical: true);
+      await refreshUnreadCount();
+    } catch (_) {}
+  }
+
+  /// Evaluates whether the current app version meets or exceeds the remote minimum supported version.
+  bool isVersionSupported() {
+    final minVer = _configCache['min_supported_version'] as String?;
+    if (minVer == null || minVer.trim().isEmpty) return true;
+    return VersionMatcher.matches(
+      appVersion: AppConstants.appVersion,
+      appBuild: AppConstants.appBuild,
+      minVersion: minVer.trim(),
+    );
   }
 }

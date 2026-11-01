@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:printing/printing.dart';
 
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
+import '../models/contact.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/payment_method.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../services/pos_cart.dart';
@@ -17,6 +19,10 @@ import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/print_settings.dart';
+import '../widgets/app_amount_text.dart';
+import '../widgets/app_confirm_dialog.dart';
+import '../widgets/app_design_tokens.dart';
+import '../widgets/app_loading_view.dart';
 import 'barcode_scanner_screen.dart';
 import 'document_detail_screen.dart';
 
@@ -39,6 +45,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   Business? _business;
   List<Product> _products = [];
+  Map<int, List<ProductUnit>> _productUnits = {};
   List<PaymentMethod> _methods = [];
   String? _method;
   bool _loading = true;
@@ -67,13 +74,18 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       db.getFirstBusiness(),
       ProductService.getAllProducts(activeOnly: true),
       db.getEnabledPaymentMethods(),
+      db.getAllProductUnits(),
     ]);
     if (!mounted) return;
+    final business = results[0] as Business?;
     final methods = results[2] as List<PaymentMethod>;
+    final units = results[3] as Map<int, List<ProductUnit>>;
     setState(() {
-      _business = results[0] as Business?;
+      _business = business;
       _products = results[1] as List<Product>;
       _methods = methods;
+      _productUnits = units;
+      _cart.setWholesalePricingEnabled(business?.wholesalePricingEnabled ?? false);
       _method ??= methods
               .where((m) => m.isDefault)
               .map((m) => m.key)
@@ -111,7 +123,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   void _addProduct(Product p) {
     final l10n = AppLocalizations.of(context);
-    final err = _cart.add(p);
+    final units = p.id != null ? (_productUnits[p.id!] ?? const <ProductUnit>[]) : const <ProductUnit>[];
+    final defaultUnit = units.where((u) => u.isDefaultSale).firstOrNull;
+    final err = _cart.add(p, unit: defaultUnit);
     if (err == PosCartError.outOfStock) {
       _toast(l10n.posNotEnoughStock(p.name));
       return;
@@ -162,21 +176,29 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     setState(() => _query = '');
   }
 
+  Future<bool> _onWillPop() async {
+    if (_cart.isEmpty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
   Future<void> _clearCart() async {
     final l10n = AppLocalizations.of(context);
     if (_cart.isEmpty) return;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.posClearCart),
-        content: Text(l10n.posClearCartConfirm),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.posClearCart)),
-        ],
-      ),
+    final ok = await AppConfirmDialog.show(
+      context,
+      title: l10n.posClearCart,
+      message: l10n.posClearCartConfirm,
+      confirmLabel: l10n.posClearCart,
+      isDestructive: true,
     );
-    if (ok == true) _resetSale();
+    if (ok) _resetSale();
   }
 
   void _resetSale() {
@@ -207,6 +229,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         discount: _cart.discount,
         date: DateTime.now(),
         payNowMethod: _method,
+        contact: _cart.customer,
       );
       if (!mounted) return;
       final change = received == null ? 0.0 : PosCart.changeFor(total: total, received: received);
@@ -298,41 +321,51 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final l10n = AppLocalizations.of(context);
     final wide = MediaQuery.sizeOf(context).width >= 840;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.posQuickSale),
-        actions: [
-          IconButton(
-            tooltip: l10n.scanBarcode,
-            icon: const Icon(Icons.qr_code_scanner),
-            onPressed: _scan,
-          ),
-          IconButton(
-            tooltip: l10n.posClearCart,
-            icon: const Icon(Icons.remove_shopping_cart_outlined),
-            onPressed: _cart.isEmpty ? null : _clearCart,
-          ),
-        ],
+    return PopScope(
+      canPop: _cart.isEmpty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.posQuickSale),
+          actions: [
+            IconButton(
+              tooltip: l10n.scanBarcode,
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: _scan,
+            ),
+            IconButton(
+              tooltip: l10n.posClearCart,
+              icon: const Icon(Icons.remove_shopping_cart_outlined),
+              onPressed: _cart.isEmpty ? null : _clearCart,
+            ),
+          ],
+        ),
+        body: _loading
+            ? const AppLoadingView()
+            : _business == null
+                ? Center(child: Text(l10n.posSetupBusinessFirst))
+                : wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: _productPicker(l10n)),
+                          const VerticalDivider(width: 1),
+                          SizedBox(width: 400, child: _cartPanel(l10n)),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          Expanded(child: _productPicker(l10n)),
+                          _cartBar(l10n),
+                        ],
+                      ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _business == null
-              ? Center(child: Text(l10n.posSetupBusinessFirst))
-              : wide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: _productPicker(l10n)),
-                        const VerticalDivider(width: 1),
-                        SizedBox(width: 400, child: _cartPanel(l10n)),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        Expanded(child: _productPicker(l10n)),
-                        _cartBar(l10n),
-                      ],
-                    ),
     );
   }
 
@@ -378,22 +411,28 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     ),
                   ),
                 )
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 190,
-                    mainAxisExtent: 112,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                  ),
-                  itemCount: products.length,
-                  itemBuilder: (_, i) => _ProductTile(
-                    product: products[i],
-                    inCart: products[i].id == null ? 0 : _cart.quantityOf(products[i].id!),
-                    price: _fmt(products[i].salePrice),
-                    l10n: l10n,
-                    onTap: () => _addProduct(products[i]),
-                  ),
+              : Builder(
+                  builder: (context) {
+                    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+                    final tileHeight = (116.0 * textScale.clamp(1.0, 1.6)).roundToDouble();
+                    return GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 190,
+                        mainAxisExtent: tileHeight,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemCount: products.length,
+                      itemBuilder: (_, i) => _ProductTile(
+                        product: products[i],
+                        inCart: products[i].id == null ? 0 : _cart.quantityOf(products[i].id!),
+                        price: _fmt(products[i].salePrice),
+                        l10n: l10n,
+                        onTap: () => _addProduct(products[i]),
+                      ),
+                    );
+                  },
                 ),
         ),
       ],
@@ -403,33 +442,46 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   Widget _cartBar(AppLocalizations l10n) {
     final cs = Theme.of(context).colorScheme;
     final total = _totals.total;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.posItemsCount(_money.format(_cart.itemCount)),
-                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-                  Text(_fmt(total),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                ],
+    return SafeArea(
+      top: false,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          border: Border(top: BorderSide(color: cs.outlineVariant)),
+          boxShadow: AppDesignTokens.softShadow(context),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.posItemsCount(_money.format(_cart.itemCount)),
+                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                    ),
+                    AppAmountText(
+                      amount: total,
+                      currencySymbol: _business?.currencySymbol ?? '',
+                      fontSize: 19,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            FilledButton.icon(
-              onPressed: _cart.isEmpty ? null : () => _openCartSheet(l10n),
-              icon: const Icon(Icons.shopping_cart_outlined),
-              label: Text(l10n.posViewCart),
-            ),
-          ],
+              FilledButton.icon(
+                onPressed: _cart.isEmpty ? null : () => _openCartSheet(l10n),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(130, AppDesignTokens.minTouchTarget),
+                ),
+                icon: const Icon(Icons.shopping_cart_outlined),
+                label: Text(l10n.posViewCart),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -454,6 +506,224 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _editLine(int index, void Function(VoidCallback) update) async {
+    final l10n = AppLocalizations.of(context);
+    final line = _cart.lines[index];
+    final p = line.product;
+    final units = p.id != null
+        ? (_productUnits[p.id!] ?? const <ProductUnit>[])
+        : const <ProductUnit>[];
+    final wholesaleEnabled = _business?.wholesalePricingEnabled ?? false;
+
+    ProductUnit? selectedUnit = line.unit;
+    String selectedCategory = line.pricingCategory ?? Contact.categoryRetail;
+    final priceCtrl = TextEditingController(text: line.unitPrice.toString());
+    bool isCustomPrice = line.priceOverride != null;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: Text(p.name),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (units.isNotEmpty) ...[
+                  Text(l10n.salesUnit,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: Text(p.unit ?? l10n.baseUnit),
+                        selected: selectedUnit == null,
+                        onSelected: (sel) {
+                          if (sel) {
+                            setDialog(() {
+                              selectedUnit = null;
+                              if (!isCustomPrice) {
+                                final resPrice =
+                                    DocumentService.resolveLinePrice(
+                                  product: p,
+                                  availableUnits: units,
+                                  unit: null,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              }
+                            });
+                          }
+                        },
+                      ),
+                      for (final u in units)
+                        ChoiceChip(
+                          label: Text(u.unitName),
+                          selected: selectedUnit?.id == u.id &&
+                              selectedUnit?.unitName == u.unitName,
+                          onSelected: (sel) {
+                            if (sel) {
+                              setDialog(() {
+                                selectedUnit = u;
+                                if (!isCustomPrice) {
+                                  final resPrice =
+                                    DocumentService.resolveLinePrice(
+                                    product: p,
+                                    availableUnits: units,
+                                    unit: u,
+                                    targetCategory: selectedCategory,
+                                    quantity: line.quantity,
+                                    wholesalePricingEnabled: wholesaleEnabled,
+                                  );
+                                  priceCtrl.text = resPrice.toString();
+                                }
+                              });
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (wholesaleEnabled) ...[
+                  Text(l10n.pricingCategory,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: Text(l10n.retail),
+                        selected: selectedCategory == Contact.categoryRetail,
+                        onSelected: (sel) {
+                          if (sel) {
+                            setDialog(() {
+                              selectedCategory = Contact.categoryRetail;
+                              if (!isCustomPrice) {
+                                final resPrice =
+                                    DocumentService.resolveLinePrice(
+                                  product: p,
+                                  availableUnits: units,
+                                  unit: selectedUnit,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              }
+                            });
+                          }
+                        },
+                      ),
+                      ChoiceChip(
+                        label: Text(l10n.wholesale),
+                        selected: selectedCategory == Contact.categoryWholesale,
+                        onSelected: (sel) {
+                          if (sel) {
+                            setDialog(() {
+                              selectedCategory = Contact.categoryWholesale;
+                              if (!isCustomPrice) {
+                                final resPrice =
+                                    DocumentService.resolveLinePrice(
+                                  product: p,
+                                  availableUnits: units,
+                                  unit: selectedUnit,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              }
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                Text(l10n.unitPrice,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: priceCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    suffixText: _business?.currencySymbol ?? '',
+                    suffixIcon: isCustomPrice
+                        ? IconButton(
+                            tooltip: l10n.reset,
+                            icon: const Icon(Icons.refresh, size: 18),
+                            onPressed: () {
+                              setDialog(() {
+                                isCustomPrice = false;
+                                final resPrice =
+                                    DocumentService.resolveLinePrice(
+                                  product: p,
+                                  availableUnits: units,
+                                  unit: selectedUnit,
+                                  targetCategory: selectedCategory,
+                                  quantity: line.quantity,
+                                  wholesalePricingEnabled: wholesaleEnabled,
+                                );
+                                priceCtrl.text = resPrice.toString();
+                              });
+                            },
+                          )
+                        : null,
+                  ),
+                  onChanged: (val) {
+                    final entered = double.tryParse(val.trim());
+                    if (entered != null) {
+                      isCustomPrice = true;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.save),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      final overridePrice =
+          isCustomPrice ? double.tryParse(priceCtrl.text.trim()) : null;
+      update(() {
+        final err = _cart.updateLine(
+          index,
+          unit: selectedUnit,
+          clearUnit: selectedUnit == null,
+          pricingCategory: selectedCategory,
+          priceOverride: overridePrice,
+          clearPriceOverride: !isCustomPrice,
+        );
+        if (err == PosCartError.outOfStock) {
+          _toast(l10n.posNotEnoughStock(p.name));
+        }
+      });
+    }
   }
 
   Widget _cartPanel(AppLocalizations l10n, {VoidCallback? refresh}) {
@@ -488,6 +758,27 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     return Column(
       children: [
+        if (_business?.wholesalePricingEnabled == true)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text(l10n.retail),
+                  selected: _cart.pricingCategory == Contact.categoryRetail,
+                  onSelected: (_) =>
+                      update(() => _cart.setPricingCategory(Contact.categoryRetail)),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text(l10n.wholesale),
+                  selected: _cart.pricingCategory == Contact.categoryWholesale,
+                  onSelected: (_) => update(
+                      () => _cart.setPricingCategory(Contact.categoryWholesale)),
+                ),
+              ],
+            ),
+          ),
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -495,12 +786,21 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final line = _cart.lines[i];
+              final unitLabel =
+                  line.unit?.unitName ?? line.product.unit ?? '';
+              final tierLabel = (_business?.wholesalePricingEnabled == true &&
+                      line.pricingCategory == Contact.categoryWholesale)
+                  ? ' (${l10n.wholesalePricing})'
+                  : '';
               return ListTile(
                 dense: true,
+                onTap: () => _editLine(i, update),
                 title: Text(line.product.name,
-                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${_fmt(line.product.salePrice)} × ${_money.format(line.quantity)} = ${_fmt(line.total)}'),
+                subtitle: Text(
+                    '${_fmt(line.unitPrice)} × ${_money.format(line.quantity)} $unitLabel$tierLabel = ${_fmt(line.total)}'),
                 trailing: _QtyStepper(
                   quantity: line.quantity,
                   onMinus: () => update(() => _setQty(i, line.quantity - 1)),
@@ -557,7 +857,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               if (t.taxAmount > 0) _totalRow(l10n.tax, _fmt(t.taxAmount)),
               _totalRow(l10n.grandTotal, _fmt(t.total), big: true),
               if (change > 0)
-                _totalRow(l10n.posChange, _fmt(change), color: Colors.green.shade700),
+                _totalRow(
+                  l10n.posChange,
+                  _fmt(change),
+                  color: AppDesignTokens.semanticSuccess(context),
+                ),
               const SizedBox(height: 10),
               SizedBox(
                 height: 54,
@@ -632,6 +936,7 @@ class _ProductTile extends StatelessWidget {
           padding: const EdgeInsets.all(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -662,20 +967,26 @@ class _ProductTile extends StatelessWidget {
                     ),
                 ],
               ),
-              const Spacer(),
-              Text(price,
-                  style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary)),
-              const SizedBox(height: 2),
-              Text(
-                !tracks
-                    ? l10n.posService
-                    : soldOut
-                        ? l10n.outOfStock
-                        : l10n.posInStock(FormatUtils.formatQuantity(available)),
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: soldOut ? cs.error : cs.onSurfaceVariant,
-                ),
+              const SizedBox(height: 4),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(price,
+                      style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary)),
+                  const SizedBox(height: 2),
+                  Text(
+                    !tracks
+                        ? l10n.posService
+                        : soldOut
+                            ? l10n.outOfStock
+                            : l10n.posInStock(FormatUtils.formatQuantity(available)),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: soldOut ? cs.error : cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -703,15 +1014,29 @@ class _QtyStepper extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            visualDensity: VisualDensity.compact,
-            icon: Icon(quantity <= 1 ? Icons.delete_outline : Icons.remove, size: 18),
+            constraints: const BoxConstraints(
+              minWidth: AppDesignTokens.minTouchTarget,
+              minHeight: AppDesignTokens.minTouchTarget,
+            ),
+            icon: Icon(quantity <= 1 ? Icons.delete_outline : Icons.remove, size: 20),
+            tooltip: quantity <= 1
+                ? AppLocalizations.of(context).delete
+                : null,
             onPressed: onMinus,
           ),
-          Text(NumberFormat('#,##0.##').format(quantity),
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              NumberFormat('#,##0.##').format(quantity),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
           IconButton(
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.add, size: 18),
+            constraints: const BoxConstraints(
+              minWidth: AppDesignTokens.minTouchTarget,
+              minHeight: AppDesignTokens.minTouchTarget,
+            ),
+            icon: const Icon(Icons.add, size: 20),
             onPressed: onPlus,
           ),
         ],

@@ -4,9 +4,13 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
+import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
+import '../widgets/app_amount_text.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_totals_card.dart';
@@ -35,6 +39,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   final List<bool> _taxableList = [];
   final List<int?> _productIds = [];
   final List<double?> _taxRates = [];
+  final List<String?> _pricingCategories = [];
+  final List<bool> _isManualPriceList = [];
+  final List<Product?> _cachedProducts = [];
+  final List<String?> _saleUnits = [];
+  final List<double> _conversionFactors = [];
+  final Map<int, List<ProductUnit>> _unitsCache = {};
   Map<int, double> _profileRates = {};
 
   Business? _business;
@@ -94,10 +104,54 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       _taxableList.add(true);
       _productIds.add(null);
       _taxRates.add(null);
+      _pricingCategories.add(
+        _business?.wholesalePricingEnabled == true
+            ? (_selectedContact?.pricingCategory ?? Contact.categoryRetail)
+            : null,
+      );
+      _isManualPriceList.add(false);
+      _cachedProducts.add(null);
+      _saleUnits.add(null);
+      _conversionFactors.add(1.0);
     });
   }
 
-  void _removeItem(int index) {
+  bool get _isDirty {
+    return _selectedContact != null ||
+        _notesController.text.isNotEmpty ||
+        (_discountController.text != '0' && _discountController.text.isNotEmpty) ||
+        (_paidController.text != '0' && _paidController.text.isNotEmpty) ||
+        _descriptionControllers.any((c) => c.text.isNotEmpty) ||
+        _productIds.any((id) => id != null) ||
+        _descriptionControllers.length > 1;
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
+  Future<void> _removeItem(int index) async {
+    final hasContent =
+        _descriptionControllers[index].text.isNotEmpty || _productIds[index] != null;
+    if (hasContent) {
+      final l10n = AppLocalizations.of(context);
+      final proceed = await AppConfirmDialog.show(
+        context,
+        title: l10n.confirmDeleteLine,
+        message: l10n.deleteLineWarning,
+        isDestructive: true,
+      );
+      if (!proceed) return;
+    }
+    if (!mounted) return;
     setState(() {
       _descriptionControllers[index].dispose();
       _quantityControllers[index].dispose();
@@ -109,6 +163,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       _taxableList.removeAt(index);
       _productIds.removeAt(index);
       _taxRates.removeAt(index);
+      _pricingCategories.removeAt(index);
+      _isManualPriceList.removeAt(index);
+      _cachedProducts.removeAt(index);
+      _saleUnits.removeAt(index);
+      _conversionFactors.removeAt(index);
     });
   }
 
@@ -141,14 +200,23 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   List<DocumentItemInput> _buildItems() => List.generate(
     _descriptionControllers.length,
-    (i) => DocumentItemInput(
-      description: _descriptionControllers[i].text.trim(),
-      quantity: double.tryParse(_quantityControllers[i].text) ?? 0,
-      price: double.tryParse(_priceControllers[i].text) ?? 0,
-      taxable: _taxableList[i],
-      productId: _productIds[i],
-      taxRate: _taxRates[i],
-    ),
+    (i) {
+      final q = double.tryParse(_quantityControllers[i].text) ?? 0;
+      final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
+      final unit = i < _saleUnits.length ? _saleUnits[i] : null;
+      return DocumentItemInput(
+        description: _descriptionControllers[i].text.trim(),
+        quantity: q,
+        price: double.tryParse(_priceControllers[i].text) ?? 0,
+        taxable: _taxableList[i],
+        productId: _productIds[i],
+        taxRate: _taxRates[i],
+        pricingCategory: _pricingCategories[i],
+        saleUnit: unit,
+        unitConversionFactor: factor,
+        baseQuantity: q * factor,
+      );
+    },
   );
 
   Future<void> _save({bool isDraft = false}) async {
@@ -230,6 +298,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     final totals = _totals;
@@ -242,9 +311,78 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     );
     final remaining = MoneyUtils.calculateRemaining(total, paid, decimalDigits);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.invoice), centerTitle: true),
-      body: ResponsiveCenter(
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.invoice), centerTitle: true),
+        bottomNavigationBar: SafeArea(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              boxShadow: AppDesignTokens.softShadow(context),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.total,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      AppAmountText(
+                        amount: total,
+                        currencySymbol: _business?.currencySymbol ?? '',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _saving ? null : () => _save(isDraft: true),
+                  child: Text(l10n.saveDraft),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _saving ? null : () => _save(),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(110, AppDesignTokens.minTouchTarget),
+                  ),
+                  child: _saving
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(l10n.saveInvoice),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: ResponsiveCenter(
         child: Form(
           key: _formKey,
           child: ListView(
@@ -254,7 +392,48 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 label: l10n.customer,
                 type: 'customer',
                 initialContact: _selectedContact,
-                onContactChanged: (contact) => _selectedContact = contact,
+                onContactChanged: (contact) async {
+                  setState(() => _selectedContact = contact);
+                  if (_business?.wholesalePricingEnabled == true) {
+                    final newCat =
+                        contact?.pricingCategory ?? Contact.categoryRetail;
+                    for (int i = 0; i < _descriptionControllers.length; i++) {
+                      final p = _cachedProducts[i];
+                      if (!_isManualPriceList[i] && p != null) {
+                        _pricingCategories[i] = newCat;
+                        final q =
+                            double.tryParse(_quantityControllers[i].text) ??
+                            1.0;
+                        final currentP =
+                            double.tryParse(_priceControllers[i].text);
+                        List<ProductUnit> units =
+                            _unitsCache[p.id] ?? const [];
+                        if (units.isEmpty && p.id != null) {
+                          try {
+                            units = await DatabaseHelper.instance
+                                .getProductUnits(p.id!);
+                            _unitsCache[p.id!] = units;
+                          } catch (_) {}
+                        }
+                        final resolved = DocumentService.resolveLinePrice(
+                          product: p,
+                          availableUnits: units,
+                          quantity: q,
+                          currentPrice: currentP,
+                          saleUnit: _saleUnits[i],
+                          unitConversionFactor: _conversionFactors[i],
+                          pricingCategory: _pricingCategories[i],
+                          targetCategory: newCat,
+                          isManualPrice: _isManualPriceList[i],
+                          wholesalePricingEnabled: true,
+                        );
+                        _priceControllers[i].text =
+                            resolved.toStringAsFixed(2);
+                      }
+                    }
+                    if (mounted) setState(() {});
+                  }
+                },
               ),
               const SizedBox(height: 16),
               AppSectionHeader(
@@ -271,11 +450,33 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   taxable: _taxableList[index],
                   taxRate: _taxRates[index],
                   productId: _productIds[index],
+                  wholesalePricingEnabled:
+                      _business?.wholesalePricingEnabled ?? false,
+                  pricingCategory: _pricingCategories[index],
+                  onPricingCategoryChanged: (cat) {
+                    setState(() => _pricingCategories[index] = cat);
+                  },
+                  customerPricingCategory:
+                      _selectedContact?.pricingCategory ??
+                      Contact.categoryRetail,
+                  isManualPrice: _isManualPriceList[index],
+                  onManualPriceChanged: (manual) {
+                    setState(() => _isManualPriceList[index] = manual);
+                  },
+                  saleUnit: _saleUnits[index],
+                  onSaleUnitChanged: (unit) {
+                    setState(() => _saleUnits[index] = unit);
+                  },
+                  unitConversionFactor: _conversionFactors[index],
+                  onConversionFactorChanged: (factor) {
+                    setState(() => _conversionFactors[index] = factor);
+                  },
                   onProductChanged: (productId) {
                     setState(() => _productIds[index] = productId);
                   },
                   onProductSelected: (product) {
                     setState(() {
+                      _cachedProducts[index] = product;
                       if (product == null) {
                         _taxRates[index] = null;
                       } else if (!product.isTaxable) {
@@ -287,6 +488,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                         _taxRates[index] = null;
                       }
                     });
+                    if (product?.id != null) {
+                      DatabaseHelper.instance
+                          .getProductUnits(product!.id!)
+                          .then((u) {
+                        _unitsCache[product.id!] = u;
+                      });
+                    }
                   },
                   onTaxableChanged: (value) {
                     setState(() => _taxableList[index] = value ?? true);
@@ -324,6 +532,15 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   labelText: l10n.discount,
                   prefixIcon: const Icon(Icons.percent_rounded, size: 20),
                 ),
+                textInputAction: TextInputAction.next,
+                onTap: () {
+                  if (_discountController.text.isNotEmpty) {
+                    _discountController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: _discountController.text.length,
+                    );
+                  }
+                },
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -336,6 +553,15 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   prefixIcon: const Icon(Icons.payments_outlined, size: 20),
                   helperText: l10n.remainingBalanceHelper,
                 ),
+                textInputAction: TextInputAction.next,
+                onTap: () {
+                  if (_paidController.text.isNotEmpty) {
+                    _paidController.selection = TextSelection(
+                      baseOffset: 0,
+                      extentOffset: _paidController.text.length,
+                    );
+                  }
+                },
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -399,6 +625,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

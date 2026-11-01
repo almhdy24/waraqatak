@@ -72,10 +72,10 @@ class LicenseKeyClaims {
       licenseType != perpetualType &&
       expiresAt == null;
 
-  /// Whether this key may be activated at [now] for [expectedAppSlug].
-  bool allowsActivation(DateTime now, {required String expectedAppSlug}) =>
+  /// Whether this key may be activated at [now] for [expectedAppId].
+  bool allowsActivation(DateTime now, {required String expectedAppId}) =>
       !malformed &&
-      appSlug == expectedAppSlug &&
+      appSlug == expectedAppId &&
       !isExpiredAt(now) &&
       !limitedWithoutExpiry;
 }

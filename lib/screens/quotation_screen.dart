@@ -4,7 +4,11 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
+import '../models/product.dart';
+import '../models/product_unit.dart';
 import '../services/document_service.dart';
+import '../widgets/app_amount_text.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_section_header.dart';
 import '../widgets/app_totals_card.dart';
@@ -24,6 +28,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _notesController = TextEditingController();
   final _validityController = TextEditingController(text: '7');
+  bool _saving = false;
 
   final List<TextEditingController> _desc = [];
   final List<TextEditingController> _qty = [];
@@ -31,6 +36,12 @@ class _QuotationScreenState extends State<QuotationScreen> {
   final List<bool> _taxable = [];
   final List<int?> _productIds = [];
   final List<double?> _taxRates = [];
+  final List<String?> _pricingCategories = [];
+  final List<bool> _isManualPriceList = [];
+  final List<Product?> _cachedProducts = [];
+  final List<String?> _saleUnits = [];
+  final List<double> _conversionFactors = [];
+  final Map<int, List<ProductUnit>> _unitsCache = {};
   Map<int, double> _profileRates = {};
 
   Business? _business;
@@ -82,10 +93,48 @@ class _QuotationScreenState extends State<QuotationScreen> {
       _taxable.add(true);
       _productIds.add(null);
       _taxRates.add(null);
+      _pricingCategories.add(null);
+      _isManualPriceList.add(false);
+      _cachedProducts.add(null);
+      _saleUnits.add(null);
+      _conversionFactors.add(1.0);
     });
   }
 
-  void _removeItem(int index) {
+  bool get _isDirty {
+    return _contact != null ||
+        _notesController.text.isNotEmpty ||
+        (_validityController.text != '7' && _validityController.text.isNotEmpty) ||
+        _desc.any((c) => c.text.isNotEmpty) ||
+        _productIds.any((id) => id != null) ||
+        _desc.length > 1;
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_isDirty || _saving) return true;
+    final l10n = AppLocalizations.of(context);
+    return AppConfirmDialog.show(
+      context,
+      title: l10n.unsavedChangesTitle,
+      message: l10n.unsavedChangesMessage,
+      confirmLabel: l10n.discardChanges,
+      isDestructive: true,
+    );
+  }
+
+  Future<void> _removeItem(int index) async {
+    final hasContent = _desc[index].text.isNotEmpty || _productIds[index] != null;
+    if (hasContent) {
+      final l10n = AppLocalizations.of(context);
+      final proceed = await AppConfirmDialog.show(
+        context,
+        title: l10n.confirmDeleteLine,
+        message: l10n.deleteLineWarning,
+        isDestructive: true,
+      );
+      if (!proceed) return;
+    }
+    if (!mounted) return;
     setState(() {
       _desc[index].dispose();
       _qty[index].dispose();
@@ -96,6 +145,11 @@ class _QuotationScreenState extends State<QuotationScreen> {
       _taxable.removeAt(index);
       _productIds.removeAt(index);
       _taxRates.removeAt(index);
+      _pricingCategories.removeAt(index);
+      _isManualPriceList.removeAt(index);
+      _cachedProducts.removeAt(index);
+      _saleUnits.removeAt(index);
+      _conversionFactors.removeAt(index);
     });
   }
 
@@ -120,19 +174,37 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
   List<DocumentItemInput> _buildItems() => List.generate(
     _desc.length,
-    (i) => DocumentItemInput(
-      description: _desc[i].text.trim(),
-      quantity: double.tryParse(_qty[i].text) ?? 1,
-      price: double.tryParse(_price[i].text) ?? 0,
-      taxable: _taxable[i],
-      productId: _productIds[i],
-      taxRate: _taxRates[i],
-    ),
+    (i) {
+      final q = double.tryParse(_qty[i].text) ?? 1;
+      final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
+      final unit = i < _saleUnits.length ? _saleUnits[i] : null;
+      return DocumentItemInput(
+        description: _desc[i].text.trim(),
+        quantity: q,
+        price: double.tryParse(_price[i].text) ?? 0,
+        taxable: _taxable[i],
+        productId: _productIds[i],
+        taxRate: _taxRates[i],
+        pricingCategory: i < _pricingCategories.length ? _pricingCategories[i] : null,
+        saleUnit: unit,
+        unitConversionFactor: factor,
+        baseQuantity: q * factor,
+      );
+    },
   );
 
   Future<void> _save({bool isDraft = false}) async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_saving || !_formKey.currentState!.validate()) return;
     if (_business == null) return;
+
+    if (_desc.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).pleaseAddItems)),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
 
     final int validityDays = int.tryParse(_validityController.text) ?? 7;
     final DateTime documentDate = DateTime.now();
@@ -164,6 +236,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
           content: Text('${AppLocalizations.of(context).operationFailed}: $e'),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -171,129 +245,265 @@ class _QuotationScreenState extends State<QuotationScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final totals = _totals;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.quotation), centerTitle: true),
-      body: ResponsiveCenter(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ContactAutocompleteField(
-                label: l10n.customer,
-                type: 'customer',
-                onContactChanged: (c) => _contact = c,
-              ),
-              const SizedBox(height: 16),
-              AppSectionHeader(title: l10n.items, count: _desc.length),
-              const SizedBox(height: 8),
-              ...List.generate(
-                _desc.length,
-                (i) => DocumentItemForm(
-                  descriptionController: _desc[i],
-                  quantityController: _qty[i],
-                  priceController: _price[i],
-                  taxable: _taxable[i],
-                  taxRate: _taxRates[i],
-                  productId: _productIds[i],
-                  onProductChanged: (productId) {
-                    setState(() => _productIds[i] = productId);
-                  },
-                  onProductSelected: (product) {
-                    setState(() {
-                      if (product == null) {
-                        _taxRates[i] = null;
-                      } else if (!product.isTaxable) {
-                        _taxable[i] = false;
-                        _taxRates[i] = 0.0;
-                      } else if (product.taxProfileId != null) {
-                        _taxRates[i] = _profileRates[product.taxProfileId];
-                      } else {
-                        _taxRates[i] = null;
-                      }
-                    });
-                  },
-                  onTaxableChanged: (value) {
-                    setState(() => _taxable[i] = value ?? true);
-                  },
-                  onDelete: () => _removeItem(i),
-                  onChanged: () => setState(() {}),
+    return PopScope(
+      canPop: !_isDirty || _saving,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final proceed = await _onWillPop();
+        if (proceed && context.mounted) {
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.quotation), centerTitle: true),
+        bottomNavigationBar: SafeArea(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
                 ),
               ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _addItem,
-                icon: const Icon(Icons.add_circle_outline_rounded),
-                label: Text(l10n.addItem),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.buttonRadius,
-                    ),
+              boxShadow: AppDesignTokens.softShadow(context),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.total,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      AppAmountText(
+                        amount: totals.total,
+                        currencySymbol: _business?.currencySymbol ?? '',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              AppTotalsCard(
-                subtotal: totals.subtotal,
-                discount: 0,
-                taxAmount: totals.taxAmount,
-                taxRate: _business?.taxRate ?? 0,
-                total: totals.total,
-                paid: 0,
-                remaining: 0,
-                currencySymbol: _business?.currencySymbol ?? '',
-                showPaymentRow: false,
-                isTaxInclusive: _business?.pricesIncludeTax ?? false,
-                netTaxableBase: (_business?.pricesIncludeTax ?? false)
-                    ? (totals.total - totals.taxAmount)
-                    : null,
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _validityController,
-                decoration: InputDecoration(
-                  labelText: l10n.validityDays,
-                  prefixIcon: const Icon(
-                    Icons.calendar_month_outlined,
-                    size: 20,
-                  ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _saving ? null : () => _save(isDraft: true),
+                  child: Text(l10n.saveDraft),
                 ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _notesController,
-                decoration: InputDecoration(
-                  labelText: l10n.notes,
-                  prefixIcon: const Icon(Icons.notes_rounded, size: 20),
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton(
-                  onPressed: () => _save(),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _saving ? null : () => _save(),
                   style: FilledButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    minimumSize: const Size(110, AppDesignTokens.minTouchTarget),
+                  ),
+                  child: _saving
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(l10n.save),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: ResponsiveCenter(
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                ContactAutocompleteField(
+                  label: l10n.customer,
+                  type: 'customer',
+                  initialContact: _contact,
+                  onContactChanged: (contact) async {
+                    setState(() => _contact = contact);
+                    if (_business?.wholesalePricingEnabled == true) {
+                      final newCat =
+                          contact?.pricingCategory ?? Contact.categoryRetail;
+                      for (int i = 0; i < _desc.length; i++) {
+                        final p = i < _cachedProducts.length ? _cachedProducts[i] : null;
+                        if (i < _isManualPriceList.length && !_isManualPriceList[i] && p != null) {
+                          _pricingCategories[i] = newCat;
+                          final q = double.tryParse(_qty[i].text) ?? 1.0;
+                          final currentP = double.tryParse(_price[i].text);
+                          List<ProductUnit> units = _unitsCache[p.id] ?? const [];
+                          if (units.isEmpty && p.id != null) {
+                            try {
+                              units = await DatabaseHelper.instance.getProductUnits(p.id!);
+                              _unitsCache[p.id!] = units;
+                            } catch (_) {}
+                          }
+                          final resolved = DocumentService.resolveLinePrice(
+                            product: p,
+                            availableUnits: units,
+                            quantity: q,
+                            currentPrice: currentP,
+                            saleUnit: _saleUnits[i],
+                            unitConversionFactor: _conversionFactors[i],
+                            pricingCategory: _pricingCategories[i],
+                            targetCategory: newCat,
+                            isManualPrice: _isManualPriceList[i],
+                            wholesalePricingEnabled: true,
+                          );
+                          _price[i].text = resolved.toStringAsFixed(2);
+                        }
+                      }
+                      if (mounted) setState(() {});
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                AppSectionHeader(title: l10n.items, count: _desc.length),
+                const SizedBox(height: 8),
+                ...List.generate(
+                  _desc.length,
+                  (i) => DocumentItemForm(
+                    descriptionController: _desc[i],
+                    quantityController: _qty[i],
+                    priceController: _price[i],
+                    taxable: _taxable[i],
+                    taxRate: _taxRates[i],
+                    productId: _productIds[i],
+                    wholesalePricingEnabled:
+                        _business?.wholesalePricingEnabled ?? false,
+                    pricingCategory: _pricingCategories[i],
+                    onPricingCategoryChanged: (cat) {
+                      setState(() => _pricingCategories[i] = cat);
+                    },
+                    customerPricingCategory:
+                        _contact?.pricingCategory ??
+                        Contact.categoryRetail,
+                    isManualPrice: _isManualPriceList[i],
+                    onManualPriceChanged: (manual) {
+                      setState(() => _isManualPriceList[i] = manual);
+                    },
+                    saleUnit: _saleUnits[i],
+                    onSaleUnitChanged: (unit) {
+                      setState(() => _saleUnits[i] = unit);
+                    },
+                    unitConversionFactor: _conversionFactors[i],
+                    onConversionFactorChanged: (factor) {
+                      setState(() => _conversionFactors[i] = factor);
+                    },
+                    onProductChanged: (productId) {
+                      setState(() => _productIds[i] = productId);
+                    },
+                    onProductSelected: (product) {
+                      setState(() {
+                        _cachedProducts[i] = product;
+                        if (product == null) {
+                          _taxRates[i] = null;
+                        } else if (!product.isTaxable) {
+                          _taxable[i] = false;
+                          _taxRates[i] = 0.0;
+                        } else if (product.taxProfileId != null) {
+                          _taxRates[i] = _profileRates[product.taxProfileId];
+                        } else {
+                          _taxRates[i] = null;
+                        }
+                      });
+                      if (product?.id != null) {
+                        DatabaseHelper.instance
+                            .getProductUnits(product!.id!)
+                            .then((u) {
+                          _unitsCache[product.id!] = u;
+                        });
+                      }
+                    },
+                    onTaxableChanged: (value) {
+                      setState(() => _taxable[i] = value ?? true);
+                    },
+                    onDelete: () => _removeItem(i),
+                    onChanged: () => setState(() {}),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _addItem,
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                  label: Text(l10n.addItem),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(46),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(
                         AppDesignTokens.buttonRadius,
                       ),
                     ),
                   ),
-                  child: Text(l10n.save),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => _save(isDraft: true),
-                child: Text(l10n.saveDraft),
-              ),
-            ],
+                const SizedBox(height: 16),
+                AppTotalsCard(
+                  subtotal: totals.subtotal,
+                  discount: 0,
+                  taxAmount: totals.taxAmount,
+                  taxRate: _business?.taxRate ?? 0,
+                  total: totals.total,
+                  paid: 0,
+                  remaining: 0,
+                  currencySymbol: _business?.currencySymbol ?? '',
+                  showPaymentRow: false,
+                  isTaxInclusive: _business?.pricesIncludeTax ?? false,
+                  netTaxableBase: (_business?.pricesIncludeTax ?? false)
+                      ? (totals.total - totals.taxAmount)
+                      : null,
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: _validityController,
+                  decoration: InputDecoration(
+                    labelText: l10n.validityDays,
+                    prefixIcon: const Icon(
+                      Icons.calendar_month_outlined,
+                      size: 20,
+                    ),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _notesController,
+                  decoration: InputDecoration(
+                    labelText: l10n.notes,
+                    prefixIcon: const Icon(Icons.notes_rounded, size: 20),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _saving ? null : () => _save(),
+                    child: _saving
+                        ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          )
+                        : Text(l10n.save),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _saving ? null : () => _save(isDraft: true),
+                  child: Text(l10n.saveDraft),
+                ),
+              ],
+            ),
           ),
         ),
       ),

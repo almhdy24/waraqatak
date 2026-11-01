@@ -58,12 +58,14 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       _error = null;
     });
     try {
+      final business = await DatabaseHelper.instance.getFirstBusiness();
       final futures = await Future.wait([
         DatabaseHelper.instance.getProductCategories(),
         BusinessReportingService.instance.getProductPerformance(
           from: _range.from,
           to: _range.to,
           category: _selectedCategory,
+          currencyCode: business?.currencyCode,
           sortBy: _sortBy,
         ),
       ]);
@@ -158,7 +160,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       ];
       warning = l10n.grossProfitNotice;
       if (summary.hasIncompleteCosts) {
-        warning = '$warning\n${l10n.unknownCostNotice} (${summary.unvaluedSalesCount} مبيعات)';
+        warning = '$warning\n${l10n.unknownCostNotice} ${l10n.unvaluedSalesNotice(summary.unvaluedSalesCount)}';
       }
       if (summary.hasMultipleCurrencies) {
         warning = '$warning\n${l10n.mixedCurrenciesNotice}';

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../models/currency.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
@@ -11,6 +12,32 @@ import '../../widgets/responsive.dart';
 class CustomerReportScreen extends StatefulWidget {
   const CustomerReportScreen({super.key});
 
+  static List<String> buildPdfRow(Map<String, dynamic> r, NumberFormat numFmt) {
+    return [
+      r['name'] as String? ?? '—',
+      r['phone'] as String? ?? '—',
+      numFmt.format(((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble()),
+      numFmt.format(((r['total_paid'] ?? r['paid'] ?? 0) as num).toDouble()),
+      numFmt.format(((r['outstanding'] ?? 0) as num).toDouble()),
+    ];
+  }
+
+  static List<String> buildTotalsRow({
+    required double totalAmount,
+    required double totalPaid,
+    required double totalOutstanding,
+    required String totalLabel,
+    required NumberFormat numFmt,
+  }) {
+    return [
+      totalLabel,
+      '',
+      numFmt.format(totalAmount),
+      numFmt.format(totalPaid),
+      numFmt.format(totalOutstanding),
+    ];
+  }
+
   @override
   State<CustomerReportScreen> createState() => _CustomerReportScreenState();
 }
@@ -18,6 +45,7 @@ class CustomerReportScreen extends StatefulWidget {
 class _CustomerReportScreenState extends State<CustomerReportScreen> {
   List<Map<String, dynamic>>? _rows;
   String? _error;
+  String _currencySymbol = '';
 
   static final _numFmt = NumberFormat('#,##0.##');
 
@@ -30,7 +58,14 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
   Future<void> _load() async {
     setState(() { _rows = null; _error = null; });
     try {
-      final rows = await DatabaseHelper.instance.getContactBalances('customer', 'invoice');
+      final business = await DatabaseHelper.instance.getFirstBusiness();
+      final currency = business?.currencyCode ?? 'SDG';
+      _currencySymbol = Currency.symbolForCode(currency);
+      final rows = await DatabaseHelper.instance.getContactBalances(
+        'customer',
+        'invoice',
+        currencyCode: currency,
+      );
       if (!mounted) return;
       setState(() => _rows = rows);
     } catch (e) {
@@ -44,8 +79,12 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
     final business = await DatabaseHelper.instance.getFirstBusiness();
     if (business == null || _rows == null) return;
 
+    final totalAmount = _rows!.fold(0.0,
+        (s, r) => s + ((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble());
+    final totalPaid = _rows!.fold(0.0,
+        (s, r) => s + ((r['total_paid'] ?? r['paid'] ?? 0) as num).toDouble());
     final totalOutstanding = _rows!.fold(0.0,
-        (s, r) => s + (r['outstanding'] as num).toDouble());
+        (s, r) => s + ((r['outstanding'] ?? 0) as num).toDouble());
 
     final columns = [
       PdfReportColumn(title: l10n.customer, flex: 2.2),
@@ -55,15 +94,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
       PdfReportColumn(title: l10n.remaining, flex: 1.3, align: pw.TextAlign.right),
     ];
 
-    final rows = _rows!.map((r) {
-      return [
-        r['name'] as String? ?? '—',
-        r['phone'] as String? ?? '—',
-        _numFmt.format((r['total'] as num).toDouble()),
-        _numFmt.format((r['paid'] as num).toDouble()),
-        _numFmt.format((r['outstanding'] as num).toDouble()),
-      ];
-    }).toList();
+    final rows = _rows!.map((r) => CustomerReportScreen.buildPdfRow(r, _numFmt)).toList();
 
     final data = PdfReportData(
       title: l10n.customerReport,
@@ -76,13 +107,13 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
       ],
       columns: columns,
       rows: rows,
-      totalsRow: [
-        l10n.total,
-        '',
-        '',
-        '',
-        _numFmt.format(totalOutstanding),
-      ],
+      totalsRow: CustomerReportScreen.buildTotalsRow(
+        totalAmount: totalAmount,
+        totalPaid: totalPaid,
+        totalOutstanding: totalOutstanding,
+        totalLabel: l10n.total,
+        numFmt: _numFmt,
+      ),
     );
 
     try {
@@ -138,7 +169,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
                       Text(l10n.totalOutstanding,
                           style: TextStyle(fontSize: 10,
                               color: Theme.of(context).colorScheme.error)),
-                      Text(_numFmt.format(totalOutstanding),
+                      Text('${_numFmt.format(totalOutstanding)} $_currencySymbol',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.error)),
                     ]),

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../services/activation_service.dart';
 import '../services/license_service.dart';
-import '../utils/url_launcher_utils.dart';
 import '../widgets/responsive.dart';
+import '../widgets/support_guidance_card.dart';
 
 /// Screen for entering an activation key.
 ///
@@ -26,6 +25,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
   bool _success = false;
   String? _error;
   ActivationOutcome? _lastOutcome;
+  String? _lastReferenceId;
 
   @override
   void dispose() {
@@ -41,6 +41,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _loading = true;
       _error = null;
       _lastOutcome = null;
+      _lastReferenceId = null;
     });
 
     final String deviceId;
@@ -54,13 +55,16 @@ class _ActivationScreenState extends State<ActivationScreen> {
       return;
     }
 
-    final outcome = await ActivationService.activate(key, deviceId);
+    final res = await ActivationService.activateDetailed(key, deviceId);
     if (!mounted) return;
 
     final l10n = AppLocalizations.of(context);
-    setState(() => _lastOutcome = outcome);
+    setState(() {
+      _lastOutcome = res.outcome;
+      _lastReferenceId = res.referenceId;
+    });
 
-    switch (outcome) {
+    switch (res.outcome) {
       case ActivationOutcome.success:
         setState(() {
           _loading = false;
@@ -83,24 +87,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _loading = false;
       _error = message;
     });
-  }
-
-  Future<void> _launchWhatsApp(BuildContext context) async {
-    final l10n = AppLocalizations.of(context);
-    final uri = Uri.parse(AppConstants.whatsappUrl).replace(
-      queryParameters: {'text': l10n.activationWhatsAppGreeting},
-    );
-    await UrlLauncherUtils.launchUri(context, uri);
-  }
-
-  Future<void> _launchEmail(BuildContext context) async {
-    final l10n = AppLocalizations.of(context);
-    final uri = Uri(
-      scheme: 'mailto',
-      path: AppConstants.supportEmail,
-      queryParameters: {'subject': l10n.activationEmailSubject},
-    );
-    await UrlLauncherUtils.launchUri(context, uri);
   }
 
   @override
@@ -226,7 +212,10 @@ class _ActivationScreenState extends State<ActivationScreen> {
             ),
           ),
           const SizedBox(height: 32),
-          _buildSupportCard(context, l10n, cs),
+          SupportGuidanceCard(
+            referenceId: _lastReferenceId,
+            rawKey: _ctrl.text,
+          ),
         ],
       ),
     );
@@ -241,94 +230,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
         ActivationOutcome.deviceUnavailable => l10n.activationTipDevice,
         ActivationOutcome.success => '',
       };
-
-  Widget _buildSupportCard(
-      BuildContext context, AppLocalizations l10n, ColorScheme cs) {
-    final hasWhatsApp = AppConstants.whatsappUrl.trim().isNotEmpty;
-    final hasEmail = AppConstants.supportEmail.trim().isNotEmpty;
-
-    if (!hasWhatsApp && !hasEmail) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.support_agent_rounded, size: 20, color: cs.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  l10n.activationTroubleTitle,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.activationTroubleBody,
-            style: TextStyle(
-              fontSize: 13,
-              color: cs.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              if (hasWhatsApp)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _launchWhatsApp(context),
-                    icon: const Icon(Icons.chat_rounded,
-                        size: 18, color: Color(0xFF25D366)),
-                    label: Text(
-                      l10n.activationSupportWhatsApp,
-                      style: const TextStyle(fontSize: 12.5),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-              if (hasWhatsApp && hasEmail) const SizedBox(width: 8),
-              if (hasEmail)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _launchEmail(context),
-                    icon: const Icon(Icons.mail_outline_rounded,
-                        size: 18, color: Color(0xFFEA4335)),
-                    label: Text(
-                      l10n.activationSupportEmail,
-                      style: const TextStyle(fontSize: 12.5),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSuccess(AppLocalizations l10n, ColorScheme cs) {
     return Padding(

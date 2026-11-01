@@ -1,6 +1,7 @@
 import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/constants/app_constants.dart';
 import 'license_key.dart';
 import 'license_notification_service.dart';
 import 'license_service.dart';
@@ -32,6 +33,21 @@ enum ActivationOutcome {
   deviceUnavailable,
 }
 
+/// Detailed result of an activation attempt containing the user-safe outcome
+/// and an optional server reference ID (correlation ID) for support tracking.
+class DetailedActivationResult {
+  final ActivationOutcome outcome;
+
+  /// Opaque correlation / reference ID returned by the server (e.g. `req_abc123`).
+  /// Safe to show to user for customer support lookup without disclosing internal checks.
+  final String? referenceId;
+
+  const DetailedActivationResult({
+    required this.outcome,
+    this.referenceId,
+  });
+}
+
 /// Thin wrapper around the Elmahdi Pay SDK used only for key activation.
 ///
 /// Nothing is bought, priced, or paid for inside the app. The user enters a
@@ -41,8 +57,8 @@ enum ActivationOutcome {
 class ActivationService {
   ActivationService._();
 
-  /// App slug the licensing server issues Waraqatak keys under.
-  static const String appSlug = 'com.elmahdi.waraqatak';
+  /// App identifier the licensing server issues Waraqatak keys under.
+  static const String appSlug = AppConstants.appId;
 
   /// HTTPS base URL for the licensing server.
   static const String _serverUrl = 'https://api.almhdy24.com';
@@ -106,12 +122,22 @@ class ActivationService {
     return s;
   }
 
-  /// Activate [rawKey] on this device.
+  /// Activate [rawKey] on this device, returning the deterministic outcome.
+  /// Backward compatible wrapper for [activateDetailed].
+  static Future<ActivationOutcome> activate(
+    String rawKey,
+    String deviceId,
+  ) async {
+    final result = await activateDetailed(rawKey, deviceId);
+    return result.outcome;
+  }
+
+  /// Activate [rawKey] on this device with full diagnostic reference details.
   ///
   /// Supports both short (12-char Crockford Base32) and legacy (signed_long)
   /// keys.
   ///
-  /// Returns one of [ActivationOutcome]. On [ActivationOutcome.success] the
+  /// Returns a [DetailedActivationResult]. On [ActivationOutcome.success] the
   /// license key is persisted via [LicenseService.storeLicense] with
   /// `isActive: true` and the expiry embedded in the key or returned by
   /// the server (null for perpetual / lifetime keys). For every other outcome
@@ -121,16 +147,13 @@ class ActivationService {
   /// Keys that do not parse, fail checksum, were issued for another app, or
   /// are already expired are rejected as [ActivationOutcome.invalid] without
   /// contacting the server.
-  ///
-  /// No automatic retries. Caller is responsible for re-invoking after a
-  /// user-visible retry.
-  static Future<ActivationOutcome> activate(
+  static Future<DetailedActivationResult> activateDetailed(
     String rawKey,
     String deviceId,
   ) async {
     final key = normalizeKey(rawKey);
     if (key.isEmpty) {
-      return ActivationOutcome.invalid;
+      return const DetailedActivationResult(outcome: ActivationOutcome.invalid);
     }
 
     final bool isShort = ShortLicenseKey.isShortKey(key);
@@ -140,7 +163,7 @@ class ActivationService {
     if (isShort) {
       final normKey = ShortLicenseKey.normalize(key);
       if (!ShortLicenseKey.verifyChecksum(normKey)) {
-        return ActivationOutcome.invalid;
+        return const DetailedActivationResult(outcome: ActivationOutcome.invalid);
       }
       serverKey = normKey;
       claims = null;
@@ -148,8 +171,8 @@ class ActivationService {
       // Long key path: payload must parse and be valid for this app.
       claims = LicenseKeyClaims.tryParse(key);
       if (claims == null ||
-          !claims.allowsActivation(DateTime.now(), expectedAppSlug: appSlug)) {
-        return ActivationOutcome.invalid;
+          !claims.allowsActivation(DateTime.now(), expectedAppId: AppConstants.appId)) {
+        return const DetailedActivationResult(outcome: ActivationOutcome.invalid);
       }
       serverKey = key;
     }
@@ -163,28 +186,43 @@ class ActivationService {
           machineId: deviceId,
           deviceName: deviceModel,
           deviceModel: deviceModel,
-          product: 'waraqatak',
+          product: AppConstants.appId,
         ),
       );
-    } on ElmahdiPayRateLimitException {
-      return ActivationOutcome.tooManyAttempts;
+    } on ElmahdiPayRateLimitException catch (e) {
+      return DetailedActivationResult(
+        outcome: ActivationOutcome.tooManyAttempts,
+        referenceId: e.correlationId,
+      );
     } on ElmahdiPayNetworkException {
-      return ActivationOutcome.serverUnreachable;
+      return const DetailedActivationResult(
+        outcome: ActivationOutcome.serverUnreachable,
+      );
     } on ElmahdiPayApiException catch (e) {
       // 5xx is a server-side problem, not a key problem — treat as
       // unreachable so the UI doesn't incorrectly declare the key invalid.
-      if (e.statusCode >= 500) return ActivationOutcome.serverUnreachable;
+      if (e.statusCode >= 500) {
+        return DetailedActivationResult(
+          outcome: ActivationOutcome.serverUnreachable,
+          referenceId: e.correlationId,
+        );
+      }
       // 401 (hardened API), 403, 404, 409, 422 and any other 4xx all
       // collapse into "invalid". The server's own message is deliberately
       // not surfaced to the user.
-      return ActivationOutcome.invalid;
+      return DetailedActivationResult(
+        outcome: ActivationOutcome.invalid,
+        referenceId: e.correlationId,
+      );
     } on TypeError {
       // The server answered 2xx but the body lacked expected fields.
     } on FormatException {
       // Body could not be decoded.
     } catch (_) {
       // Anything else is not a confirmed 2xx answer: store nothing.
-      return ActivationOutcome.serverUnreachable;
+      return const DetailedActivationResult(
+        outcome: ActivationOutcome.serverUnreachable,
+      );
     }
 
     final DateTime? expiresAt;
@@ -193,7 +231,9 @@ class ActivationService {
     if (isShort) {
       if (result == null ||
           (result.license == null && result.effectiveToken.isEmpty)) {
-        return ActivationOutcome.serverUnreachable;
+        return const DetailedActivationResult(
+          outcome: ActivationOutcome.serverUnreachable,
+        );
       }
       final lic = result.license;
       expiresAt = lic?.expiresAt;
@@ -214,7 +254,10 @@ class ActivationService {
       expiresAt: expiresAt,
       licenseType: licenseType,
     );
-    return ActivationOutcome.success;
+    return DetailedActivationResult(
+      outcome: ActivationOutcome.success,
+      referenceId: result?.correlationId,
+    );
   }
 
   /// Deactivates [rawKey] on the server for this device (best-effort).
@@ -232,7 +275,7 @@ class ActivationService {
         DeactivateLicenseRequest(
           licenseKey: serverKey,
           machineId: deviceId,
-          product: 'waraqatak',
+          product: AppConstants.appId,
           reason: 'user_removed',
         ),
       );
@@ -252,7 +295,7 @@ class ActivationService {
         VerifyLicenseRequest(
           tokenOrKey: tokenOrKey,
           machineId: deviceId,
-          product: 'waraqatak',
+          product: AppConstants.appId,
         ),
       );
     } catch (_) {
@@ -268,7 +311,7 @@ class ActivationService {
     try {
       return await _sdk.public.claimTrial(
         TrialClaimRequest(
-          product: 'waraqatak',
+          product: AppConstants.appId,
           machineId: deviceId,
           deviceName: deviceModel,
           deviceModel: deviceModel,
@@ -286,7 +329,7 @@ class ActivationService {
     try {
       return await _sdk.public.getTrialStatus(
         TrialStatusRequest(
-          product: 'waraqatak',
+          product: AppConstants.appId,
           machineId: deviceId,
         ),
       );

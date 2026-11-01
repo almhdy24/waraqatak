@@ -13,7 +13,10 @@ import 'product_form_screen.dart';
 import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_empty_state.dart';
+import '../widgets/app_error_state.dart';
+import '../widgets/app_loading_view.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'bulk_pricing_screen.dart';
@@ -173,26 +176,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.confirmDelete),
-        content: Text(l10n.deleteProductMessage),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(l10n.cancel)),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(l10n.delete,
-                style: const TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.confirmDelete,
+      message: l10n.deleteProductMessage,
+      confirmLabel: l10n.delete,
+      isDestructive: true,
     );
 
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       try {
         await DatabaseHelper.instance.deleteProduct(product.id!);
         if (!mounted) return;
@@ -372,6 +364,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     if (_query.isNotEmpty)
                       IconButton(
                         icon: const Icon(Icons.clear, size: 18),
+                        tooltip: MaterialLocalizations.of(context).closeButtonLabel,
                         onPressed: () {
                           _debounceTimer?.cancel();
                           _searchCtrl.clear();
@@ -471,21 +464,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Widget _buildList(
       BuildContext context, AppLocalizations l10n, ColorScheme cs) {
     if (_error != null) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-          const SizedBox(height: 12),
-          Text(
-            ErrorUtils.toFriendlyMessage(_error!, l10n),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-        ]),
+      return AppErrorState(
+        message: ErrorUtils.toFriendlyMessage(_error!, l10n),
+        onRetry: _load,
       );
     }
     if (_products == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AppLoadingView();
     }
     final products = _products!;
     if (products.isEmpty) {

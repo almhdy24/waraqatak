@@ -8,6 +8,7 @@ import '../models/business.dart';
 import '../models/currency.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
+import '../widgets/app_icons.dart';
 import '../widgets/responsive.dart';
 
 class BusinessSetupScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
   String _currencyCode = 'SDG';
   String? _logoPath;
   Business? _existing;
+  bool _isCurrencyLocked = false;
   bool _loading = true;
   bool _saving = false;
 
@@ -53,9 +55,11 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
   Future<void> _load() async {
     try {
       final business = await DatabaseHelper.instance.getFirstBusiness();
+      final isLocked = await DatabaseHelper.instance.isCurrencyLocked();
       if (!mounted) return;
       setState(() {
         _existing = business;
+        _isCurrencyLocked = isLocked;
         if (business != null) {
           _nameController.text = business.name;
           _ownerController.text = business.ownerName;
@@ -111,6 +115,34 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
 
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
+
+    if (!_isCurrencyLocked) {
+      final currencyChanged =
+          _existing == null || _existing!.currencyCode != _currencyCode;
+      if (currencyChanged) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(AppLocalizations.of(ctx).currencyConfirmTitle),
+            content: Text(
+              AppLocalizations.of(ctx).currencyConfirmMessage(_currencyCode),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(AppLocalizations.of(ctx).cancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(AppLocalizations.of(ctx).confirm),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true) return;
+      }
+    }
+
     setState(() => _saving = true);
 
     final business = _existing != null
@@ -390,6 +422,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       DropdownButtonFormField<String>(
+                        key: ValueKey('currency_dropdown_$_currencyCode'),
                         initialValue: _currencyCode,
                         items: Currency.supportedCurrencies.map((currency) {
                           return DropdownMenuItem<String>(
@@ -399,16 +432,25 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                             ),
                           );
                         }).toList(),
-                        onChanged: (value) {
-                          setState(() => _currencyCode = value!);
-                        },
+                        onChanged: _isCurrencyLocked
+                            ? null
+                            : (value) {
+                                setState(() => _currencyCode = value!);
+                              },
                         decoration: InputDecoration(
                           labelText: l10n.currency,
-                          prefixIcon: const Icon(
-                            Icons.currency_exchange,
+                          prefixIcon: Icon(
+                            _isCurrencyLocked
+                                ? Icons.lock_outline
+                                : Icons.currency_exchange,
                             size: 20,
+                            color: _isCurrencyLocked
+                                ? Theme.of(context).colorScheme.outline
+                                : null,
                           ),
-                          helperText: l10n.currencyScopeNote,
+                          helperText: _isCurrencyLocked
+                              ? l10n.currencyLockedNote
+                              : l10n.currencyInitialWarningNote,
                           helperMaxLines: 2,
                           border: const OutlineInputBorder(),
                         ),
@@ -441,9 +483,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                           ),
                         ),
                         trailing: Icon(
-                          l10n.isArabic
-                              ? Icons.chevron_left
-                              : Icons.chevron_right,
+                          AppIcons.chevronForward(context),
                         ),
                         onTap: () async {
                           await Navigator.push(
@@ -480,9 +520,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                           ),
                         ),
                         trailing: Icon(
-                          l10n.isArabic
-                              ? Icons.chevron_left
-                              : Icons.chevron_right,
+                          AppIcons.chevronForward(context),
                         ),
                         onTap: () => Navigator.push(
                           context,
