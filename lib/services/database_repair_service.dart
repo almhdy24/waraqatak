@@ -5,6 +5,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/database_diagnostic.dart';
 import '../models/document_status.dart';
+import '../models/stock_movement.dart';
 import 'backup_service.dart';
 import 'database_diagnostic_service.dart';
 
@@ -55,6 +56,46 @@ class RepairResult {
     this.error,
     this.safetyBackupPath,
     this.rolledBack = false,
+  });
+}
+
+/// Repair options for document stock movement discrepancies.
+enum PurchaseRepairOption {
+  /// Neutralize surplus movement so net doc movement equals doc items.
+  optionA,
+
+  /// Pair duplicate movement with compensating stock adjustment and neutralize both.
+  optionB,
+}
+
+/// Structured preview of a guided stock movement repair.
+class MovementRepairPreview {
+  final int documentId;
+  final String documentNumber;
+  final int productId;
+  final String productName;
+  final double expectedMovement;
+  final double actualMovement;
+  final double surplusMovement;
+  final List<Map<String, dynamic>> affectedMovements;
+  final Map<String, dynamic>? compensatingAdjustment;
+  final PurchaseRepairOption option;
+  final String confirmationToken;
+  final String summary;
+
+  const MovementRepairPreview({
+    required this.documentId,
+    required this.documentNumber,
+    required this.productId,
+    required this.productName,
+    required this.expectedMovement,
+    required this.actualMovement,
+    required this.surplusMovement,
+    required this.affectedMovements,
+    this.compensatingAdjustment,
+    required this.option,
+    required this.confirmationToken,
+    required this.summary,
   });
 }
 
@@ -431,6 +472,42 @@ class DatabaseRepairService {
           isSafeAutoRepair: false,
         );
 
+      case 'document_movement_mismatch':
+        return RepairableIssue(
+          finding: f,
+          title: title,
+          explanation: explanation,
+          severity: f.severity,
+          category: f.category,
+          affectedCount: count,
+          affectedIds: f.affectedIds,
+          plannedChange: isAr
+              ? 'تتطلب استخدام أداة الإصلاح الموجه لمعادلة الحركات الزائدة أو ربطها بالتسويات المخزنية.'
+              : 'Requires guided repair tool to neutralize surplus movements or pair with stock adjustments.',
+          recommendedAction: isAr
+              ? 'استخدم أداة الإصلاح الموجه لفحص حركات المستند ومعادلة التكرار بأمان مع أخذ نسخة احتياطية.'
+              : 'Use the guided repair tool to inspect document movements and neutralize duplicates safely with a backup.',
+          isSafeAutoRepair: false,
+        );
+
+      case 'ledger_movement_inventory_mismatch':
+        return RepairableIssue(
+          finding: f,
+          title: title,
+          explanation: explanation,
+          severity: f.severity,
+          category: f.category,
+          affectedCount: count,
+          affectedIds: f.affectedIds,
+          plannedChange: isAr
+              ? 'لا يتم تعديل حركات دفتر الأستاذ أو المخزون تلقائياً للحفاظ على القيود المحاسبية وتاريخ الحركات.'
+              : 'No automatic ledger or movement changes to protect accounting entries and audit history.',
+          recommendedAction: isAr
+              ? 'راجع حركات المخزون والمستندات المرتبطة لمعالجة الفوارق بين رصيد الأستاذ وحركات المخزن.'
+              : 'Review stock movements and linked documents to reconcile ledger balances with warehouse movements.',
+          isSafeAutoRepair: false,
+        );
+
       case 'missing_opening_stock':
         return RepairableIssue(
           finding: f,
@@ -674,6 +751,8 @@ class DatabaseRepairService {
       'active_receipt_missing_payment_record' => 'سند قبض نشط غير مقيد في سجلات المدفوعات',
       'cancelled_document_payment_mismatch' => 'مستند ملغى يحتوي على مدفوعات نشطة مسجلة',
       'stock_movement_ledger_mismatch' => 'اختلاف رصيد المخزون عن سجل حركة الأصناف',
+      'document_movement_mismatch' => 'اختلاف حركات المخزون عن بنود المستند',
+      'ledger_movement_inventory_mismatch' => 'اختلاف رصيد المخزون في دفتر الأستاذ عن سجل الحركات',
       'missing_opening_stock' => 'صنف يحتوي على حركات مخزون بدون رصيد افتتاحي',
       'negative_stock_quantity' => 'رصيد مخزون سالب للبضاعة',
       'suspicious_nan_or_infinite_stock' => 'قيمة غير رقمية أو تالفة في رصيد المخزون',
@@ -739,6 +818,10 @@ class DatabaseRepairService {
         'تم العثور على $count من المستندات الملغاة وما زالت تحتوي على مدفوعات مسجلة أو مبالغ مسددة.',
       'stock_movement_ledger_mismatch' =>
         'تم العثور على $count من الأصناف حيث لا يتطابق رصيد المخزون الحالي مع مجموع حركات المخزون المسجلة.',
+      'document_movement_mismatch' =>
+        'تم العثور على $count من المستندات حيث لا يتطابق صافي حركات المخزون المسجلة مع كميات البنود في المستند.',
+      'ledger_movement_inventory_mismatch' =>
+        'تم العثور على $count من الأصناف حيث يختلف رصيد المخزون المحسوب دفترياً عن مجموع حركات المخزون الفعلية.',
       'missing_opening_stock' =>
         'تم العثور على $count من الأصناف مسجل لها حركات مخزون ولكن بدون قيد رصيد افتتاحي أولي.',
       'negative_stock_quantity' =>
@@ -1146,5 +1229,268 @@ class DatabaseRepairService {
   /// Returns user-facing localized entity type label.
   static String entityTypeLabel(String entityType, AppLocalizations l10n) {
     return l10n.diagnosticEntityType(entityType);
+  }
+
+  // =========================================================================
+  // GUIDED PURCHASE MOVEMENT REPAIR (OPTION A & OPTION B)
+  // =========================================================================
+
+  /// Previews guided repair for document stock movement discrepancies without mutating database.
+  static Future<MovementRepairPreview> previewPurchaseMovementRepair({
+    required DatabaseExecutor db,
+    required int documentId,
+    required int productId,
+    required PurchaseRepairOption option,
+  }) async {
+    final docs = await db.query(
+      'documents',
+      where: 'id = ?',
+      whereArgs: [documentId],
+    );
+    if (docs.isEmpty) {
+      throw ArgumentError('Document with ID $documentId not found.');
+    }
+    final doc = docs.first;
+    final docNumber = doc['document_number'] as String;
+
+    final prods = await db.query(
+      'products',
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+    if (prods.isEmpty) {
+      throw ArgumentError('Product with ID $productId not found.');
+    }
+    final prod = prods.first;
+    final prodName = prod['name'] as String;
+
+    // Calculate expected movement from document items
+    final items = await db.query(
+      'document_items',
+      where: 'document_id = ? AND product_id = ?',
+      whereArgs: [documentId, productId],
+    );
+    double expectedMovement = 0.0;
+    final docStatus = doc['status'] as String?;
+    final docType = doc['type'] as String?;
+    if (docStatus != 'draft' && docStatus != 'cancelled') {
+      for (final it in items) {
+        final qty = (it['quantity'] as num).toDouble();
+        final factor = (it['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
+        if (docType == 'purchase') {
+          expectedMovement += qty * factor;
+        } else if (docType == 'invoice') {
+          expectedMovement -= qty * factor;
+        }
+      }
+    }
+
+    // Actual movements referencing this document
+    final movements = await db.query(
+      'stock_movements',
+      where: 'reference_document_id = ? AND product_id = ?',
+      whereArgs: [documentId, productId],
+      orderBy: 'id ASC',
+    );
+    double actualMovement = 0.0;
+    for (final m in movements) {
+      actualMovement += (m['quantity'] as num).toDouble();
+    }
+
+    final surplus = actualMovement - expectedMovement;
+
+    Map<String, dynamic>? compensatingAdj;
+    if (option == PurchaseRepairOption.optionB) {
+      // Find subsequent adjustment for this product that offset the surplus
+      final adjs = await db.rawQuery('''
+        SELECT * FROM stock_movements
+        WHERE product_id = ?
+          AND type = 'adjustment'
+          AND abs(quantity - ?) < 0.001
+        ORDER BY id DESC
+        LIMIT 1
+      ''', [productId, -surplus]);
+      if (adjs.isNotEmpty) {
+        compensatingAdj = adjs.first;
+      }
+    }
+
+    final token = 'CONFIRM-REPAIR-$docNumber';
+    final summary = option == PurchaseRepairOption.optionA
+        ? 'Option A: Neutralize surplus $surplus units on $docNumber by recording a compensating reversal movement.'
+        : 'Option B: Pair duplicate movement on $docNumber with compensating adjustment (${compensatingAdj != null ? 'ID: ${compensatingAdj['id']}' : 'None'}) and neutralize both, removing phantom loss from accounting.';
+
+    return MovementRepairPreview(
+      documentId: documentId,
+      documentNumber: docNumber,
+      productId: productId,
+      productName: prodName,
+      expectedMovement: expectedMovement,
+      actualMovement: actualMovement,
+      surplusMovement: surplus,
+      affectedMovements: movements,
+      compensatingAdjustment: compensatingAdj,
+      option: option,
+      confirmationToken: token,
+      summary: summary,
+    );
+  }
+
+  /// Executes guided stock movement repair inside an atomic transaction after safety backup.
+  static Future<RepairResult> executePurchaseMovementRepair({
+    required DatabaseExecutor db,
+    required MovementRepairPreview preview,
+    required String confirmationToken,
+    bool createSafetyBackup = true,
+    AppLocalizations? l10n,
+  }) async {
+    final isAr = l10n?.isArabic ?? false;
+
+    if (confirmationToken != preview.confirmationToken) {
+      return RepairResult(
+        success: false,
+        repairedCount: 0,
+        message: isAr
+            ? 'رمز التأكيد غير صحيح. تم إلغاء عملية الإصلاح.'
+            : 'Invalid confirmation token. Repair cancelled.',
+        error: 'Token mismatch',
+      );
+    }
+
+    if (preview.surplusMovement.abs() < 0.001) {
+      return RepairResult(
+        success: true,
+        repairedCount: 0,
+        message: isAr
+            ? 'لا يوجد فائض في حركات المخزون لهذا المستند.'
+            : 'No stock movement surplus found for this document.',
+      );
+    }
+
+    String? safetyBackupPath;
+    if (createSafetyBackup) {
+      try {
+        safetyBackupPath = safetyBackupOverride != null
+            ? await safetyBackupOverride!()
+            : await BackupService.createSafetyBackup();
+      } catch (e) {
+        return RepairResult(
+          success: false,
+          repairedCount: 0,
+          message: isAr
+              ? 'فشل إنشاء نسخة الأمان الاحتياطية. تم إلغاء الإصلاح.'
+              : 'Failed to create safety backup. Repair aborted.',
+          error: e.toString(),
+        );
+      }
+    }
+
+    final database = db is Database ? db : await DatabaseHelper.instance.database;
+
+    try {
+      int repairedCount = 0;
+      await database.transaction((txn) async {
+        if (preview.option == PurchaseRepairOption.optionA) {
+          // Option A: Neutralize surplus movement so net doc movement equals doc items.
+          final unitCost = (preview.affectedMovements.lastOrNull?['unit_cost'] as num?)?.toDouble() ?? 0.0;
+          final totalCost = (unitCost * preview.surplusMovement.abs());
+
+          await txn.insert('stock_movements', {
+            'product_id': preview.productId,
+            'quantity': -preview.surplusMovement,
+            'unit_cost': unitCost,
+            'total_cost': totalCost,
+            'date': DateTime.now().toIso8601String(),
+            'type': StockMovement.typeCancellation,
+            'notes': '[REPAIR-OPTION-A] Neutralize duplicate purchase edit movement for ${preview.documentNumber}',
+            'reference_document_id': preview.documentId,
+            'cost_status': StockMovement.costStatusKnown,
+          });
+
+          // Adjust product stock_quantity
+          await txn.rawUpdate('''
+            UPDATE products
+            SET stock_quantity = stock_quantity - ?
+            WHERE id = ?
+          ''', [preview.surplusMovement, preview.productId]);
+
+          // Audit log inside txn
+          await txn.insert('audit_log', {
+            'action': 'REPAIR_MOVEMENT_OPTION_A',
+            'entity_type': 'documents',
+            'entity_id': preview.documentId,
+            'details': 'Neutralized surplus movement of ${preview.surplusMovement} on ${preview.documentNumber}',
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+          repairedCount = 1;
+        } else {
+          // Option B: Pair duplicate movement with compensating adjustment and neutralize both
+          final compAdj = preview.compensatingAdjustment;
+          if (compAdj == null) {
+            throw StateError('Cannot apply Option B: compensating stock adjustment was not found.');
+          }
+
+          if (preview.affectedMovements.length < 2) {
+            throw StateError('Cannot apply Option B: multiple movements referencing document not found.');
+          }
+          final duplicateMov = preview.affectedMovements.last;
+          final dupId = duplicateMov['id'] as int;
+          final adjId = compAdj['id'] as int;
+
+          // Neutralize duplicate movement: unlink reference doc and mark type neutralized
+          await txn.update(
+            'stock_movements',
+            {
+              'type': 'neutralized',
+              'reference_document_id': null,
+              'notes': '${duplicateMov['notes'] ?? ''} [NEUTRALIZED-OPTION-B]',
+            },
+            where: 'id = ?',
+            whereArgs: [dupId],
+          );
+
+          // Neutralize compensating adjustment: mark type neutralized
+          await txn.update(
+            'stock_movements',
+            {
+              'type': 'neutralized',
+              'notes': '${compAdj['notes'] ?? ''} [NEUTRALIZED-OPTION-B]',
+            },
+            where: 'id = ?',
+            whereArgs: [adjId],
+          );
+
+          // Audit log inside txn
+          await txn.insert('audit_log', {
+            'action': 'REPAIR_MOVEMENT_OPTION_B',
+            'entity_type': 'documents',
+            'entity_id': preview.documentId,
+            'details': 'Neutralized duplicate movement #$dupId and compensating adjustment #$adjId for ${preview.documentNumber}',
+            'timestamp': DateTime.now().toIso8601String(),
+          });
+          repairedCount = 2;
+        }
+      });
+
+      return RepairResult(
+        success: true,
+        repairedCount: repairedCount,
+        message: isAr
+            ? 'تم تنفيذ الإصلاح بنجاح ومعادلة حركات المخزون.'
+            : 'Repair executed successfully and stock movements reconciled.',
+        safetyBackupPath: safetyBackupPath,
+      );
+    } catch (e) {
+      return RepairResult(
+        success: false,
+        repairedCount: 0,
+        message: isAr
+            ? 'فشل تنفيذ الإصلاح. تم التراجع عن جميع التغييرات.'
+            : 'Repair failed during execution. All changes rolled back.',
+        error: e.toString(),
+        safetyBackupPath: safetyBackupPath,
+        rolledBack: true,
+      );
+    }
   }
 }

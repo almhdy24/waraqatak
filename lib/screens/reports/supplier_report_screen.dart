@@ -7,6 +7,7 @@ import '../../models/currency.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 
 class SupplierReportScreen extends StatefulWidget {
@@ -124,8 +125,10 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     }
   }

@@ -8,6 +8,7 @@ import '../../services/business_reporting_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -243,8 +244,10 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     }
   }

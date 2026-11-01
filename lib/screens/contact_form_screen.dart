@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_confirm_dialog.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
 class ContactFormScreen extends StatefulWidget {
@@ -123,8 +124,10 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _saving = false);

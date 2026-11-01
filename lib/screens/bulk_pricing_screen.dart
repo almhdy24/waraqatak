@@ -7,6 +7,7 @@ import '../services/bulk_pricing_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 
@@ -118,19 +119,20 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
     final l10n = AppLocalizations.of(context);
     final val = double.tryParse(_valController.text.trim());
     if (val == null || val < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.invalidPriceWarning)),
+      AppSnackBar.show(
+        context,
+        l10n.invalidPriceWarning,
+        severity: AppSnackBarSeverity.warning,
       );
       return;
     }
 
     final hasErrors = _previewItems.any((it) => !it.isValid);
     if (hasErrors) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.invalidPriceWarning),
-          backgroundColor: Colors.red,
-        ),
+      AppSnackBar.show(
+        context,
+        l10n.invalidPriceWarning,
+        severity: AppSnackBarSeverity.error,
       );
       return;
     }
@@ -171,17 +173,18 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
           target: _target,
         );
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(l10n.pricesUpdatedSuccess),
-            backgroundColor: Colors.teal,
-          ),
+        AppSnackBar.show(
+          context,
+          l10n.pricesUpdatedSuccess,
+          severity: AppSnackBarSeverity.success,
         );
         await _load();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n))),
+        AppSnackBar.show(
+          context,
+          ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+          severity: AppSnackBarSeverity.error,
         );
         setState(() => _loading = false);
       }

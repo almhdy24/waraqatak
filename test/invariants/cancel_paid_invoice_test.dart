@@ -256,7 +256,7 @@ void main() {
     );
 
     // Record later payment via receipt voucher
-    await db.recordPayment(
+    await db.recordPaymentWithReceipt(
       documentId: invId,
       amount: 50.0,
       paymentMethod: 'cash',
@@ -407,22 +407,24 @@ void main() {
   });
 
   testWidgets('9. CancelPaidDocumentDialog: confirm button disabled until status is chosen', (tester) async {
-    final invId = await DocumentService.createDocument(
-      type: 'invoice',
-      business: business,
-      contact: customer,
-      items: [
-        DocumentItemInput(
-          description: product.name,
-          productId: product.id,
-          quantity: 1,
-          price: 100.0,
-        ),
-      ],
-      paid: 100.0,
-      date: DateTime.now(),
-    );
-    final doc = (await db.getDocumentById(invId))!;
+    final doc = (await tester.runAsync(() async {
+      final invId = await DocumentService.createDocument(
+        type: 'invoice',
+        business: business,
+        contact: customer,
+        items: [
+          DocumentItemInput(
+            description: product.name,
+            productId: product.id,
+            quantity: 1,
+            price: 100.0,
+          ),
+        ],
+        paid: 100.0,
+        date: DateTime.now(),
+      );
+      return (await db.getDocumentById(invId))!;
+    }))!;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -445,7 +447,7 @@ void main() {
     final refundedTile = find.text(l10n.refundStatusRefunded);
     expect(refundedTile, findsOneWidget);
     await tester.tap(refundedTile);
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     // Confirm button must now be enabled
     confirmBtn = tester.widget<ElevatedButton>(confirmFinder);

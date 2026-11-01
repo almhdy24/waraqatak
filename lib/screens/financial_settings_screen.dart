@@ -7,6 +7,7 @@ import '../models/tax_profile.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import 'tax_profiles_screen.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
 class FinancialSettingsScreen extends StatefulWidget {
@@ -129,16 +130,18 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
         _business = updated;
         _saving = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).operationSuccessful),
-        ),
+      AppSnackBar.show(
+        context,
+        AppLocalizations.of(context).operationSuccessful,
+        severity: AppSnackBarSeverity.success,
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).operationFailed)),
+      AppSnackBar.show(
+        context,
+        AppLocalizations.of(context).operationFailed,
+        severity: AppSnackBarSeverity.error,
       );
     }
   }

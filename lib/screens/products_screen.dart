@@ -17,6 +17,7 @@ import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'bulk_pricing_screen.dart';
@@ -124,21 +125,18 @@ class _ProductsScreenState extends State<ProductsScreen> {
       _query = _searchCtrl.text;
       _load();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${l10n.barcodeNotFound}: $query'),
-          action: SnackBarAction(
-            label: l10n.addProduct,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ProductFormScreen(initialBarcode: query),
-                ),
-              ).then((_) => _load());
-            },
-          ),
-        ),
+      AppSnackBar.show(
+        context,
+        '${l10n.barcodeNotFound}: $query',
+        actionLabel: l10n.addProduct,
+        onAction: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProductFormScreen(initialBarcode: query),
+            ),
+          ).then((_) => _load());
+        },
       );
     }
   }
@@ -169,8 +167,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       if (deactivate == true && mounted) {
         await ProductService.setActive(product.id!, active: false);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.productDeactivated)));
+        AppSnackBar.show(context, l10n.productDeactivated);
         _load();
       }
       return;
@@ -188,13 +185,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
       try {
         await DatabaseHelper.instance.deleteProduct(product.id!);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.operationSuccessful)));
+        AppSnackBar.show(
+          context,
+          l10n.operationSuccessful,
+          severity: AppSnackBarSeverity.success,
+        );
         _load();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(ErrorUtils.toFriendlyMessage(e, l10n))));
+        AppSnackBar.show(
+          context,
+          ErrorUtils.toFriendlyMessage(e, l10n),
+          severity: AppSnackBarSeverity.error,
+        );
       }
     }
   }
@@ -203,10 +206,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final l10n = AppLocalizations.of(context);
     await ProductService.setActive(product.id!, active: !product.isActive);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-          product.isActive ? l10n.productDeactivated : l10n.productActivated),
-    ));
+    AppSnackBar.show(
+      context,
+      product.isActive ? l10n.productDeactivated : l10n.productActivated,
+    );
     _load();
   }
 

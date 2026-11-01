@@ -14,6 +14,7 @@ import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'reports/report_date_filter.dart';
@@ -138,8 +139,10 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     }
   }

@@ -7,6 +7,7 @@ import '../models/app_notification.dart';
 import '../services/app_ops_service.dart';
 import '../utils/url_launcher_utils.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 import 'about_screen.dart';
 import 'database_diagnostic_screen.dart';
@@ -65,11 +66,10 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
 
   void _toggleSelection(AppNotification item) {
     if (!item.isDismissible) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).cannotDeleteCritical),
-          duration: const Duration(seconds: 2),
-        ),
+      AppSnackBar.show(
+        context,
+        AppLocalizations.of(context).cannotDeleteCritical,
+        severity: AppSnackBarSeverity.warning,
       );
       return;
     }
@@ -98,19 +98,14 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
     await AppOpsService.instance.deleteNotification(item.serverId);
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.notificationDeleted),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: l10n.undo,
-          onPressed: () async {
-            await AppOpsService.instance.restoreNotification(item);
-            await _load();
-          },
-        ),
-      ),
+    AppSnackBar.show(
+      context,
+      l10n.notificationDeleted,
+      actionLabel: l10n.undo,
+      onAction: () async {
+        await AppOpsService.instance.restoreNotification(item);
+        await _load();
+      },
     );
   }
 
@@ -155,21 +150,16 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.notificationsDeleted),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: l10n.undo,
-          onPressed: () async {
-            for (final item in toDelete) {
-              await AppOpsService.instance.restoreNotification(item);
-            }
-            await _load();
-          },
-        ),
-      ),
+    AppSnackBar.show(
+      context,
+      l10n.notificationsDeleted,
+      actionLabel: l10n.undo,
+      onAction: () async {
+        for (final item in toDelete) {
+          await AppOpsService.instance.restoreNotification(item);
+        }
+        await _load();
+      },
     );
   }
 
@@ -205,23 +195,18 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
     await _load();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.notificationsDeleted),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: l10n.undo,
-          onPressed: () async {
-            for (final item in snapshot) {
-              if (item.isDismissible) {
-                await AppOpsService.instance.restoreNotification(item);
-              }
-            }
-            await _load();
-          },
-        ),
-      ),
+    AppSnackBar.show(
+      context,
+      l10n.notificationsDeleted,
+      actionLabel: l10n.undo,
+      onAction: () async {
+        for (final item in snapshot) {
+          if (item.isDismissible) {
+            await AppOpsService.instance.restoreNotification(item);
+          }
+        }
+        await _load();
+      },
     );
   }
 
@@ -380,8 +365,10 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.networkError)),
+    AppSnackBar.show(
+      context,
+      l10n.networkError,
+      severity: AppSnackBarSeverity.error,
     );
   }
 

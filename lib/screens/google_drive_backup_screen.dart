@@ -8,6 +8,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import '../localization/app_localizations.dart';
 import '../services/backup_encryption_service.dart';
 import '../services/google_drive_backup_service.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
 
@@ -260,9 +261,11 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
       _slowTimer?.cancel();
       if (!mounted) return;
       if (success) {
-        ScaffoldMessenger.of(
+        AppSnackBar.show(
           context,
-        ).showSnackBar(SnackBar(content: Text(l10n.operationSuccessful)));
+          l10n.operationSuccessful,
+          severity: AppSnackBarSeverity.success,
+        );
         Navigator.of(context).popUntil((route) => route.isFirst);
       } else {
         setState(() {

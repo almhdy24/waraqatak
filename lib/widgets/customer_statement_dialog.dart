@@ -10,6 +10,7 @@ import '../models/customer_statement.dart';
 import '../models/document.dart';
 import '../services/customer_statement_service.dart';
 import '../services/pdf_service.dart';
+import 'app_snackbar.dart';
 
 enum StatementPeriodPreset { thisMonth, last7Days, allTime, custom }
 
@@ -171,8 +172,10 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _generatingPdf = false);
@@ -191,8 +194,10 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _generatingPdf = false);

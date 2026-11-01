@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:in_app_update/in_app_update.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../localization/app_localizations.dart';
+import '../widgets/app_snackbar.dart';
 
 /// Abstract platform wrapper to allow mock testing of Google Play in-app updates
 /// without calling native Android platform channels.
@@ -197,9 +198,7 @@ class AppUpdateService extends ChangeNotifier {
 
       if (manual && context != null && context.mounted) {
         final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.appUpToDate)));
+        AppSnackBar.show(context, l10n.appUpToDate);
       }
       return AppUpdateCheckResult.noUpdateAvailable;
     } catch (e, stack) {
@@ -213,9 +212,11 @@ class AppUpdateService extends ChangeNotifier {
 
       if (manual && context != null && context.mounted) {
         final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(
+        AppSnackBar.show(
           context,
-        ).showSnackBar(SnackBar(content: Text(l10n.updateCheckFailed)));
+          l10n.updateCheckFailed,
+          severity: AppSnackBarSeverity.error,
+        );
       }
       return AppUpdateCheckResult.failed;
     }
@@ -242,15 +243,11 @@ class AppUpdateService extends ChangeNotifier {
 
   void _showDownloadedNotification(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(l10n.updateDownloadedRestart),
-        duration: const Duration(seconds: 15),
-        action: SnackBarAction(
-          label: l10n.restartNow,
-          onPressed: () => completeFlexibleUpdate(context: context),
-        ),
-      ),
+    AppSnackBar.show(
+      context,
+      l10n.updateDownloadedRestart,
+      actionLabel: l10n.restartNow,
+      onAction: () => completeFlexibleUpdate(context: context),
     );
   }
 
@@ -262,9 +259,11 @@ class AppUpdateService extends ChangeNotifier {
       developer.log('AppUpdateService completeFlexibleUpdate failed: $e');
       if (context != null && context.mounted) {
         final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(
+        AppSnackBar.show(
           context,
-        ).showSnackBar(SnackBar(content: Text(l10n.updateFailed)));
+          l10n.updateFailed,
+          severity: AppSnackBarSeverity.error,
+        );
       }
     }
   }

@@ -11,6 +11,7 @@ import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'barcode_scanner_screen.dart';
@@ -179,12 +180,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     for (final u in _productUnits) {
       final name = u.unitName.trim().toLowerCase();
       if (seenUnitNames.contains(name)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${AppLocalizations.of(context).duplicateUnitNameError}: ${u.unitName}',
-            ),
-          ),
+        AppSnackBar.show(
+          context,
+          '${AppLocalizations.of(context).duplicateUnitNameError}: ${u.unitName}',
+          severity: AppSnackBarSeverity.error,
         );
         return;
       }
@@ -199,10 +198,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _type == Product.typeService &&
         _currentStock > 0) {
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                AppLocalizations.of(context).cannotConvertStockedProductToService)),
+      AppSnackBar.show(
+        context,
+        AppLocalizations.of(context).cannotConvertStockedProductToService,
+        severity: AppSnackBarSeverity.error,
       );
       return;
     }
@@ -218,8 +217,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
       if (used && mounted) {
         setState(() => _saving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context).duplicateBarcode)),
+        AppSnackBar.show(
+          context,
+          AppLocalizations.of(context).duplicateBarcode,
+          severity: AppSnackBarSeverity.error,
         );
         return;
       }
@@ -270,8 +271,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       Navigator.pop(context, id);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)))),
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -456,9 +459,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       if (deactivate == true && mounted) {
         await DatabaseHelper.instance.setProductActive(id, active: false);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.productDeactivated)),
-        );
+        AppSnackBar.show(context, l10n.productDeactivated);
         Navigator.pop(context, true);
       }
       return;
@@ -480,8 +481,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         Navigator.pop(context, true);
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n))),
+        AppSnackBar.show(
+          context,
+          ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+          severity: AppSnackBarSeverity.error,
         );
       }
     }
@@ -603,11 +606,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             widget.product!.isProduct &&
                             newType == Product.typeService &&
                             _currentStock > 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  l10n.cannotConvertStockedProductToService),
-                            ),
+                          AppSnackBar.show(
+                            context,
+                            l10n.cannotConvertStockedProductToService,
+                            severity: AppSnackBarSeverity.error,
                           );
                           return;
                         }

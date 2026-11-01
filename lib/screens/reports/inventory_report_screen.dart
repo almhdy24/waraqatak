@@ -10,6 +10,7 @@ import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
 import '../inventory_screen.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 
 class InventoryReportScreen extends StatefulWidget {
@@ -218,8 +219,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${l10n.operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${l10n.operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     }
   }
@@ -282,15 +285,19 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                       : null,
                 );
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.costReconciliationSuccess)),
+                  AppSnackBar.show(
+                    context,
+                    l10n.costReconciliationSuccess,
+                    severity: AppSnackBarSeverity.success,
                   );
                   _load();
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(e.toString())),
+                  AppSnackBar.show(
+                    context,
+                    e.toString(),
+                    severity: AppSnackBarSeverity.error,
                   );
                 }
               }

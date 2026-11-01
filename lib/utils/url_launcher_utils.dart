@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../localization/app_localizations.dart';
+import '../widgets/app_snackbar.dart';
 
 class UrlLauncherUtils {
   static Future<void> launch(
@@ -34,13 +35,10 @@ class UrlLauncherUtils {
   }
 
   static void _showError(BuildContext context) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).operationFailed),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    AppSnackBar.show(
+      context,
+      AppLocalizations.of(context).operationFailed,
+      severity: AppSnackBarSeverity.error,
+    );
   }
 }

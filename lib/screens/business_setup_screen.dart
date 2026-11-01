@@ -9,6 +9,7 @@ import '../models/currency.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
 class BusinessSetupScreen extends StatefulWidget {
@@ -75,10 +76,10 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${AppLocalizations.of(context).operationFailed}: $e'),
-        ),
+      AppSnackBar.show(
+        context,
+        '${AppLocalizations.of(context).operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     }
   }
@@ -100,8 +101,10 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
       setState(() => _logoPath = savedFile.path);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).logoLoadFailed)),
+      AppSnackBar.show(
+        context,
+        AppLocalizations.of(context).logoLoadFailed,
+        severity: AppSnackBarSeverity.error,
       );
     }
   }
@@ -182,10 +185,10 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${AppLocalizations.of(context).operationFailed}: $e'),
-        ),
+      AppSnackBar.show(
+        context,
+        '${AppLocalizations.of(context).operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _saving = false);

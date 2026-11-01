@@ -2073,6 +2073,30 @@ class AppLocalizations {
   );
   String get repairFixPreviewTitle =>
       _t('معاينة تفاصيل الإصلاح', 'Repair Preview');
+  String get repairMovementPreviewTitle =>
+      _t('معاينة إصلاح حركة المخزون', 'Stock Movement Repair Preview');
+  String get repairMovementAction =>
+      _t('معاينة وإصلاح الحركات', 'Preview & Repair Movements');
+  String get repairOptionNeutralize => _t(
+    'الخيار (ب): تحييد الحركة المكررة (موصى به - لا خسارة في الأرباح)',
+    'Option B: Neutralize Duplicate (Recommended - No P&L Loss)',
+  );
+  String get repairOptionCompensate => _t(
+    'الخيار (أ): قيد تسوية عكسي (يسجل خسارة في الأرباح والخسائر)',
+    'Option A: Compensating Entry (Incurs P&L Loss)',
+  );
+  String get repairConfirmMovementBody => _t(
+    'سيتم إنشاء نسخة أمان محلية تلقائياً قبل تطبيق تعديل حركات المخزون. هل ترغب في الاستمرار؟',
+    'A local safety backup will be created automatically before modifying stock movements. Do you want to proceed?',
+  );
+  String get repairAffectedMovementsCount =>
+      _t('حركات المخزون المتأثرة:', 'Affected Stock Movements:');
+  String get repairExpectedMovement =>
+      _t('الحركة المتوقعة من المستند:', 'Expected Movement:');
+  String get repairActualMovement =>
+      _t('إجمالي الحركات الفعلية:', 'Actual Movements:');
+  String get repairSurplusMovement =>
+      _t('الفائض المراد معالجته:', 'Surplus to Reconcile:');
   String get repairSafeBadge => _t('إصلاح آمن وتلقائي', 'Safe Auto-Repair');
   String get repairReviewBadge =>
       _t('يتطلب مراجعة يدوية', 'Requires Manual Review');

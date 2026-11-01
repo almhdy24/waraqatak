@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/tax_profile.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
 class TaxProfilesScreen extends StatefulWidget {
@@ -135,8 +136,11 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                 final name = nameCtrl.text.trim();
                 final rate = double.tryParse(rateCtrl.text.trim());
                 if (name.isEmpty || rate == null || rate < 0) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                      content: Text(l10n.invalidAmount)));
+                  AppSnackBar.show(
+                    ctx,
+                    l10n.invalidAmount,
+                    severity: AppSnackBarSeverity.warning,
+                  );
                   return;
                 }
                 Navigator.pop(ctx);

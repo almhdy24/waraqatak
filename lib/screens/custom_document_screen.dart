@@ -6,6 +6,7 @@ import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
 import '../widgets/app_confirm_dialog.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -106,8 +107,10 @@ class _CustomDocumentScreenState extends State<CustomDocumentScreen> {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: docId)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context).operationFailed}: $e')),
+      AppSnackBar.show(
+        context,
+        '${AppLocalizations.of(context).operationFailed}: $e',
+        severity: AppSnackBarSeverity.error,
       );
     } finally {
       if (mounted) setState(() => _saving = false);

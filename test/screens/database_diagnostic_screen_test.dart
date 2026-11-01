@@ -600,4 +600,190 @@ void main() {
       });
     },
   );
+
+  testWidgets(
+    '8. Guided repair UI: preview shown, cancel writes nothing, confirm executes repair',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final l10n = AppLocalizations('ar');
+
+      late int prodId;
+      late int docId;
+      late int mv1Id;
+      late int mv2Id;
+
+      await tester.runAsync(() async {
+        prodId = await rawDb.insert('products', {
+          'name': 'منتج فحص حركات الواجهة',
+          'type': 'product',
+          'stock_quantity': 20.0,
+          'purchase_price': 50.0,
+          'sale_price': 80.0,
+        });
+
+        docId = await rawDb.insert('documents', {
+          'document_number': 'PUR-TEST-99',
+          'type': 'purchase',
+          'status': 'issued',
+          'date': DateTime.now().toIso8601String(),
+          'subtotal': 500.0,
+          'tax_rate': 0.0,
+          'tax_amount': 0.0,
+          'discount': 0.0,
+          'total': 500.0,
+          'paid': 0.0,
+          'remaining': 500.0,
+        });
+
+        await rawDb.insert('document_items', {
+          'document_id': docId,
+          'product_id': prodId,
+          'description': 'بند شراء',
+          'quantity': 10.0,
+          'price': 50.0,
+          'total': 500.0,
+          'taxable': 0,
+          'unit_conversion_factor': 1.0,
+        });
+
+        mv1Id = await rawDb.insert('stock_movements', {
+          'product_id': prodId,
+          'quantity': 10.0,
+          'type': 'purchase',
+          'reference_document_id': docId,
+          'date': DateTime.now().toIso8601String(),
+        });
+
+        // Duplicate movement (corrupted surplus)
+        mv2Id = await rawDb.insert('stock_movements', {
+          'product_id': prodId,
+          'quantity': 10.0,
+          'type': 'purchase',
+          'reference_document_id': docId,
+          'date': DateTime.now().toIso8601String(),
+        });
+
+        // Compensating stock adjustment made by merchant to correct physical count
+        await rawDb.insert('stock_movements', {
+          'product_id': prodId,
+          'quantity': -10.0,
+          'type': 'adjustment',
+          'reference_document_id': null,
+          'date': DateTime.now().toIso8601String(),
+        });
+      });
+
+      try {
+        await tester.pumpWidget(
+          _buildTestApp(
+            langCode: 'ar',
+            child: DatabaseDiagnosticScreen(db: rawDb),
+          ),
+        );
+        await _pumpUntilDiagnosticsLoaded(tester);
+
+        // 1. Expand the issue card
+        final issueTitle = find.text('اختلاف حركات المخزون عن بنود المستند');
+        expect(issueTitle, findsOneWidget);
+        await tester.tap(issueTitle);
+        await tester.pumpAndSettle();
+
+        final reviewButton =
+            find.widgetWithText(OutlinedButton, l10n.repairActionReview);
+        expect(reviewButton, findsOneWidget);
+        await tester.tap(reviewButton);
+        await tester.pumpAndSettle();
+
+        // 2. Action button in bottom sheet is visible
+        final actionButton =
+            find.byKey(const Key('repairMovementActionButton'));
+        expect(actionButton, findsOneWidget);
+        await tester.tap(actionButton);
+        await _pumpUntilDiagnosticsLoaded(tester);
+
+        // 3. Preview dialog is shown with exact rows and expected vs actual
+        expect(find.text(l10n.repairMovementPreviewTitle), findsOneWidget);
+        expect(find.text('ID #$mv1Id • purchase'), findsOneWidget);
+        expect(find.text('ID #$mv2Id • purchase'), findsOneWidget);
+
+        // 4. Cancel writes nothing
+        final cancelButton =
+            find.byKey(const Key('repairPreviewCancelButton'));
+        expect(cancelButton, findsOneWidget);
+        await tester.tap(cancelButton);
+        await tester.pumpAndSettle();
+
+        // Verify stock movements unchanged
+        await tester.runAsync(() async {
+          final mvs = await rawDb.query(
+            'stock_movements',
+            where: 'reference_document_id = ?',
+            whereArgs: [docId],
+          );
+          expect(mvs.length, 2);
+          expect(mvs.any((m) => m['type'] == 'neutralized'), isFalse);
+        });
+
+        // 5. Re-open and proceed through confirmation
+        await tester.tap(reviewButton);
+        await tester.pumpAndSettle();
+        await tester.tap(actionButton);
+        await _pumpUntilDiagnosticsLoaded(tester);
+
+        final proceedButton =
+            find.byKey(const Key('repairPreviewProceedButton'));
+        await tester.tap(proceedButton);
+        await tester.pumpAndSettle();
+
+        // AppConfirmDialog is shown
+        expect(find.text(l10n.repairConfirmTitle), findsOneWidget);
+        final confirmDialogButton =
+            find.widgetWithText(FilledButton, l10n.confirm);
+        expect(confirmDialogButton, findsOneWidget);
+        await tester.tap(confirmDialogButton);
+        await _pumpUntilDiagnosticsLoaded(tester);
+
+        // 6. Repair executed successfully: movements neutralized
+        await tester.runAsync(() async {
+          final mvs = await rawDb.query(
+            'stock_movements',
+            where: 'product_id = ?',
+            whereArgs: [prodId],
+          );
+          expect(
+            mvs.where((m) => m['type'] == 'neutralized').length,
+            2,
+          );
+        });
+
+        // Drain AppSnackBar dismissal timer
+        await tester.pump(const Duration(seconds: 6));
+      } finally {
+        await tester.runAsync(() async {
+          await rawDb.delete(
+            'stock_movements',
+            where: 'product_id = ?',
+            whereArgs: [prodId],
+          );
+          await rawDb.delete(
+            'document_items',
+            where: 'document_id = ?',
+            whereArgs: [docId],
+          );
+          await rawDb.delete('documents', where: 'id = ?', whereArgs: [docId]);
+          await rawDb.delete(
+            'products',
+            where: 'id = ?',
+            whereArgs: [prodId],
+          );
+        });
+      }
+    },
+  );
 }
