@@ -209,6 +209,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: Text(l10n.wholesalePricingDesc),
                       value: _wholesalePricingEnabled,
                       onChanged: (v) async {
+                        if (!v && _wholesalePricingEnabled) {
+                          final proceed = await AppConfirmDialog.show(
+                            context,
+                            title: l10n.wholesalePricing,
+                            message: l10n.wholesalePricingDisableWarning,
+                            confirmLabel: l10n.disableAction,
+                            isDestructive: false,
+                          );
+                          if (!proceed) return;
+                        }
+                        if (!mounted) return;
                         setState(() => _wholesalePricingEnabled = v);
                         final b = await DatabaseHelper.instance.getFirstBusiness();
                         if (b != null) {
