@@ -333,7 +333,7 @@ class AppLocalizations {
     'This app uses open-source libraries and the Tajawal font (SIL Open Font License 1.1).',
   );
 
-  // ========== BACKUP WARNING ==========
+  // ========== BACKUP WARNING & ENCRYPTION ==========
   String get backupUnencryptedTitle =>
       _t('نسخة احتياطية غير مشفرة', 'Unencrypted Backup');
   String get backupUnencryptedWarning => _t(
@@ -342,6 +342,41 @@ class AppLocalizations {
     'The backup file contains your data in unencrypted form. '
         'Keep it in a safe place and do not share it with anyone you do not trust.',
   );
+  String get backupEncryptionQuestion =>
+      _t('هل تريد حماية النسخة بكلمة سر؟', 'Do you want to protect this backup with a password?');
+  String get backupWithoutPassword =>
+      _t('لا، بدون كلمة سر (غير مشفرة)', 'No, without password (unencrypted)');
+  String get backupWithPassword =>
+      _t('نعم، حماية بكلمة سر', 'Yes, protect with password');
+  String get backupPassword => _t('كلمة المرور', 'Password');
+  String get backupConfirmPassword =>
+      _t('تأكيد كلمة المرور', 'Confirm password');
+  String get backupPasswordRequired =>
+      _t('يرجى إدخال كلمة المرور', 'Please enter a password');
+  String get backupPasswordMinLength =>
+      _t('كلمة المرور يجب أن لا تقل عن 8 أحرف', 'Password must be at least 8 characters');
+  String get backupPasswordsDoNotMatch =>
+      _t('كلمتا المرور غير متطابقتين', 'Passwords do not match');
+  String get backupPasswordWarning => _t(
+    'تحذير: إذا نسيت كلمة المرور، فلن تتمكن أنت ولا نحن ولا أي شخص آخر من استعادة بياناتك.',
+    'Warning: If you forget the password, neither you, nor we, nor anyone else will ever be able to recover your data.',
+  );
+  String get backupEncryptedTitle =>
+      _t('نسخة احتياطية مشفرة', 'Encrypted Backup');
+  String get backupEnterPasswordMessage => _t(
+    'هذه النسخة محمية بكلمة سر. أدخل كلمة المرور لاستعادتها:',
+    'This backup is password-protected. Enter the password to restore it:',
+  );
+  String get backupIncorrectPassword =>
+      _t('كلمة المرور غير صحيحة أو الملف تالف', 'Incorrect password or corrupted backup file');
+  String get backupUpdateRequired =>
+      _t('حدّث التطبيق لفتح هذه النسخة', 'Update the app to open this backup');
+  String get backupCorrupted =>
+      _t('ملف النسخة الاحتياطية تالف أو غير صالح', 'Backup file is corrupted or invalid');
+  String get backupDecrypting =>
+      _t('جاري فك التشفير والتحقق من البيانات…', 'Decrypting and verifying data…');
+  String get backupEncrypting =>
+      _t('جاري تشفير النسخة الاحتياطية والتحقق…', 'Encrypting backup and verifying…');
   String get continueAction => _t('متابعة', 'Continue');
 
   String get fromYourPhone => _t('من هاتفك', 'From your phone');
