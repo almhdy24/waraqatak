@@ -51,6 +51,7 @@ dependencies:
   # Cryptography — backup encryption (AES-256-GCM + PBKDF2)
   cryptography: ^2.7.0
   cryptography_flutter: ^2.3.4
+  unorm_dart: ^0.3.3
 
   # Elmahdi Pay — subscription & license SDK
   elmahdi_pay_flutter:
