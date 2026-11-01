@@ -7,7 +7,7 @@
 | Phase 2 | Red-First Oracle & Invariant Harness | COMPLETE | 57ad95a | 4 suites / 11 tests passed, 1 skipped (BUG-01) |
 | Phase 3 | Single-Currency Refactor | COMPLETE | e35e10a | Removed UI multi-currency selectors/pickers; enforced base currency with legacy preservation; all mapped tests pass |
 | Phase 4 | Fix Proven Defects | COMPLETE | c76db19 | Fixed BUG-01 (DocumentItemInput decimalDigits); skipped BUG-03 & BUG-05 per historical-number rule; money_oracle and invariant tests pass |
-| Phase 5 | Structural Guards | PENDING | - | - |
+| Phase 5 | Structural Guards | COMPLETE | 3be0a41 | Created single_currency_guard_test (8 guards); static scan, test preservation, runtime isolation; mutation verified; play_compliance OK |
 | Phase 6 | Final Verification & Docs | PENDING | - | - |
 
 ---
@@ -100,4 +100,26 @@
   - `dart analyze lib/services/document_service.dart test/accounting/money_oracle_test.dart`: Clean (0 issues).
   - `flutter test test/accounting/money_oracle_test.dart`: 5/5 passed.
   - `flutter test test/invariants/units_wholesale_invariants_test.dart test/guards/architecture_guards_test.dart`: All invariant and architecture guard tests passed.
+
+### Phase 5: Structural Guards
+- Created `test/guards/single_currency_guard_test.dart` (8 comprehensive guards):
+  - **Static & Architecture Guards:**
+    - Guard 1: Scans `lib/screens` and `lib/widgets` to enforce that no currency selector, picker, or `Currency.supportedCurrencies` exists outside `lib/screens/business_setup_screen.dart`.
+    - Guard 2: Scans `lib/screens` to enforce that no screen executes raw SQL `insert` or `update` on the `documents` table directly; all operations must route through `DatabaseHelper` or `DocumentService`.
+    - Guard 3: Verifies that `CurrencyContext` (`lib/services/currency_service.dart`) provides authoritative base currency resolution and validation.
+  - **Test Preservation Guard:**
+    - Guard 4: Scans `docs/single_currency_design.md` test mapping table, asserting that every single mapped test (5 in Phase 1, 3 in Phase 2 Stage 1, and 14 in `single_base_currency_test.dart`) exists in its test file.
+  - **Runtime & Database Guards:**
+    - Guard 5: Verifies `DatabaseHelper.insertDocumentWithItems` throws `ArgumentError` when attempting to insert a document with mismatched foreign currency.
+    - Guard 6: Verifies `DatabaseHelper.issueDocument` throws `ArgumentError` when attempting to issue a draft document with foreign currency.
+    - Guard 7: Verifies `DatabaseHelper.copyDocumentWithItems` throws `StateError` when attempting to duplicate a document with legacy foreign currency.
+    - Guard 8: Verifies `DatabaseHelper.getPeriodSummary` segregates historical foreign-currency records and strictly prevents nominal addition to base-currency totals.
+- **Mutation Verification:**
+  - Removed allowlist from Guard 1: Test failed with `Actual: ['lib/screens/business_setup_screen.dart: contains currency picker/selector']`.
+  - Restored allowlist: All 8 tests passed.
+- **Verification:**
+  - `dart analyze test/guards/single_currency_guard_test.dart`: Clean (0 issues).
+  - `flutter test test/guards/single_currency_guard_test.dart`: 8 / 8 passed.
+  - `bash tool/check_play_compliance.sh`: Play compliance guard OK.
+
 
