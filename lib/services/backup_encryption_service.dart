@@ -93,6 +93,7 @@ class BackupEncryptionService {
   static const int minIterations = 100000;
   static const int maxIterations = 10000000;
   static const int minPasswordLength = 8;
+  static const int parityTestIterations = 1000;
 
   static const int saltLength = 16;
   static const int nonceLength = 12;
@@ -130,38 +131,120 @@ class BackupEncryptionService {
     return true;
   }
 
+  /// Compares two byte lists in constant time to prevent timing attacks.
+  static bool _constantTimeEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a[i] ^ b[i];
+    }
+    return diff == 0;
+  }
+
   /// Derives an AES-256 key from [normalizedPassword] and [salt] using PBKDF2-HMAC-SHA256.
   ///
-  /// Prefers native Android platform acceleration (`SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")`).
-  /// On older platforms (e.g. Android 7.0/7.1 API 24/25 where PBKDF2WithHmacSHA256 is not in the system provider)
-  /// or in headless test environments, gracefully falls back to pure-Dart PBKDF2 running strictly
-  /// in a background isolate via [compute] so the main UI thread and progress spinner never freeze.
+  /// Guarantees cross-platform parity:
+  /// Before using the native Android platform implementation (`SecretKeyFactory`),
+  /// a cheap runtime parity check (1000 iterations) is executed comparing native output
+  /// with the specification-compliant pure-Dart implementation for the user's actual
+  /// normalized password and salt.
+  /// If outputs match, native acceleration is safely used for the full iteration count.
+  /// If native derivation throws (e.g. Android API 24/25) or outputs differ, it falls
+  /// back immediately to pure-Dart running inside a background isolate via [compute].
+  /// Nothing about the password or derived keys is cached.
   static Future<SecretKey> _deriveKey({
     required String normalizedPassword,
     required List<int> salt,
     required int iterations,
   }) async {
+    bool nativeParityPassed = false;
     try {
-      final pbkdf2 = Pbkdf2.hmacSha256(
+      // 1. Cheap runtime parity test (1000 iterations)
+      final pbkdf2Native = Pbkdf2.hmacSha256(
         bits: 256,
-        iterations: iterations,
+        iterations: parityTestIterations,
       );
-      return await pbkdf2.deriveKeyFromPassword(
+      final nativeTestKey = await pbkdf2Native.deriveKeyFromPassword(
         password: normalizedPassword,
         nonce: salt,
       );
-    } catch (_) {
-      // Fallback: run pure-Dart PBKDF2 in an isolate to avoid blocking UI
-      final keyBytes = await compute(
-        _computePureDartPbkdf2,
-        _Pbkdf2FallbackParams(
-          password: normalizedPassword,
-          salt: salt,
-          iterations: iterations,
-        ),
+      final nativeTestBytes = await nativeTestKey.extractBytes();
+
+      final pureDartTest = DartPbkdf2(
+        macAlgorithm: const DartHmac(DartSha256()),
+        bits: 256,
+        iterations: parityTestIterations,
       );
-      return SecretKeyData(keyBytes);
+      final dartTestKey = await pureDartTest.deriveKeyFromPassword(
+        password: normalizedPassword,
+        nonce: salt,
+      );
+      final dartTestBytes = await dartTestKey.extractBytes();
+
+      if (_constantTimeEquals(nativeTestBytes, dartTestBytes)) {
+        nativeParityPassed = true;
+      } else {
+        if (kDebugMode) {
+          debugPrint(
+            'PBKDF2 parity check: Native output differs from pure-Dart specification. Falling back to pure-Dart isolate.',
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          'PBKDF2 parity check: Native derivation failed ($e). Falling back to pure-Dart isolate.',
+        );
+      }
+      nativeParityPassed = false;
     }
+
+    if (nativeParityPassed) {
+      try {
+        final pbkdf2Native = Pbkdf2.hmacSha256(
+          bits: 256,
+          iterations: iterations,
+        );
+        return await pbkdf2Native.deriveKeyFromPassword(
+          password: normalizedPassword,
+          nonce: salt,
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint(
+            'Native PBKDF2 full derivation failed ($e). Falling back to pure-Dart isolate.',
+          );
+        }
+      }
+    }
+
+    // Pure-Dart fallback executing off the UI isolate
+    final keyBytes = await compute(
+      _computePureDartPbkdf2,
+      _Pbkdf2FallbackParams(
+        password: normalizedPassword,
+        salt: salt,
+        iterations: iterations,
+      ),
+    );
+    return SecretKeyData(keyBytes);
+  }
+
+  /// Exposed for testing: derives key using pure-Dart PBKDF2 in an isolate.
+  @visibleForTesting
+  static Future<List<int>> deriveKeyPureDart({
+    required String password,
+    required List<int> salt,
+    required int iterations,
+  }) async {
+    final normalized = normalizePassword(password);
+    return _computePureDartPbkdf2(
+      _Pbkdf2FallbackParams(
+        password: normalized,
+        salt: salt,
+        iterations: iterations,
+      ),
+    );
   }
 
   /// Entry point executed inside a background isolate for pure-Dart PBKDF2 fallback.
