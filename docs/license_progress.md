@@ -7,12 +7,69 @@
 | Batch 2 | License & Trial Correctness | COMPLETED | `8a2fff1` | `8911bf7` | N/A | license_correctness_matrix_test, standalone test_license_rejection_matrix |
 | Batch 3 | Notification Targeting | COMPLETED | `f0d54eb` | `4c2d176` | `7d5331a` | version_matcher_test (2), test_version_matcher (16), test_notification_targeting (6) |
 | Batch 4 | App Notifications | COMPLETED | `01a947c` | N/A | N/A | app_notifications_test (5), app_identity_test (4), play compliance |
-| Batch 5 | Activation / License / Trial UX | IN_PROGRESS | - | - | - | - |
-| Batch 6 | Final Verification & Docs | PENDING | - | - | - | - |
+| Batch 5 | Activation / License / Trial UX | COMPLETED | `ff25efc` | N/A | N/A | activation_detailed_test (4), play_compliance_test (42), localization tests, play compliance guard |
+| Batch 6 | Final Verification & Docs | COMPLETED | Pending commit | `a439e22` | N/A | Full suite (14 passes), 6 hostile mutations verified |
 
 ---
 
 ## Detailed Batch Logs
+
+### Batch 6: Final Verification, Mutation Testing, and Deployment Documentation
+- Ran full test suite across APP and API:
+  - API: `test_product_identifier.php` (7 tests, 23 assertions).
+  - API: `test_license_rejection_matrix.php` (2 tests, 43 assertions).
+  - API: `test_version_matcher.php` (16 tests, 22 assertions).
+  - API: `test_notification_targeting.php` (6 tests, 22 assertions).
+  - API & PANEL: `php -l` on all 19 changed PHP files passed syntax check.
+  - APP: `test/services/app_identity_test.dart` (4/4 passed).
+  - APP: `test/services/license_correctness_matrix_test.dart` (6/6 passed).
+  - APP: `test/utils/version_matcher_test.dart` (2/2 passed).
+  - APP: `test/services/app_notifications_test.dart` (5/5 passed).
+  - APP: `test/services/activation_detailed_test.dart` (4/4 passed).
+  - APP: `test/services/play_compliance_test.dart` (42/42 passed).
+  - APP: `test/invariants/units_wholesale_invariants_test.dart` (Passed INV-1..INV-9).
+  - APP: `test/guards/architecture_guards_test.dart` (3/3 passed).
+  - APP: `bash tool/check_play_compliance.sh` (Passed).
+- Executed 6 Hostile Mutation Tests (mutate, assert failure, revert, re-verify pass):
+  - M1: VersionMatcher ignored max bound -> test failed on upper bound vector -> reverted -> passed.
+  - M2: App identity changed to `'com.other.app'` -> 3 tests in `app_identity_test.dart` failed -> reverted -> passed.
+  - M3: Tombstones omitted SharedPreferences write -> `app_notifications_test.dart` failed -> reverted -> passed.
+  - M4: API VersionMatcher allowed min > max -> `test_notification_targeting.php` failed -> reverted -> passed.
+  - M5: LicenseService ignored stored expired status -> `license_correctness_matrix_test.dart` failed -> reverted -> passed.
+  - M6: AppConstants hardcoded back to `'1.1.3'` -> `app_identity_test.dart` failed -> reverted -> passed.
+- Documentation created:
+  - `docs/license_verification.md` in APP: Detailed audit trail of all commands, outputs, and hostile mutations.
+  - `docs/license_final_report.md` in APP: Executive summary, resolution table F1..F8, decisions summary, and manual actions.
+  - `DEPLOY_NOTES.md` in API root: Step-by-step instructions for running manual SQL migrations in phpMyAdmin with pre/post read-only checks and rollbacks.
+  - `E2E_RUNBOOK.md` in APP root: Comprehensive manual device testing runbook.
+
+### Batch 5: Activation, License, and Trial UX Hardening
+- Strengthened `packages/elmahdi_pay_flutter`:
+  - `exceptions.dart`: captures server `correlationId` across all API exceptions.
+  - `http_client.dart`: parses body or `X-Correlation-ID` header and assigns to error/success models.
+  - `license_activation.dart`: `ActivateLicenseResult` captures `correlationId`.
+- Hardened `ActivationService`:
+  - Added `DetailedActivationResult(outcome, referenceId)` and `activateDetailed()`.
+  - Maintained backward-compatible `activate()` signature.
+  - Anti-enumeration invariant strictly preserved: all non-429 4xx responses return `ActivationOutcome.invalid`.
+- Support Diagnostics & Safe Error Reference:
+  - Created `SupportDiagnostics.generateSummary(referenceId, rawKey)` in `lib/utils/support_diagnostics.dart`.
+  - Secrets strictly masked: Crockford keys formatted as `XXXX-****-YYYY`, legacy keys as `XXXX...YYYY`.
+  - Device IDs, app version, build, OS version, and reference ID included cleanly.
+- Compliant UI Guidance:
+  - Created reusable `SupportGuidanceCard` in `lib/widgets/support_guidance_card.dart`.
+  - Strictly routes support guidance to `AboutScreen`: "If the problem continues, contact support from the About page".
+  - One-tap "Copy support information" button copying masked diagnostics to clipboard.
+  - Applied across `ActivationScreen`, `LicenseScreen`, `LockedFeatureScreen`, and `ProUpgradeSheet`.
+  - Removed all direct WhatsApp/Email/Wa.me buttons and links from gating screens, fully complying with Google Play consumption-only policy.
+- Localizations:
+  - Added bilingual keys in `app_localizations.dart` (`supportFromAboutPage`, `openAboutPage`, `copySupportInfo`, `supportInfoCopied`, `referenceIdLabel`, `copiedToClipboard`).
+  - Localization quality tests passed (10/10) and plural tests passed (6/6).
+- Verification:
+  - `test/services/activation_detailed_test.dart` passed (4/4).
+  - `test/services/play_compliance_test.dart` passed (42/42).
+  - `tool/check_play_compliance.sh` passed.
+  - `dart analyze lib/ test/services/ packages/elmahdi_pay_flutter/lib/` passed (0 errors, 0 warnings).
 
 ### Batch 0: Discovery Audit
 - Audit document: `docs/license_audit.md` covering sections A through H with exact file:line evidence.
