@@ -550,15 +550,29 @@ class BackupService {
         if (data.containsKey('app_settings') && data['app_settings'] is List) {
           final setCols = await getTableCols('app_settings');
           for (final row in _convertRows(data['app_settings'])) {
+            final sanitized = sanitizeRow(row, setCols);
+            // Invariant: after any restore, journal_reports_enabled is forced OFF
+            if (sanitized['key'] == 'journal_reports_enabled') {
+              sanitized['value'] = 'false';
+            }
             await txn.insert(
               'app_settings',
-              sanitizeRow(row, setCols),
+              sanitized,
               conflictAlgorithm: ConflictAlgorithm.replace,
             );
           }
         } else {
           await DatabaseHelper.seedDefaultSettings(txn);
         }
+        // Invariant: force journal_reports_enabled = false regardless of backup content
+        await txn.insert(
+          'app_settings',
+          {
+            'key': 'journal_reports_enabled',
+            'value': 'false',
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
       }
 
       // Journal entries & lines (Phase 1)
@@ -603,8 +617,23 @@ class BackupService {
         await JournalBackfillService.backfillIfNeeded();
       }
     } else {
-      // New backup includes journal: verify parity
-      await JournalBackfillService.verifyParity();
+      // New backup includes journal: verify parity safely
+      try {
+        await JournalBackfillService.verifyParity();
+      } catch (e) {
+        await DatabaseHelper.instance.setSetting(
+          'journal_parity_failed_at',
+          DateTime.now().toIso8601String(),
+        );
+        await DatabaseHelper.instance.setSetting(
+          'journal_parity_failure_reason',
+          'Post-restore parity mismatch: $e',
+        );
+        await DatabaseHelper.instance.logAuditEvent(
+          'post_restore_parity_failed',
+          details: 'error=$e',
+        );
+      }
     }
 
     // Prune older safety backups beyond retention limits
