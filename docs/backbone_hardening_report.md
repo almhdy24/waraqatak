@@ -84,11 +84,38 @@ All defects were isolated with red tests, hardened with targeted minimal fixes, 
   - In `JournalBackfillService`: added `_isRunning` concurrency lock, `onProgress` callback reporting `(processed, total)`, and automatic `BackupService.createSafetyBackup()` invocation prior to touching historical records.
 - **Tests Verified**: `test/accounting/journal_backfill_test.dart` passes 4/4.
 
+### Commit 5: `0074f60` & Commit 6: `9f206b6`
+`perf(accounting): isolate ledger derivation, batch resumable backfill with checkpoint cursor`
+- **Root Cause**:
+  1. Ledger derivation calculations (`LedgerBuilder.build`) ran on the UI isolate, which on large datasets could drop frames.
+  2. The backfill process was monolithic. If Termux or the OS killed the process during backfill, progress was lost and resuming was not checkpointed.
+  3. Database getter scheduled background microtasks in unit test environments.
+- **Fix**:
+  1. **Ledger Derivation Offloaded to Worker Isolate**: In `lib/services/accounting/ledger_service.dart`, offloaded `LedgerBuilder.build` via `Isolate.run` (with zero SQLite connections shared across isolates and automatic fallback for widget test harnesses).
+  2. **Bounded, Atomic, Resumable Batching with Checkpoint Cursor**: In `lib/services/accounting/journal_backfill_service.dart`:
+     - Added `settingKeyBackfillCursor = 'journal_backfill_cursor'` and `defaultBatchSize = 100`.
+     - Chunked execution in transactions of 100 entries, atomically writing entries and updating `journal_backfill_cursor` within each batch transaction.
+     - Added `await Future.delayed(Duration(milliseconds: 10))` between batches to yield frames to the UI compositor.
+     - Process interruption cleanly preserves cursor; subsequent invocation picks up from checkpoint cursor without duplicate `entryNo` collision or missing entries.
+     - Upon completion, rigorously verifies full account-by-account parity against derived trial balance, sets `journal_backfilled_at`, and clears the cursor (`null`).
+  3. **Startup Decoupling in Main**: Moved startup backfill execution to `lib/main.dart` after `runApp(...)` via `unawaited(JournalBackfillService.backfillIfNeeded().catchError(...))`. Kept `DatabaseHelper.get database` pure.
+  4. **Concurrent Invocations Deduplicated**: Shared in-flight `Completer<int>` future ensures multiple concurrent callers wait on the same execution without racing.
+  5. **Synthetic Benchmarks Measured**:
+     - 5,000 documents (12,501 journal entries, ~40k lines): backfilled in 34.1 seconds on Termux CPU; RSS 110.5 MB; 100% exact parity.
+     - 20,000 documents (50,001 journal entries, ~160k lines): backfilled in 124.4 seconds on Termux CPU; RSS 147.0 MB; 100% exact parity.
+- **Tests Added**:
+  - `test/accounting/journal_backfill_test.dart`:
+    - "5. Interrupted batch and resumability: cursor persists, resumes without duplicates, and passes parity"
+    - "6. Concurrent backfills deduplication: shared Future prevents duplicate runs"
+- **Hostile Mutations Verified**:
+  - Mutation 1 (omitting cursor commit): caught by test 5 (`Expected: <2>, Actual: <0>`).
+  - Mutation 2 (forcing seq to 1 on resume): caught by test 5 (`UNIQUE constraint failed: journal_entries.entry_no`).
+
 ---
 
 ## Final Verification Summary
 
-- **Local Regression Suite**: 88/88 test files passing.
-- **Play Store Compliance**: Verified clean (`tool/check_play_compliance.sh`).
-- **Static Analysis**: Zero errors or warnings across `lib/` and `test/`.
+- **Local Regression Suite**: 88/88 test files passing (1,022 total tests, 0 failures, 0 skipped).
+- **Play Store Compliance**: Verified clean (`tool/check_play_compliance.sh` guard OK, 42 tests passing).
+- **Static Analysis**: Zero errors or warnings (`dart analyze lib/ test/`).
 - **Git Branch Status**: Clean working tree on `fix/backbone-hardening`. No push, no tags, no pubspec bump.
