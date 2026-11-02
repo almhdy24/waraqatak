@@ -119,6 +119,8 @@ class PostingService {
     final taxMinor = MoneyUtils.toMinorUnits(doc.taxAmount, decimalDigits);
     final netMinor = totalMinor - taxMinor;
 
+    if (totalMinor <= 0) return;
+
     final lines = <JournalLineDraft>[
       JournalLineDraft(
         accountCode: Accounts.receivables.code,
@@ -240,6 +242,10 @@ class PostingService {
   }) {
     final totalMinor = MoneyUtils.toMinorUnits(doc.total, decimalDigits);
     final taxMinor = MoneyUtils.toMinorUnits(doc.taxAmount, decimalDigits);
+    final netMinor = totalMinor - taxMinor;
+
+    if (totalMinor <= 0) return;
+
     final netAmount = doc.total - doc.taxAmount;
 
     double stockedNet = 0.0;
@@ -255,10 +261,32 @@ class PostingService {
       }
     }
 
-    final stockedMinor = MoneyUtils.toMinorUnits(stockedNet, decimalDigits);
-    // Ensure stockedMinor + expensedMinor == netMinor exactly
-    final netMinor = totalMinor - taxMinor;
-    final expensedMinor = netMinor - stockedMinor;
+    final hasStocked = items.any((it) {
+      final p = it.productId == null ? null : products[it.productId];
+      return p != null &&
+          p.type == Product.typeProduct &&
+          it.effectiveBaseQuantity > 0;
+    });
+    final hasNonStocked = items.any((it) {
+      final p = it.productId == null ? null : products[it.productId];
+      return p == null ||
+          p.type != Product.typeProduct ||
+          it.effectiveBaseQuantity <= 0;
+    });
+
+    final int stockedMinor;
+    final int expensedMinor;
+    if (!hasStocked) {
+      stockedMinor = 0;
+      expensedMinor = netMinor;
+    } else if (!hasNonStocked) {
+      stockedMinor = netMinor;
+      expensedMinor = 0;
+    } else {
+      final rawStockedMinor = MoneyUtils.toMinorUnits(stockedNet, decimalDigits);
+      stockedMinor = rawStockedMinor.clamp(0, netMinor);
+      expensedMinor = netMinor - stockedMinor;
+    }
 
     final lines = <JournalLineDraft>[
       if (stockedMinor > 0)

@@ -256,4 +256,174 @@ void main() {
     // 6. Verify parity passes
     await JournalBackfillService.verifyParity();
   });
+
+  test('5. Interrupted batch and resumability: cursor persists, resumes without duplicates, and passes parity', () async {
+    final rawDb = await db.database;
+    await rawDb.delete('journal_lines');
+    await rawDb.delete('journal_entries');
+    await rawDb.delete('document_items');
+    await rawDb.delete('documents');
+    await rawDb.delete('app_settings');
+
+    final pId = await db.insertProduct(
+      Product(
+        name: 'منتج دفعات',
+        salePrice: 100.0,
+        purchasePrice: 60.0,
+        averageCost: 60.0,
+        costStatus: Product.costStatusKnown,
+        stockQuantity: 100.0,
+      ),
+    );
+
+    // Insert 6 invoices
+    for (int i = 1; i <= 6; i++) {
+      final inv = Document(
+        type: 'invoice',
+        documentNumber: 'INV-RESUME-$i',
+        date: DateTime(2025, 3, i),
+        subtotal: 100.0,
+        discount: 0.0,
+        taxRate: 0.15,
+        taxAmount: 15.0,
+        total: 115.0,
+        paid: 115.0,
+        remaining: 0.0,
+        paymentMethod: 'cash',
+        status: DocumentStatus.paid,
+        currencyCode: 'SDG',
+      );
+      await db.insertDocumentWithItems(inv, [
+        DocumentItem(
+          documentId: 0,
+          productId: pId,
+          description: 'بند',
+          quantity: 1.0,
+          price: 100.0,
+          total: 100.0,
+        ),
+      ]);
+    }
+
+    // Clear journal entries to simulate legacy unbackfilled DB
+    await rawDb.delete('journal_lines');
+    await rawDb.delete('journal_entries');
+
+    // Run backfill with batchSize: 2, simulating crash/interruption after first batch (cursor 2)
+    var batchCount = 0;
+    try {
+      await JournalBackfillService.runBackfill(
+        rawDb,
+        batchSize: 2,
+        onProgress: (processed, total) {
+          batchCount++;
+          if (batchCount == 1) {
+            // First batch committed: cursor should be 2. Simulate process crash.
+            throw Exception('Simulated crash after batch 1');
+          }
+        },
+      );
+      fail('Should have thrown simulated crash');
+    } catch (e) {
+      expect(e.toString(), contains('Simulated crash'));
+    }
+
+    // Check that cursor was atomically persisted
+    final cursorAfterCrash = await JournalBackfillService.getBackfillCursor();
+    expect(cursorAfterCrash, equals(2), reason: 'Cursor must persist at checkpoint');
+
+    // Not yet marked completed
+    expect(await JournalBackfillService.isBackfillCompleted(), isFalse);
+
+    // Resume backfill
+    final resumedCount = await JournalBackfillService.runBackfill(
+      rawDb,
+      batchSize: 2,
+    );
+    expect(resumedCount, greaterThan(0));
+
+    // Cursor should now be cleared
+    final cursorAfterDone = await JournalBackfillService.getBackfillCursor();
+    expect(cursorAfterDone, equals(0), reason: 'Cursor must be cleared on completion');
+    expect(await JournalBackfillService.isBackfillCompleted(), isTrue);
+
+    // Assert zero duplicate entries
+    final dupes = await rawDb.rawQuery('''
+      SELECT entry_no, COUNT(*) as c
+      FROM journal_entries
+      GROUP BY entry_no
+      HAVING c > 1
+    ''');
+    expect(dupes, isEmpty, reason: 'Resumed backfill must produce zero duplicate entries');
+
+    // Rigorous parity check
+    await JournalBackfillService.verifyParity();
+  });
+
+  test('6. Concurrent backfills deduplication: shared Future prevents duplicate runs', () async {
+    final rawDb = await db.database;
+    await rawDb.delete('journal_lines');
+    await rawDb.delete('journal_entries');
+    await rawDb.delete('document_items');
+    await rawDb.delete('documents');
+    await rawDb.delete('app_settings');
+
+    final pId = await db.insertProduct(
+      Product(
+        name: 'منتج التزامن',
+        salePrice: 50.0,
+        purchasePrice: 30.0,
+        averageCost: 30.0,
+        costStatus: Product.costStatusKnown,
+        stockQuantity: 10.0,
+      ),
+    );
+
+    final inv = Document(
+      type: 'invoice',
+      documentNumber: 'INV-CONCUR-1',
+      date: DateTime(2025, 4, 1),
+      subtotal: 50.0,
+      discount: 0.0,
+      taxRate: 0.0,
+      taxAmount: 0.0,
+      total: 50.0,
+      paid: 50.0,
+      remaining: 0.0,
+      paymentMethod: 'cash',
+      status: DocumentStatus.paid,
+      currencyCode: 'SDG',
+    );
+    await db.insertDocumentWithItems(inv, [
+      DocumentItem(
+        documentId: 0,
+        productId: pId,
+        description: 'بند',
+        quantity: 1.0,
+        price: 50.0,
+        total: 50.0,
+      ),
+    ]);
+
+    await rawDb.delete('journal_lines');
+    await rawDb.delete('journal_entries');
+
+    // Launch two backfills simultaneously
+    final results = await Future.wait([
+      JournalBackfillService.backfillIfNeeded(batchSize: 2),
+      JournalBackfillService.backfillIfNeeded(batchSize: 2),
+    ]);
+
+    expect(results[0], equals(results[1]));
+    expect(await JournalBackfillService.isBackfillCompleted(), isTrue);
+
+    // Zero duplicates
+    final dupes = await rawDb.rawQuery('''
+      SELECT entry_no, COUNT(*) as c
+      FROM journal_entries
+      GROUP BY entry_no
+      HAVING c > 1
+    ''');
+    expect(dupes, isEmpty);
+  });
 }

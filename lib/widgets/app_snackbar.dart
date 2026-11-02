@@ -16,8 +16,8 @@ enum AppSnackBarSeverity {
 class AppSnackBar {
   AppSnackBar._();
 
-  /// Default SnackBar display duration (5 seconds).
-  static const Duration defaultDuration = Duration(seconds: 5);
+  /// Default SnackBar display duration (3 seconds).
+  static const Duration defaultDuration = Duration(seconds: 3);
 
   /// Extended SnackBar display duration for accessible navigation (10 seconds).
   static const Duration accessibleDuration = Duration(seconds: 10);

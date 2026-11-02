@@ -202,6 +202,114 @@ void main() {
       expect(payEntry.lines[1].creditMinor, 110000);
     });
 
+    test('Purchase issuance with fractional allocation maintains exact integer balance', () {
+      final doc = Document(
+        id: 201,
+        type: 'purchase',
+        documentNumber: 'PUR-201',
+        date: DateTime(2026, 4, 1),
+        subtotal: 2395333.91,
+        discount: 0.0,
+        taxRate: 15.0,
+        taxAmount: 359300.09,
+        total: 2754634.0,
+        paid: 0.0,
+        remaining: 2754634.0,
+        currencyCode: 'SAR',
+      );
+
+      final p = Product(
+        id: 1,
+        name: 'Item 1',
+        salePrice: 100.0,
+        purchasePrice: 60.0,
+        type: Product.typeProduct,
+      );
+
+      final items = [
+        DocumentItem(
+          id: 1,
+          documentId: 201,
+          productId: 1,
+          description: 'Item 1',
+          quantity: 23953.3391,
+          price: 100.0,
+          total: 2395333.91,
+        ),
+      ];
+
+      final drafts = PostingService.postDocumentIssued(
+        doc: doc,
+        items: items,
+        products: {1: p},
+        nextEntryNo: nextEntryNo,
+      );
+
+      expect(drafts.length, 1);
+      final pur = drafts.first;
+      expect(pur.isBalanced, isTrue, reason: 'Dr=${pur.totalDebitMinor} must equal Cr=${pur.totalCreditMinor}');
+    });
+
+    test('Receipt and Voucher posting generates balanced journal drafts', () {
+      final receiptDoc = Document(
+        id: 40,
+        type: 'payment_receipt',
+        documentNumber: 'REC-4001',
+        date: DateTime(2026, 4, 1),
+        subtotal: 500.0,
+        discount: 0.0,
+        taxRate: 0.0,
+        taxAmount: 0.0,
+        total: 500.0,
+        paid: 500.0,
+        remaining: 0.0,
+        paymentMethod: 'cash',
+        currencyCode: 'SDG',
+      );
+
+      final rDrafts = PostingService.postDocumentIssued(
+        doc: receiptDoc,
+        items: const [],
+        products: const {},
+        nextEntryNo: nextEntryNo,
+      );
+      expect(rDrafts.length, 1);
+      expect(rDrafts.first.isBalanced, isTrue);
+      expect(rDrafts.first.lines[0].accountCode, Accounts.cash.code);
+      expect(rDrafts.first.lines[0].debitMinor, 50000);
+      expect(rDrafts.first.lines[1].accountCode, Accounts.otherIncome.code);
+      expect(rDrafts.first.lines[1].creditMinor, 50000);
+
+      final voucherDoc = Document(
+        id: 41,
+        type: 'expense_voucher',
+        documentNumber: 'VCH-4001',
+        date: DateTime(2026, 4, 1),
+        subtotal: 250.0,
+        discount: 0.0,
+        taxRate: 0.0,
+        taxAmount: 0.0,
+        total: 250.0,
+        paid: 250.0,
+        remaining: 0.0,
+        paymentMethod: 'bankak',
+        currencyCode: 'SDG',
+      );
+
+      final vDrafts = PostingService.postDocumentIssued(
+        doc: voucherDoc,
+        items: const [],
+        products: const {},
+        nextEntryNo: nextEntryNo,
+      );
+      expect(vDrafts.length, 1);
+      expect(vDrafts.first.isBalanced, isTrue);
+      expect(vDrafts.first.lines[0].accountCode, Accounts.operatingExpenses.code);
+      expect(vDrafts.first.lines[0].debitMinor, 25000);
+      expect(vDrafts.first.lines[1].accountCode, Accounts.bank.code);
+      expect(vDrafts.first.lines[1].creditMinor, 25000);
+    });
+
     test('Cancellation generates exact reversal entries dated at original effective date', () {
       final doc = Document(
         id: 30,

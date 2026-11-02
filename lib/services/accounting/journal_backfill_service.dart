@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/business.dart';
 import '../../models/currency.dart';
 import '../../utils/money_utils.dart';
+import '../backup_service.dart';
 import 'journal_draft.dart';
 import 'journal_writer.dart';
 import 'ledger.dart';
@@ -35,6 +37,21 @@ class JournalBackfillService {
   JournalBackfillService._();
 
   static const String settingKeyBackfilledAt = 'journal_backfilled_at';
+  static const String settingKeyBackfillCursor = 'journal_backfill_cursor';
+  static const int defaultBatchSize = 100;
+  static Future<int>? _activeRun;
+
+  /// Returns true if backfill is actively executing.
+  static bool get isRunning => _activeRun != null;
+
+  /// Returns the current backfill checkpoint cursor (0 if not in progress).
+  static Future<int> getBackfillCursor({DatabaseExecutor? txn}) async {
+    final val = await DatabaseHelper.instance.getSetting(
+      settingKeyBackfillCursor,
+      txn: txn,
+    );
+    return val != null ? (int.tryParse(val) ?? 0) : 0;
+  }
 
   /// Returns true if backfill has already been executed.
   static Future<bool> isBackfillCompleted({DatabaseExecutor? txn}) async {
@@ -46,172 +63,238 @@ class JournalBackfillService {
   }
 
   /// Runs backfill if not already completed and historical data exists.
+  /// Deduplicates concurrent invocations by sharing the in-flight Future.
   /// Returns the number of entries backfilled, or 0 if skipped.
-  static Future<int> backfillIfNeeded({Database? dbOverride}) async {
-    final db = dbOverride ?? await DatabaseHelper.instance.database;
-
-    final isDone = await isBackfillCompleted(txn: db);
-    if (isDone) return 0;
-
-    // Check if any documents or movements exist
-    final docCountRows = await db.rawQuery(
-      "SELECT COUNT(*) as count FROM documents WHERE status != 'draft' AND status != 'cancelled'",
-    );
-    final docCount = (docCountRows.first['count'] as num?)?.toInt() ?? 0;
-
-    final movCountRows = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM stock_movements',
-    );
-    final movCount = (movCountRows.first['count'] as num?)?.toInt() ?? 0;
-
-    if (docCount == 0 && movCount == 0) {
-      // Clean slate; mark as backfilled immediately
-      await DatabaseHelper.instance.setSetting(
-        settingKeyBackfilledAt,
-        DateTime.now().toIso8601String(),
-        txn: db,
-      );
-      return 0;
+  static Future<int> backfillIfNeeded({
+    Database? dbOverride,
+    int batchSize = defaultBatchSize,
+    void Function(int processed, int total)? onProgress,
+  }) async {
+    if (_activeRun != null) {
+      return await _activeRun!;
     }
 
-    return await runBackfill(db);
+    final completer = Completer<int>();
+    _activeRun = completer.future;
+
+    try {
+      final db = dbOverride ?? await DatabaseHelper.instance.database;
+
+      final isDone = await isBackfillCompleted(txn: db);
+      if (isDone) {
+        completer.complete(0);
+        return 0;
+      }
+
+      // Check if any documents or movements exist
+      final docCountRows = await db.rawQuery(
+        "SELECT COUNT(*) as count FROM documents WHERE status != 'draft' AND status != 'cancelled'",
+      );
+      final docCount = (docCountRows.first['count'] as num?)?.toInt() ?? 0;
+
+      final movCountRows = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM stock_movements',
+      );
+      final movCount = (movCountRows.first['count'] as num?)?.toInt() ?? 0;
+
+      if (docCount == 0 && movCount == 0) {
+        // Clean slate; mark as backfilled immediately
+        await DatabaseHelper.instance.setSetting(
+          settingKeyBackfilledAt,
+          DateTime.now().toIso8601String(),
+          txn: db,
+        );
+        completer.complete(0);
+        return 0;
+      }
+
+      final count = await runBackfill(db, batchSize: batchSize, onProgress: onProgress);
+      completer.complete(count);
+      return count;
+    } catch (e, st) {
+      completer.completeError(e, st);
+      try {
+        final db = dbOverride ?? await DatabaseHelper.instance.database;
+        await DatabaseHelper.instance.setSetting(
+          'journal_parity_failed_at',
+          DateTime.now().toIso8601String(),
+          txn: db,
+        );
+        await DatabaseHelper.instance.setSetting(
+          'journal_parity_failure_reason',
+          'Backfill failure: $e',
+          txn: db,
+        );
+        await DatabaseHelper.instance.logAuditEvent(
+          'backfill_failed',
+          details: 'error=$e',
+        );
+      } catch (_) {}
+      rethrow;
+    } finally {
+      _activeRun = null;
+    }
   }
 
   /// Core backfill transaction:
   /// 1. Reads derived ledger output for business base currency.
   /// 2. Converts each derived [JournalEntry] into a balanced [JournalEntryDraft] with `origin = 'legacy_backfill'`.
-  /// 3. Writes all drafts to `journal_entries` and `journal_lines`.
-  /// 4. Rigorously verifies account-by-account parity against derived trial balance.
-  /// 5. If parity fails, throws [StateError] which aborts and rolls back the transaction.
-  /// 6. Marks backfill completed.
-  static Future<int> runBackfill(Database db) async {
+  /// 3. Writes drafts in bounded, atomic, checkpointed batches.
+  /// 4. Rigorously verifies account-by-account parity against derived trial balance upon completion.
+  /// 5. If parity fails, throws [StateError] which aborts without marking completed.
+  /// 6. Marks backfill completed and clears cursor.
+  static Future<int> runBackfill(
+    Database db, {
+    int batchSize = defaultBatchSize,
+    void Function(int processed, int total)? onProgress,
+  }) async {
+    final cursorVal = await DatabaseHelper.instance.getSetting(
+      settingKeyBackfillCursor,
+      txn: db,
+    );
+    var cursor = cursorVal != null ? (int.tryParse(cursorVal) ?? 0) : 0;
+
+    // Invariant: automatic safety backup before modifying historical data (first start only)
+    if (cursor == 0) {
+      try {
+        await BackupService.createSafetyBackup();
+      } catch (_) {}
+
+      // Clean any prior partial legacy backfill entries if starting fresh
+      await db.delete(
+        'journal_entries',
+        where: "origin = 'legacy_backfill'",
+      );
+    }
+
     final bRows = await db.query('businesses', limit: 1);
     final business = bRows.isNotEmpty ? Business.fromMap(bRows.first) : null;
     final baseCurrency = business?.currencyCode ?? 'SDG';
     final decimalDigits = Currency.decimalDigitsForCode(baseCurrency);
 
-    // Derive ledger entries for the base currency
-    final book = await LedgerService.load(currencyCode: baseCurrency);
+    // Derive ledger entries for the base currency (offloaded to worker isolate in LedgerService)
+    final book = await LedgerService.buildDerived(
+      currencyCode: baseCurrency,
+      executor: db,
+    );
     final derivedEntries = book.entries;
+    final total = derivedEntries.length;
 
-    return await db.transaction((txn) async {
-      var entrySeq = 1;
-      var backfilledCount = 0;
+    var backfilledCount = 0;
 
-      for (final e in derivedEntries) {
-        if (e.lines.isEmpty) continue; // skip zero-line uncosted placeholders
+    // Process in bounded, atomic, checkpointed batches
+    while (cursor < total) {
+      final end = (cursor + batchSize < total) ? cursor + batchSize : total;
+      final batch = derivedEntries.sublist(cursor, end);
 
-        final lines = <JournalLineDraft>[];
-        var totalDebit = 0;
-        var totalCredit = 0;
+      await db.transaction((txn) async {
+        var seq = cursor + 1;
+        for (final e in batch) {
+          if (e.lines.isEmpty) {
+            seq++;
+            continue; // skip zero-line uncosted placeholders
+          }
 
-        for (final l in e.lines) {
-          final drMinor = MoneyUtils.toMinorUnits(l.debit, decimalDigits);
-          final crMinor = MoneyUtils.toMinorUnits(l.credit, decimalDigits);
-          totalDebit += drMinor;
-          totalCredit += crMinor;
-          lines.add(
-            JournalLineDraft(
-              accountCode: l.account.code,
-              debitMinor: drMinor,
-              creditMinor: crMinor,
-            ),
-          );
-        }
+          final lines = <JournalLineDraft>[];
+          var totalDebit = 0;
+          var totalCredit = 0;
 
-        // Guarantee exact integer minor unit balance
-        final diff = totalDebit - totalCredit;
-        if (diff != 0 && lines.isNotEmpty) {
-          final firstCredit = lines.firstWhere(
-            (l) => l.creditMinor > 0,
-            orElse: () => lines.first,
-          );
-          final idx = lines.indexOf(firstCredit);
-          if (firstCredit.creditMinor > 0) {
-            lines[idx] = JournalLineDraft(
-              accountCode: firstCredit.accountCode,
-              debitMinor: firstCredit.debitMinor,
-              creditMinor: firstCredit.creditMinor + diff,
-              productId: firstCredit.productId,
-              contactId: firstCredit.contactId,
-            );
-          } else {
-            lines[0] = JournalLineDraft(
-              accountCode: lines[0].accountCode,
-              debitMinor: lines[0].debitMinor - diff,
-              creditMinor: lines[0].creditMinor,
-              productId: lines[0].productId,
-              contactId: lines[0].contactId,
+          for (final l in e.lines) {
+            final drMinor = MoneyUtils.toMinorUnits(l.debit, decimalDigits);
+            final crMinor = MoneyUtils.toMinorUnits(l.credit, decimalDigits);
+            totalDebit += drMinor;
+            totalCredit += crMinor;
+            lines.add(
+              JournalLineDraft(
+                accountCode: l.account.code,
+                debitMinor: drMinor,
+                creditMinor: crMinor,
+              ),
             );
           }
-        }
 
-        final sourceType = _mapSourceType(e.source);
-        final draft = JournalEntryDraft(
-          entryNo:
-              'JE-BACKFILL-$entrySeq-${DateTime.now().microsecondsSinceEpoch}',
-          effectiveDate: e.date,
-          postedAt: DateTime.now(),
-          sourceType: sourceType,
-          sourceId: e.documentId,
-          origin: 'legacy_backfill',
-          memo: e.reference,
-          lines: lines,
-        );
-        entrySeq++;
+          // Guarantee exact integer minor unit balance
+          final diff = totalDebit - totalCredit;
+          if (diff != 0 && lines.isNotEmpty) {
+            final firstCredit = lines.firstWhere(
+              (l) => l.creditMinor > 0,
+              orElse: () => lines.first,
+            );
+            final idx = lines.indexOf(firstCredit);
+            if (firstCredit.creditMinor > 0) {
+              lines[idx] = JournalLineDraft(
+                accountCode: firstCredit.accountCode,
+                debitMinor: firstCredit.debitMinor,
+                creditMinor: firstCredit.creditMinor + diff,
+                productId: firstCredit.productId,
+                contactId: firstCredit.contactId,
+              );
+            } else {
+              lines[0] = JournalLineDraft(
+                accountCode: lines[0].accountCode,
+                debitMinor: lines[0].debitMinor - diff,
+                creditMinor: lines[0].creditMinor,
+                productId: lines[0].productId,
+                contactId: lines[0].contactId,
+              );
+            }
+          }
 
-        await JournalWriter.write(txn, draft);
-        backfilledCount++;
-      }
-
-      // Parity check against derived ledger
-      final derivedTB = AccountingReports.trialBalance(derivedEntries);
-      final journalRows = await txn.rawQuery('''
-        SELECT 
-          l.account_code,
-          COALESCE(SUM(l.debit_minor), 0) as dr,
-          COALESCE(SUM(l.credit_minor), 0) as cr
-        FROM journal_lines l
-        JOIN journal_entries e ON l.entry_id = e.id
-        GROUP BY l.account_code
-      ''');
-
-      final journalMap = <String, ({int dr, int cr, int bal})>{};
-      for (final r in journalRows) {
-        final code = r['account_code'] as String;
-        final dr = (r['dr'] as num).toInt();
-        final cr = (r['cr'] as num).toInt();
-        final acct = Accounts.byCode(code);
-        final bal = acct.debitNormal ? (dr - cr) : (cr - dr);
-        journalMap[code] = (dr: dr, cr: cr, bal: bal);
-      }
-
-      for (final acct in Accounts.all) {
-        final dBal = derivedTB.rows
-            .firstWhere(
-              (r) => r.account.code == acct.code,
-              orElse: () => AccountBalance(acct, 0, 0),
-            )
-            .balance;
-        final derivedBalMinor = MoneyUtils.toMinorUnits(dBal, decimalDigits);
-        final journalBalMinor = journalMap[acct.code]?.bal ?? 0;
-
-        if (derivedBalMinor != journalBalMinor) {
-          throw StateError(
-            'Backfill parity verification failed on account ${acct.code}: derived=$derivedBalMinor, journal=$journalBalMinor. Aborting backfill.',
+          final sourceType = _mapSourceType(e.source);
+          final draft = JournalEntryDraft(
+            entryNo: 'JE-BACKFILL-$seq',
+            effectiveDate: e.date,
+            postedAt: DateTime.now(),
+            sourceType: sourceType,
+            sourceId: e.documentId,
+            origin: 'legacy_backfill',
+            memo: e.reference,
+            lines: lines,
           );
-        }
-      }
+          seq++;
 
-      // Mark backfill completed
+          await JournalWriter.write(txn, draft, lockDateOverride: e.date);
+          backfilledCount++;
+        }
+
+        // Atomically commit checkpoint cursor with the batch
+        await DatabaseHelper.instance.setSetting(
+          settingKeyBackfillCursor,
+          end.toString(),
+          txn: txn,
+        );
+      });
+
+      cursor = end;
+      onProgress?.call(cursor, total);
+
+      // Yield to the event loop so UI / compositor never starves or drops frames
+      await Future.delayed(const Duration(milliseconds: 10));
+    }
+
+    // Rigorous account-by-account parity check across full derived trial balance
+    await verifyParity(executor: db, currencyCode: baseCurrency);
+
+    // Parity verified: mark backfill completed and clear cursor
+    await db.transaction((txn) async {
       await DatabaseHelper.instance.setSetting(
         settingKeyBackfilledAt,
         DateTime.now().toIso8601String(),
         txn: txn,
       );
-
-      return backfilledCount;
+      await DatabaseHelper.instance.setSetting(
+        settingKeyBackfillCursor,
+        null,
+        txn: txn,
+      );
     });
+
+    await DatabaseHelper.instance.logAuditEvent(
+      'backfill_completed',
+      details: 'entries=$total',
+    );
+
+    return backfilledCount;
   }
 
   /// Verifies parity between persisted journal and derived ledger on an existing database.

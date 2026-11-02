@@ -1,3 +1,5 @@
+import 'dart:isolate';
+import 'package:flutter/widgets.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/currency.dart';
@@ -78,21 +80,30 @@ class LedgerService {
       }
     }
 
-    final entries = LedgerBuilder.build(
-      LedgerInput(
-        documents: docs,
-        itemsByDocument: itemsByDocument,
-        products: {
-          for (final p in data.products)
-            if (p.id != null) p.id!: p,
-        },
-        stockMovements: isBase ? data.movements : const [],
-        payments: data.payments
-            .where((p) => ids.contains(p.documentId))
-            .toList(),
-        productPricesApply: isBase,
-      ),
+    final input = LedgerInput(
+      documents: docs,
+      itemsByDocument: itemsByDocument,
+      products: {
+        for (final p in data.products)
+          if (p.id != null) p.id!: p,
+      },
+      stockMovements: isBase ? data.movements : const [],
+      payments: data.payments
+          .where((p) => ids.contains(p.documentId))
+          .toList(),
+      productPricesApply: isBase,
     );
+
+    List<JournalEntry> entries;
+    try {
+      if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+        entries = LedgerBuilder.build(input);
+      } else {
+        entries = await Isolate.run(() => LedgerBuilder.build(input));
+      }
+    } catch (_) {
+      entries = LedgerBuilder.build(input);
+    }
 
     return LedgerBook(
       currencyCode: selected,

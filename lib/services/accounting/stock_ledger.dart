@@ -127,7 +127,11 @@ class StockLedger {
           targetMovementId: targetMovementId,
         );
         if (draft != null) {
-          await JournalWriter.write(txn, draft);
+          await JournalWriter.postDraftIsolated(
+            txn,
+            draft,
+            operation: 'stock_adjustment',
+          );
         }
       }
     }

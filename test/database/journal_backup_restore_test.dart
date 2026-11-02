@@ -180,4 +180,59 @@ void main() {
     // Clean up hook
     BackupService.onLegacyBackupRestored = null;
   });
+
+  test('Restoring backup containing journal_reports_enabled=true resets flag to false', () async {
+    final db = DatabaseHelper.instance;
+
+    final backupData = {
+      'app': BackupService.appId,
+      'backup_version': 4,
+      'database_version': 25,
+      'created_at': DateTime(2026, 4, 1).toIso8601String(),
+      'data': {
+        'businesses': [
+          {
+            'name': 'متجر النيل',
+            'owner_name': 'عمر',
+            'phone': '0999999999',
+            'address': 'الخرطوم',
+            'currency_code': 'SDG',
+          }
+        ],
+        'contacts': [],
+        'products': [],
+        'product_units': [],
+        'documents': [],
+        'document_items': [],
+        'document_counters': [],
+        'document_payments': [],
+        'stock_movements': [],
+        'tax_profiles': [],
+        'payment_methods': [],
+        'stocktake_sessions': [],
+        'stocktake_items': [],
+        'audit_log': [],
+        'accounts': [],
+        'journal_entries': [],
+        'journal_lines': [],
+        'app_settings': [
+          {
+            'key': 'journal_reports_enabled',
+            'value': 'true',
+            'updated_at': DateTime(2026, 4, 1).toIso8601String(),
+          },
+        ],
+      },
+    };
+
+    final success = await BackupService.restoreFromJsonMap(
+      backupData,
+      createSafetyBackup: false,
+    );
+    expect(success, isTrue);
+
+    // Invariant: after any restore, journal_reports_enabled is forced OFF
+    final reportsEnabled = await db.isJournalReportsEnabled();
+    expect(reportsEnabled, isFalse);
+  });
 }
