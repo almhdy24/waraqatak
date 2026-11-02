@@ -598,6 +598,11 @@ class AppLocalizations {
   String get openingStock => _t('رصيد افتتاحي', 'Opening Stock');
   String get adjustStock => _t('تعديل يدوي', 'Manual Adjustment');
   String get stockAdjustment => _t('تعديل المخزون', 'Stock Adjustment');
+  String get addStock => _t('إضافة مخزون (+)', 'Add Stock (+)');
+  String get removeStock => _t('خصم مخزون (−)', 'Remove Stock (−)');
+  String get adjustmentQuantity => _t('كمية التعديل', 'Adjustment Quantity');
+  String get confirmAddStock => _t('تأكيد إضافة المخزون', 'Confirm Stock Addition');
+  String get confirmRemoveStock => _t('تأكيد خصم المخزون', 'Confirm Stock Removal');
   String get adjustmentDelta =>
       _t('كمية التعديل (+ أو -)', 'Adjustment Delta (+ or -)');
   String get noMovements => _t('لا توجد حركات مخزون', 'No stock movements');

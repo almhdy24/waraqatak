@@ -120,17 +120,191 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     AppSnackBar.show(context, msg);
   }
 
-  void _addProduct(Product p) {
+  void _addProduct(Product p, {double quantity = 1}) {
     final l10n = AppLocalizations.of(context);
     final units = p.id != null ? (_productUnits[p.id!] ?? const <ProductUnit>[]) : const <ProductUnit>[];
     final defaultUnit = units.where((u) => u.isDefaultSale).firstOrNull;
-    final err = _cart.add(p, unit: defaultUnit);
+    final err = _cart.add(p, quantity: quantity, unit: defaultUnit);
     if (err == PosCartError.outOfStock) {
       _toast(l10n.posNotEnoughStock(p.name));
       return;
     }
     HapticFeedback.selectionClick();
     setState(() {});
+  }
+
+  Future<void> _promptAddQuantity(Product p) async {
+    final l10n = AppLocalizations.of(context);
+    final units = p.id != null
+        ? (_productUnits[p.id!] ?? const <ProductUnit>[])
+        : const <ProductUnit>[];
+    final defaultUnit = units.where((u) => u.isDefaultSale).firstOrNull;
+    final unitLabel = defaultUnit?.unitName ?? p.unit ?? '';
+
+    final qtyCtrl = TextEditingController(text: '1');
+    qtyCtrl.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: qtyCtrl.text.length,
+    );
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(p.name),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.itemQuantity,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: qtyCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: false,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
+                ],
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                  suffixText: unitLabel.isNotEmpty ? unitLabel : null,
+                ),
+                validator: (val) {
+                  final parsed = FormatUtils.parseQuantity(val);
+                  if (parsed == null || parsed <= 0) {
+                    return l10n.invalidQuantity;
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) {
+                  if (formKey.currentState?.validate() == true) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() == true) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: Text(l10n.save),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final qty = FormatUtils.parseQuantity(qtyCtrl.text);
+      if (qty != null && qty > 0) {
+        _addProduct(p, quantity: qty);
+      }
+    }
+  }
+
+  Future<void> _promptDirectQuantity(
+    int index,
+    void Function(VoidCallback) update,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final line = _cart.lines[index];
+    final p = line.product;
+    final unitLabel = line.unit?.unitName ?? p.unit ?? '';
+    final qtyCtrl = TextEditingController(
+      text: FormatUtils.formatQuantity(line.quantity),
+    );
+    qtyCtrl.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: qtyCtrl.text.length,
+    );
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(p.name),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.itemQuantity,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: qtyCtrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                  signed: false,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
+                ],
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                  suffixText: unitLabel.isNotEmpty ? unitLabel : null,
+                ),
+                validator: (val) {
+                  final parsed = FormatUtils.parseQuantity(val);
+                  if (parsed == null || parsed <= 0) {
+                    return l10n.invalidQuantity;
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) {
+                  if (formKey.currentState?.validate() == true) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() == true) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: Text(l10n.save),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final newQty = FormatUtils.parseQuantity(qtyCtrl.text);
+      if (newQty != null && newQty > 0) {
+        update(() => _setQty(index, newQty));
+      }
+    }
   }
 
   void _setQty(int index, double qty) {
@@ -429,6 +603,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         price: _fmt(products[i].salePrice),
                         l10n: l10n,
                         onTap: () => _addProduct(products[i]),
+                        onLongPress: () => _promptAddQuantity(products[i]),
                       ),
                     );
                   },
@@ -459,7 +634,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      l10n.posItemsCount(_money.format(_cart.itemCount)),
+                      l10n.posItemsCount(FormatUtils.formatQuantity(_cart.itemCount)),
                       style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                     ),
                     AppAmountText(
@@ -518,8 +693,14 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     ProductUnit? selectedUnit = line.unit;
     String selectedCategory = line.pricingCategory ?? Contact.categoryRetail;
+    final qtyCtrl = TextEditingController(
+      text: FormatUtils.formatQuantity(line.quantity),
+    );
     final priceCtrl = TextEditingController(text: line.unitPrice.toString());
     bool isCustomPrice = line.priceOverride != null;
+
+    double currentQty() =>
+        FormatUtils.parseQuantity(qtyCtrl.text) ?? line.quantity;
 
     final result = await showDialog<bool>(
       context: context,
@@ -553,7 +734,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   availableUnits: units,
                                   unit: null,
                                   targetCategory: selectedCategory,
-                                  quantity: line.quantity,
+                                  quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
                                 priceCtrl.text = resPrice.toString();
@@ -578,7 +759,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                     availableUnits: units,
                                     unit: u,
                                     targetCategory: selectedCategory,
-                                    quantity: line.quantity,
+                                    quantity: currentQty(),
                                     wholesalePricingEnabled: wholesaleEnabled,
                                   );
                                   priceCtrl.text = resPrice.toString();
@@ -613,7 +794,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   availableUnits: units,
                                   unit: selectedUnit,
                                   targetCategory: selectedCategory,
-                                  quantity: line.quantity,
+                                  quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
                                 priceCtrl.text = resPrice.toString();
@@ -636,7 +817,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   availableUnits: units,
                                   unit: selectedUnit,
                                   targetCategory: selectedCategory,
-                                  quantity: line.quantity,
+                                  quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
                                 priceCtrl.text = resPrice.toString();
@@ -649,14 +830,56 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
+                Text(l10n.itemQuantity,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 13)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: qtyCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: false,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
+                  ],
+                  decoration: InputDecoration(
+                    isDense: true,
+                    suffixText: selectedUnit?.unitName ?? p.unit ?? '',
+                  ),
+                  onChanged: (val) {
+                    if (!isCustomPrice) {
+                      final enteredQty = FormatUtils.parseQuantity(val);
+                      if (enteredQty != null && enteredQty > 0) {
+                        setDialog(() {
+                          final resPrice = DocumentService.resolveLinePrice(
+                            product: p,
+                            availableUnits: units,
+                            unit: selectedUnit,
+                            targetCategory: selectedCategory,
+                            quantity: enteredQty,
+                            wholesalePricingEnabled: wholesaleEnabled,
+                          );
+                          priceCtrl.text = resPrice.toString();
+                        });
+                      }
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
                 Text(l10n.unitPrice,
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 6),
                 TextField(
                   controller: priceCtrl,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                    signed: false,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
+                  ],
                   decoration: InputDecoration(
                     isDense: true,
                     suffixText: _business?.currencySymbol ?? '',
@@ -673,7 +896,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   availableUnits: units,
                                   unit: selectedUnit,
                                   targetCategory: selectedCategory,
-                                  quantity: line.quantity,
+                                  quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
                                 priceCtrl.text = resPrice.toString();
@@ -683,7 +906,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         : null,
                   ),
                   onChanged: (val) {
-                    final entered = double.tryParse(val.trim());
+                    final entered = FormatUtils.parseQuantity(val.trim());
                     if (entered != null) {
                       isCustomPrice = true;
                     }
@@ -708,10 +931,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     if (result == true) {
       final overridePrice =
-          isCustomPrice ? double.tryParse(priceCtrl.text.trim()) : null;
+          isCustomPrice ? FormatUtils.parseQuantity(priceCtrl.text.trim()) : null;
+      final newQty =
+          FormatUtils.parseQuantity(qtyCtrl.text.trim()) ?? line.quantity;
       update(() {
         final err = _cart.updateLine(
           index,
+          quantity: newQty,
           unit: selectedUnit,
           clearUnit: selectedUnit == null,
           pricingCategory: selectedCategory,
@@ -799,11 +1025,12 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text(
-                    '${_fmt(line.unitPrice)} × ${_money.format(line.quantity)} $unitLabel$tierLabel = ${_fmt(line.total)}'),
+                    '${_fmt(line.unitPrice)} × ${FormatUtils.formatQuantity(line.quantity)} $unitLabel$tierLabel = ${_fmt(line.total)}'),
                 trailing: _QtyStepper(
                   quantity: line.quantity,
                   onMinus: () => update(() => _setQty(i, line.quantity - 1)),
                   onPlus: () => update(() => _setQty(i, line.quantity + 1)),
+                  onTapQuantity: () => _promptDirectQuantity(i, update),
                 ),
               );
             },
@@ -904,6 +1131,7 @@ class _ProductTile extends StatelessWidget {
   final String price;
   final AppLocalizations l10n;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _ProductTile({
     required this.product,
@@ -911,6 +1139,7 @@ class _ProductTile extends StatelessWidget {
     required this.price,
     required this.l10n,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -931,6 +1160,7 @@ class _ProductTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: soldOut ? null : onTap,
+        onLongPress: soldOut ? null : onLongPress,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Column(
@@ -999,7 +1229,14 @@ class _QtyStepper extends StatelessWidget {
   final double quantity;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
-  const _QtyStepper({required this.quantity, required this.onMinus, required this.onPlus});
+  final VoidCallback? onTapQuantity;
+
+  const _QtyStepper({
+    required this.quantity,
+    required this.onMinus,
+    required this.onPlus,
+    this.onTapQuantity,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1023,11 +1260,15 @@ class _QtyStepper extends StatelessWidget {
                 : null,
             onPressed: onMinus,
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              NumberFormat('#,##0.##').format(quantity),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          InkWell(
+            onTap: onTapQuantity,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Text(
+                FormatUtils.formatQuantity(quantity),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
             ),
           ),
           IconButton(

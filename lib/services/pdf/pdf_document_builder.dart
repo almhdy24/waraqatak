@@ -544,7 +544,7 @@ class PdfDocumentBuilder {
       widgets.add(pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          txt('${numFmt.format(item.quantity)}$unitSuffix × ${numFmt.format(item.price)}', size: smallSize),
+          txt('${FormatUtils.formatQuantity(item.quantity)}$unitSuffix × ${numFmt.format(item.price)}', size: smallSize),
           txt('${numFmt.format(lineTotal)} $currency', size: smallSize),
         ],
       ));

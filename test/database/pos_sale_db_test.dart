@@ -100,4 +100,35 @@ void main() {
     expect((await db.getDocumentById(id))!.status, DocumentStatus.paid);
     expect(await db.getDocumentPayments(id), hasLength(2));
   });
+
+  test('quick sale with fractional quantities updates stock and persists exactly', () async {
+    final db = DatabaseHelper.instance;
+    final method = (await db.getEnabledPaymentMethods()).first.key;
+    // pen has 3 left in stock from previous test
+    final cart = PosCart()..add(pen, quantity: 1.25);
+
+    final id = await DocumentService.createDocument(
+      type: 'invoice',
+      business: business.copyWith(taxesEnabled: false),
+      items: cart.toItemInputs(),
+      date: DateTime.now(),
+      payNowMethod: method,
+    );
+
+    final inv = (await db.getDocumentById(id))!;
+    expect(inv.status, DocumentStatus.paid);
+    expect(inv.total, closeTo(625.0, 0.001)); // 1.25 * 500 = 625
+
+    final items = await db.getDocumentItems(id);
+    expect(items.single.quantity, 1.25);
+
+    // Remaining stock: 3.0 - 1.25 = 1.75
+    final updatedPen = (await db.getProductById(pen.id!))!;
+    expect(updatedPen.stockQuantity, closeTo(1.75, 0.0001));
+
+    final movements = (await db.getStockMovements(pen.id!))
+        .where((m) => m.referenceDocumentId == id);
+    expect(movements, hasLength(1));
+    expect(movements.single.quantity, closeTo(-1.25, 0.0001));
+  });
 }

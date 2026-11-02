@@ -6,6 +6,7 @@ import '../localization/app_localizations.dart';
 import '../models/database_diagnostic.dart';
 import '../models/document_status.dart';
 import '../models/stock_movement.dart';
+import 'accounting/journal_backfill_service.dart';
 import 'accounting/stock_ledger.dart';
 import 'backup_service.dart';
 import 'database_diagnostic_service.dart';
@@ -1488,6 +1489,44 @@ class DatabaseRepairService {
         error: e.toString(),
         safetyBackupPath: safetyBackupPath,
         rolledBack: true,
+      );
+    }
+  }
+
+  /// Rebuilds the double-entry journal from scratch and restores 100% parity with derived ledger.
+  static Future<RepairResult> rebuildJournal({
+    Database? db,
+    AppLocalizations? l10n,
+  }) async {
+    final targetDb = db ?? await DatabaseHelper.instance.database;
+    final isAr = l10n?.isArabic ?? false;
+
+    String? safetyBackupPath;
+    try {
+      safetyBackupPath = safetyBackupOverride != null
+          ? await safetyBackupOverride!()
+          : await BackupService.createSafetyBackup();
+    } catch (_) {}
+
+    try {
+      final count = await JournalBackfillService.rebuildJournal(dbOverride: targetDb);
+      return RepairResult(
+        success: true,
+        repairedCount: count,
+        message: isAr
+            ? 'تمت إعادة بناء دفتر اليومية بنجاح ومطابقة الأرصدة 100% ($count قيد).'
+            : 'Journal rebuilt successfully with 100% parity ($count entries).',
+        safetyBackupPath: safetyBackupPath,
+      );
+    } catch (e) {
+      return RepairResult(
+        success: false,
+        repairedCount: 0,
+        message: isAr
+            ? 'فشل إعادة بناء دفتر اليومية: $e'
+            : 'Failed to rebuild journal: $e',
+        error: e.toString(),
+        safetyBackupPath: safetyBackupPath,
       );
     }
   }

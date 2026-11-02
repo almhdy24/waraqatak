@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../services/inventory_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../widgets/app_design_tokens.dart';
 import 'barcode_scanner_screen.dart';
 import 'stock_movements_screen.dart';
 import '../widgets/responsive.dart';
@@ -26,7 +28,8 @@ class InventoryScreen extends StatefulWidget {
   static Future<bool> showAdjustDialog(
       BuildContext context, Product product) async {
     final l10n = AppLocalizations.of(context);
-    final deltaCtrl = TextEditingController();
+    bool isAdd = true;
+    final qtyCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
     String selectedReason = 'count_gain';
     bool adjusted = false;
@@ -64,9 +67,14 @@ class InventoryScreen extends StatefulWidget {
             bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: StatefulBuilder(
           builder: (ctx, setSheet) {
-            final delta = double.tryParse(deltaCtrl.text) ?? 0;
+            final cs = Theme.of(ctx).colorScheme;
+            final successColor = AppDesignTokens.semanticSuccess(ctx);
+            final dangerColor = AppDesignTokens.semanticDanger(ctx);
+            final activeColor = isAdd ? successColor : dangerColor;
+
+            final qty = FormatUtils.parseQuantity(qtyCtrl.text) ?? 0.0;
+            final delta = isAdd ? qty : -qty;
             final newQty = product.stockQuantity + delta;
-            final isAdd = delta > 0;
 
             return Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -79,19 +87,113 @@ class InventoryScreen extends StatefulWidget {
                       width: 40,
                       height: 4,
                       decoration: BoxDecoration(
-                          color: Theme.of(ctx).colorScheme.outlineVariant,
+                          color: cs.outlineVariant,
                           borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text(l10n.stockAdjustment,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(product.name,
-                      style: TextStyle(
-                          color: Theme.of(ctx).colorScheme.primary,
-                          fontWeight: FontWeight.w600)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(l10n.stockAdjustment,
+                                style: const TextStyle(
+                                    fontSize: 18, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 2),
+                            Text(product.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: cs.primary,
+                                    fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: activeColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: activeColor.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(isAdd ? Icons.add : Icons.remove,
+                                size: 14, color: activeColor),
+                            const SizedBox(width: 4),
+                            Text(
+                              isAdd ? l10n.addStock : l10n.removeStock,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: activeColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Add Stock (+) / Remove Stock (-) selector
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<bool>(
+                      segments: [
+                        ButtonSegment<bool>(
+                          value: true,
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: Text(l10n.addStock),
+                        ),
+                        ButtonSegment<bool>(
+                          value: false,
+                          icon: const Icon(Icons.remove_circle_outline),
+                          label: Text(l10n.removeStock),
+                        ),
+                      ],
+                      selected: {isAdd},
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return isAdd
+                                ? AppDesignTokens.semanticSuccessContainer(ctx)
+                                : AppDesignTokens.semanticDangerContainer(ctx);
+                          }
+                          return null;
+                        }),
+                        foregroundColor: WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.selected)) {
+                            return activeColor;
+                          }
+                          return null;
+                        }),
+                      ),
+                      onSelectionChanged: (set) {
+                        final newIsAdd = set.first;
+                        setSheet(() {
+                          isAdd = newIsAdd;
+                          if (isAdd &&
+                              const ['count_loss', 'damage_loss', 'expiry_loss']
+                                  .contains(selectedReason)) {
+                            selectedReason = 'count_gain';
+                          } else if (!isAdd &&
+                              const ['count_gain', 'opening_stock']
+                                  .contains(selectedReason)) {
+                            selectedReason = 'count_loss';
+                          }
+                          validationError = null;
+                        });
+                      },
+                    ),
+                  ),
                   const SizedBox(height: 16),
 
                   // Current / new qty display
@@ -103,29 +205,28 @@ class InventoryScreen extends StatefulWidget {
                           value: FormatUtils.formatQuantity(
                               product.stockQuantity,
                               unit: product.unit),
-                          color: Colors.grey,
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Icon(
-                            l10n.isArabic
-                                ? Icons.arrow_back
-                                : Icons.arrow_forward,
-                            color: delta != 0
-                                ? (isAdd ? Colors.green : Colors.red)
-                                : Colors.grey),
+                          l10n.isArabic
+                              ? Icons.arrow_back
+                              : Icons.arrow_forward,
+                          color: qty > 0 ? activeColor : cs.outlineVariant,
+                        ),
                       ),
                       Expanded(
                         child: _QtyBox(
                           label: l10n.newStockQuantity,
-                          value: delta != 0
+                          value: qty > 0
                               ? FormatUtils.formatQuantity(newQty,
                                   unit: product.unit)
                               : '—',
-                          color: delta != 0
-                              ? (newQty >= 0 ? Colors.green : Colors.red)
-                              : Colors.grey,
+                          color: qty > 0
+                              ? (newQty >= 0 ? activeColor : dangerColor)
+                              : cs.outlineVariant,
                         ),
                       ),
                     ],
@@ -133,44 +234,60 @@ class InventoryScreen extends StatefulWidget {
                   const SizedBox(height: 16),
 
                   TextField(
-                    controller: deltaCtrl,
+                    controller: qtyCtrl,
                     decoration: InputDecoration(
-                      labelText: l10n.adjustmentDelta,
-                      prefixIcon: const Icon(Icons.tune),
+                      labelText: l10n.adjustmentQuantity,
+                      prefixIcon: Icon(
+                        isAdd
+                            ? Icons.add_circle_outline
+                            : Icons.remove_circle_outline,
+                        color: activeColor,
+                      ),
+                      suffixText: product.unit?.isNotEmpty == true
+                          ? product.unit
+                          : null,
+                      helperText: qty > 0
+                          ? '${isAdd ? '+' : '−'} ${FormatUtils.formatQuantity(qty)} ${product.unit ?? ''}'
+                          : null,
+                      helperStyle: TextStyle(
+                        color: activeColor,
+                        fontWeight: FontWeight.bold,
+                      ),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
-                        signed: true, decimal: true),
+                      decimal: true,
+                      signed: false,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
+                    ],
                     autofocus: true,
                     onChanged: (_) => setSheet(() {
-                      final curDelta = double.tryParse(deltaCtrl.text) ?? 0;
-                      if (curDelta < 0 && selectedReason == 'count_gain') {
-                        selectedReason = 'count_loss';
-                      } else if (curDelta >= 0 && selectedReason == 'count_loss') {
-                        selectedReason = 'count_gain';
-                      }
+                      validationError = null;
                     }),
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    initialValue: (delta < 0
+                    initialValue: (isAdd
                             ? const [
+                                'count_gain',
+                                'opening_stock',
+                                'entry_correction',
+                                'other',
+                              ]
+                            : const [
                                 'count_loss',
                                 'damage_loss',
                                 'expiry_loss',
                                 'entry_correction',
                                 'other',
-                              ]
-                            : const [
-                                'count_gain',
-                                'opening_stock',
-                                'entry_correction',
-                                'other',
                               ])
                         .contains(selectedReason)
                         ? selectedReason
-                        : (delta < 0 ? 'count_loss' : 'count_gain'),
+                        : (isAdd ? 'count_gain' : 'count_loss'),
                     decoration: InputDecoration(
                       labelText: l10n.adjustmentReason,
                       prefixIcon: const Icon(Icons.category_outlined),
@@ -178,17 +295,17 @@ class InventoryScreen extends StatefulWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    items: (delta < 0
+                    items: (isAdd
                             ? const [
-                                'count_loss',
-                                'damage_loss',
-                                'expiry_loss',
+                                'count_gain',
+                                'opening_stock',
                                 'entry_correction',
                                 'other',
                               ]
                             : const [
-                                'count_gain',
-                                'opening_stock',
+                                'count_loss',
+                                'damage_loss',
+                                'expiry_loss',
                                 'entry_correction',
                                 'other',
                               ])
@@ -226,17 +343,17 @@ class InventoryScreen extends StatefulWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Theme.of(ctx).colorScheme.errorContainer.withValues(alpha: 0.5),
+                        color: cs.errorContainer.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.error_outline, size: 16, color: Theme.of(ctx).colorScheme.error),
+                          Icon(Icons.error_outline, size: 16, color: cs.error),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               validationError!,
-                              style: TextStyle(fontSize: 12, color: Theme.of(ctx).colorScheme.error),
+                              style: TextStyle(fontSize: 12, color: cs.error),
                             ),
                           ),
                         ],
@@ -247,22 +364,28 @@ class InventoryScreen extends StatefulWidget {
                   SizedBox(
                     width: double.infinity,
                     height: 50,
-                    child: FilledButton(
+                    child: FilledButton.icon(
                       onPressed: isSaving
                           ? null
                           : () async {
-                              final d = double.tryParse(deltaCtrl.text);
+                              final parsedQty =
+                                  FormatUtils.parseQuantity(qtyCtrl.text);
                               final notes = notesCtrl.text.trim();
-                              if (d == null || d == 0) {
-                                setSheet(() => validationError = l10n.enterAdjustmentDelta);
+                              if (parsedQty == null || parsedQty <= 0) {
+                                setSheet(() => validationError =
+                                    l10n.enterAdjustmentDelta);
                                 return;
                               }
-                              if (product.stockQuantity + d < 0) {
-                                setSheet(() => validationError = l10n.stockCannotBeNegative);
+                              final effectiveDelta =
+                                  isAdd ? parsedQty : -parsedQty;
+                              if (product.stockQuantity + effectiveDelta < 0) {
+                                setSheet(() => validationError =
+                                    l10n.stockCannotBeNegative);
                                 return;
                               }
                               if (selectedReason == 'other' && notes.isEmpty) {
-                                setSheet(() => validationError = l10n.adjustmentReasonRequired);
+                                setSheet(() => validationError =
+                                    l10n.adjustmentReasonRequired);
                                 return;
                               }
                               setSheet(() {
@@ -272,7 +395,7 @@ class InventoryScreen extends StatefulWidget {
                               try {
                                 await InventoryService.adjust(
                                   productId: product.id!,
-                                  delta: d,
+                                  delta: effectiveDelta,
                                   reason: selectedReason,
                                   notes: notes.isNotEmpty ? notes : null,
                                 );
@@ -295,15 +418,27 @@ class InventoryScreen extends StatefulWidget {
                               }
                             },
                       style: FilledButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12))),
-                      child: isSaving
+                        backgroundColor: activeColor,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: isSaving
+                          ? const SizedBox.shrink()
+                          : Icon(isAdd
+                              ? Icons.add_circle_outline
+                              : Icons.remove_circle_outline),
+                      label: isSaving
                           ? const SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
                             )
-                          : Text(l10n.confirmStockAdjustment),
+                          : Text(isAdd
+                              ? l10n.confirmAddStock
+                              : l10n.confirmRemoveStock),
                     ),
                   ),
                 ],

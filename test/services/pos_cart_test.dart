@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/models/product.dart';
+import 'package:warqatek/models/product_unit.dart';
 import 'package:warqatek/services/pos_cart.dart';
+import 'package:warqatek/utils/format_utils.dart';
 
 void main() {
   const pen = Product(id: 1, name: 'قلم', salePrice: 500, stockQuantity: 3);
@@ -70,6 +72,58 @@ void main() {
       c.clear();
       expect(c.isEmpty, isTrue);
       expect(c.discount, 0);
+    });
+
+    test('direct decimal quantity input preserves precision and totals', () {
+      final c = PosCart();
+      // Add fractional quantity 0.125
+      expect(c.add(pen, quantity: 0.125), isNull);
+      expect(c.lines.single.quantity, 0.125);
+      expect(c.subtotal, 62.5); // 0.125 * 500 = 62.5
+
+      // Update to 2.5
+      expect(c.setQuantity(0, 2.5), isNull);
+      expect(c.lines.single.quantity, 2.5);
+      expect(c.subtotal, 1250); // 2.5 * 500 = 1250
+
+      // Exceeding remaining stock with decimal (stock is 3, set to 3.1)
+      expect(c.setQuantity(0, 3.1), PosCartError.outOfStock);
+      expect(c.lines.single.quantity, 2.5);
+
+      // Setting exactly to remaining stock
+      expect(c.setQuantity(0, 3.0), isNull);
+      expect(c.lines.single.quantity, 3.0);
+    });
+
+    test('decimal quantity with unit conversion respects base stock', () {
+      // Product with stock 30
+      const bulkItem = Product(id: 10, name: 'سكر', salePrice: 100, stockQuantity: 30);
+      const sackUnit = ProductUnit(id: 1, productId: 10, unitName: 'شوال', conversionFactor: 10, salePrice: 950);
+
+      final c = PosCart();
+      // Add 2.5 sacks = 25 units in base stock
+      expect(c.add(bulkItem, quantity: 2.5, unit: sackUnit), isNull);
+      expect(c.lines.single.quantity, 2.5);
+      expect(c.lines.single.baseQuantity, 25.0);
+      expect(c.baseQuantityOf(10), 25.0);
+
+      // Adding another 0.6 sacks = 6 units (total 31 > 30) -> out of stock
+      expect(c.add(bulkItem, quantity: 0.6, unit: sackUnit), PosCartError.outOfStock);
+
+      // Adding 0.5 sacks = 5 units (total 30 == 30) -> succeeds
+      expect(c.add(bulkItem, quantity: 0.5, unit: sackUnit), isNull);
+      expect(c.lines.single.quantity, 3.0);
+      expect(c.lines.single.baseQuantity, 30.0);
+    });
+
+    test('FormatUtils.parseQuantity handles decimals and locale separators', () {
+      expect(FormatUtils.parseQuantity('44.5'), 44.5);
+      expect(FormatUtils.parseQuantity('25,25'), 25.25);
+      expect(FormatUtils.parseQuantity('0،125'), 0.125);
+      expect(FormatUtils.parseQuantity('  100.50  '), 100.5);
+      expect(FormatUtils.parseQuantity(''), isNull);
+      expect(FormatUtils.parseQuantity(null), isNull);
+      expect(FormatUtils.parseQuantity('abc'), isNull);
     });
   });
 }

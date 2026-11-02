@@ -17,6 +17,7 @@ import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
+import 'inventory_screen.dart';
 import 'reports/report_date_filter.dart';
 
 class StockMovementsScreen extends StatefulWidget {
@@ -184,6 +185,16 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
         title: Text(l10n.stockMovementsReport),
         centerTitle: true,
         actions: [
+          if (_selectedProduct != null)
+            IconButton(
+              icon: const Icon(Icons.tune),
+              tooltip: l10n.stockAdjustment,
+              onPressed: () async {
+                final changed = await InventoryScreen.showAdjustDialog(
+                    context, _selectedProduct!);
+                if (changed) _load();
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined),
             tooltip: l10n.printOrShareReport,

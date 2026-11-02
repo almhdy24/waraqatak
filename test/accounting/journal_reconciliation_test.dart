@@ -11,6 +11,7 @@ import 'package:warqatek/models/document_item.dart';
 import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/models/product.dart';
 import 'package:warqatek/services/accounting/journal_reconciliation_service.dart';
+import 'package:warqatek/services/accounting/ledger.dart';
 import 'package:warqatek/services/database_diagnostic_service.dart';
 
 void main() {
@@ -201,5 +202,196 @@ void main() {
   test('5. DatabaseDiagnosticService integrates reconciliation checks seamlessly', () async {
     final report = await DatabaseDiagnosticService.runDiagnostics();
     expect(report.totalChecksRun, greaterThanOrEqualTo(8));
+  });
+
+  test('6. Document journal effect ignores reversed entries and reversal entries', () async {
+    final rawDb = await db.database;
+
+    final pId = await db.insertProduct(
+      Product(
+        name: 'منتج اختبار العكس',
+        salePrice: 100.0,
+        purchasePrice: 60.0,
+        stockQuantity: 10.0,
+      ),
+    );
+
+    // Create an invoice of 100 SDG
+    final inv = Document(
+      type: 'invoice',
+      documentNumber: 'INV-REV-TEST',
+      date: DateTime(2026, 4, 1),
+      subtotal: 100.0,
+      discount: 0.0,
+      taxRate: 0.0,
+      taxAmount: 0.0,
+      total: 100.0,
+      paid: 100.0,
+      remaining: 0.0,
+      paymentMethod: 'cash',
+      status: DocumentStatus.paid,
+      currencyCode: 'SDG',
+    );
+    final docId = await db.insertDocumentWithItems(inv, [
+      DocumentItem(
+        documentId: 0,
+        productId: pId,
+        description: 'بند',
+        quantity: 1.0,
+        price: 100.0,
+        total: 100.0,
+      ),
+    ]);
+
+    // Clear auto shadow entries to test explicit manual reversals
+    await rawDb.delete('journal_lines');
+    await rawDb.delete('journal_entries');
+
+    // Insert an initial entry (Entry 1)
+    final origEntryId = await rawDb.insert('journal_entries', {
+      'entry_no': 'JE-ORIG-1',
+      'effective_date': '2026-04-01',
+      'posted_at': DateTime.now().toIso8601String(),
+      'source_type': 'invoice',
+      'source_id': docId,
+      'origin': 'live',
+      'revision': 1,
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': origEntryId,
+      'account_code': Accounts.receivables.code,
+      'debit_minor': 10000,
+      'credit_minor': 0,
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': origEntryId,
+      'account_code': Accounts.salesRevenue.code,
+      'debit_minor': 0,
+      'credit_minor': 10000,
+    });
+
+    // Insert a reversal entry reversing Entry 1
+    final revEntryId = await rawDb.insert('journal_entries', {
+      'entry_no': 'JE-REV-1',
+      'effective_date': '2026-04-01',
+      'posted_at': DateTime.now().toIso8601String(),
+      'source_type': 'invoice',
+      'source_id': docId,
+      'reverses_entry_id': origEntryId,
+      'origin': 'live',
+      'revision': 2,
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': revEntryId,
+      'account_code': Accounts.salesRevenue.code,
+      'debit_minor': 10000,
+      'credit_minor': 0,
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': revEntryId,
+      'account_code': Accounts.receivables.code,
+      'debit_minor': 0,
+      'credit_minor': 10000,
+    });
+
+    // Insert new active revised entry for the document (100 SDG = 10000 minor)
+    final activeEntryId = await rawDb.insert('journal_entries', {
+      'entry_no': 'JE-ACTIVE-1',
+      'effective_date': '2026-04-01',
+      'posted_at': DateTime.now().toIso8601String(),
+      'source_type': 'invoice',
+      'source_id': docId,
+      'origin': 'live',
+      'revision': 3,
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': activeEntryId,
+      'account_code': Accounts.receivables.code,
+      'debit_minor': 10000,
+      'credit_minor': 0,
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': activeEntryId,
+      'account_code': Accounts.salesRevenue.code,
+      'debit_minor': 0,
+      'credit_minor': 10000,
+    });
+
+    // Run reconciliation: should NOT produce document_journal_effect_mismatch!
+    final findings = await JournalReconciliationService.runReconciliation();
+    final effectMismatches = findings.where((f) => f.code == 'document_journal_effect_mismatch').toList();
+    expect(effectMismatches, isEmpty, reason: 'Reversed entry and reversal entry must be excluded');
+  });
+
+  test('7. Purchase document journal effect calculates net debits (debit_minor - credit_minor)', () async {
+    final rawDb = await db.database;
+
+    final pId = await db.insertProduct(
+      Product(
+        name: 'منتج شراء بصافي مدين',
+        salePrice: 150.0,
+        purchasePrice: 100.0,
+        stockQuantity: 10.0,
+      ),
+    );
+
+    // Create a purchase document of 80 SDG (e.g. 100 gross minus 20 purchase adjustment/discount)
+    final pur = Document(
+      type: 'purchase',
+      documentNumber: 'PUR-NET-TEST',
+      date: DateTime(2026, 4, 2),
+      subtotal: 80.0,
+      discount: 0.0,
+      taxRate: 0.0,
+      taxAmount: 0.0,
+      total: 80.0,
+      paid: 80.0,
+      remaining: 0.0,
+      paymentMethod: 'bank',
+      status: DocumentStatus.paid,
+      currencyCode: 'SDG',
+    );
+    final docId = await db.insertDocumentWithItems(pur, [
+      DocumentItem(
+        documentId: 0,
+        productId: pId,
+        description: 'بند شراء',
+        quantity: 1.0,
+        price: 80.0,
+        total: 80.0,
+      ),
+    ]);
+
+    // Clear auto shadow entries to test explicit net debit calculation
+    await rawDb.delete('journal_lines');
+    await rawDb.delete('journal_entries');
+
+    // Insert journal lines with gross debit 10,000 minor and credit 2,000 minor on inventory
+    // Net effect is 8,000 minor = 80 SDG
+    final entryId = await rawDb.insert('journal_entries', {
+      'entry_no': 'JE-PUR-NET-1',
+      'effective_date': '2026-04-02',
+      'posted_at': DateTime.now().toIso8601String(),
+      'source_type': 'purchase',
+      'source_id': docId,
+      'origin': 'live',
+      'revision': 1,
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': entryId,
+      'account_code': Accounts.inventory.code,
+      'debit_minor': 10000,
+      'credit_minor': 2000, // discount/adjustment credit
+    });
+    await rawDb.insert('journal_lines', {
+      'entry_id': entryId,
+      'account_code': Accounts.bank.code,
+      'debit_minor': 0,
+      'credit_minor': 8000,
+    });
+
+    final findings = await JournalReconciliationService.runReconciliation();
+    final effectMismatches = findings.where((f) => f.code == 'document_journal_effect_mismatch').toList();
+    expect(effectMismatches, isEmpty, reason: 'Net effect (10000 - 2000 = 8000) matches document total of 80 SDG');
   });
 }

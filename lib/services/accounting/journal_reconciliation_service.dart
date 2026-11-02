@@ -150,7 +150,12 @@ class JournalReconciliationService {
         SELECT l.account_code, l.debit_minor, l.credit_minor
         FROM journal_lines l
         JOIN journal_entries e ON l.entry_id = e.id
-        WHERE e.source_id = ? AND e.source_type = ?
+        WHERE e.source_id = ? 
+          AND e.source_type = ?
+          AND e.reverses_entry_id IS NULL
+          AND e.id NOT IN (
+            SELECT reverses_entry_id FROM journal_entries WHERE reverses_entry_id IS NOT NULL
+          )
       ''', [docId, doc['type']]);
 
       if (lines.isEmpty) continue; // Unposted or foreign currency document
@@ -158,21 +163,21 @@ class JournalReconciliationService {
       int journalDocTotalMinor = 0;
       final docType = doc['type'] as String;
       if (docType == 'invoice') {
-        // Sales revenue (4100) + VAT output (2120) credits
+        // Sales revenue (4100) + VAT output (2120) net credits
         for (final l in lines) {
           final code = l['account_code'] as String;
           if (code == Accounts.salesRevenue.code || code == Accounts.vatOutput.code) {
-            journalDocTotalMinor += (l['credit_minor'] as num).toInt();
+            journalDocTotalMinor += ((l['credit_minor'] as num).toInt() - (l['debit_minor'] as num).toInt());
           }
         }
       } else {
-        // Purchases: Inventory (1140) + operating expenses (6100) + input VAT (1150) debits
+        // Purchases: Inventory (1140) + operating expenses (6100) + input VAT (1150) net debits
         for (final l in lines) {
           final code = l['account_code'] as String;
           if (code == Accounts.inventory.code ||
               code == Accounts.operatingExpenses.code ||
               code == Accounts.vatInput.code) {
-            journalDocTotalMinor += (l['debit_minor'] as num).toInt();
+            journalDocTotalMinor += ((l['debit_minor'] as num).toInt() - (l['credit_minor'] as num).toInt());
           }
         }
       }

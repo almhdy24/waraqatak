@@ -45,6 +45,16 @@ class FormatUtils {
     return formatted;
   }
 
+  /// Parses a user-input quantity string into a double.
+  /// Handles decimal separators like '.' and ',' and Arabic comma '،'.
+  /// Returns null if empty, invalid, or non-numeric.
+  static double? parseQuantity(String? text) {
+    if (text == null) return null;
+    final normalized = text.trim().replaceAll(',', '.').replaceAll('،', '.');
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized);
+  }
+
   /// Formats a tax rate cleanly, preserving decimal precision without showing
   /// trailing zeros (e.g. 15.0 -> "15%", 15.5 -> "15.5%", 5.25 -> "5.25%").
   static String formatTaxRate(double rate) {

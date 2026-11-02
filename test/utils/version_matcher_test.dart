@@ -119,5 +119,21 @@ void main() {
         isTrue,
       );
     });
+
+    test('Orders 1.1.5+20 < 1.1.5+21 correctly', () {
+      final v20 = ParsedVersion.tryParse('1.1.5+20')!;
+      final v21 = ParsedVersion.tryParse('1.1.5+21')!;
+      expect(v20.compareTo(v21, compareBuild: true), lessThan(0));
+      expect(v21.compareTo(v20, compareBuild: true), greaterThan(0));
+
+      expect(
+        VersionMatcher.matches(appVersion: '1.1.5+20', minVersion: '1.1.5+21'),
+        isFalse,
+      );
+      expect(
+        VersionMatcher.matches(appVersion: '1.1.5+21', minVersion: '1.1.5+21'),
+        isTrue,
+      );
+    });
   });
 }

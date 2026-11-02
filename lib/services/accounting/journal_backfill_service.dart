@@ -148,153 +148,207 @@ class JournalBackfillService {
     int batchSize = defaultBatchSize,
     void Function(int processed, int total)? onProgress,
   }) async {
-    final cursorVal = await DatabaseHelper.instance.getSetting(
-      settingKeyBackfillCursor,
-      txn: db,
-    );
-    var cursor = cursorVal != null ? (int.tryParse(cursorVal) ?? 0) : 0;
-
-    // Invariant: automatic safety backup before modifying historical data (first start only)
-    if (cursor == 0) {
-      try {
-        await BackupService.createSafetyBackup();
-      } catch (_) {}
-
-      // Clean any prior partial legacy backfill entries if starting fresh
-      await db.delete(
-        'journal_entries',
-        where: "origin = 'legacy_backfill'",
+    try {
+      final cursorVal = await DatabaseHelper.instance.getSetting(
+        settingKeyBackfillCursor,
+        txn: db,
       );
-    }
+      var cursor = cursorVal != null ? (int.tryParse(cursorVal) ?? 0) : 0;
 
-    final bRows = await db.query('businesses', limit: 1);
-    final business = bRows.isNotEmpty ? Business.fromMap(bRows.first) : null;
-    final baseCurrency = business?.currencyCode ?? 'SDG';
-    final decimalDigits = Currency.decimalDigitsForCode(baseCurrency);
+      // Invariant: automatic safety backup before modifying historical data (first start only)
+      if (cursor == 0) {
+        try {
+          await BackupService.createSafetyBackup();
+        } catch (_) {}
 
-    // Derive ledger entries for the base currency (offloaded to worker isolate in LedgerService)
-    final book = await LedgerService.buildDerived(
-      currencyCode: baseCurrency,
-      executor: db,
-    );
-    final derivedEntries = book.entries;
-    final total = derivedEntries.length;
+        // When starting fresh (cursor == 0), purge ALL journal lines and journal entries completely
+        await db.delete('journal_lines');
+        await db.delete('journal_entries');
+      }
 
-    var backfilledCount = 0;
+      final bRows = await db.query('businesses', limit: 1);
+      final business = bRows.isNotEmpty ? Business.fromMap(bRows.first) : null;
+      final baseCurrency = business?.currencyCode ?? 'SDG';
+      final decimalDigits = Currency.decimalDigitsForCode(baseCurrency);
 
-    // Process in bounded, atomic, checkpointed batches
-    while (cursor < total) {
-      final end = (cursor + batchSize < total) ? cursor + batchSize : total;
-      final batch = derivedEntries.sublist(cursor, end);
+      // Derive ledger entries for the base currency (offloaded to worker isolate in LedgerService)
+      final book = await LedgerService.buildDerived(
+        currencyCode: baseCurrency,
+        executor: db,
+      );
+      final derivedEntries = book.entries;
+      final total = derivedEntries.length;
 
-      await db.transaction((txn) async {
-        var seq = cursor + 1;
-        for (final e in batch) {
-          if (e.lines.isEmpty) {
-            seq++;
-            continue; // skip zero-line uncosted placeholders
-          }
+      var backfilledCount = 0;
 
-          final lines = <JournalLineDraft>[];
-          var totalDebit = 0;
-          var totalCredit = 0;
+      // Process in bounded, atomic, checkpointed batches
+      while (cursor < total) {
+        final end = (cursor + batchSize < total) ? cursor + batchSize : total;
+        final batch = derivedEntries.sublist(cursor, end);
 
-          for (final l in e.lines) {
-            final drMinor = MoneyUtils.toMinorUnits(l.debit, decimalDigits);
-            final crMinor = MoneyUtils.toMinorUnits(l.credit, decimalDigits);
-            totalDebit += drMinor;
-            totalCredit += crMinor;
-            lines.add(
-              JournalLineDraft(
-                accountCode: l.account.code,
-                debitMinor: drMinor,
-                creditMinor: crMinor,
-              ),
-            );
-          }
+        await db.transaction((txn) async {
+          var seq = cursor + 1;
+          for (final e in batch) {
+            if (e.lines.isEmpty) {
+              seq++;
+              continue; // skip zero-line uncosted placeholders
+            }
 
-          // Guarantee exact integer minor unit balance
-          final diff = totalDebit - totalCredit;
-          if (diff != 0 && lines.isNotEmpty) {
-            final firstCredit = lines.firstWhere(
-              (l) => l.creditMinor > 0,
-              orElse: () => lines.first,
-            );
-            final idx = lines.indexOf(firstCredit);
-            if (firstCredit.creditMinor > 0) {
-              lines[idx] = JournalLineDraft(
-                accountCode: firstCredit.accountCode,
-                debitMinor: firstCredit.debitMinor,
-                creditMinor: firstCredit.creditMinor + diff,
-                productId: firstCredit.productId,
-                contactId: firstCredit.contactId,
-              );
-            } else {
-              lines[0] = JournalLineDraft(
-                accountCode: lines[0].accountCode,
-                debitMinor: lines[0].debitMinor - diff,
-                creditMinor: lines[0].creditMinor,
-                productId: lines[0].productId,
-                contactId: lines[0].contactId,
+            final lines = <JournalLineDraft>[];
+            var totalDebit = 0;
+            var totalCredit = 0;
+
+            for (final l in e.lines) {
+              final drMinor = MoneyUtils.toMinorUnits(l.debit, decimalDigits);
+              final crMinor = MoneyUtils.toMinorUnits(l.credit, decimalDigits);
+              totalDebit += drMinor;
+              totalCredit += crMinor;
+              lines.add(
+                JournalLineDraft(
+                  accountCode: l.account.code,
+                  debitMinor: drMinor,
+                  creditMinor: crMinor,
+                ),
               );
             }
+
+            // Guarantee exact integer minor unit balance
+            final diff = totalDebit - totalCredit;
+            if (diff != 0 && lines.isNotEmpty) {
+              final firstCredit = lines.firstWhere(
+                (l) => l.creditMinor > 0,
+                orElse: () => lines.first,
+              );
+              final idx = lines.indexOf(firstCredit);
+              if (firstCredit.creditMinor > 0) {
+                lines[idx] = JournalLineDraft(
+                  accountCode: firstCredit.accountCode,
+                  debitMinor: firstCredit.debitMinor,
+                  creditMinor: firstCredit.creditMinor + diff,
+                  productId: firstCredit.productId,
+                  contactId: firstCredit.contactId,
+                );
+              } else {
+                lines[0] = JournalLineDraft(
+                  accountCode: lines[0].accountCode,
+                  debitMinor: lines[0].debitMinor - diff,
+                  creditMinor: lines[0].creditMinor,
+                  productId: lines[0].productId,
+                  contactId: lines[0].contactId,
+                );
+              }
+            }
+
+            final sourceType = _mapSourceType(e.source);
+            final draft = JournalEntryDraft(
+              entryNo: 'JE-BACKFILL-$seq',
+              effectiveDate: e.date,
+              postedAt: DateTime.now(),
+              sourceType: sourceType,
+              sourceId: e.documentId,
+              origin: 'legacy_backfill',
+              memo: e.reference,
+              lines: lines,
+            );
+            seq++;
+
+            await JournalWriter.write(txn, draft, lockDateOverride: e.date);
+            backfilledCount++;
           }
 
-          final sourceType = _mapSourceType(e.source);
-          final draft = JournalEntryDraft(
-            entryNo: 'JE-BACKFILL-$seq',
-            effectiveDate: e.date,
-            postedAt: DateTime.now(),
-            sourceType: sourceType,
-            sourceId: e.documentId,
-            origin: 'legacy_backfill',
-            memo: e.reference,
-            lines: lines,
+          // Atomically commit checkpoint cursor with the batch
+          await DatabaseHelper.instance.setSetting(
+            settingKeyBackfillCursor,
+            end.toString(),
+            txn: txn,
           );
-          seq++;
+        });
 
-          await JournalWriter.write(txn, draft, lockDateOverride: e.date);
-          backfilledCount++;
-        }
+        cursor = end;
+        onProgress?.call(cursor, total);
 
-        // Atomically commit checkpoint cursor with the batch
+        // Yield to the event loop so UI / compositor never starves or drops frames
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
+
+      // Rigorous account-by-account parity check across full derived trial balance
+      await verifyParity(executor: db, currencyCode: baseCurrency);
+
+      // Parity verified: mark backfill completed and clear cursor
+      await db.transaction((txn) async {
+        await DatabaseHelper.instance.setSetting(
+          settingKeyBackfilledAt,
+          DateTime.now().toIso8601String(),
+          txn: txn,
+        );
         await DatabaseHelper.instance.setSetting(
           settingKeyBackfillCursor,
-          end.toString(),
+          null,
           txn: txn,
         );
       });
 
-      cursor = end;
-      onProgress?.call(cursor, total);
+      await DatabaseHelper.instance.logAuditEvent(
+        'backfill_completed',
+        details: 'entries=$total',
+      );
 
-      // Yield to the event loop so UI / compositor never starves or drops frames
-      await Future.delayed(const Duration(milliseconds: 10));
+      return backfilledCount;
+    } catch (e) {
+      // If verifyParity fails or any exception occurs, clean up any incomplete/corrupted entries
+      // and reset journal_backfill_cursor so the database does not stay in a corrupted double-counted state.
+      try {
+        await db.delete('journal_lines');
+        await db.delete('journal_entries');
+        await DatabaseHelper.instance.setSetting(
+          settingKeyBackfillCursor,
+          null,
+          txn: db,
+        );
+      } catch (_) {}
+      rethrow;
     }
+  }
 
-    // Rigorous account-by-account parity check across full derived trial balance
-    await verifyParity(executor: db, currencyCode: baseCurrency);
+  /// Executes a full, clean journal rebuild:
+  /// 1. Clears journal_lines and journal_entries completely.
+  /// 2. Clears journal_backfilled_at and journal_backfill_cursor in app_settings.
+  /// 3. Re-runs runBackfill(db).
+  /// 4. Asserting that verifyParity succeeds with 100% match.
+  static Future<int> rebuildJournal({
+    Database? dbOverride,
+    int batchSize = defaultBatchSize,
+    void Function(int processed, int total)? onProgress,
+  }) async {
+    final db = dbOverride ?? await DatabaseHelper.instance.database;
 
-    // Parity verified: mark backfill completed and clear cursor
-    await db.transaction((txn) async {
-      await DatabaseHelper.instance.setSetting(
-        settingKeyBackfilledAt,
-        DateTime.now().toIso8601String(),
-        txn: txn,
-      );
-      await DatabaseHelper.instance.setSetting(
-        settingKeyBackfillCursor,
-        null,
-        txn: txn,
-      );
-    });
+    // 1. Clearing journal_lines and journal_entries
+    await db.delete('journal_lines');
+    await db.delete('journal_entries');
 
-    await DatabaseHelper.instance.logAuditEvent(
-      'backfill_completed',
-      details: 'entries=$total',
+    // 2. Clearing journal_backfilled_at and journal_backfill_cursor in app_settings
+    await DatabaseHelper.instance.setSetting(
+      settingKeyBackfilledAt,
+      null,
+      txn: db,
+    );
+    await DatabaseHelper.instance.setSetting(
+      settingKeyBackfillCursor,
+      null,
+      txn: db,
     );
 
-    return backfilledCount;
+    // 3. Re-running JournalBackfillService.runBackfill(db)
+    final count = await runBackfill(
+      db,
+      batchSize: batchSize,
+      onProgress: onProgress,
+    );
+
+    // 4. Asserting that verifyParity succeeds with 100% match
+    await verifyParity(executor: db);
+
+    return count;
   }
 
   /// Verifies parity between persisted journal and derived ledger on an existing database.
