@@ -37,7 +37,7 @@ void main() {
   }
 
   group('AppSnackBar Widget & Lifecycle Tests', () {
-    testWidgets('SnackBar without action: present at 4.9s and gone at 5.5s', (tester) async {
+    testWidgets('SnackBar without action: present at 2.9s and gone at 3.5s', (tester) async {
       await tester.pumpWidget(
         buildTestHost(
           builder: (context) => ElevatedButton(
@@ -54,12 +54,12 @@ void main() {
       expect(find.text('Test message without action'), findsOneWidget);
       expect(find.byType(SnackBar), findsOneWidget);
 
-      // Advance to 4.9s from trigger (4.6s remaining)
-      await tester.pump(const Duration(milliseconds: 4600));
+      // Advance to 2.9s from trigger (2.6s remaining)
+      await tester.pump(const Duration(milliseconds: 2600));
       expect(find.text('Test message without action'), findsOneWidget);
       expect(find.byType(SnackBar), findsOneWidget);
 
-      // Advance past 5.0s to 5.5s (another 600ms)
+      // Advance past 3.0s to 3.5s (another 600ms)
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pumpAndSettle();
 
@@ -67,7 +67,7 @@ void main() {
       expect(find.byType(SnackBar), findsNothing);
     });
 
-    testWidgets('SnackBar with action: present at 4.9s and gone at 5.5s', (tester) async {
+    testWidgets('SnackBar with action: present at 2.9s and gone at 3.5s', (tester) async {
       var actionCount = 0;
       await tester.pumpWidget(
         buildTestHost(
@@ -92,12 +92,12 @@ void main() {
       expect(find.byType(SnackBar), findsOneWidget);
       expect(tester.widget<SnackBar>(find.byType(SnackBar)).persist, isFalse);
 
-      // Advance to 4.9s
-      await tester.pump(const Duration(milliseconds: 4600));
+      // Advance to 2.9s
+      await tester.pump(const Duration(milliseconds: 2600));
       expect(find.text('Action message'), findsOneWidget);
       expect(find.text('Undo'), findsOneWidget);
 
-      // Advance to 5.5s (dismissed and settled)
+      // Advance to 3.5s (dismissed and settled)
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pumpAndSettle();
 
