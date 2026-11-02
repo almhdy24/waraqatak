@@ -25,11 +25,17 @@ class JournalReconciliationService {
     final db = executor ?? await DatabaseHelper.instance.database;
     final findings = <DiagnosticFinding>[];
 
-    // Check if journal tables exist
+    // Check if journal tables exist and have recorded data
     final tables = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name = 'journal_entries'",
     );
     if (tables.isEmpty) return findings;
+
+    final countRes = await db.rawQuery(
+      "SELECT (SELECT COUNT(*) FROM journal_entries) + (SELECT COUNT(*) FROM journal_lines) as c",
+    );
+    final count = (countRes.first['c'] as num?)?.toInt() ?? 0;
+    if (count == 0) return findings;
 
     // Fetch base currency
     final bRows = await db.query('businesses', limit: 1);
@@ -209,7 +215,10 @@ class JournalReconciliationService {
     final journalBalMinor = jRes.isNotEmpty ? (jRes.first['bal'] as num).toInt() : 0;
 
     // Derived reference book valuation
-    final book = await LedgerService.buildDerived(currencyCode: baseCurrency);
+    final book = await LedgerService.buildDerived(
+      currencyCode: baseCurrency,
+      executor: db,
+    );
     final derivedTB = AccountingReports.trialBalance(book.entries);
     final derivedBal = derivedTB.rows
         .firstWhere(

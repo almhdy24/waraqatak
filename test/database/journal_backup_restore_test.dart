@@ -26,6 +26,7 @@ void main() {
 
   tearDownAll(() async {
     try {
+      await DatabaseHelper.instance.closeDatabase();
       if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
     } catch (_) {}
   });

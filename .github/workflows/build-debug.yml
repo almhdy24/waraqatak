@@ -12,6 +12,7 @@ jobs:
   build-debug-apk:
     name: Build Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout

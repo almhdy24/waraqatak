@@ -1,3 +1,4 @@
+import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/currency.dart';
 import '../../models/document_item.dart';
@@ -31,8 +32,11 @@ class LedgerService {
   static const String settingKeyJournalReportsEnabled = 'journal_reports_enabled';
 
   /// Returns whether reports read from the persisted journal.
-  static Future<bool> isJournalReportsEnabled() async {
-    final val = await DatabaseHelper.instance.getSetting(settingKeyJournalReportsEnabled);
+  static Future<bool> isJournalReportsEnabled({DatabaseExecutor? txn}) async {
+    final val = await DatabaseHelper.instance.getSetting(
+      settingKeyJournalReportsEnabled,
+      txn: txn,
+    );
     return val == 'true';
   }
 
@@ -45,10 +49,13 @@ class LedgerService {
   }
 
   /// Always derives double-entry journal on the fly (reference oracle).
-  static Future<LedgerBook> buildDerived({String? currencyCode}) async {
+  static Future<LedgerBook> buildDerived({
+    String? currencyCode,
+    DatabaseExecutor? executor,
+  }) async {
     final db = DatabaseHelper.instance;
-    final business = await db.getFirstBusiness();
-    final data = await db.getLedgerData();
+    final business = await db.getFirstBusiness(txn: executor);
+    final data = await db.getLedgerData(txn: executor);
     final base = business?.currencyCode ?? 'SDG';
 
     final currencies = <String>{
@@ -121,11 +128,11 @@ class LedgerService {
 
     final reportsEnabled = forceDerived
         ? false
-        : (await isJournalReportsEnabled());
+        : (await isJournalReportsEnabled(txn: rawDb));
 
     // Foreign currencies and non-journal mode always use derived ledger
     if (!reportsEnabled || !isBase) {
-      return buildDerived(currencyCode: selected);
+      return buildDerived(currencyCode: selected, executor: rawDb);
     }
 
     // Load persisted journal entries for base currency

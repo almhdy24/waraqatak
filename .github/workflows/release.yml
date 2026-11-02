@@ -22,6 +22,7 @@ jobs:
   build-and-release:
     name: Build & Publish Release
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout

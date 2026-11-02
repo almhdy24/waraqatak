@@ -18,6 +18,7 @@ jobs:
   analyze-and-test:
     name: Analyze & Test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -51,6 +52,7 @@ jobs:
   build-apk:
     name: Build Release APKs
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: analyze-and-test
 
     steps:

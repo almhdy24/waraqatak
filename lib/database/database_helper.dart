@@ -2265,9 +2265,9 @@ class DatabaseHelper {
     return db.insert('businesses', b.toMap());
   }
 
-  Future<Business?> getFirstBusiness() async {
-    final db = await database;
-    final maps = await db.query('businesses', limit: 1);
+  Future<Business?> getFirstBusiness({DatabaseExecutor? txn}) async {
+    final exec = txn ?? (await database);
+    final maps = await exec.query('businesses', limit: 1);
     if (maps.isEmpty) return null;
     return Business.fromMap(maps.first);
   }
@@ -5329,7 +5329,27 @@ class DatabaseHelper {
       List<DocumentPayment> payments,
     })
   >
-  getLedgerData() async {
+  getLedgerData({DatabaseExecutor? txn}) async {
+    if (txn != null) {
+      final docs = await txn.query('documents', orderBy: 'date ASC, id ASC');
+      final items = await txn.query('document_items');
+      final products = await txn.query('products');
+      final movements = await txn.query(
+        'stock_movements',
+        orderBy: 'date ASC, id ASC',
+      );
+      final payments = await txn.query(
+        'document_payments',
+        orderBy: 'date ASC, id ASC',
+      );
+      return (
+        documents: docs.map(Document.fromMap).toList(),
+        items: items.map(DocumentItem.fromMap).toList(),
+        products: products.map(Product.fromMap).toList(),
+        movements: movements.map(StockMovement.fromMap).toList(),
+        payments: payments.map(DocumentPayment.fromMap).toList(),
+      );
+    }
     final db = await database;
     return db.transaction((txn) async {
       final docs = await txn.query('documents', orderBy: 'date ASC, id ASC');

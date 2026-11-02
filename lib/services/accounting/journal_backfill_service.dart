@@ -228,7 +228,10 @@ class JournalBackfillService {
     final decimalDigits = Currency.decimalDigitsForCode(selectedCurrency);
 
     // Always compare against derived reference
-    final book = await LedgerService.buildDerived(currencyCode: selectedCurrency);
+    final book = await LedgerService.buildDerived(
+      currencyCode: selectedCurrency,
+      executor: db,
+    );
     final derivedTB = AccountingReports.trialBalance(book.entries);
 
     final journalRows = await db.rawQuery('''
@@ -275,7 +278,7 @@ class JournalBackfillService {
   }) async {
     final db = executor ?? await DatabaseHelper.instance.database;
     final isBackfilled = await isBackfillCompleted(txn: db);
-    final isReports = await LedgerService.isJournalReportsEnabled();
+    final isReports = await LedgerService.isJournalReportsEnabled(txn: db);
 
     int count = 0;
     try {
