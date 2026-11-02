@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme_mode_scope.dart';
 import 'database/database_helper.dart';
 import 'localization/app_localizations.dart';
+import 'services/accounting/journal_backfill_service.dart';
 import 'services/app_diagnostics_service.dart';
 import 'services/license_service.dart';
 import 'screens/splash_screen.dart';
@@ -39,6 +40,14 @@ Future<void> main() async {
       final lang = prefs.getString('language') ?? 'ar';
       final themeMode = ThemeModeScope.decode(prefs.getString('theme_mode'));
       runApp(WarqatekApp(initialLanguage: lang, initialThemeMode: themeMode));
+
+      // Asynchronously trigger journal backfill in background after UI renders
+      unawaited(
+        JournalBackfillService.backfillIfNeeded().catchError((e, st) {
+          developer.log('Startup backfill error', error: e, stackTrace: st);
+          return 0;
+        }),
+      );
     },
     (error, stack) {
       developer.log('Uncaught zone error', error: error, stackTrace: stack);

@@ -20,7 +20,6 @@ import '../models/app_notification.dart';
 import '../models/diagnostic_report.dart';
 import '../models/product_unit.dart';
 import '../models/stocktake.dart';
-import '../services/accounting/journal_backfill_service.dart';
 import '../services/accounting/journal_writer.dart';
 import '../services/accounting/stock_ledger.dart';
 import '../services/inventory_costing_service.dart';
@@ -48,15 +47,6 @@ class DatabaseHelper {
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _createTables,
       onUpgrade: _upgradeTables,
-      onOpen: (db) async {
-        // Decouple backfill from the critical onOpen startup path so first frame
-        // and splash render immediately without blocking the UI thread.
-        Future.microtask(() async {
-          try {
-            await JournalBackfillService.backfillIfNeeded();
-          } catch (_) {}
-        });
-      },
     );
   }
 
