@@ -105,6 +105,94 @@ class JournalWriter {
     return entryId;
   }
 
+  static int _spCounter = 0;
+
+  static Future<T> _runIsolatedShadow<T>(
+    DatabaseExecutor txn, {
+    required Future<T> Function() action,
+    required T fallback,
+    required String operation,
+  }) async {
+    final shadowEnabled =
+        await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
+    if (!shadowEnabled) return fallback;
+
+    final spName =
+        'sp_shadow_${DateTime.now().microsecondsSinceEpoch}_${++_spCounter}';
+    await txn.execute('SAVEPOINT $spName');
+
+    try {
+      final result = await action();
+      await txn.execute('RELEASE SAVEPOINT $spName');
+      return result;
+    } catch (e) {
+      if (e is PeriodClosedException) {
+        try {
+          await txn.execute('ROLLBACK TO SAVEPOINT $spName');
+          await txn.execute('RELEASE SAVEPOINT $spName');
+        } catch (_) {}
+        rethrow;
+      }
+
+      try {
+        await txn.execute('ROLLBACK TO SAVEPOINT $spName');
+        await txn.execute('RELEASE SAVEPOINT $spName');
+      } catch (_) {}
+
+      try {
+        await DatabaseHelper.instance.logAuditEvent(
+          'shadow_posting_failure',
+          details: 'op=$operation error=$e',
+          txn: txn,
+        );
+      } catch (_) {}
+
+      try {
+        await DatabaseHelper.instance.setSetting(
+          'journal_parity_failed_at',
+          DateTime.now().toIso8601String(),
+          txn: txn,
+        );
+        await DatabaseHelper.instance.setSetting(
+          'journal_parity_failure_reason',
+          'Shadow posting failed on $operation: $e',
+          txn: txn,
+        );
+      } catch (_) {}
+
+      try {
+        final reportsEnabled =
+            await DatabaseHelper.instance.isJournalReportsEnabled(txn: txn);
+        if (reportsEnabled) {
+          await DatabaseHelper.instance.setSetting(
+            'journal_reports_enabled',
+            'false',
+            txn: txn,
+          );
+        }
+      } catch (_) {}
+
+      return fallback;
+    }
+  }
+
+  /// Writes a draft isolated in a savepoint, protecting caller from shadow posting failures.
+  static Future<int?> postDraftIsolated(
+    DatabaseExecutor txn,
+    JournalEntryDraft draft, {
+    required String operation,
+    DateTime? lockDateOverride,
+  }) async {
+    return await _runIsolatedShadow(
+      txn,
+      fallback: null,
+      operation: operation,
+      action: () async {
+        return await write(txn, draft, lockDateOverride: lockDateOverride);
+      },
+    );
+  }
+
   /// Generates and persists journal entries for an issued document (invoice, purchase, receipt, voucher).
   static Future<List<int>> postDocumentIssued(
     DatabaseExecutor txn,
@@ -114,62 +202,65 @@ class JournalWriter {
     DateTime? now,
     String origin = 'live',
   }) async {
-    final shadowEnabled =
-        await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
-    if (!shadowEnabled) return const [];
+    return await _runIsolatedShadow(
+      txn,
+      fallback: const <int>[],
+      operation: 'document_issued',
+      action: () async {
+        if (doc.status == DocumentStatus.draft ||
+            doc.status == DocumentStatus.cancelled ||
+            doc.type == 'quotation') {
+          return const <int>[];
+        }
 
-    if (doc.status == DocumentStatus.draft ||
-        doc.status == DocumentStatus.cancelled ||
-        doc.type == 'quotation') {
-      return const [];
-    }
+        final productIds =
+            items.map((i) => i.productId).whereType<int>().toSet();
+        final products = <int, Product>{};
+        if (productIds.isNotEmpty) {
+          final placeholders = List.filled(productIds.length, '?').join(',');
+          final pRows = await txn.query(
+            'products',
+            where: 'id IN ($placeholders)',
+            whereArgs: productIds.toList(),
+          );
+          for (final r in pRows) {
+            final p = Product.fromMap(r);
+            if (p.id != null) products[p.id!] = p;
+          }
+        }
 
-    final productIds =
-        items.map((i) => i.productId).whereType<int>().toSet();
-    final products = <int, Product>{};
-    if (productIds.isNotEmpty) {
-      final placeholders = List.filled(productIds.length, '?').join(',');
-      final pRows = await txn.query(
-        'products',
-        where: 'id IN ($placeholders)',
-        whereArgs: productIds.toList(),
-      );
-      for (final r in pRows) {
-        final p = Product.fromMap(r);
-        if (p.id != null) products[p.id!] = p;
-      }
-    }
+        Document? effectiveParentDoc = parentDoc;
+        if (effectiveParentDoc == null && doc.relatedDocumentId != null) {
+          final pDocRows = await txn.query(
+            'documents',
+            where: 'id = ?',
+            whereArgs: [doc.relatedDocumentId],
+          );
+          if (pDocRows.isNotEmpty) {
+            effectiveParentDoc = Document.fromMap(pDocRows.first);
+          }
+        }
 
-    Document? effectiveParentDoc = parentDoc;
-    if (effectiveParentDoc == null && doc.relatedDocumentId != null) {
-      final pDocRows = await txn.query(
-        'documents',
-        where: 'id = ?',
-        whereArgs: [doc.relatedDocumentId],
-      );
-      if (pDocRows.isNotEmpty) {
-        effectiveParentDoc = Document.fromMap(pDocRows.first);
-      }
-    }
+        var entrySeq = 1;
+        final drafts = PostingService.postDocumentIssued(
+          doc: doc,
+          items: items,
+          products: products,
+          parentDoc: effectiveParentDoc,
+          nextEntryNo: (prefix) =>
+              '$prefix-${doc.id ?? 0}-${DateTime.now().microsecondsSinceEpoch}-${entrySeq++}',
+          now: now,
+          origin: origin,
+        );
 
-    var entrySeq = 1;
-    final drafts = PostingService.postDocumentIssued(
-      doc: doc,
-      items: items,
-      products: products,
-      parentDoc: effectiveParentDoc,
-      nextEntryNo: (prefix) =>
-          '$prefix-${doc.id ?? 0}-${DateTime.now().microsecondsSinceEpoch}-${entrySeq++}',
-      now: now,
-      origin: origin,
+        final ids = <int>[];
+        for (final draft in drafts) {
+          final id = await write(txn, draft);
+          ids.add(id);
+        }
+        return ids;
+      },
     );
-
-    final ids = <int>[];
-    for (final draft in drafts) {
-      final id = await write(txn, draft);
-      ids.add(id);
-    }
-    return ids;
   }
 
   /// Generates and persists a journal entry for an unlinked payment on an issued document.
@@ -180,21 +271,24 @@ class JournalWriter {
     DateTime? now,
     String origin = 'live',
   }) async {
-    final shadowEnabled =
-        await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
-    if (!shadowEnabled) return null;
+    return await _runIsolatedShadow(
+      txn,
+      fallback: null,
+      operation: 'payment_recorded',
+      action: () async {
+        final timestamp = now ?? DateTime.now();
+        final draft = PostingService.postPaymentRecorded(
+          payment: payment,
+          parentDoc: parentDoc,
+          nextEntryNo: (prefix) =>
+              '$prefix-PAY-${payment.id ?? 0}-${timestamp.microsecondsSinceEpoch}',
+          now: timestamp,
+          origin: origin,
+        );
 
-    final timestamp = now ?? DateTime.now();
-    final draft = PostingService.postPaymentRecorded(
-      payment: payment,
-      parentDoc: parentDoc,
-      nextEntryNo: (prefix) =>
-          '$prefix-PAY-${payment.id ?? 0}-${timestamp.microsecondsSinceEpoch}',
-      now: timestamp,
-      origin: origin,
+        return await write(txn, draft);
+      },
     );
-
-    return await write(txn, draft);
   }
 
   /// Authoritatively reverses all active journal entries for a document (D3).
@@ -205,13 +299,14 @@ class JournalWriter {
     DateTime? now,
     String? memo,
   }) async {
-    final shadowEnabled =
-        await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
-    if (!shadowEnabled) return const [];
+    return await _runIsolatedShadow(
+      txn,
+      fallback: const <int>[],
+      operation: 'document_reversed',
+      action: () async {
+        final timestamp = now ?? DateTime.now();
 
-    final timestamp = now ?? DateTime.now();
-
-    final entryRows = await txn.rawQuery('''
+        final entryRows = await txn.rawQuery('''
       SELECT e.* FROM journal_entries e
       WHERE (e.source_id = ? AND e.source_type IN ('invoice', 'purchase', 'receipt', 'voucher', 'cogs', 'payment'))
          OR (e.source_type = 'payment' AND e.source_id IN (
@@ -220,62 +315,66 @@ class JournalWriter {
       ORDER BY e.id ASC
     ''', [documentId, documentId]);
 
-    if (entryRows.isEmpty) return const [];
+        if (entryRows.isEmpty) return const <int>[];
 
-    final existingEntries = <JournalEntryEntity>[];
-    for (final r in entryRows) {
-      final eId = r['id'] as int;
-      final lineRows = await txn.query(
-        'journal_lines',
-        where: 'entry_id = ?',
-        whereArgs: [eId],
-        orderBy: 'id ASC',
-      );
-      final lines =
-          lineRows.map((lr) => JournalLineEntity.fromMap(lr)).toList();
-      existingEntries.add(JournalEntryEntity.fromMap(r, lines: lines));
-    }
+        final existingEntries = <JournalEntryEntity>[];
+        for (final r in entryRows) {
+          final eId = r['id'] as int;
+          final lineRows = await txn.query(
+            'journal_lines',
+            where: 'entry_id = ?',
+            whereArgs: [eId],
+            orderBy: 'id ASC',
+          );
+          final lines =
+              lineRows.map((lr) => JournalLineEntity.fromMap(lr)).toList();
+          existingEntries.add(JournalEntryEntity.fromMap(r, lines: lines));
+        }
 
-    final reversedIds = existingEntries
-        .where((e) => e.reversesEntryId != null)
-        .map((e) => e.reversesEntryId!)
-        .toSet();
+        final reversedIds = existingEntries
+            .where((e) => e.reversesEntryId != null)
+            .map((e) => e.reversesEntryId!)
+            .toSet();
 
-    final reversalIds = <int>[];
-    var seq = 1;
-    for (final e in existingEntries) {
-      if (reversedIds.contains(e.id)) continue;
-      if (e.reversesEntryId != null) continue;
+        final reversalIds = <int>[];
+        var seq = 1;
+        for (final e in existingEntries) {
+          if (reversedIds.contains(e.id)) continue;
+          if (e.reversesEntryId != null) continue;
 
-      final revLines = e.lines
-          .map(
-            (l) => JournalLineDraft(
-              accountCode: l.accountCode,
-              debitMinor: l.creditMinor,
-              creditMinor: l.debitMinor,
-              productId: l.productId,
-              contactId: l.contactId,
-            ),
-          )
-          .toList();
+          final revLines = e.lines
+              .map(
+                (l) => JournalLineDraft(
+                  accountCode: l.accountCode,
+                  debitMinor: l.creditMinor,
+                  creditMinor: l.debitMinor,
+                  productId: l.productId,
+                  contactId: l.contactId,
+                ),
+              )
+              .toList();
 
-      final revDraft = JournalEntryDraft(
-        entryNo: 'JE-REV-${e.id}-${timestamp.microsecondsSinceEpoch}-${seq++}',
-        effectiveDate: e.effectiveDate, // D3: dated at original entry's effective date
-        postedAt: timestamp,
-        sourceType: e.sourceType,
-        sourceId: e.sourceId,
-        revision: e.revision + 1,
-        memo: memo ?? 'Reversal of entry ${e.entryNo}',
-        reversesEntryId: e.id,
-        origin: 'live',
-        lines: revLines,
-      );
+          final revDraft = JournalEntryDraft(
+            entryNo:
+                'JE-REV-${e.id}-${timestamp.microsecondsSinceEpoch}-${seq++}',
+            effectiveDate:
+                e.effectiveDate, // D3: dated at original entry's effective date
+            postedAt: timestamp,
+            sourceType: e.sourceType,
+            sourceId: e.sourceId,
+            revision: e.revision + 1,
+            memo: memo ?? 'Reversal of entry ${e.entryNo}',
+            reversesEntryId: e.id,
+            origin: 'live',
+            lines: revLines,
+          );
 
-      final revId = await write(txn, revDraft);
-      reversalIds.add(revId);
-    }
+          final revId = await write(txn, revDraft);
+          reversalIds.add(revId);
+        }
 
-    return reversalIds;
+        return reversalIds;
+      },
+    );
   }
 }

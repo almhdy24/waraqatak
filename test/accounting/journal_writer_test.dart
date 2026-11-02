@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
+import 'package:warqatek/models/document.dart';
 import 'package:warqatek/services/accounting/journal_draft.dart';
 import 'package:warqatek/services/accounting/journal_writer.dart';
 
@@ -200,6 +201,54 @@ void main() {
         return await JournalWriter.write(txn, backfillDraft, lockDateOverride: lockDate);
       });
       expect(backfillId, isPositive);
+    });
+
+    test('Shadow isolation savepoint catches journal crash and allows transaction commit when reports are OFF', () async {
+      final db = DatabaseHelper.instance;
+      final rawDb = await db.database;
+
+      final doc = Document(
+        id: 777,
+        type: 'invoice',
+        documentNumber: 'INV-ISOLATE-001',
+        date: DateTime(2026, 4, 1),
+        subtotal: 100.0,
+        discount: 0.0,
+        taxRate: 0.0,
+        taxAmount: 0.0,
+        total: 100.0,
+        paid: 0.0,
+        remaining: 100.0,
+        currencyCode: 'SDG',
+      );
+
+      // Force journal entries table to fail on insert
+      await rawDb.execute('''
+        CREATE TRIGGER fail_shadow_entries BEFORE INSERT ON journal_entries
+        BEGIN
+          SELECT RAISE(ABORT, 'Simulated shadow engine crash');
+        END;
+      ''');
+
+      try {
+        final result = await rawDb.transaction((txn) async {
+          // Shadow posting should isolate the error, rollback to savepoint, log audit, and return empty list
+          final ids = await JournalWriter.postDocumentIssued(
+            txn,
+            doc,
+            const [],
+          );
+          return ids;
+        });
+
+        expect(result, isEmpty, reason: 'Failed shadow write must return fallback empty list');
+
+        // Verify parity failure was flagged in settings
+        final failureReason = await db.getSetting('journal_parity_failure_reason');
+        expect(failureReason, contains('Shadow posting failed on document_issued'));
+      } finally {
+        await rawDb.execute('DROP TRIGGER fail_shadow_entries');
+      }
     });
   });
 }
