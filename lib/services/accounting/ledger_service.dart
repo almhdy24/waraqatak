@@ -1,4 +1,5 @@
 import 'dart:isolate';
+import 'package:flutter/widgets.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/currency.dart';
@@ -95,7 +96,11 @@ class LedgerService {
 
     List<JournalEntry> entries;
     try {
-      entries = await Isolate.run(() => LedgerBuilder.build(input));
+      if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+        entries = LedgerBuilder.build(input);
+      } else {
+        entries = await Isolate.run(() => LedgerBuilder.build(input));
+      }
     } catch (_) {
       entries = LedgerBuilder.build(input);
     }

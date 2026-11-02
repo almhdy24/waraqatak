@@ -173,9 +173,9 @@ class JournalBackfillService {
     final decimalDigits = Currency.decimalDigitsForCode(baseCurrency);
 
     // Derive ledger entries for the base currency (offloaded to worker isolate in LedgerService)
-    final book = await LedgerService.load(
+    final book = await LedgerService.buildDerived(
       currencyCode: baseCurrency,
-      forceDerived: true,
+      executor: db,
     );
     final derivedEntries = book.entries;
     final total = derivedEntries.length;
