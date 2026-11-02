@@ -80,6 +80,7 @@ void main() {
       final violatingFiles = <String>[];
       final allowlist = <String, String>{
         'lib/database/database_helper.dart': 'Central authoritative database manager',
+        'lib/services/accounting/stock_ledger.dart': 'Authoritative single stock writer for double-entry backbone',
         'lib/services/backup_service.dart': 'Backup restoration inserts raw tables including stock_movements',
         'lib/services/inventory_costing_service.dart': 'Initial opening stock movement on product creation',
         'lib/services/database_repair_service.dart': 'Guided safe repair tool with backup and confirmation for historical data reconciliation',
