@@ -49,7 +49,13 @@ class DatabaseHelper {
       onCreate: _createTables,
       onUpgrade: _upgradeTables,
       onOpen: (db) async {
-        await JournalBackfillService.backfillIfNeeded(dbOverride: db);
+        // Decouple backfill from the critical onOpen startup path so first frame
+        // and splash render immediately without blocking the UI thread.
+        Future.microtask(() async {
+          try {
+            await JournalBackfillService.backfillIfNeeded();
+          } catch (_) {}
+        });
       },
     );
   }

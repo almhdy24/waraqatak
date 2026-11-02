@@ -3,6 +3,7 @@ import '../../database/database_helper.dart';
 import '../../models/business.dart';
 import '../../models/currency.dart';
 import '../../utils/money_utils.dart';
+import '../backup_service.dart';
 import 'journal_draft.dart';
 import 'journal_writer.dart';
 import 'ledger.dart';
@@ -35,6 +36,10 @@ class JournalBackfillService {
   JournalBackfillService._();
 
   static const String settingKeyBackfilledAt = 'journal_backfilled_at';
+  static bool _isRunning = false;
+
+  /// Returns true if backfill is actively executing.
+  static bool get isRunning => _isRunning;
 
   /// Returns true if backfill has already been executed.
   static Future<bool> isBackfillCompleted({DatabaseExecutor? txn}) async {
@@ -47,34 +52,43 @@ class JournalBackfillService {
 
   /// Runs backfill if not already completed and historical data exists.
   /// Returns the number of entries backfilled, or 0 if skipped.
-  static Future<int> backfillIfNeeded({Database? dbOverride}) async {
-    final db = dbOverride ?? await DatabaseHelper.instance.database;
+  static Future<int> backfillIfNeeded({
+    Database? dbOverride,
+    void Function(int processed, int total)? onProgress,
+  }) async {
+    if (_isRunning) return 0;
+    _isRunning = true;
+    try {
+      final db = dbOverride ?? await DatabaseHelper.instance.database;
 
-    final isDone = await isBackfillCompleted(txn: db);
-    if (isDone) return 0;
+      final isDone = await isBackfillCompleted(txn: db);
+      if (isDone) return 0;
 
-    // Check if any documents or movements exist
-    final docCountRows = await db.rawQuery(
-      "SELECT COUNT(*) as count FROM documents WHERE status != 'draft' AND status != 'cancelled'",
-    );
-    final docCount = (docCountRows.first['count'] as num?)?.toInt() ?? 0;
-
-    final movCountRows = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM stock_movements',
-    );
-    final movCount = (movCountRows.first['count'] as num?)?.toInt() ?? 0;
-
-    if (docCount == 0 && movCount == 0) {
-      // Clean slate; mark as backfilled immediately
-      await DatabaseHelper.instance.setSetting(
-        settingKeyBackfilledAt,
-        DateTime.now().toIso8601String(),
-        txn: db,
+      // Check if any documents or movements exist
+      final docCountRows = await db.rawQuery(
+        "SELECT COUNT(*) as count FROM documents WHERE status != 'draft' AND status != 'cancelled'",
       );
-      return 0;
-    }
+      final docCount = (docCountRows.first['count'] as num?)?.toInt() ?? 0;
 
-    return await runBackfill(db);
+      final movCountRows = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM stock_movements',
+      );
+      final movCount = (movCountRows.first['count'] as num?)?.toInt() ?? 0;
+
+      if (docCount == 0 && movCount == 0) {
+        // Clean slate; mark as backfilled immediately
+        await DatabaseHelper.instance.setSetting(
+          settingKeyBackfilledAt,
+          DateTime.now().toIso8601String(),
+          txn: db,
+        );
+        return 0;
+      }
+
+      return await runBackfill(db, onProgress: onProgress);
+    } finally {
+      _isRunning = false;
+    }
   }
 
   /// Core backfill transaction:
@@ -84,7 +98,15 @@ class JournalBackfillService {
   /// 4. Rigorously verifies account-by-account parity against derived trial balance.
   /// 5. If parity fails, throws [StateError] which aborts and rolls back the transaction.
   /// 6. Marks backfill completed.
-  static Future<int> runBackfill(Database db) async {
+  static Future<int> runBackfill(
+    Database db, {
+    void Function(int processed, int total)? onProgress,
+  }) async {
+    // Invariant: automatic safety backup before modifying historical data
+    try {
+      await BackupService.createSafetyBackup();
+    } catch (_) {}
+
     final bRows = await db.query('businesses', limit: 1);
     final business = bRows.isNotEmpty ? Business.fromMap(bRows.first) : null;
     final baseCurrency = business?.currencyCode ?? 'SDG';
@@ -97,6 +119,7 @@ class JournalBackfillService {
     return await db.transaction((txn) async {
       var entrySeq = 1;
       var backfilledCount = 0;
+      final total = derivedEntries.length;
 
       for (final e in derivedEntries) {
         if (e.lines.isEmpty) continue; // skip zero-line uncosted placeholders
@@ -162,6 +185,7 @@ class JournalBackfillService {
 
         await JournalWriter.write(txn, draft);
         backfilledCount++;
+        onProgress?.call(entrySeq, total);
       }
 
       // Parity check against derived ledger
