@@ -11,8 +11,17 @@ import 'license_notification_service.dart';
 /// [SecureLicenseStorage]; tests inject an in-memory fake.
 abstract class LicenseStorage {
   Future<String?> read({required String key});
-  Future<void> write({required String key, required String value});
+  Future<bool> write({required String key, required String value});
   Future<void> delete({required String key});
+}
+
+/// Signals a failure in the underlying [LicenseStorage] implementation.
+class LicenseStorageException implements Exception {
+  final String key;
+  final Object cause;
+  const LicenseStorageException(this.key, this.cause);
+  @override
+  String toString() => 'LicenseStorageException($key): $cause';
 }
 
 /// Android Keystore-backed storage (EncryptedSharedPreferences).
@@ -29,16 +38,19 @@ class SecureLicenseStorage implements LicenseStorage {
   Future<String?> read({required String key}) async {
     try {
       return await _store.read(key: key);
-    } on Object catch (_) {
-      return null;
+    } on Object catch (e) {
+      throw LicenseStorageException(key, e);
     }
   }
 
   @override
-  Future<void> write({required String key, required String value}) async {
+  Future<bool> write({required String key, required String value}) async {
     try {
       await _store.write(key: key, value: value);
-    } on Object catch (_) {}
+      return true;
+    } on Object catch (_) {
+      return false;
+    }
   }
 
   @override
@@ -96,6 +108,18 @@ class LicenseService {
   /// In-memory cache so entitlement is only computed once per session.
   EntitlementState? _cached;
 
+  bool _storageFault = false;
+  bool get hasStorageFault => _storageFault;
+
+  Future<String?> _read(String key) async {
+    try {
+      return await _store.read(key: key);
+    } on LicenseStorageException {
+      _storageFault = true;
+      return null;
+    }
+  }
+
   // ── Device ID & Model ──────────────────────────────────────────────────────
 
   static const _deviceChannel = MethodChannel('com.elmahdi.waraqatak/device');
@@ -103,7 +127,7 @@ class LicenseService {
   /// Hardware device name / model (e.g. "Samsung Galaxy A16").
   /// Informational metadata for display only — not used as an identity secret.
   Future<String> getDeviceModel() async {
-    final cached = await _store.read(key: _kDeviceModelCache);
+    final cached = await _read(_kDeviceModelCache);
     if (cached != null && cached.isNotEmpty) {
       return cached;
     }
@@ -130,7 +154,7 @@ class LicenseService {
   /// a [StateError] instead of generating a random transient UUID that would break
   /// device identity stability across reinstallations.
   Future<String> getOrCreateDeviceId() async {
-    var id = await _store.read(key: _kDeviceId);
+    var id = await _read(_kDeviceId);
     if (id == null || id.isEmpty) {
       final stableId = await _stableDeviceId();
       if (stableId == null || stableId.isEmpty) {
@@ -176,6 +200,7 @@ class LicenseService {
   void invalidateCache() => _cached = null;
 
   Future<EntitlementState> _compute() async {
+    _storageFault = false;
     String? deviceId;
     try {
       deviceId = await getOrCreateDeviceId();
@@ -190,9 +215,9 @@ class LicenseService {
     await _updateLastLaunch(now);
 
     // ── License ───────────────────────────────────────────────────────────────
-    final licenseKey = await _store.read(key: _kLicenseKey);
+    final licenseKey = await _read(_kLicenseKey);
     if (licenseKey != null && licenseKey.isNotEmpty) {
-      final statusStr = await _store.read(key: _kLicenseStatus);
+      final statusStr = await _read(_kLicenseStatus);
       if (statusStr == 'revoked') {
         return EntitlementState(
           status: EntitlementStatus.licenseRevoked,
@@ -201,7 +226,7 @@ class LicenseService {
       }
       if (statusStr == 'expired') {
         DateTime? exp;
-        final expiryStr = await _store.read(key: _kLicenseExpiry);
+        final expiryStr = await _read(_kLicenseExpiry);
         if (expiryStr != null && expiryStr.isNotEmpty) {
           exp = DateTime.tryParse(expiryStr);
         }
@@ -215,8 +240,8 @@ class LicenseService {
       // License expiry is compared against a clock that never runs backwards.
       final effectiveNow = await _effectiveNow(now);
 
-      final expiryStr = await _store.read(key: _kLicenseExpiry);
-      final storedType = await _store.read(key: _kLicenseType);
+      final expiryStr = await _read(_kLicenseExpiry);
+      final storedType = await _read(_kLicenseType);
       DateTime? expiry;
       var usable = true;
       if (expiryStr != null && expiryStr.isNotEmpty) {
@@ -259,7 +284,7 @@ class LicenseService {
     final effective = await _effectiveNow(now);
 
     // 1. Authoritative server-side trial status check
-    final serverStatus = await _store.read(key: _kTrialServerStatus);
+    final serverStatus = await _read(_kTrialServerStatus);
     if (serverStatus == 'expired') {
       return EntitlementState(
         status: EntitlementStatus.trialExpired,
@@ -267,7 +292,7 @@ class LicenseService {
       );
     }
 
-    final serverExpiryStr = await _store.read(key: _kTrialServerExpiry);
+    final serverExpiryStr = await _read(_kTrialServerExpiry);
     if (serverExpiryStr != null && serverExpiryStr.isNotEmpty) {
       final serverExpiry = DateTime.tryParse(serverExpiryStr);
       if (serverExpiry != null) {
@@ -307,7 +332,7 @@ class LicenseService {
   // ── Trial ──────────────────────────────────────────────────────────────────
 
   Future<DateTime> _getOrInitTrialStart(DateTime now) async {
-    final s = await _store.read(key: _kTrialStart);
+    final s = await _read(_kTrialStart);
     if (s != null && s.isNotEmpty) {
       final dt = DateTime.tryParse(s);
       if (dt != null) return dt;
@@ -317,8 +342,8 @@ class LicenseService {
     // or legacy install), derive start from historical evidence if available
     // to prevent granting a fresh trial upon license removal.
     DateTime start = now;
-    final seenStr = await _store.read(key: _kLastSeen);
-    final launchStr = await _store.read(key: _kLastLaunch);
+    final seenStr = await _read(_kLastSeen);
+    final launchStr = await _read(_kLastLaunch);
     final seen = seenStr != null ? DateTime.tryParse(seenStr) : null;
     if (seen != null && seen.isBefore(start)) {
       start = seen;
@@ -336,7 +361,7 @@ class LicenseService {
   /// only ever moves forward, so setting the device clock back does not
   /// bring an expired license back.
   Future<DateTime> _effectiveNow(DateTime now) async {
-    final s = await _store.read(key: _kLastSeen);
+    final s = await _read(_kLastSeen);
     final seen = (s == null || s.isEmpty) ? null : DateTime.tryParse(s);
     if (seen == null || now.isAfter(seen)) {
       await _store.write(key: _kLastSeen, value: now.toUtc().toIso8601String());
@@ -349,13 +374,13 @@ class LicenseService {
   /// last recorded launch time, advance the trial start by the rollback delta
   /// so the user cannot gain extra trial days by rewinding the device clock.
   Future<void> _updateLastLaunch(DateTime now) async {
-    final s = await _store.read(key: _kLastLaunch);
+    final s = await _read(_kLastLaunch);
     if (s != null && s.isNotEmpty) {
       final last = DateTime.tryParse(s);
       if (last != null) {
         final rollback = last.difference(now); // positive when clock went back
         if (rollback > const Duration(minutes: 2)) {
-          final trialStr = await _store.read(key: _kTrialStart);
+          final trialStr = await _read(_kTrialStart);
           if (trialStr != null && trialStr.isNotEmpty) {
             final ts = DateTime.tryParse(trialStr);
             if (ts != null) {
@@ -372,7 +397,7 @@ class LicenseService {
 
   // ── License Persistence ────────────────────────────────────────────────────
 
-  Future<void> storeLicense({
+  Future<bool> storeLicense({
     required String licenseKey,
     required DateTime? expiresAt,
     required bool isActive,
@@ -382,26 +407,38 @@ class LicenseService {
     // Seed trial start if not already set, binding trial lifetime from
     // the installation / activation time.
     await _getOrInitTrialStart(_clock());
-    await _store.write(key: _kLicenseKey, value: licenseKey);
-    await _store.write(key: _kLicenseType, value: licenseType ?? '');
-    await _store.write(
-        key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '');
-    await _store.write(
-        key: _kLicenseStatus, value: isActive ? 'active' : 'revoked');
+    var ok = true;
+    ok = await _store.write(key: _kLicenseKey, value: licenseKey) && ok;
+    ok = await _store.write(key: _kLicenseType, value: licenseType ?? '') && ok;
+    ok = await _store.write(
+        key: _kLicenseExpiry, value: expiresAt?.toIso8601String() ?? '') && ok;
+    ok = await _store.write(
+        key: _kLicenseStatus, value: isActive ? 'active' : 'revoked') && ok;
     if (activationToken != null) {
-      await _store.write(key: _kActivationToken, value: activationToken);
+      ok = await _store.write(key: _kActivationToken, value: activationToken) && ok;
+    }
+    final back = await _read(_kLicenseKey);
+    if (!ok || back != licenseKey) {
+      await _store.delete(key: _kLicenseKey);
+      await _store.delete(key: _kLicenseExpiry);
+      await _store.delete(key: _kLicenseStatus);
+      await _store.delete(key: _kLicenseType);
+      await _store.delete(key: _kActivationToken);
+      invalidateCache();
+      return false;
     }
     invalidateCache();
+    return true;
   }
 
-  Future<String?> get licenseKey => _store.read(key: _kLicenseKey);
+  Future<String?> get licenseKey => _read(_kLicenseKey);
 
   /// Authoritatively syncs free trial status with the licensing API.
   Future<void> syncTrialWithServer({bool force = false}) async {
     try {
       if (!force) {
-        final key = await _store.read(key: _kLicenseKey);
-        final status = await _store.read(key: _kLicenseStatus);
+        final key = await _read(_kLicenseKey);
+        final status = await _read(_kLicenseStatus);
         if (key != null && key.isNotEmpty && status == 'active') {
           // Device is actively licensed; avoid claiming stray trial or dispatching trial notifications
           return;
@@ -461,54 +498,48 @@ class LicenseService {
   /// If the server is offline or unreachable, legitimate paying customers are NOT locked out.
   Future<void> verifyLicenseOnline() async {
     try {
-      final key = await _store.read(key: _kLicenseKey);
+      final key = await _read(_kLicenseKey);
       if (key == null || key.isEmpty) return;
 
-      final token = await _store.read(key: _kActivationToken);
+      final token = await _read(_kActivationToken);
       final tokenOrKey = (token != null && token.isNotEmpty) ? token : key;
       final deviceId = await getOrCreateDeviceId();
 
-      final result = await ActivationService.verifyLicenseOnline(
+      final decision = await ActivationService.verifyLicenseDecision(
         tokenOrKey: tokenOrKey,
         deviceId: deviceId,
       );
 
-      if (result == null) {
-        // Network/connectivity failure — preserve offline use, never revoke
-        return;
-      }
-
-      if (!result.valid) {
-        final err = result.error ?? '';
-        if (err.contains('expired')) {
+      switch (decision.outcome) {
+        case LicenseVerifyOutcome.unreachable:
+          // Network/connectivity failure — preserve offline use, never revoke.
+          return;
+        case LicenseVerifyOutcome.expired:
           await _store.write(key: _kLicenseStatus, value: 'expired');
           invalidateCache();
           await LicenseNotificationService.instance.onLicenseExpired();
-        } else {
-          // Fail closed for any explicit rejection (revoked, deactivated,
-          // device_not_registered, device_mismatch, license_not_found, etc.)
+        case LicenseVerifyOutcome.rejected:
           await _store.write(key: _kLicenseStatus, value: 'revoked');
           invalidateCache();
           await LicenseNotificationService.instance
-              .onLicenseRevoked(reason: err);
-        }
-      } else {
-        // Confirmed valid by server
-        await _store.write(key: _kLicenseStatus, value: 'active');
-        final data = result.data;
-        if (data != null && data['expires_at'] != null) {
-          final expStr = data['expires_at'].toString();
-          await _store.write(key: _kLicenseExpiry, value: expStr);
-          final expDate = DateTime.tryParse(expStr);
-          if (expDate != null) {
-            final days = expDate.difference(DateTime.now()).inDays;
-            if (days > 0 && days <= 7) {
-              await LicenseNotificationService.instance
-                  .onLicenseExpiring(daysRemaining: days);
+              .onLicenseRevoked(reason: decision.reason ?? '');
+        case LicenseVerifyOutcome.valid:
+          // Confirmed valid by server
+          await _store.write(key: _kLicenseStatus, value: 'active');
+          final data = decision.result?.data;
+          if (data != null && data['expires_at'] != null) {
+            final expStr = data['expires_at'].toString();
+            await _store.write(key: _kLicenseExpiry, value: expStr);
+            final expDate = DateTime.tryParse(expStr);
+            if (expDate != null) {
+              final days = expDate.difference(_clock()).inDays;
+              if (days > 0 && days <= 7) {
+                await LicenseNotificationService.instance
+                    .onLicenseExpiring(daysRemaining: days);
+              }
             }
           }
-        }
-        invalidateCache();
+          invalidateCache();
       }
     } catch (_) {}
   }

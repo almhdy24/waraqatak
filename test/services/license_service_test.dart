@@ -453,4 +453,74 @@ void main() {
       },
     );
   });
+
+  // ── Item 2: classifyVerifyError table-driven tests ────────────────────────
+
+  group('ActivationService.classifyVerifyError', () {
+    final cases = <(String?, LicenseVerifyOutcome)>[
+      ('license_expired', LicenseVerifyOutcome.expired),
+      ('Revoked', LicenseVerifyOutcome.rejected),
+      ('device_mismatch', LicenseVerifyOutcome.rejected),
+      ('license_not_found', LicenseVerifyOutcome.rejected),
+      ('rate_limited', LicenseVerifyOutcome.unreachable),
+      ('invalid_request', LicenseVerifyOutcome.unreachable),
+      ('', LicenseVerifyOutcome.unreachable),
+      (null, LicenseVerifyOutcome.unreachable),
+    ];
+    for (final (input, expected) in cases) {
+      test('classifyVerifyError("$input") → $expected', () {
+        expect(
+          ActivationService.classifyVerifyError(input),
+          expected,
+        );
+      });
+    }
+  });
+
+  // ── Item 3: storeLicense returns false when write fails ───────────────────
+
+  group('Item 3: storeLicense detects write failures', () {
+    test('storage that fails wq_license_key write returns false and leaves no key',
+        () async {
+      final failingStore = _FailingLicenseStorage('wq_license_key');
+      final svc = LicenseService.forTesting(
+        storage: failingStore,
+        clock: DateTime.now,
+      );
+      final result = await svc.storeLicense(
+        licenseKey: 'test-key-abc',
+        expiresAt: null,
+        isActive: true,
+        licenseType: 'lifetime',
+      );
+      expect(result, isFalse);
+      expect(failingStore.data.containsKey('wq_license_key'), isFalse);
+      // licenseKey getter should return null
+      expect(await svc.licenseKey, isNull);
+    });
+  });
+}
+
+/// A [LicenseStorage] that always fails [write] for a specific key,
+/// simulating a Keystore failure on that key.
+class _FailingLicenseStorage implements LicenseStorage {
+  final String failKey;
+  final Map<String, String> data = {};
+
+  _FailingLicenseStorage(this.failKey);
+
+  @override
+  Future<String?> read({required String key}) async => data[key];
+
+  @override
+  Future<bool> write({required String key, required String value}) async {
+    if (key == failKey) return false;
+    data[key] = value;
+    return true;
+  }
+
+  @override
+  Future<void> delete({required String key}) async {
+    data.remove(key);
+  }
 }
