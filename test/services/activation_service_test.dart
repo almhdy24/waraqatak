@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:warqatek/services/activation_service.dart';
+import 'package:warqatek/services/license_service.dart';
 
 import 'test_keys.dart';
 
@@ -26,18 +27,39 @@ void main() {
 
   // ── flutter_secure_storage channel stub ────────────────────────────────────
   // The secure-storage plugin is reached when activate() stores the key on
-  // success. We swallow every call so the test runs on the host VM without
-  // Android plugins. Reads return null to simulate first-run storage.
+  // success. We simulate a simple in-memory store so that the write→read-back
+  // verification added in Item 3 (storeLicense) works correctly on the host VM.
   const storageChannel =
       MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  final _fakeStorage = <String, String>{};
   setUpAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(storageChannel, (call) async => null);
+        .setMockMethodCallHandler(storageChannel, (call) async {
+      switch (call.method) {
+        case 'write':
+          final key = call.arguments['key']?.toString();
+          final value = call.arguments['value']?.toString();
+          if (key != null && value != null) _fakeStorage[key] = value;
+          return null;
+        case 'read':
+          final key = call.arguments['key']?.toString();
+          return key != null ? _fakeStorage[key] : null;
+        case 'delete':
+          final key = call.arguments['key']?.toString();
+          if (key != null) _fakeStorage.remove(key);
+          return null;
+        default:
+          return null;
+      }
+    });
   });
   tearDownAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(storageChannel, null);
   });
+
+  // Clear fake storage between tests so they remain independent.
+  setUp(() => _fakeStorage.clear());
 
   tearDown(ActivationService.debugResetClient);
 
@@ -98,7 +120,8 @@ void main() {
         ActivationOutcome.success);
   });
 
-  test('200 with malformed JSON → success (never crashes)', () async {
+  test('200 with malformed JSON → serverUnreachable (fix: unreadable body is not a confirmed activation)',
+      () async {
     final mock = MockClient((_) async => http.Response(
           'not-json-at-all',
           200,
@@ -110,11 +133,14 @@ void main() {
         httpClient: mock,
       ),
     );
+    // Previously asserted success (incorrect — a 2xx with unreadable body
+    // must never count as a confirmed activation). Fixed in Item 1.
     expect(await ActivationService.activate(validKey, deviceId),
-        ActivationOutcome.success);
+        ActivationOutcome.serverUnreachable);
   });
 
-  test('200 with empty body → success (never crashes)', () async {
+  test('200 with empty body → serverUnreachable (fix: unreadable body is not a confirmed activation)',
+      () async {
     final mock = MockClient((_) async => http.Response(
           '',
           200,
@@ -126,8 +152,10 @@ void main() {
         httpClient: mock,
       ),
     );
+    // Previously asserted success (incorrect — a 2xx with unreadable body
+    // must never count as a confirmed activation). Fixed in Item 1.
     expect(await ActivationService.activate(validKey, deviceId),
-        ActivationOutcome.success);
+        ActivationOutcome.serverUnreachable);
   });
 
   for (final code in [401, 403, 404, 409, 422, 400, 418]) {
@@ -457,6 +485,64 @@ void main() {
 
       final ok = await ActivationService.deactivate(validKey, deviceId);
       expect(ok, isFalse);
+    });
+  });
+
+  // ── Item 1: long key + captive portal HTML body → serverUnreachable ───────
+
+  group('Item 1 fix: long key with HTML 200 body must not store a license',
+      () {
+    // Track whether the storage channel write was invoked.
+    final writeCalls = <String>[];
+
+    setUp(() {
+      writeCalls.clear();
+      // Override storage handler to record writes.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(storageChannel, (call) async {
+        if (call.method == 'write') {
+          writeCalls.add(call.arguments['key']?.toString() ?? '');
+        }
+        return null;
+      });
+    });
+
+    tearDown(() {
+      // Restore the original no-op stub.
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(storageChannel, (call) async => null);
+    });
+
+    test(
+        'long key + HTTP 200 with HTML body → serverUnreachable, nothing stored',
+        () async {
+      // Build a syntactically valid long key: payload with app_slug and
+      // a future expires_at, base64url-encoded, then a dot, then a signature.
+      final longKey = makeKey({
+        'app_slug': ActivationService.appSlug,
+        'expires_at': '2099-01-01T00:00:00Z',
+      });
+
+      final mock = MockClient((_) async => http.Response(
+            '<html>captive portal</html>',
+            200,
+            headers: {'content-type': 'text/html'},
+          ));
+      ActivationService.debugOverrideClient(
+        ElmahdiPayClient(
+          ElmahdiPayConfig(baseUrl: 'https://api.almhdy24.com'),
+          httpClient: mock,
+        ),
+      );
+
+      final result =
+          await ActivationService.activateDetailed(longKey, deviceId);
+      expect(result.outcome, ActivationOutcome.serverUnreachable,
+          reason:
+              'HTML captive-portal body is not a confirmed server activation');
+      expect(
+          writeCalls.any((k) => k == 'wq_license_key'), isFalse,
+          reason: 'wq_license_key must not be written without confirmed server answer');
     });
   });
 }

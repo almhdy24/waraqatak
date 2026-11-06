@@ -31,6 +31,9 @@ enum ActivationOutcome {
 
   /// Device identity could not be verified securely by the operating system.
   deviceUnavailable,
+
+  /// The server accepted the key but it could not be saved on this device.
+  storageFailed,
 }
 
 /// Detailed result of an activation attempt containing the user-safe outcome
@@ -46,6 +49,15 @@ class DetailedActivationResult {
     required this.outcome,
     this.referenceId,
   });
+}
+
+enum LicenseVerifyOutcome { valid, expired, rejected, unreachable }
+
+class LicenseVerifyDecision {
+  final LicenseVerifyOutcome outcome;
+  final VerifyLicenseResult? result;
+  final String? reason;
+  const LicenseVerifyDecision(this.outcome, {this.result, this.reason});
 }
 
 /// Thin wrapper around the Elmahdi Pay SDK used only for key activation.
@@ -215,11 +227,22 @@ class ActivationService {
         referenceId: e.correlationId,
       );
     } on TypeError {
-      // The server answered 2xx but the body lacked expected fields.
+      // 2xx answer with an unreadable body: not a confirmed activation.
+      return const DetailedActivationResult(
+        outcome: ActivationOutcome.serverUnreachable,
+      );
     } on FormatException {
-      // Body could not be decoded.
+      return const DetailedActivationResult(
+        outcome: ActivationOutcome.serverUnreachable,
+      );
     } catch (_) {
       // Anything else is not a confirmed 2xx answer: store nothing.
+      return const DetailedActivationResult(
+        outcome: ActivationOutcome.serverUnreachable,
+      );
+    }
+
+    if (result == null) {
       return const DetailedActivationResult(
         outcome: ActivationOutcome.serverUnreachable,
       );
@@ -229,8 +252,7 @@ class ActivationService {
     final String? licenseType;
 
     if (isShort) {
-      if (result == null ||
-          (result.license == null && result.effectiveToken.isEmpty)) {
+      if (result.license == null && result.effectiveToken.isEmpty) {
         return const DetailedActivationResult(
           outcome: ActivationOutcome.serverUnreachable,
         );
@@ -239,24 +261,38 @@ class ActivationService {
       expiresAt = lic?.expiresAt;
       licenseType = lic?.type ?? LicenseKeyClaims.perpetualType;
     } else {
+      // For long keys, the server must return a token; an empty token with no
+      // license object means the response was not a confirmed activation (e.g.
+      // a captive-portal HTML page returned with 200).
+      if (result.effectiveToken.isEmpty && result.license == null) {
+        return const DetailedActivationResult(
+          outcome: ActivationOutcome.serverUnreachable,
+        );
+      }
       expiresAt = claims!.expiresAt;
       licenseType = claims.licenseType ?? LicenseKeyClaims.lifetimeType;
     }
 
-    await LicenseService.instance.storeLicense(
+    final stored = await LicenseService.instance.storeLicense(
       licenseKey: isShort ? ShortLicenseKey.format(serverKey) : serverKey,
       expiresAt: expiresAt,
       isActive: true,
       licenseType: licenseType,
-      activationToken: result?.effectiveToken,
+      activationToken: result.effectiveToken,
     );
+    if (!stored) {
+      return DetailedActivationResult(
+        outcome: ActivationOutcome.storageFailed,
+        referenceId: result.correlationId,
+      );
+    }
     await LicenseNotificationService.instance.onLicenseActivated(
       expiresAt: expiresAt,
       licenseType: licenseType,
     );
     return DetailedActivationResult(
       outcome: ActivationOutcome.success,
-      referenceId: result?.correlationId,
+      referenceId: result.correlationId,
     );
   }
 
@@ -300,6 +336,54 @@ class ActivationService {
       );
     } catch (_) {
       return null;
+    }
+  }
+
+  static const List<String> _rejectionMarkers = [
+    'revoked', 'deactivated', 'device_not_registered',
+    'device_mismatch', 'license_not_found', 'not_found',
+  ];
+
+  @visibleForTesting
+  static LicenseVerifyOutcome classifyVerifyError(String? error) {
+    final e = (error ?? '').trim().toLowerCase();
+    if (e.isEmpty) return LicenseVerifyOutcome.unreachable;
+    if (e.contains('expired')) return LicenseVerifyOutcome.expired;
+    for (final m in _rejectionMarkers) {
+      if (e.contains(m)) return LicenseVerifyOutcome.rejected;
+    }
+    // Unknown error text: never change the license state because of it.
+    return LicenseVerifyOutcome.unreachable;
+  }
+
+  static Future<LicenseVerifyDecision> verifyLicenseDecision({
+    required String tokenOrKey,
+    required String deviceId,
+  }) async {
+    try {
+      final r = await _sdk.public.verifyLicense(
+        VerifyLicenseRequest(
+          tokenOrKey: tokenOrKey,
+          machineId: deviceId,
+          product: AppConstants.appId,
+        ),
+      );
+      if (r.valid) {
+        return LicenseVerifyDecision(LicenseVerifyOutcome.valid, result: r);
+      }
+      final outcome = classifyVerifyError(r.error);
+      return LicenseVerifyDecision(outcome, result: r, reason: r.error);
+    } on ElmahdiPayRateLimitException {
+      return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
+    } on ElmahdiPayNetworkException {
+      return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
+    } on ElmahdiPayApiException {
+      // ElmahdiPayApiException has fields: statusCode (int), message (String),
+      // errors (Map<String,dynamic>?), correlationId (String?). There is no
+      // machine-readable error-code String field — message is a human string.
+      return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
+    } catch (_) {
+      return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
     }
   }
 
