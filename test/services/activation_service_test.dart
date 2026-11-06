@@ -545,6 +545,59 @@ void main() {
           reason: 'wq_license_key must not be written without confirmed server answer');
     });
   });
+
+  // ── B2-2: classifyApiException ───────────────────────────────────────────
+
+  group('classifyApiException', () {
+    test('403 revoked → rejected', () {
+      expect(
+        ActivationService.classifyApiException(403, 'License revoked'),
+        LicenseVerifyOutcome.rejected,
+      );
+    });
+    test('404 license_not_found → rejected', () {
+      expect(
+        ActivationService.classifyApiException(404, 'license_not_found'),
+        LicenseVerifyOutcome.rejected,
+      );
+    });
+    test('403 device_mismatch → rejected', () {
+      expect(
+        ActivationService.classifyApiException(403, 'device_mismatch'),
+        LicenseVerifyOutcome.rejected,
+      );
+    });
+    test('410 license expired → expired', () {
+      expect(
+        ActivationService.classifyApiException(410, 'license expired'),
+        LicenseVerifyOutcome.expired,
+      );
+    });
+    test('404 Route not found → unreachable', () {
+      expect(
+        ActivationService.classifyApiException(404, 'Route not found'),
+        LicenseVerifyOutcome.unreachable,
+      );
+    });
+    test('500 revoked → unreachable (5xx ignored)', () {
+      expect(
+        ActivationService.classifyApiException(500, 'revoked'),
+        LicenseVerifyOutcome.unreachable,
+      );
+    });
+    test('403 empty → unreachable', () {
+      expect(
+        ActivationService.classifyApiException(403, ''),
+        LicenseVerifyOutcome.unreachable,
+      );
+    });
+    test('401 revoked → unreachable (401 not in allowed codes)', () {
+      expect(
+        ActivationService.classifyApiException(401, 'revoked'),
+        LicenseVerifyOutcome.unreachable,
+      );
+    });
+  });
 }
 
 /// A plain Dart exception that stands in for `dart:io`'s `SocketException`.
