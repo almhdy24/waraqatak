@@ -242,12 +242,6 @@ class ActivationService {
       );
     }
 
-    if (result == null) {
-      return const DetailedActivationResult(
-        outcome: ActivationOutcome.serverUnreachable,
-      );
-    }
-
     final DateTime? expiresAt;
     final String? licenseType;
 
@@ -344,6 +338,25 @@ class ActivationService {
     'device_mismatch', 'license_not_found', 'not_found',
   ];
 
+  static const List<String> _apiRejectionMarkers = [
+    'revoked', 'deactivated', 'device_not_registered',
+    'device_mismatch', 'license_not_found',
+  ];
+
+  @visibleForTesting
+  static LicenseVerifyOutcome classifyApiException(int statusCode, String text) {
+    if (statusCode != 403 && statusCode != 404 && statusCode != 410) {
+      return LicenseVerifyOutcome.unreachable;
+    }
+    final t = text.trim().toLowerCase();
+    if (t.isEmpty) return LicenseVerifyOutcome.unreachable;
+    if (t.contains('expired')) return LicenseVerifyOutcome.expired;
+    for (final m in _apiRejectionMarkers) {
+      if (t.contains(m)) return LicenseVerifyOutcome.rejected;
+    }
+    return LicenseVerifyOutcome.unreachable;
+  }
+
   @visibleForTesting
   static LicenseVerifyOutcome classifyVerifyError(String? error) {
     final e = (error ?? '').trim().toLowerCase();
@@ -377,10 +390,11 @@ class ActivationService {
       return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
     } on ElmahdiPayNetworkException {
       return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
-    } on ElmahdiPayApiException {
-      // ElmahdiPayApiException has fields: statusCode (int), message (String),
-      // errors (Map<String,dynamic>?), correlationId (String?). There is no
-      // machine-readable error-code String field — message is a human string.
+    } on ElmahdiPayApiException catch (e) {
+      final o = classifyApiException(e.statusCode, '${e.message} ${e.errors ?? ''}');
+      if (o == LicenseVerifyOutcome.rejected || o == LicenseVerifyOutcome.expired) {
+        return LicenseVerifyDecision(o, reason: e.message);
+      }
       return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
     } catch (_) {
       return const LicenseVerifyDecision(LicenseVerifyOutcome.unreachable);
