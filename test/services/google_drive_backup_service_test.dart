@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -437,6 +438,60 @@ void main() {
 
       expect(l10nAr.googleDriveErrorConfig, contains('Google Cloud'));
       expect(l10nEn.googleDriveErrorConfig, contains('Google Cloud'));
+    });
+
+    // ── Item 6: retention — keep newest 7 ────────────────────────────────────
+
+    test(
+        'Item 6: after upload with 9 existing backups, only newest 7 remain; unrelated file untouched',
+        () async {
+      await GoogleDriveBackupService.instance.signIn();
+
+      // Pre-populate the fake client with 9 warqatek backup files and one
+      // unrelated file. Use distinct modifiedTime values so sorting is stable.
+      final baseTime = DateTime(2026, 1, 1, 0, 0, 0);
+      for (var i = 0; i < 9; i++) {
+        final id = 'old_id_$i';
+        final bytes = Uint8List.fromList([i]);
+        fakeClient.storage[id] = bytes;
+        fakeClient.files.add(DriveBackupFile(
+          id: id,
+          name: 'warqatek_backup_2026010${i + 1}_120000.waraq',
+          sizeBytes: 1,
+          modifiedTime: baseTime.add(Duration(hours: i)),
+        ));
+      }
+      // Add an unrelated file that must never be deleted.
+      fakeClient.storage['other_id'] = Uint8List(0);
+      fakeClient.files.add(DriveBackupFile(
+        id: 'other_id',
+        name: 'other.txt',
+        sizeBytes: 0,
+        modifiedTime: DateTime(2026, 1, 1),
+      ));
+
+      // Upload a new backup (makes 10 warqatek_backup_* files total).
+      final uploaded =
+          await GoogleDriveBackupService.instance.uploadCurrentBackup();
+
+      final backups = await GoogleDriveBackupService.instance.listBackups();
+      final waraqatekBackups = backups
+          .where((f) =>
+              f.name.startsWith('warqatek_backup_') &&
+              f.name.endsWith('.waraq'))
+          .toList();
+
+      // Exactly 7 warqatek backups must remain.
+      expect(waraqatekBackups.length, 7,
+          reason: 'Retention must keep only the newest 7');
+
+      // The newly uploaded file must be among the survivors.
+      expect(waraqatekBackups.any((f) => f.id == uploaded.id), isTrue,
+          reason: 'The just-uploaded backup must be retained');
+
+      // The unrelated file must still be there.
+      expect(backups.any((f) => f.name == 'other.txt'), isTrue,
+          reason: 'Retention must not touch files that are not warqatek backups');
     });
   });
 }

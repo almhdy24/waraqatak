@@ -64,7 +64,7 @@ class _GoogleAuthClient extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final headers = await _headerSupplier();
     request.headers.addAll(headers);
-    return _client.send(request);
+    return _client.send(request).timeout(const Duration(seconds: 90));
   }
 
   @override
@@ -233,10 +233,13 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
   }) async {
     final api = await _getDriveApi();
 
+    // Escape the file name for use in Drive API query strings.
+    final safeName = fileName.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+
     // Avoid duplicate files with the same name if possible
     final existing = await api.files.list(
       spaces: 'appDataFolder',
-      q: "trashed = false and name = '$fileName'",
+      q: "trashed = false and name = '$safeName'",
       $fields: 'files(id)',
     );
 
@@ -246,6 +249,10 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
       contentType: 'application/octet-stream',
     );
 
+    final uploadOptions = bytes.length > 5 * 1024 * 1024
+        ? drive.ResumableUploadOptions()
+        : drive.UploadOptions.defaultOptions;
+
     drive.File uploaded;
     if (existing.files != null && existing.files!.isNotEmpty) {
       final existingId = existing.files!.first.id!;
@@ -253,6 +260,7 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
         drive.File(),
         existingId,
         uploadMedia: media,
+        uploadOptions: uploadOptions,
         $fields: 'id, name, size, modifiedTime',
       );
     } else {
@@ -262,6 +270,7 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
       uploaded = await api.files.create(
         driveFile,
         uploadMedia: media,
+        uploadOptions: uploadOptions,
         $fields: 'id, name, size, modifiedTime',
       );
     }
@@ -359,8 +368,11 @@ class GoogleDriveBackupService {
     final localFile = File(localBackupPath);
     try {
       final bytes = await localFile.readAsBytes();
-      final dateStr = DateTime.now().toIso8601String().split('T').first;
-      final cloudFileName = 'warqatek_backup_$dateStr.waraq';
+      final n = DateTime.now();
+      String two(int v) => v.toString().padLeft(2, '0');
+      final stamp =
+          '${n.year}${two(n.month)}${two(n.day)}_${two(n.hour)}${two(n.minute)}${two(n.second)}';
+      final cloudFileName = 'warqatek_backup_$stamp.waraq';
       final uploaded = await _client.uploadBackup(
         bytes: bytes,
         fileName: cloudFileName,
@@ -377,6 +389,28 @@ class GoogleDriveBackupService {
           details: 'file_id=${uploaded.id}; name=${uploaded.name}',
         );
       }
+
+      // Retention: keep newest 7 backups, delete the rest.
+      try {
+        final all = await _client.listBackups(); // already sorted newest first
+        final mine = all
+            .where((f) =>
+                f.name.startsWith('warqatek_backup_') &&
+                f.name.endsWith('.waraq'))
+            .toList()
+          ..sort((a, b) => b.modifiedTime.compareTo(a.modifiedTime));
+        for (final old in mine.skip(7)) {
+          if (old.id == uploaded.id) continue;
+          try {
+            await _client.deleteBackup(old.id);
+          } catch (e) {
+            debugPrint('Drive retention: failed to delete ${old.id}: $e');
+          }
+        }
+      } catch (e) {
+        debugPrint('Drive retention skipped: $e');
+      }
+
       return uploaded;
     } finally {
       try {
