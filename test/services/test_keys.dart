@@ -32,8 +32,9 @@ class FakeLicenseStorage implements LicenseStorage {
   Future<String?> read({required String key}) async => data[key];
 
   @override
-  Future<void> write({required String key, required String value}) async {
+  Future<bool> write({required String key, required String value}) async {
     data[key] = value;
+    return true;
   }
 
   @override

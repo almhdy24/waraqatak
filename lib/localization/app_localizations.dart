@@ -1041,6 +1041,14 @@ class AppLocalizations {
     'تعذّر التحقق من هوية هذا الجهاز بشكل آمن.',
     'Could not verify device identity securely.',
   );
+  String get activationStorageFailed => _t(
+    'تعذّر حفظ الترخيص على هذا الجهاز. حاول مرة أخرى، وإن تكرر الخطأ تواصل مع الدعم.',
+    "Couldn't save the license on this device. Please try again. If it keeps happening, contact support.",
+  );
+  String get licenseStorageFault => _t(
+    'تعذّرت قراءة الترخيص المحفوظ على هذا الجهاز. أعد إدخال مفتاح التفعيل.',
+    'The saved license could not be read on this device. Please re-enter your activation key.',
+  );
   String get activationTipDevice => _t(
     'تلميح: تأكد من تفعيل خدمات النظام أو تشغيل التطبيق على جهاز مدعوم.',
     'Tip: Ensure system services are active or run the app on a supported device.',

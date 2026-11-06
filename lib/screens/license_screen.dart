@@ -29,6 +29,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
   EntitlementState? _state;
   String? _deviceModel;
   bool _busy = false;
+  bool _storageFault = false;
 
   @override
   void initState() {
@@ -43,6 +44,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
     setState(() {
       _state = s;
       _deviceModel = model;
+      _storageFault = LicenseService.instance.hasStorageFault;
     });
   }
 
@@ -141,6 +143,52 @@ class _LicenseScreenState extends State<LicenseScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (_storageFault)
+                  Card(
+                    elevation: 0,
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: Theme.of(context).colorScheme.onErrorContainer),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  AppLocalizations.of(context).licenseStorageFault,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onErrorContainer,
+                                    fontSize: 13,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          FilledButton(
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const ActivationScreen()),
+                              );
+                              await _reload();
+                            },
+                            child: Text(AppLocalizations.of(context).enterOrChangeKey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (_storageFault) const SizedBox(height: 16),
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(

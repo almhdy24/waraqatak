@@ -74,6 +74,8 @@ class _ActivationScreenState extends State<ActivationScreen> {
         _showError(l10n.activationServerUnreachable);
       case ActivationOutcome.deviceUnavailable:
         _showError(l10n.activationDeviceUnavailable);
+      case ActivationOutcome.storageFailed:
+        _showError(l10n.activationStorageFailed);
     }
   }
 
@@ -219,6 +221,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
         ActivationOutcome.serverUnreachable => l10n.activationTipServer,
         ActivationOutcome.tooManyAttempts => l10n.activationTipAttempts,
         ActivationOutcome.deviceUnavailable => l10n.activationTipDevice,
+        ActivationOutcome.storageFailed => l10n.activationStorageFailed,
         ActivationOutcome.success => '',
       };
 
