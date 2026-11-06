@@ -696,11 +696,32 @@ class BackupService {
   static Future<String> _buildBackupJson() async {
     final db = await DatabaseHelper.instance.database;
 
-    final businesses = await db.query('businesses');
-    String? logoBase64;
+    final snapshot = await db.transaction((txn) async {
+      return <String, List<Map<String, Object?>>>{
+        'businesses': await txn.query('businesses'),
+        'contacts': await txn.query('contacts'),
+        'products': await txn.query('products'),
+        'product_units': await txn.query('product_units'),
+        'documents': await txn.query('documents'),
+        'document_items': await txn.query('document_items'),
+        'document_counters': await txn.query('document_counters'),
+        'document_payments': await txn.query('document_payments'),
+        'stock_movements': await txn.query('stock_movements'),
+        'tax_profiles': await txn.query('tax_profiles'),
+        'payment_methods': await txn.query('payment_methods'),
+        'stocktake_sessions': await txn.query('stocktake_sessions'),
+        'stocktake_items': await txn.query('stocktake_items'),
+        'audit_log': await txn.query('audit_log'),
+        'accounts': await txn.query('accounts'),
+        'journal_entries': await txn.query('journal_entries'),
+        'journal_lines': await txn.query('journal_lines'),
+        'app_settings': await txn.query('app_settings'),
+      };
+    });
 
-    if (businesses.isNotEmpty) {
-      final logoPath = businesses.first['logo_path']?.toString();
+    String? logoBase64;
+    if (snapshot['businesses']!.isNotEmpty) {
+      final logoPath = snapshot['businesses']!.first['logo_path']?.toString();
       if (logoPath != null && logoPath.isNotEmpty) {
         final logoFile = File(logoPath);
         if (await logoFile.exists()) {
@@ -721,26 +742,7 @@ class BackupService {
       'backup_version': currentBackupVersion,
       'database_version': DatabaseHelper.dbVersion,
       'created_at': DateTime.now().toIso8601String(),
-      'data': {
-        'businesses': businesses,
-        'contacts': await db.query('contacts'),
-        'products': await db.query('products'),
-        'product_units': await db.query('product_units'),
-        'documents': await db.query('documents'),
-        'document_items': await db.query('document_items'),
-        'document_counters': await db.query('document_counters'),
-        'document_payments': await db.query('document_payments'),
-        'stock_movements': await db.query('stock_movements'),
-        'tax_profiles': await db.query('tax_profiles'),
-        'payment_methods': await db.query('payment_methods'),
-        'stocktake_sessions': await db.query('stocktake_sessions'),
-        'stocktake_items': await db.query('stocktake_items'),
-        'audit_log': await db.query('audit_log'),
-        'accounts': await db.query('accounts'),
-        'journal_entries': await db.query('journal_entries'),
-        'journal_lines': await db.query('journal_lines'),
-        'app_settings': await db.query('app_settings'),
-      },
+      'data': snapshot,
       'assets': {'logo_base64': logoBase64},
     };
 
