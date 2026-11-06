@@ -64,10 +64,27 @@ class BackupService {
   // SHARE BACKUP
   // ============================================================
 
-  static Future<void> createBackup() async {
+  static Future<void> createBackup({String? password}) async {
     final jsonStr = await _buildBackupJson();
+    final dir = await getTemporaryDirectory();
+    // clean old share files
+    try {
+      for (final e in dir.listSync()) {
+        if (e is File && e.uri.pathSegments.last.startsWith('warqatek_share_')) {
+          await e.delete();
+        }
+      }
+    } catch (_) {}
+    final name = 'warqatek_share_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
+    final file = File('${dir.path}/$name');
+    if (password != null && password.isNotEmpty) {
+      final enc = await BackupEncryptionService.encryptJson(jsonStr: jsonStr, password: password);
+      await file.writeAsBytes(enc, flush: true);
+    } else {
+      await file.writeAsString(jsonStr, encoding: utf8, flush: true);
+    }
     await SharePlus.instance.share(
-      ShareParams(text: jsonStr, subject: 'Warqatek Backup'),
+      ShareParams(files: [XFile(file.path)], subject: 'Warqatek Backup'),
     );
   }
 
@@ -89,7 +106,7 @@ class BackupService {
       );
       await file.writeAsBytes(encryptedBytes, flush: true);
     } else {
-      await file.writeAsString(jsonStr, encoding: utf8);
+      await file.writeAsString(jsonStr, encoding: utf8, flush: true);
     }
 
     return file.path;
