@@ -107,6 +107,7 @@ SUPPORT_SURFACE=(
   "lib/core/constants/app_constants.dart"
   "lib/screens/about_screen.dart"
   "lib/screens/activation_screen.dart"
+  "lib/screens/license_screen.dart"
 )
 
 # The ONLY outbound hosts the app is permitted to reach. Four product-site
