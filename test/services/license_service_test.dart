@@ -186,6 +186,32 @@ void main() {
       expect(storage.data.containsKey('wq_license_type'), isFalse);
       expect(storage.data.containsKey('wq_last_seen'), isTrue);
     });
+
+    test('stored last_launch is a UTC value ending in Z, clock moved back 3 days -> trial start is advanced by 3 days', () async {
+      final initialTrialStart = DateTime.utc(2026, 5, 1, 10);
+      storage.data['wq_trial_start'] = initialTrialStart.toIso8601String();
+      storage.data['wq_last_launch'] = DateTime.utc(2026, 5, 10, 10).toIso8601String();
+
+      // Clock moved back 3 days from last_launch: May 7 instead of May 10
+      final evaluatedNow = DateTime.utc(2026, 5, 7, 10);
+      await evaluateAt(evaluatedNow);
+
+      final updatedStart = DateTime.parse(storage.data['wq_trial_start']!);
+      expect(updatedStart, initialTrialStart.add(const Duration(days: 3)));
+    });
+
+    test('stored last_launch has NO Z, now is 5 hours earlier -> trial start is NOT changed', () async {
+      final initialTrialStart = DateTime.utc(2026, 5, 1, 10);
+      storage.data['wq_trial_start'] = initialTrialStart.toIso8601String();
+      storage.data['wq_last_launch'] = '2026-05-10T12:00:00.000';
+
+      // Now is 5 hours earlier
+      final evaluatedNow = DateTime.utc(2026, 5, 10, 7);
+      await evaluateAt(evaluatedNow);
+
+      final updatedStart = storage.data['wq_trial_start'];
+      expect(updatedStart, initialTrialStart.toIso8601String());
+    });
   });
 
   group('revoked', () {

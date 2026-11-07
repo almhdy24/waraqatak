@@ -374,11 +374,12 @@ class LicenseService {
   /// last recorded launch time, advance the trial start by the rollback delta
   /// so the user cannot gain extra trial days by rewinding the device clock.
   Future<void> _updateLastLaunch(DateTime now) async {
+    final nowUtc = now.toUtc();
     final s = await _read(_kLastLaunch);
     if (s != null && s.isNotEmpty) {
-      final last = DateTime.tryParse(s);
+      final last = s.endsWith('Z') ? DateTime.tryParse(s) : null; // old local-time values (no Z) are ignored once
       if (last != null) {
-        final rollback = last.difference(now); // positive when clock went back
+        final rollback = last.difference(nowUtc); // positive when clock went back
         if (rollback > const Duration(minutes: 2)) {
           final trialStr = await _read(_kTrialStart);
           if (trialStr != null && trialStr.isNotEmpty) {
@@ -392,7 +393,7 @@ class LicenseService {
         }
       }
     }
-    await _store.write(key: _kLastLaunch, value: now.toIso8601String());
+    await _store.write(key: _kLastLaunch, value: nowUtc.toIso8601String());
   }
 
   // ── License Persistence ────────────────────────────────────────────────────
