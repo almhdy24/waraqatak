@@ -23,6 +23,10 @@ class BackupService {
 
   @visibleForTesting
   static Directory Function()? backupDirectoryOverride;
+  @visibleForTesting
+  static Future<String> Function()? buildBackupJsonOverride;
+  @visibleForTesting
+  static Future<void> Function(File temp, File target)? onBeforeLocalPromotion;
 
   @visibleForTesting
   static Future<void> Function(File tempFile, File targetFile)?
@@ -97,24 +101,79 @@ class BackupService {
   // SAVE LOCAL BACKUP (App Documents Directory)
   // ============================================================
 
-  static Future<String> createLocalBackup({String? password}) async {
-    final jsonStr = await _buildBackupJson();
-    final fileName =
-        'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
+  static Future<String> createLocalBackup({
+    String? password,
+    String? targetPath,
+  }) async {
+    final jsonStr = buildBackupJsonOverride != null
+        ? await buildBackupJsonOverride!()
+        : await _buildBackupJson();
 
-    final directory = await _getBackupDirectory();
-    final file = File('${directory.path}/$fileName');
-    if (password != null && password.isNotEmpty) {
-      final encryptedBytes = await BackupEncryptionService.encryptJson(
-        jsonStr: jsonStr,
-        password: password,
-      );
-      await file.writeAsBytes(encryptedBytes, flush: true);
+    final File targetFile;
+    if (targetPath != null) {
+      targetFile = File(targetPath);
     } else {
-      await file.writeAsString(jsonStr, encoding: utf8, flush: true);
+      final fileName =
+          'warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
+      final directory = await _getBackupDirectory();
+      targetFile = File('${directory.path}/$fileName');
     }
 
-    return file.path;
+    final tempFile = File('${targetFile.path}.tmp');
+
+    try {
+      if (password != null && password.isNotEmpty) {
+        final encryptedBytes = await BackupEncryptionService.encryptJson(
+          jsonStr: jsonStr,
+          password: password,
+        );
+        await tempFile.writeAsBytes(encryptedBytes, flush: true);
+
+        // Verify non-empty and decryptable/parsable header
+        final readBackBytes = await tempFile.readAsBytes();
+        if (readBackBytes.isEmpty) {
+          throw const FileSystemException('Created backup is empty');
+        }
+        if (!BackupEncryptionService.isEncrypted(readBackBytes)) {
+          throw const FormatException(
+            'Created backup missing valid encryption header',
+          );
+        }
+        await BackupEncryptionService.decryptJson(
+          encryptedBytes: readBackBytes,
+          password: password,
+        );
+      } else {
+        await tempFile.writeAsString(jsonStr, encoding: utf8, flush: true);
+
+        // Verify non-empty and parsable header/JSON
+        final readBackBytes = await tempFile.readAsBytes();
+        if (readBackBytes.isEmpty) {
+          throw const FileSystemException('Created backup is empty');
+        }
+        final decoded = jsonDecode(utf8.decode(readBackBytes));
+        if (decoded is! Map<String, dynamic>) {
+          throw const FormatException(
+            'Created backup has invalid JSON structure',
+          );
+        }
+        _validateBackup(decoded);
+      }
+
+      if (onBeforeLocalPromotion != null) {
+        await onBeforeLocalPromotion!(tempFile, targetFile);
+      }
+
+      await tempFile.rename(targetFile.path);
+      return targetFile.path;
+    } catch (e) {
+      try {
+        if (tempFile.existsSync()) {
+          await tempFile.delete();
+        }
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   // ============================================================
@@ -713,6 +772,10 @@ class BackupService {
     }
   }
 
+  /// Public validation helper used before restore operations.
+  static void validateBackup(Map<String, dynamic> jsonMap) =>
+      _validateBackup(jsonMap);
+
   // ============================================================
   // ROW CONVERSION
   // ============================================================
@@ -789,36 +852,60 @@ class BackupService {
       'assets': {'logo_base64': logoBase64},
     };
 
-    return const JsonEncoder.withIndent('  ').convert(backupData);
+    return jsonEncode(backupData);
   }
 
   // ============================================================
   // RESTORE LOGO
   // ============================================================
 
+  static Future<void> _clearMissingLogoPath() async {
+    try {
+      final business = await DatabaseHelper.instance.getFirstBusiness();
+      if (business != null &&
+          business.logoPath != null &&
+          business.logoPath!.isNotEmpty) {
+        final file = File(business.logoPath!);
+        if (!await file.exists()) {
+          await DatabaseHelper.instance.updateBusiness(
+            business.copyWith(logoPath: null),
+          );
+        }
+      }
+    } catch (_) {
+      // Best-effort cleanup: never throw
+    }
+  }
+
   static Future<void> _restoreLogoIfNeeded(Map<String, dynamic> jsonMap) async {
     final assets = jsonMap['assets'];
-    if (assets is! Map<String, dynamic>) return;
+    bool restored = false;
+    if (assets is Map<String, dynamic>) {
+      final logoBase64 = assets['logo_base64'] as String?;
+      if (logoBase64 != null && logoBase64.isNotEmpty) {
+        try {
+          final logoBytes = base64Decode(logoBase64);
+          final directory = await getApplicationDocumentsDirectory();
+          final fileName =
+              'business_logo_${DateTime.now().millisecondsSinceEpoch}.png';
+          final file = File('${directory.path}/$fileName');
+          await file.writeAsBytes(logoBytes, flush: true);
 
-    final logoBase64 = assets['logo_base64'] as String?;
-    if (logoBase64 == null || logoBase64.isEmpty) return;
+          final business = await DatabaseHelper.instance.getFirstBusiness();
+          if (business != null) {
+            await DatabaseHelper.instance.updateBusiness(
+              business.copyWith(logoPath: file.path),
+            );
+            restored = true;
+          }
+        } catch (_) {
+          // Do not fail restore due to logo
+        }
+      }
+    }
 
-    try {
-      final logoBytes = base64Decode(logoBase64);
-      final directory = await getApplicationDocumentsDirectory();
-      final fileName =
-          'business_logo_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(logoBytes, flush: true);
-
-      final business = await DatabaseHelper.instance.getFirstBusiness();
-      if (business == null) return;
-
-      await DatabaseHelper.instance.updateBusiness(
-        business.copyWith(logoPath: file.path),
-      );
-    } catch (_) {
-      // Do not fail restore due to logo
+    if (!restored) {
+      await _clearMissingLogoPath();
     }
   }
 }

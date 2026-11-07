@@ -80,12 +80,14 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
   static const String defaultServerClientId =
       '357022447272-rr13hjouqhrndd1e9a9de71q4ilpvu6i.apps.googleusercontent.com';
 
-  static const String _envServerClientId =
-      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
+  static const String _envServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+  );
 
   /// Active serverClientId, allowing optional environment override while defaulting to [defaultServerClientId].
-  static String get serverClientId =>
-      _envServerClientId.isNotEmpty ? _envServerClientId : defaultServerClientId;
+  static String get serverClientId => _envServerClientId.isNotEmpty
+      ? _envServerClientId
+      : defaultServerClientId;
 
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   bool _initialized = false;
@@ -94,9 +96,7 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
 
   Future<void> _ensureInitialized() async {
     if (!_initialized) {
-      await _googleSignIn.initialize(
-        serverClientId: serverClientId,
-      );
+      await _googleSignIn.initialize(serverClientId: serverClientId);
       _initialized = true;
     }
   }
@@ -131,14 +131,12 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
       throw StateError('Google account sign-in was cancelled or failed.');
     }
 
-    var headers = await _account!.authorizationClient.authorizationHeaders(
-      [drive.DriveApi.driveAppdataScope],
-      promptIfNecessary: false,
-    );
-    headers ??= await _account!.authorizationClient.authorizationHeaders(
-      [drive.DriveApi.driveAppdataScope],
-      promptIfNecessary: true,
-    );
+    var headers = await _account!.authorizationClient.authorizationHeaders([
+      drive.DriveApi.driveAppdataScope,
+    ], promptIfNecessary: false);
+    headers ??= await _account!.authorizationClient.authorizationHeaders([
+      drive.DriveApi.driveAppdataScope,
+    ], promptIfNecessary: true);
 
     if (headers == null || !headers.containsKey('Authorization')) {
       throw StateError('Failed to obtain Google Drive authorization token.');
@@ -162,11 +160,12 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
         scopeHint: [drive.DriveApi.driveAppdataScope],
       );
       if (_account != null) {
-        final headers = await _account!.authorizationClient.authorizationHeaders(
-          [drive.DriveApi.driveAppdataScope],
-          promptIfNecessary: true,
-        );
-        final hasAuthHeader = headers != null && headers.containsKey('Authorization');
+        final headers = await _account!.authorizationClient
+            .authorizationHeaders([
+              drive.DriveApi.driveAppdataScope,
+            ], promptIfNecessary: true);
+        final hasAuthHeader =
+            headers != null && headers.containsKey('Authorization');
         if (hasAuthHeader) {
           _driveApi = drive.DriveApi(_GoogleAuthClient(_getFreshHeaders));
           return true;
@@ -213,12 +212,14 @@ class DefaultGoogleDriveClient implements GoogleDriveClient {
       for (final f in items) {
         final size = int.tryParse(f.size ?? '0') ?? 0;
         final modified = f.modifiedTime ?? DateTime.now();
-        allFiles.add(DriveBackupFile(
-          id: f.id ?? '',
-          name: f.name ?? 'backup.waraq',
-          sizeBytes: size,
-          modifiedTime: modified,
-        ));
+        allFiles.add(
+          DriveBackupFile(
+            id: f.id ?? '',
+            name: f.name ?? 'backup.waraq',
+            sizeBytes: size,
+            modifiedTime: modified,
+          ),
+        );
       }
       pageToken = fileList.nextPageToken;
     } while (pageToken != null && pageToken.isNotEmpty);
@@ -322,13 +323,14 @@ class GoogleDriveBackupService {
 
   @visibleForTesting
   static Future<void> Function(String event, {String? details})?
-      logAuditEventOverride;
+  logAuditEventOverride;
 
   @visibleForTesting
   static Future<bool> Function(
     Map<String, dynamic> jsonMap, {
     bool createSafetyBackup,
-  })? restoreFromJsonMapOverride;
+  })?
+  restoreFromJsonMapOverride;
 
   @visibleForTesting
   void setClientForTesting(GoogleDriveClient client) {
@@ -358,6 +360,7 @@ class GoogleDriveBackupService {
       debugPrint('Cloud backup deleted, but failed to log audit event: $e');
     }
   }
+
   String? get currentUserEmail => _client.currentUserEmail;
 
   /// Creates a local backup and uploads it to the appDataFolder on Google Drive.
@@ -393,12 +396,15 @@ class GoogleDriveBackupService {
       // Retention: keep newest 7 backups, delete the rest.
       try {
         final all = await _client.listBackups(); // already sorted newest first
-        final mine = all
-            .where((f) =>
-                f.name.startsWith('warqatek_backup_') &&
-                f.name.endsWith('.waraq'))
-            .toList()
-          ..sort((a, b) => b.modifiedTime.compareTo(a.modifiedTime));
+        final mine =
+            all
+                .where(
+                  (f) =>
+                      f.name.startsWith('warqatek_backup_') &&
+                      f.name.endsWith('.waraq'),
+                )
+                .toList()
+              ..sort((a, b) => b.modifiedTime.compareTo(a.modifiedTime));
         for (final old in mine.skip(7)) {
           if (old.id == uploaded.id) continue;
           try {
@@ -485,12 +491,12 @@ class GoogleDriveBackupService {
         throw Exception('Invalid cloud backup format');
       }
 
-      // Validates schema and triggers safety backup before modifying local SQLite database
+      // Validates schema/version on decoded JSON before initiating restore
+      BackupService.validateBackup(decoded);
+
+      // Triggers safety backup and restores data within SQLite transaction
       final success = restoreFromJsonMapOverride != null
-          ? await restoreFromJsonMapOverride!(
-              decoded,
-              createSafetyBackup: true,
-            )
+          ? await restoreFromJsonMapOverride!(decoded, createSafetyBackup: true)
           : await BackupService.restoreFromJsonMap(
               decoded,
               createSafetyBackup: true,
