@@ -37,6 +37,9 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Install native SQLite
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -45,6 +48,19 @@ jobs:
 
       - name: Analyze
         run: flutter analyze
+
+      - name: Reference Pricing & Guard Invariants Test (Unskipped Enforcement)
+        run: |
+          set -o pipefail
+          flutter test --reporter=expanded \
+            test/reference_pricing_math_test.dart \
+            test/reference_pricing_widgets_test.dart \
+            test/reference_pricing_db_test.dart \
+            test/guards 2>&1 | tee test_output.log
+          if grep -E "~[1-9]|were skipped" test_output.log; then
+            echo "ERROR: Skipped tests detected in CI execution!"
+            exit 1
+          fi
 
       - name: Test
         run: flutter test
