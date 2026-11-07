@@ -6,6 +6,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/currency.dart';
+import '../services/reference_pricing_service.dart';
 import 'financial_settings_screen.dart';
 import 'payment_methods_screen.dart';
 import '../widgets/app_icons.dart';
@@ -33,6 +34,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
   String? _logoPath;
   Business? _existing;
   bool _isCurrencyLocked = false;
+  bool _hasRates = false;
   bool _loading = true;
   bool _saving = false;
 
@@ -57,10 +59,12 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
     try {
       final business = await DatabaseHelper.instance.getFirstBusiness();
       final isLocked = await DatabaseHelper.instance.isCurrencyLocked();
+      final hasRates = await ReferencePricingService.hasRates();
       if (!mounted) return;
       setState(() {
         _existing = business;
         _isCurrencyLocked = isLocked;
+        _hasRates = hasRates;
         if (business != null) {
           _nameController.text = business.name;
           _ownerController.text = business.ownerName;
@@ -435,7 +439,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                             ),
                           );
                         }).toList(),
-                        onChanged: _isCurrencyLocked
+                        onChanged: (_isCurrencyLocked || _hasRates)
                             ? null
                             : (value) {
                                 setState(() => _currencyCode = value!);
@@ -443,17 +447,19 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                         decoration: InputDecoration(
                           labelText: l10n.currency,
                           prefixIcon: Icon(
-                            _isCurrencyLocked
+                            (_isCurrencyLocked || _hasRates)
                                 ? Icons.lock_outline
                                 : Icons.currency_exchange,
                             size: 20,
-                            color: _isCurrencyLocked
+                            color: (_isCurrencyLocked || _hasRates)
                                 ? Theme.of(context).colorScheme.outline
                                 : null,
                           ),
-                          helperText: _isCurrencyLocked
-                              ? l10n.currencyLockedNote
-                              : l10n.currencyInitialWarningNote,
+                          helperText: _hasRates
+                              ? l10n.currencyChangeBlockedByRates
+                              : (_isCurrencyLocked
+                                  ? l10n.currencyLockedNote
+                                  : l10n.currencyInitialWarningNote),
                           helperMaxLines: 2,
                           border: const OutlineInputBorder(),
                         ),

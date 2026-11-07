@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../localization/app_localizations.dart';
+import '../models/reference_pricing_types.dart';
 
 /// Centralized utility to convert technical exceptions and database errors
 /// into clear, actionable, friendly Arabic messages for business users,
@@ -13,6 +14,28 @@ class ErrorUtils {
   }
 
   static String toFriendlyMessage(Object error, AppLocalizations l10n) {
+    if (error is ReferencePricingException) {
+      return switch (error.code) {
+        ReferencePricingError.invalidRate => l10n.refErrInvalidRate,
+        ReferencePricingError.invalidPrice => l10n.refErrInvalidPrice,
+        ReferencePricingError.priceOutOfRange => l10n.refErrPriceOutOfRange,
+        ReferencePricingError.rateMissing => l10n.rateMissingForCurrency,
+        ReferencePricingError.referencePriceRequired =>
+          l10n.refErrReferencePriceRequired,
+        ReferencePricingError.repricingInProgress => l10n.refErrRepricingBusy,
+        ReferencePricingError.currencyExists => l10n.refErrCurrencyExists,
+        ReferencePricingError.currencyIsBase => l10n.refErrCurrencyIsBase,
+        ReferencePricingError.currencyInUse => l10n.currencyInUse,
+        ReferencePricingError.currencyArchived => l10n.refErrCurrencyArchived,
+        ReferencePricingError.baseCurrencyChangeBlocked =>
+          l10n.currencyChangeBlockedByRates,
+        ReferencePricingError.businessNotConfigured => l10n.setupBusinessFirst,
+        ReferencePricingError.implicitClear ||
+        ReferencePricingError.currencyNotFound =>
+          l10n.refErrGeneric,
+      };
+    }
+
     final raw = error.toString();
     debugPrint('[Waraqatak Error] $raw');
 
