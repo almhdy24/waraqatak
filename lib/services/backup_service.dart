@@ -70,15 +70,20 @@ class BackupService {
     // clean old share files
     try {
       for (final e in dir.listSync()) {
-        if (e is File && e.uri.pathSegments.last.startsWith('warqatek_share_')) {
+        if (e is File &&
+            e.uri.pathSegments.last.startsWith('warqatek_share_')) {
           await e.delete();
         }
       }
     } catch (_) {}
-    final name = 'warqatek_share_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
+    final name =
+        'warqatek_share_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
     final file = File('${dir.path}/$name');
     if (password != null && password.isNotEmpty) {
-      final enc = await BackupEncryptionService.encryptJson(jsonStr: jsonStr, password: password);
+      final enc = await BackupEncryptionService.encryptJson(
+        jsonStr: jsonStr,
+        password: password,
+      );
       await file.writeAsBytes(enc, flush: true);
     } else {
       await file.writeAsString(jsonStr, encoding: utf8, flush: true);
@@ -234,7 +239,8 @@ class BackupService {
             : '';
 
         // Strict match on safety backups only
-        final isSafety = name.startsWith('warqatek_safety_pre_restore_') &&
+        final isSafety =
+            name.startsWith('warqatek_safety_pre_restore_') &&
             name.endsWith('.$backupExtension');
         if (!isSafety) continue;
 
@@ -251,9 +257,10 @@ class BackupService {
           final mtime = await file.lastModified();
           filesWithTime.add((file: file, mtime: mtime));
         } catch (_) {
-          filesWithTime.add(
-            (file: file, mtime: DateTime.fromMillisecondsSinceEpoch(0)),
-          );
+          filesWithTime.add((
+            file: file,
+            mtime: DateTime.fromMillisecondsSinceEpoch(0),
+          ));
         }
       }
       filesWithTime.sort((a, b) => b.mtime.compareTo(a.mtime));
@@ -421,13 +428,20 @@ class BackupService {
       Map<String, dynamic> sanitizeRow(
         Map<String, dynamic> row,
         Set<String> cols,
-      ) =>
-          Map.fromEntries(row.entries.where((e) => cols.contains(e.key)));
+      ) => Map.fromEntries(row.entries.where((e) => cols.contains(e.key)));
 
-      if (await tableExists('journal_lines')) await txn.delete('journal_lines');
-      if (await tableExists('journal_entries')) await txn.delete('journal_entries');
-      if (await tableExists('accounts')) await txn.delete('accounts');
-      if (await tableExists('app_settings')) await txn.delete('app_settings');
+      if (await tableExists('journal_lines')) {
+        await txn.delete('journal_lines');
+      }
+      if (await tableExists('journal_entries')) {
+        await txn.delete('journal_entries');
+      }
+      if (await tableExists('accounts')) {
+        await txn.delete('accounts');
+      }
+      if (await tableExists('app_settings')) {
+        await txn.delete('app_settings');
+      }
       await txn.delete('document_payments');
       await txn.delete('document_items');
       await txn.delete('stocktake_items');
@@ -456,8 +470,7 @@ class BackupService {
       for (final row in _convertRows(data['products'])) {
         await txn.insert('products', sanitizeRow(row, productCols));
       }
-      if (data.containsKey('product_units') &&
-          data['product_units'] is List) {
+      if (data.containsKey('product_units') && data['product_units'] is List) {
         final puCols = await getTableCols('product_units');
         for (final row in _convertRows(data['product_units'])) {
           await txn.insert('product_units', sanitizeRow(row, puCols));
@@ -582,14 +595,10 @@ class BackupService {
           await DatabaseHelper.seedDefaultSettings(txn);
         }
         // Invariant: force journal_reports_enabled = false regardless of backup content
-        await txn.insert(
-          'app_settings',
-          {
-            'key': 'journal_reports_enabled',
-            'value': 'false',
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await txn.insert('app_settings', {
+          'key': 'journal_reports_enabled',
+          'value': 'false',
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
       // Journal entries & lines (Phase 1)
@@ -614,6 +623,17 @@ class BackupService {
       await DatabaseHelper.backfillCurrencyLockIfNeeded(txn);
     });
 
+    // Verify database integrity post-restore
+    final integrity = await db.rawQuery('PRAGMA integrity_check');
+    final integrityResult = integrity.isNotEmpty
+        ? integrity.first.values.first?.toString()
+        : null;
+    if (integrityResult?.toLowerCase() != 'ok') {
+      throw StateError(
+        'Database integrity check failed post-restore: $integrityResult',
+      );
+    }
+
     await _restoreLogoIfNeeded(jsonMap);
     await DatabaseHelper.instance.logAuditEvent(
       'backup_restored',
@@ -622,7 +642,8 @@ class BackupService {
     );
 
     // If legacy backup lacked journal tables, invoke backfill
-    final isLegacy = !data.containsKey('journal_entries') ||
+    final isLegacy =
+        !data.containsKey('journal_entries') ||
         data['journal_entries'] == null ||
         (data['journal_entries'] as List).isEmpty;
     if (isLegacy) {

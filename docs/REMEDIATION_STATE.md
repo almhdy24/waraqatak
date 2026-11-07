@@ -21,8 +21,8 @@
 | **Batch 6** | IMPLEMENT: DB constraints + audit atomicity | DONE | Migration v26: unique indexes, safe de-duplication, atomic audit logging, period lock in issueDocument |
 | **Batch 7** | IMPLEMENT: POS tax, purchase units, track_inventory | DONE (POS tax) / DEFERRED (track_inventory) | POS tax preview parity (Fact B4) resolved and verified with pure unit tests; track_inventory deferred to last item per Override A3; purchase units unreachable per B5 |
 | **Batch 8** | IMPLEMENT: Arabic search, number formatting, UI error handling | DONE | ArabicSearchUtils (Alif variants, Taa Marbuta/Haa, Yaa/Alif Maqsura, Tashkeel/Tatweel removal, SQL normalize), NumberInput Arabic-Indic digits, ErrorUtils error mappings |
-| **Batch 9** | Deep financial review | PENDING | Line-by-line report queries, currencies, rounding, CSV |
-| **Batch 10** | IMPLEMENT: Backup hardening | PENDING | Key derivation once, version validation, atomic swap |
+| **Batch 9** | Deep financial review | DONE | Verified financial report queries exclude draft/cancelled, segregate currencies, round via MoneyUtils; verified CSV exports use UTF-8 BOM and import fallback to Windows-1256 |
+| **Batch 10** | IMPLEMENT: Backup hardening | DONE | Single PBKDF2 key derivation per backup/restore, strict future version rejection, post-restore PRAGMA integrity_check, pure unit tests passed |
 | **Batch 11** | Localization | SKIPPED BY USER | Skipped per supplemental override A2; user will run dedicated language prompt |
 | **Batch 12** | Licensing & entitlements | PENDING | UTC clock, offline fallback |
 | **Batch 13** | Hostile review & final verdict | PENDING | Adversarial diff review, final verdict |
