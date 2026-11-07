@@ -55,6 +55,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   List<PaymentMethod> _methods = [];
   String? _method;
   bool _loading = true;
+  bool _loadFailed = false;
   bool _saving = false;
   String _query = '';
 
@@ -75,35 +76,49 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   }
 
   Future<void> _load() async {
-    final db = DatabaseHelper.instance;
-    final results = await Future.wait([
-      db.getFirstBusiness(),
-      ProductService.getAllProducts(activeOnly: true),
-      db.getEnabledPaymentMethods(),
-      db.getAllProductUnits(),
-    ]);
-    final entitlement = await LicenseService.instance.checkEntitlement();
-    if (!mounted) return;
-    final business = results[0] as Business?;
-    final methods = results[2] as List<PaymentMethod>;
-    final units = results[3] as Map<int, List<ProductUnit>>;
-    setState(() {
-      _business = business;
-      _products = results[1] as List<Product>;
-      _methods = methods;
-      _productUnits = units;
-      _cart.setEnforceStock(FeatureAccess.canAccess(Feature.inventory, entitlement));
-      _cart.setWholesalePricingEnabled(business?.wholesalePricingEnabled ?? false);
-      if (business != null) {
-        _cart.setDecimalDigits(Currency.decimalDigitsForCode(business.currencyCode));
-      }
-      _method ??= methods
-              .where((m) => m.isDefault)
-              .map((m) => m.key)
-              .firstOrNull ??
-          methods.firstOrNull?.key;
-      _loading = false;
-    });
+    if (_loadFailed && mounted) {
+      setState(() {
+        _loadFailed = false;
+        _loading = true;
+      });
+    }
+    try {
+      final db = DatabaseHelper.instance;
+      final results = await Future.wait([
+        db.getFirstBusiness(),
+        ProductService.getAllProducts(activeOnly: true),
+        db.getEnabledPaymentMethods(),
+        db.getAllProductUnits(),
+      ]);
+      final entitlement = await LicenseService.instance.checkEntitlement();
+      if (!mounted) return;
+      final business = results[0] as Business?;
+      final methods = results[2] as List<PaymentMethod>;
+      final units = results[3] as Map<int, List<ProductUnit>>;
+      setState(() {
+        _business = business;
+        _products = results[1] as List<Product>;
+        _methods = methods;
+        _productUnits = units;
+        _cart.setEnforceStock(FeatureAccess.canAccess(Feature.inventory, entitlement));
+        _cart.setWholesalePricingEnabled(business?.wholesalePricingEnabled ?? false);
+        if (business != null) {
+          _cart.setDecimalDigits(Currency.decimalDigitsForCode(business.currencyCode));
+        }
+        _method ??= methods
+                .where((m) => m.isDefault)
+                .map((m) => m.key)
+                .firstOrNull ??
+            methods.firstOrNull?.key;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
+      });
+    }
   }
 
   String _fmt(double v) =>
