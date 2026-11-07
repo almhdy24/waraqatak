@@ -189,7 +189,7 @@ class AppLocalizations {
   String get customerHasDocumentsTitle =>
       _t('للعميل معاملات مسجلة', 'Customer has transactions');
   String get customerHasDocumentsMessage => _t(
-        'لهذا العميل مستندات مسجلة، والحذف سيمحو سجل حسابه وأرصدته. أرشف العميل بدلًا من ذلك: يختفي من المستندات الجديدة وتبقى كل السجلات سليمة.',
+        'لهذا العميل مستندات مسجلة، والحذف سيمحو سجل حسابه وأرصدته. أرشف العميل بدلاً من ذلك: يختفي من المستندات الجديدة وتبقى كل السجلات سليمة.',
         'This customer has recorded documents. Deleting would erase their account history and balances. Archive the customer instead: they stop appearing for new documents, and all records stay intact.',
       );
   String get archiveCustomer => _t('أرشفة العميل', 'Archive customer');
