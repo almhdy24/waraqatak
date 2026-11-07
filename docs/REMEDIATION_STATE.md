@@ -3,8 +3,9 @@
 **Current Branch:** `remediation/full-audit`  
 **Base Commit:** `438c75a` (Batch 4 FIFO allocation commit on `fix/batch5-robustness`)  
 **Main Branch HEAD:** `c60ddc4` (tag `v1.1.5+21`)  
-**Database dbVersion in Current Branch:** 26  
+**Database dbVersion in Current Branch:** 27  
 **Backup Format Version:** 5  
+**Verdict:** CONDITIONAL PASS — CI REQUIRED (integration tests never executed locally)  
 
 ---
 
@@ -25,7 +26,7 @@
 | **Batch 10** | IMPLEMENT: Backup hardening | DONE | Single PBKDF2 key derivation per backup/restore, strict future version rejection, post-restore PRAGMA integrity_check, pure unit tests passed |
 | **Batch 11** | Localization | SKIPPED BY USER | Skipped per supplemental override A2; user will run dedicated language prompt |
 | **Batch 12** | Licensing & entitlements | DONE | Verified UTC clock comparisons, monotonic last-seen guard, rollback protection, unreachable network offline preservation, and core offline features unblocked; 68 unit tests passed |
-| **Batch 13** | Hostile review & final verdict | DONE | Adversarial git diff review, 0 analyze errors across 7 target files, 103 pure unit and guard tests passed twice ("Double check the Double check"), final verdict approved |
+| **Batch 13** | Hostile review & final verdict | DONE | Adversarial git diff review, 0 analyze errors across target files, 103 pure unit and guard tests passed twice ("Double check the Double check"); Verdict: CONDITIONAL PASS — CI REQUIRED (integration tests never executed locally) |
 
 ---
 
@@ -46,8 +47,8 @@
 ## 3. Schema Version & Branch Collision Resolution
 
 - `main`: `dbVersion = 25`
-- `remediation/full-audit`: Migration to `dbVersion = 26` implemented:
+- `remediation/full-audit`: Migration to `dbVersion = 27` implemented (renumbered from 26 as v26 belongs to `feat/reference-currency-pricing`):
   - Non-destructive de-duplication of barcodes & document numbers
   - `CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ""`
   - `CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_type_docnum_unique ON documents(type, document_number)`
-- Any future migration added after reference-currency branch merge will be schema version >= 27.
+- Any future migration added after reference-currency branch merge will be schema version >= 28.
