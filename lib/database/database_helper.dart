@@ -321,7 +321,7 @@ class DatabaseHelper {
     ''');
     await db.execute('CREATE INDEX idx_products_name ON products(name)');
     await db.execute(
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ""',
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ''",
     );
     await db.execute(
       'CREATE INDEX idx_products_category ON products(category)',
@@ -1453,7 +1453,7 @@ class DatabaseHelper {
 
         await db.execute('DROP INDEX IF EXISTS idx_products_barcode');
         await db.execute(
-          'CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ""',
+          "CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ''",
         );
       }
 
@@ -3059,7 +3059,7 @@ class DatabaseHelper {
   Future<List<String>> getProductCategories() async {
     final db = await database;
     final results = await db.rawQuery(
-      'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND TRIM(category) != "" ORDER BY category',
+      "SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND TRIM(category) != '' ORDER BY category",
     );
     return results.map((r) => r['category'] as String).toList();
   }
