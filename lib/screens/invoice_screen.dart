@@ -10,6 +10,7 @@ import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
 import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 import '../widgets/app_amount_text.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
@@ -525,13 +526,15 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              TextFormField(
+              AmountField(
                 controller: _discountController,
                 decoration: InputDecoration(
                   labelText: l10n.discount,
                   prefixIcon: const Icon(Icons.percent_rounded, size: 20),
                 ),
                 textInputAction: TextInputAction.next,
+                maxDecimals: 4,
+                showMultipliers: true,
                 onTap: () {
                   if (_discountController.text.isNotEmpty) {
                     _discountController.selection = TextSelection(
@@ -540,12 +543,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     );
                   }
                 },
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
               ),
               const SizedBox(height: 12),
-              TextFormField(
+              AmountField(
                 controller: _paidController,
                 decoration: InputDecoration(
                   labelText: l10n.paid,
@@ -553,6 +553,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   helperText: l10n.remainingBalanceHelper,
                 ),
                 textInputAction: TextInputAction.next,
+                maxDecimals: 4,
+                showMultipliers: true,
                 onTap: () {
                   if (_paidController.text.isNotEmpty) {
                     _paidController.selection = TextSelection(
@@ -561,9 +563,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     );
                   }
                 },
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
               ),
               const SizedBox(height: 12),
               TextFormField(

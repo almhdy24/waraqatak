@@ -9,6 +9,7 @@ import '../screens/product_form_screen.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import '../utils/number_input.dart';
+import 'amount_field.dart';
 import 'app_design_tokens.dart';
 import 'product_autocomplete_field.dart';
 
@@ -490,7 +491,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
               children: [
                 Expanded(
                   flex: 3,
-                  child: TextFormField(
+                  child: AmountField(
                     controller: widget.quantityController,
                     decoration: InputDecoration(
                       labelText: l10n.itemQuantity,
@@ -501,6 +502,8 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       border: const OutlineInputBorder(),
                     ),
                     textInputAction: TextInputAction.next,
+                    maxDecimals: 4,
+                    showMultipliers: false,
                     onTap: () {
                       if (widget.quantityController.text.isNotEmpty) {
                         widget.quantityController.selection = TextSelection(
@@ -509,9 +512,6 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                         );
                       }
                     },
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
                     validator: (v) {
                       final q = NumberInput.parse(v ?? '');
                       if (q == null || q <= 0) return l10n.invalidQuantity;
@@ -523,7 +523,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                 const SizedBox(width: 8),
                 Expanded(
                   flex: 4,
-                  child: TextFormField(
+                  child: AmountField(
                     controller: widget.priceController,
                     decoration: InputDecoration(
                       labelText: l10n.itemPrice,
@@ -534,6 +534,8 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       border: const OutlineInputBorder(),
                     ),
                     textInputAction: TextInputAction.next,
+                    maxDecimals: 4,
+                    showMultipliers: true,
                     onTap: () {
                       if (widget.priceController.text.isNotEmpty) {
                         widget.priceController.selection = TextSelection(
@@ -542,9 +544,6 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                         );
                       }
                     },
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
                     validator: (v) {
                       final p = NumberInput.parse(v ?? '');
                       if (p == null || p < 0) return l10n.invalidAmount;
