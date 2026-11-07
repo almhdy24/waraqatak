@@ -103,8 +103,8 @@ void main() {
     );
   });
 
-  // 3. Deleting a product with an opening movement succeeds when no document references it
-  test('3. Deleting a product with opening movement succeeds when unreferenced', () async {
+  // 3. (B2-4) Deleting a product with an opening movement is now blocked by B2-4
+  test('3. Deleting a product with opening movement throws StateError (B2-4)', () async {
     final db = DatabaseHelper.instance;
     final pid = await ProductService.createProduct(
       name: 'منتج للحذف 3',
@@ -115,11 +115,14 @@ void main() {
     final movementsBefore = await db.getStockMovements(pid);
     expect(movementsBefore, isNotEmpty);
 
-    // Deleting should delete both the movement and the product atomically
-    final deleted = await db.deleteProduct(pid);
-    expect(deleted, 1);
-    expect(await db.getProductById(pid), isNull);
-    expect(await db.getStockMovements(pid), isEmpty);
+    // Now blocked: product has stock history
+    await expectLater(
+      () => db.deleteProduct(pid),
+      throwsA(isA<StateError>()),
+    );
+    // Product and movements still exist
+    expect(await db.getProductById(pid), isNotNull);
+    expect(await db.getStockMovements(pid), isNotEmpty);
   });
 
   // 4. Deleting a product referenced by a historical document remains protected
@@ -468,6 +471,39 @@ void main() {
     expect(await db.getDocumentById(purchaseId), isNull);
     final movements = await db.getStockMovements(pid);
     expect(movements.where((m) => m.referenceDocumentId == purchaseId), isEmpty);
+  });
+
+  // B2-4: product with no movements/documents can still be deleted (zero-stock service workaround)
+  test('B2-4: product with no movements and no documents → deleted successfully', () async {
+    final db = DatabaseHelper.instance;
+    // Insert a product with zero opening stock (no movement created for 0-stock products)
+    // We need to verify: check if ProductService.createProduct with stockQuantity=0 creates a movement.
+    // If it does, we need a raw insert. Use rawQuery to insert directly.
+    final pid = await db.database.then((d) async {
+      return d.insert('products', {
+        'name': 'منتج بدون مخزون B2-4',
+        'type': 'product',
+        'sale_price': 50.0,
+        'stock_quantity': 0.0,
+        'is_active': 1,
+        'is_taxable': 1,
+        'unit': 'حبة',
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    });
+
+    // Verify no movements
+    final movements = await db.getStockMovements(pid);
+    expect(movements, isEmpty, reason: 'Raw insert should have no movements');
+
+    // isProductReferenced must be false
+    expect(await db.isProductReferenced(pid), isFalse);
+
+    // deleteProduct must succeed
+    final deleted = await db.deleteProduct(pid);
+    expect(deleted, 1);
+    expect(await db.getProductById(pid), isNull);
   });
 }
 

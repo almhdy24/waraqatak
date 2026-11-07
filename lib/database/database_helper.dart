@@ -2545,25 +2545,38 @@ class DatabaseHelper {
       if (refRows.isNotEmpty) {
         throw StateError('Cannot delete product referenced in documents');
       }
-      await txn.delete(
+      final moveRows = await txn.query(
         'stock_movements',
+        columns: ['id'],
         where: 'product_id = ?',
         whereArgs: [id],
+        limit: 1,
       );
+      if (moveRows.isNotEmpty) {
+        throw StateError('Cannot delete product with stock history');
+      }
       return txn.delete('products', where: 'id = ?', whereArgs: [id]);
     });
   }
 
   Future<bool> isProductReferenced(int id) async {
     final db = await database;
-    final rows = await db.query(
+    final docRows = await db.query(
       'document_items',
       columns: ['id'],
       where: 'product_id = ?',
       whereArgs: [id],
       limit: 1,
     );
-    return rows.isNotEmpty;
+    if (docRows.isNotEmpty) return true;
+    final moveRows = await db.query(
+      'stock_movements',
+      columns: ['id'],
+      where: 'product_id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return moveRows.isNotEmpty;
   }
 
   Future<List<Product>> getAllProducts({
