@@ -95,13 +95,13 @@ class AppLocalizations {
   String get print => _t('طباعة', 'Print');
   String get unsavedChangesTitle => _t('تغييرات غير محفوظة', 'Unsaved Changes');
   String get unsavedChangesMessage => _t(
-    'لديك تعديلات لم يتم حفظها. هل تريد بالتأكيد الخروج وإلغاء التعديلات؟',
+    'لديك تعديلات لم تُحفظ. هل تريد الخروج وتجاهلها؟',
     'You have unsaved changes. Are you sure you want to discard them and leave?',
   );
   String get discardChanges => _t('تجاهل التعديلات', 'Discard Changes');
   String get confirmDeleteLine => _t('حذف هذا البند؟', 'Delete this item?');
   String get deleteLineWarning => _t(
-    'هل تريد بالتأكيد إزالة هذا البند من المستند؟',
+    'سيُحذف هذا البند من المستند.',
     'Are you sure you want to remove this item from the document?',
   );
 
@@ -253,7 +253,7 @@ class AppLocalizations {
   String get confirmRestore =>
       _t('استعادة النسخة الاحتياطية؟', 'Restore backup?');
   String get restoreWarning => _t(
-    'سيتم استبدال البيانات الحالية بالبيانات الموجودة في النسخة الاحتياطية. لا يمكن التراجع عن هذا الإجراء.',
+    'ستُستبدل بياناتك الحالية بما في النسخة الاحتياطية، ولا يمكن التراجع عن ذلك.',
     'Your current data will be replaced with the data in the backup. This action cannot be undone.',
   );
   String get backupRestore =>
@@ -359,7 +359,7 @@ class AppLocalizations {
   String get backupConfirmPassword =>
       _t('تأكيد كلمة المرور', 'Confirm password');
   String get backupPasswordRequired =>
-      _t('يرجى إدخال كلمة المرور', 'Please enter a password');
+      _t('أدخل كلمة المرور', 'Please enter a password');
   String get backupPasswordMinLength =>
       _t('كلمة المرور يجب أن لا تقل عن 8 أحرف', 'Password must be at least 8 characters');
   String get backupPasswordsDoNotMatch =>
@@ -453,7 +453,7 @@ class AppLocalizations {
   );
   String get refundStatusLabel => _t('حالة رد المبلغ', 'Refund Status');
   String get refundStatusRequiredHint => _t(
-    'يرجى تحديد حالة رد المبلغ لإتمام الإلغاء',
+    'حدّد حالة رد المبلغ لإتمام الإلغاء',
     'Please select the refund status to confirm cancellation',
   );
   String get refundStatusRefunded => _t('تم رد المبلغ', 'Refunded');
@@ -557,7 +557,7 @@ class AppLocalizations {
   String get productsOnly => _t('المنتجات', 'Products');
   String get servicesOnly => _t('الخدمات', 'Services');
   String get cannotConvertStockedProductToService => _t(
-    'لا يمكن تحويل منتج يحتوي على مخزون إلى خدمة. يرجى تصفير المخزون أولاً',
+    'لا يمكن تحويل منتج له مخزون إلى خدمة. صفّر المخزون أولاً.',
     'Cannot convert a product with stock to a service. Please adjust stock to 0 first',
   );
   String get stockCannotBeEditedDirectly => _t(
@@ -634,7 +634,7 @@ class AppLocalizations {
   String get adjustmentReasonRequired =>
       _t('سبب التعديل مطلوب لتأكيد الحركة', 'Adjustment reason is required');
   String get stockCannotBeNegative => _t(
-    'المخزون الناتج لا يمكن أن يكون سالباً',
+    'لا يمكن أن يصبح المخزون أقل من صفر',
     'Resulting stock cannot be negative',
   );
   String get allMovementsHistory =>
@@ -957,7 +957,7 @@ class AppLocalizations {
   String get methodStatusActive => _t('مفعلة', 'Active');
   String get methodStatusDisabled => _t('معطلة', 'Disabled');
   String get methodNameRequired =>
-      _t('يرجى إدخال اسم طريقة الدفع', 'Please enter a payment method name');
+      _t('أدخل اسم طريقة الدفع', 'Please enter a payment method name');
   String get itemTaxable => _t('خاضع للضريبة', 'Taxable');
   String get itemNonTaxable => _t('غير خاضع', 'Non-taxable');
   String get lineTotal => _t('الإجمالي', 'Line Total');
@@ -975,7 +975,7 @@ class AppLocalizations {
   String get updateAvailable =>
       _t('يتوفر تحديث جديد', 'A new update is available');
   String get updateDownloadedRestart => _t(
-    'تم تنزيل التحديث. يرجى إعادة تشغيل التطبيق لتثبيته.',
+    'اكتمل تنزيل التحديث. أعد تشغيل التطبيق لتثبيته.',
     'Update downloaded. Restart the app to apply it.',
   );
   String get restartNow => _t('إعادة التشغيل الآن', 'Restart Now');
@@ -1037,15 +1037,15 @@ class AppLocalizations {
     'Invalid or expired activation key.',
   );
   String get activationTooManyAttempts => _t(
-    'محاولات كثيرة. يرجى المحاولة لاحقاً.',
+    'محاولات كثيرة. انتظر قليلاً ثم حاول مجدداً.',
     'Too many attempts. Please try again later.',
   );
   String get activationServerUnreachable => _t(
-    'تعذّر الاتصال بالخادم. يرجى المحاولة لاحقاً.',
+    'تعذّر الاتصال بالخادم. تأكد من الإنترنت ثم حاول مجدداً.',
     'Could not reach the server. Please try again later.',
   );
   String get activationDeviceUnavailable => _t(
-    'تعذّر التحقق من هوية هذا الجهاز بشكل آمن.',
+    'تعذّر التحقق من هذا الجهاز. أعد المحاولة، وإن تكرر الخطأ تواصل مع الدعم.',
     'Could not verify device identity securely.',
   );
   String get activationStorageFailed => _t(
@@ -1057,7 +1057,7 @@ class AppLocalizations {
     'The saved license could not be read on this device. Please re-enter your activation key.',
   );
   String get activationTipDevice => _t(
-    'تلميح: تأكد من تفعيل خدمات النظام أو تشغيل التطبيق على جهاز مدعوم.',
+    'تلميح: أعد تشغيل الهاتف وجرّب مرة أخرى. إن استمرت المشكلة تواصل مع الدعم.',
     'Tip: Ensure system services are active or run the app on a supported device.',
   );
   String get pasteKey => _t('لصق', 'Paste');
@@ -1078,12 +1078,12 @@ class AppLocalizations {
   String get copiedToClipboard => _t('تم النسخ للحافظة', 'Copied to clipboard');
   String get transferNoticeTitle => _t('نقل الترخيص إلى جهاز آخر', 'License Transfer');
   String get transferNoticeBody => _t(
-    'لترخيص جهاز جديد، يرجى إزالة المفتاح من هذا الجهاز أولاً عبر الزر أدناه لتتمكن من تفعيله على جهازك الآخر.',
+    'لتفعيل المفتاح على جهاز جديد، أزله من هذا الجهاز أولاً بالزر أدناه.',
     'To activate on another device, remove the key from this device first using the button below.',
   );
   String get documentNotFound => _t('المستند غير موجود', 'Document not found');
   String get documentNotFoundDesc => _t(
-    'تعذّر العثور على المستند المطلوب في قاعدة البيانات، أو قد يكون تم حذفه.',
+    'تعذّر العثور على هذا المستند. ربما حُذف.',
     'The requested document was not found in the database or may have been deleted.',
   );
   String get viewDocument => _t('عرض المستند', 'View Document');
@@ -1119,7 +1119,7 @@ class AppLocalizations {
       _t('إزالة المفتاح من هذا الجهاز', 'Remove key from this device');
   String get removeKeyConfirmTitle => _t('إزالة المفتاح؟', 'Remove key?');
   String get removeKeyConfirmBody => _t(
-    'ستتم إزالة مفتاح التفعيل من هذا الجهاز وإلغاء ربطه بالخادم. لن يُلغى المفتاح نهائياً ويمكنك إدخاله مجدداً، وإذا كانت التجربة المجانية لا تزال سارية فستعود إليها.',
+    'سيُزال مفتاح التفعيل من هذا الجهاز ويُفكّ ارتباطه بالخادم. المفتاح نفسه لا يُلغى ويمكنك إدخاله مجدداً. وإن كانت التجربة المجانية لا تزال سارية فستعود إليها.',
     'The activation key will be unlinked and removed from this device only. The key is not cancelled and you can enter it again. If your free trial is still valid, you will return to it.',
   );
   String get removeKeyConfirmAction => _t('إزالة', 'Remove');
@@ -1408,7 +1408,7 @@ class AppLocalizations {
   String get deleteAll => _t('حذف الكل', 'Delete all');
   String get confirmDeleteAll => _t('تأكيد حذف جميع التنبيهات؟', 'Delete all notifications?');
   String get confirmDeleteAllMessage => _t(
-    'سيتم حذف جميع التنبيهات والإعلانات القابلة للحذف نهائياً. التنبيهات الهامة ستبقى محفوظة.',
+    'ستُحذف جميع التنبيهات والإعلانات القابلة للحذف نهائياً. التنبيهات الهامة تبقى محفوظة.',
     'All dismissible announcements will be permanently deleted. Critical notices will be preserved.',
   );
   String get notificationDeleted => _t('تم حذف التنبيه', 'Notification deleted');
@@ -1422,9 +1422,9 @@ class AppLocalizations {
   String get totalInvoiced => _t('إجمالي المبيعات', 'Total Invoiced');
   String get initialPayment => _t('دفعة أولية', 'Initial Payment');
   String get statementAdjustment =>
-      _t('تسوية فروقات تعديل', 'Reconciliation Adjustment');
+      _t('فرق ناتج عن تعديل سابق', 'Reconciliation Adjustment');
   String get statementWarningTitle => _t(
-    'تنبيه: يتضمن هذا الكشف بنود تسوية لفروقات محاسبية',
+    'تنبيه: يتضمن هذا الكشف بنوداً لفروق ناتجة عن تعديلات سابقة',
     'Warning: Statement contains reconciliation adjustments',
   );
   String statementWarningDetail(String inv, String amount, String symbol) => _t(
@@ -1436,7 +1436,7 @@ class AppLocalizations {
     'Receipts Linked to Cancelled Invoices (Excluded from Balance)',
   );
   String get cancelledReceiptsSubtitle => _t(
-    'مبالغ تم استلامها بموجب سندات رسمية لفواتير تم إلغاؤها لاحقاً دون تسجيل حركة استرداد نقدي:',
+    'مبالغ استلمتها بسندات قبض لفواتير ألغيتها لاحقاً دون تسجيل استرداد نقدي:',
     'Payments collected for invoices that were later cancelled without a recorded refund:',
   );
   String get cancelledInvoice => _t('الفاتورة الملغاة', 'Cancelled Invoice');
@@ -1578,11 +1578,11 @@ class AppLocalizations {
   String get confirmFinalizeStocktake =>
       _t('تأكيد تسوية المخزون', 'Confirm Stock Reconciliation');
   String get stocktakeDiscrepancyWarning => _t(
-    'سيتم تعديل كميات المخزون في النظام لتطابق الجرد الفعلي بدقة مع تسجيل حركات التسوية',
+    'ستُعدَّل كميات المخزون لتطابق الجرد الفعلي، وستُسجَّل حركات التسوية.',
     'System stock quantities will be updated to match physical counts with audit adjustments recorded',
   );
   String get interimMovementWarning => _t(
-    'تنبيه: حدثت حركات مخزون بعد بدء الجلسة؛ سيتم حساب التسوية بالنسبة للرصيد الحالي بدقة',
+    'تنبيه: حدثت حركات مخزون بعد بدء الجلسة. ستُحسب التسوية على الرصيد الحالي.',
     'Notice: Stock movements occurred after session start; reconciliation will adjust against current stock accurately',
   );
   String get stocktakeFinalizedSuccess =>
@@ -1594,7 +1594,7 @@ class AppLocalizations {
   String get sessionStatusCancelled => _t('ملغي', 'Cancelled');
   String get cancelStocktakeSession => _t('إلغاء جلسة الجرد', 'Cancel Session');
   String get confirmCancelSession => _t(
-    'هل أنت متأكد من إلغاء جلسة الجرد دون تسوية؟',
+    'هل تريد إلغاء جلسة الجرد دون تسوية؟',
     'Are you sure you want to cancel this stocktake session without reconciliation?',
   );
 
@@ -1658,7 +1658,7 @@ class AppLocalizations {
   String get updatedCount => _t('تم تحديثها', 'Updated');
   String get skippedCount => _t('تم تخطيها', 'Skipped');
   String get csvStockInfoNotice => _t(
-    'ملاحظة: كميات المخزون لا يتم تعديلها عبر ملف CSV للحفاظ على سلامة القيود المخزنية',
+    'ملاحظة: لا تُعدَّل كميات المخزون عبر ملف CSV، حفاظاً على دقة سجل الحركات.',
     'Note: Stock quantities are not modified via CSV to preserve inventory integrity',
   );
 
@@ -1712,7 +1712,7 @@ class AppLocalizations {
   String get confirmStockAdjustment =>
       _t('تأكيد تسوية المخزون', 'Confirm Stock Adjustment');
   String get enterAdjustmentDelta => _t(
-    'يرجى تحديد كمية التعديل (قيمة غير صفرية)',
+    'أدخل كمية التعديل (لا تساوي صفراً)',
     'Please enter an adjustment quantity (non-zero)',
   );
   String get openingStockHelp => _t(
@@ -1724,7 +1724,7 @@ class AppLocalizations {
     'Unit purchase cost used for stock valuation and profit calculations.',
   );
   String get pleaseAddItems => _t(
-    'يرجى إضافة بند واحد على الأقل للمستند',
+    'أضف بنداً واحداً على الأقل',
     'Please add at least one item to the document',
   );
   String get supplierStatement => _t('كشف حساب مورد', 'Supplier Statement');
@@ -1814,7 +1814,7 @@ class AppLocalizations {
     'Tip: Ensure the key is copied in full without leading or trailing spaces.',
   );
   String get activationTipServer => _t(
-    'تلميح: تأكد من تفعيل اتصال الإنترنت بالهاتف ثم أعد الضغط على زر التفعيل.',
+    'تلميح: تأكد من اتصال الهاتف بالإنترنت ثم اضغط «تفعيل» مرة أخرى.',
     'Tip: Make sure mobile data or Wi-Fi is active, then press Activate again.',
   );
   String get activationTipAttempts => _t(
@@ -1975,7 +1975,7 @@ class AppLocalizations {
   String get googleDriveConfirmRestoreTitle =>
       _t('تأكيد استرجاع النسخة السحابية', 'Confirm Cloud Restore');
   String get googleDriveConfirmRestoreBody => _t(
-    'سيتم استبدال البيانات الحالية بالنسخة المحددة. سيتم إنشاء نسخة أمان محلية تلقائياً قبل البدء.',
+    'ستُستبدل بياناتك الحالية بالنسخة المحددة. تُحفظ نسخة أمان على هاتفك تلقائياً قبل البدء.',
     'Current data will be replaced by the selected backup. A local safety backup is created automatically first.',
   );
   String get googleDriveSignInRequired => _t(
@@ -1983,11 +1983,11 @@ class AppLocalizations {
     'Please sign in with a Google account first',
   );
   String get googleDriveErrorGeneric => _t(
-    'حدث خطأ أثناء الاتصال بـ Google Drive. يرجى التحقق من اتصال الإنترنت.',
+    'تعذّر الاتصال بـ Google Drive. تأكد من الإنترنت ثم حاول مجدداً.',
     'An error occurred communicating with Google Drive. Please check your internet connection.',
   );
   String get googleDriveErrorAuthExpired => _t(
-    'انتهت صلاحية جلسة تسجيل الدخول، يرجى إعادة الاتصال بحساب Google.',
+    'انتهت جلسة تسجيل الدخول. أعد ربط حساب Google.',
     'Session expired. Please reconnect your Google account.',
   );
   String get googleDriveErrorRestoreCorrupt => _t(
@@ -1995,18 +1995,18 @@ class AppLocalizations {
     'Restore failed: Backup file is invalid or corrupted.',
   );
   String get googleDriveSignInCancelled => _t(
-    'تم إلغاء تسجيل الدخول أو لم يتم إكمال التحقق.',
+    'لم يكتمل تسجيل الدخول.',
     'Sign-in was cancelled or verification was not completed.',
   );
   String get googleDriveErrorConfig => _t(
-    'فشل إعداد المصادقة، يرجى التحقق من إعدادات Google Cloud وتطابق بصمة التطبيق.',
+    'تعذّر ربط حساب Google على هذا الجهاز. حاول لاحقاً، وإن تكرر الخطأ تواصل مع الدعم.',
     'Authentication configuration failed. Please verify Google Cloud settings and app certificate.',
   );
   String get googleDriveDeleteBackup => _t('حذف النسخة', 'Delete Backup');
   String get googleDriveConfirmDeleteTitle =>
       _t('تأكيد حذف النسخة السحابية', 'Confirm Cloud Backup Deletion');
   String get googleDriveConfirmDeleteBody => _t(
-    'هل أنت متأكد من حذف هذه النسخة الاحتياطية من Google Drive؟ لا يمكن التراجع عن هذا الإجراء.',
+    'ستُحذف هذه النسخة من Google Drive نهائياً ولا يمكن استرجاعها.',
     'Are you sure you want to delete this backup from Google Drive? This action cannot be undone.',
   );
   String get googleDriveDeleting => _t(
@@ -2190,11 +2190,11 @@ class AppLocalizations {
     'Product SKU is already in use by another product',
   );
   String get errorDuplicateRecord => _t(
-    'هذا السجل مسجل مسبقاً في النظام، يرجى التحقق من عدم التكرار',
+    'هذا السجل موجود مسبقاً. تأكد أنك لا تكرر إدخاله.',
     'This record already exists in the system',
   );
   String get errorForeignKeyConstraint => _t(
-    'لا يمكن إتمام العملية لوجود مستندات أو سجلات مرتبطة بهذا العنصر',
+    'لا يمكن إتمام العملية لأن هذا العنصر مرتبط بمستندات أو سجلات أخرى.',
     'Cannot complete operation because this item is referenced by existing records',
   );
   String get errorInsufficientStockGeneral => _t(
@@ -2202,15 +2202,15 @@ class AppLocalizations {
     'Insufficient stock to complete this transaction',
   );
   String get errorNetworkConnectivity => _t(
-    'تعذّر الاتصال بالإنترنت، يرجى التحقق من الشبكة ثم إعادة المحاولة',
+    'تعذّر الاتصال بالإنترنت. تأكد من الشبكة ثم حاول مجدداً.',
     'Could not connect to the network. Please check your internet connection',
   );
   String get errorOperationTimeout => _t(
-    'استغرقت العملية وقتاً أطول من المتوقع، يرجى إعادة المحاولة',
+    'استغرقت العملية وقتاً أطول من المتوقع. حاول مرة أخرى.',
     'The operation timed out. Please try again',
   );
   String get errorInvalidNumberFormat => _t(
-    'يرجى التأكد من كتابة الأرقام والمبالغ بشكل صحيح',
+    'تأكد من كتابة الأرقام والمبالغ بشكل صحيح.',
     'Please enter valid numbers',
   );
   String get errorDeleteProductHasHistory => _t(
@@ -2308,7 +2308,7 @@ class AppLocalizations {
   String get confirmClearPeriodLockTitle =>
       _t('فتح الفترة المحاسبية', 'Unlock Accounting Period');
   String get confirmClearPeriodLockMessage => _t(
-    'هل أنت متأكد من إلغاء قفل الفترة المحاسبية؟ سيمكن حينها إضافة وتعديل المستندات في الفترات السابقة.',
+    'إلغاء القفل يسمح بإضافة المستندات وتعديلها في الفترات السابقة. هل تريد المتابعة؟',
     'Are you sure you want to clear the period lock? Transactions in prior periods will become editable again.',
   );
   String get errorPeriodClosed => _t(
