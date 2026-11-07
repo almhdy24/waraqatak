@@ -14,6 +14,8 @@ import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../models/currency.dart';
 import '../services/document_service.dart';
+import '../services/feature_access.dart';
+import '../services/license_service.dart';
 import '../services/pdf_service.dart';
 import '../services/pos_cart.dart';
 import '../services/product_service.dart';
@@ -80,6 +82,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       db.getEnabledPaymentMethods(),
       db.getAllProductUnits(),
     ]);
+    final entitlement = await LicenseService.instance.checkEntitlement();
     if (!mounted) return;
     final business = results[0] as Business?;
     final methods = results[2] as List<PaymentMethod>;
@@ -89,6 +92,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       _products = results[1] as List<Product>;
       _methods = methods;
       _productUnits = units;
+      _cart.setEnforceStock(FeatureAccess.canAccess(Feature.inventory, entitlement));
       _cart.setWholesalePricingEnabled(business?.wholesalePricingEnabled ?? false);
       if (business != null) {
         _cart.setDecimalDigits(Currency.decimalDigitsForCode(business.currencyCode));
@@ -605,6 +609,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         inCart: products[i].id == null ? 0 : _cart.quantityOf(products[i].id!),
                         price: _fmt(products[i].salePrice),
                         l10n: l10n,
+                        enforceStock: _cart.enforceStock,
                         onTap: () => _addProduct(products[i]),
                         onLongPress: () => _promptAddQuantity(products[i]),
                       ),
@@ -1136,6 +1141,7 @@ class _ProductTile extends StatelessWidget {
   final double inCart;
   final String price;
   final AppLocalizations l10n;
+  final bool enforceStock;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -1144,6 +1150,7 @@ class _ProductTile extends StatelessWidget {
     required this.inCart,
     required this.price,
     required this.l10n,
+    this.enforceStock = true,
     required this.onTap,
     this.onLongPress,
   });
@@ -1154,6 +1161,7 @@ class _ProductTile extends StatelessWidget {
     final tracks = PosCart.tracksStock(product);
     final available = tracks ? product.stockQuantity - inCart : double.infinity;
     final soldOut = tracks && available <= 0;
+    final isBlocked = enforceStock && soldOut;
     return Material(
       color: inCart > 0 ? cs.primary.withValues(alpha: 0.08) : cs.surface,
       shape: RoundedRectangleBorder(
@@ -1165,8 +1173,8 @@ class _ProductTile extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: soldOut ? null : onTap,
-        onLongPress: soldOut ? null : onLongPress,
+        onTap: isBlocked ? null : onTap,
+        onLongPress: isBlocked ? null : onLongPress,
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Column(

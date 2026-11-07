@@ -104,6 +104,10 @@ class PosCart {
     _clampDiscount();
   }
 
+  bool _enforceStock = true;
+  bool get enforceStock => _enforceStock;
+  void setEnforceStock(bool value) { _enforceStock = value; }
+
   List<PosCartLine> get lines => List.unmodifiable(_lines);
   bool get isEmpty => _lines.isEmpty;
   double get itemCount => _lines.fold(0, (s, l) => s + l.quantity);
@@ -198,8 +202,9 @@ class PosCart {
 
     final currentTotalBase =
         product.id != null ? baseQuantityOf(product.id!) : 0.0;
-    if (tracksStock(product) &&
-        (currentTotalBase + addedBaseQty) - product.stockQuantity > 1e-9) {
+    if (_enforceStock &&
+        (tracksStock(product) &&
+            (currentTotalBase + addedBaseQty) - product.stockQuantity > 1e-9)) {
       return PosCartError.outOfStock;
     }
 
@@ -238,7 +243,8 @@ class PosCart {
         .fold(0.0, (s, e) => s + e.value.baseQuantity);
     final factor = line.unit?.conversionFactor ?? 1.0;
     final nextBase = quantity * factor;
-    if (tracksStock(p) && (otherLinesBase + nextBase) - p.stockQuantity > 1e-9) {
+    if (_enforceStock &&
+        (tracksStock(p) && (otherLinesBase + nextBase) - p.stockQuantity > 1e-9)) {
       return PosCartError.outOfStock;
     }
     _lines[index] = line.withQuantity(quantity);
@@ -273,7 +279,8 @@ class PosCart {
         .entries
         .where((e) => e.key != index && e.value.product.id == p.id)
         .fold(0.0, (s, e) => s + e.value.baseQuantity);
-    if (tracksStock(p) && (otherLinesBase + nextBase) - p.stockQuantity > 1e-9) {
+    if (_enforceStock &&
+        (tracksStock(p) && (otherLinesBase + nextBase) - p.stockQuantity > 1e-9)) {
       return PosCartError.outOfStock;
     }
 

@@ -200,5 +200,22 @@ void main() {
         expect(c.add(p, quantity: 0.4), PosCartError.outOfStock);
       },
     );
+
+    test('enforceStock flag controls stock limit enforcement', () {
+      const p2 = Product(id: 101, name: 'دفتر', salePrice: 300, stockQuantity: 2);
+      const p0 = Product(id: 102, name: 'مسطرة', salePrice: 150, stockQuantity: 0);
+
+      // (a) default cart: product with stockQuantity 2, adding quantity 3 -> returns PosCartError.outOfStock
+      final c1 = PosCart();
+      expect(c1.add(p2, quantity: 3), PosCartError.outOfStock);
+
+      // (b) cart after setEnforceStock(false): same product, adding quantity 3 -> returns null and line quantity is 3
+      final c2 = PosCart()..setEnforceStock(false);
+      expect(c2.add(p2, quantity: 3), isNull);
+      expect(c2.lines.single.quantity, 3);
+
+      // (c) cart after setEnforceStock(false): product with stockQuantity 0 can be added -> returns null
+      expect(c2.add(p0, quantity: 1), isNull);
+    });
   });
 }
