@@ -1,10 +1,14 @@
 import 'package:intl/intl.dart';
 
+import 'number_input.dart';
+
 class FormatUtils {
   static final NumberFormat _qtyFormat = NumberFormat('#,##0.####');
   static final DateFormat _defaultDateFmt = DateFormat('dd/MM/yyyy');
   static final DateFormat _defaultDateTimeFmt = DateFormat('dd/MM/yyyy HH:mm');
-  static final DateFormat _defaultTimestampFmt = DateFormat('dd/MM/yyyy HH:mm:ss');
+  static final DateFormat _defaultTimestampFmt = DateFormat(
+    'dd/MM/yyyy HH:mm:ss',
+  );
 
   /// Formats a [DateTime] into standard user-facing date 'dd/MM/yyyy'.
   static String formatDate(DateTime? date, {String fallback = '—'}) {
@@ -45,14 +49,9 @@ class FormatUtils {
     return formatted;
   }
 
-  /// Parses a user-input quantity string into a double.
-  /// Handles decimal separators like '.' and ',' and Arabic comma '،'.
-  /// Returns null if empty, invalid, or non-numeric.
+  /// Parses user-typed numbers. Accepts Arabic digits. ',' '،' are thousands separators; '.' and '٫' are decimal separators. Returns null if empty or invalid.
   static double? parseQuantity(String? text) {
-    if (text == null) return null;
-    final normalized = text.trim().replaceAll(',', '.').replaceAll('،', '.');
-    if (normalized.isEmpty) return null;
-    return double.tryParse(normalized);
+    return NumberInput.parse(text);
   }
 
   /// Formats a tax rate cleanly, preserving decimal precision without showing
