@@ -1,7 +1,7 @@
 /// Application service for reference pricing and exchange rates management.
 library;
 
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
