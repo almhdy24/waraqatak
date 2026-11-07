@@ -102,6 +102,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       context,
       l10n.notificationDeleted,
       actionLabel: l10n.undo,
+      actionExpires: true,
       onAction: () async {
         await AppOpsService.instance.restoreNotification(item);
         await _load();
@@ -154,6 +155,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       context,
       l10n.notificationsDeleted,
       actionLabel: l10n.undo,
+      actionExpires: true,
       onAction: () async {
         for (final item in toDelete) {
           await AppOpsService.instance.restoreNotification(item);
@@ -199,6 +201,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       context,
       l10n.notificationsDeleted,
       actionLabel: l10n.undo,
+      actionExpires: true,
       onAction: () async {
         for (final item in snapshot) {
           if (item.isDismissible) {
