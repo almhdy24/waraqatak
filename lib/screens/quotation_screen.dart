@@ -31,6 +31,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _notesController = TextEditingController();
   final _validityController = TextEditingController(text: '7');
+  final _discountController = TextEditingController();
   bool _saving = false;
 
   final List<TextEditingController> _desc = [];
@@ -61,6 +62,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   void dispose() {
     _notesController.dispose();
     _validityController.dispose();
+    _discountController.dispose();
     for (final c in _desc) {
       c.dispose();
     }
@@ -107,7 +109,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
   bool get _isDirty {
     return _contact != null ||
         _notesController.text.isNotEmpty ||
-        (_validityController.text != '7' && _validityController.text.isNotEmpty) ||
+        (_validityController.text != '7' &&
+            _validityController.text.isNotEmpty) ||
         _desc.any((c) => c.text.isNotEmpty) ||
         _productIds.any((id) => id != null) ||
         _desc.length > 1;
@@ -126,7 +129,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
   }
 
   Future<void> _removeItem(int index) async {
-    final hasContent = _desc[index].text.isNotEmpty || _productIds[index] != null;
+    final hasContent =
+        _desc[index].text.isNotEmpty || _productIds[index] != null;
     if (hasContent) {
       final l10n = AppLocalizations.of(context);
       final proceed = await AppConfirmDialog.show(
@@ -164,9 +168,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
     final effectiveTaxRate = (_business?.taxesEnabled ?? false)
         ? (_business?.taxRate ?? 0)
         : 0.0;
+    final discount = NumberInput.parse(_discountController.text) ?? 0.0;
     return DocumentService.calculateInvoiceTotals(
       items: items,
-      discount: 0,
+      discount: discount,
       taxRate: effectiveTaxRate,
       pricesIncludeTax:
           (_business?.taxesEnabled ?? false) &&
@@ -175,26 +180,25 @@ class _QuotationScreenState extends State<QuotationScreen> {
     );
   }
 
-  List<DocumentItemInput> _buildItems() => List.generate(
-    _desc.length,
-    (i) {
-      final q = NumberInput.parse(_qty[i].text) ?? 1;
-      final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
-      final unit = i < _saleUnits.length ? _saleUnits[i] : null;
-      return DocumentItemInput(
-        description: _desc[i].text.trim(),
-        quantity: q,
-        price: NumberInput.parse(_price[i].text) ?? 0,
-        taxable: _taxable[i],
-        productId: _productIds[i],
-        taxRate: _taxRates[i],
-        pricingCategory: i < _pricingCategories.length ? _pricingCategories[i] : null,
-        saleUnit: unit,
-        unitConversionFactor: factor,
-        baseQuantity: q * factor,
-      );
-    },
-  );
+  List<DocumentItemInput> _buildItems() => List.generate(_desc.length, (i) {
+    final q = NumberInput.parse(_qty[i].text) ?? 1;
+    final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
+    final unit = i < _saleUnits.length ? _saleUnits[i] : null;
+    return DocumentItemInput(
+      description: _desc[i].text.trim(),
+      quantity: q,
+      price: NumberInput.parse(_price[i].text) ?? 0,
+      taxable: _taxable[i],
+      productId: _productIds[i],
+      taxRate: _taxRates[i],
+      pricingCategory: i < _pricingCategories.length
+          ? _pricingCategories[i]
+          : null,
+      saleUnit: unit,
+      unitConversionFactor: factor,
+      baseQuantity: q * factor,
+    );
+  });
 
   Future<void> _save({bool isDraft = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
@@ -222,6 +226,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
         business: _business!,
         contact: _contact,
         items: _buildItems(),
+        discount: NumberInput.parse(_discountController.text) ?? 0,
         notes: _notesController.text,
         date: documentDate,
         validUntil: validUntil,
@@ -305,7 +310,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
                 FilledButton(
                   onPressed: _saving ? null : () => _save(),
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size(110, AppDesignTokens.minTouchTarget),
+                    minimumSize: const Size(
+                      110,
+                      AppDesignTokens.minTouchTarget,
+                    ),
                   ),
                   child: _saving
                       ? SizedBox(
@@ -338,15 +346,21 @@ class _QuotationScreenState extends State<QuotationScreen> {
                       final newCat =
                           contact?.pricingCategory ?? Contact.categoryRetail;
                       for (int i = 0; i < _desc.length; i++) {
-                        final p = i < _cachedProducts.length ? _cachedProducts[i] : null;
-                        if (i < _isManualPriceList.length && !_isManualPriceList[i] && p != null) {
+                        final p = i < _cachedProducts.length
+                            ? _cachedProducts[i]
+                            : null;
+                        if (i < _isManualPriceList.length &&
+                            !_isManualPriceList[i] &&
+                            p != null) {
                           _pricingCategories[i] = newCat;
                           final q = NumberInput.parse(_qty[i].text) ?? 1.0;
                           final currentP = NumberInput.parse(_price[i].text);
-                          List<ProductUnit> units = _unitsCache[p.id] ?? const [];
+                          List<ProductUnit> units =
+                              _unitsCache[p.id] ?? const [];
                           if (units.isEmpty && p.id != null) {
                             try {
-                              units = await DatabaseHelper.instance.getProductUnits(p.id!);
+                              units = await DatabaseHelper.instance
+                                  .getProductUnits(p.id!);
                               _unitsCache[p.id!] = units;
                             } catch (_) {}
                           }
@@ -362,8 +376,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
                             isManualPrice: _isManualPriceList[i],
                             wholesalePricingEnabled: true,
                           );
-                          _price[i].text = NumberInput.formatForInput(resolved,
-                              maxDecimals: 4);
+                          _price[i].text = NumberInput.formatForInput(
+                            resolved,
+                            maxDecimals: 4,
+                          );
                         }
                       }
                       if (mounted) setState(() {});
@@ -389,8 +405,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
                       setState(() => _pricingCategories[i] = cat);
                     },
                     customerPricingCategory:
-                        _contact?.pricingCategory ??
-                        Contact.categoryRetail,
+                        _contact?.pricingCategory ?? Contact.categoryRetail,
                     isManualPrice: _isManualPriceList[i],
                     onManualPriceChanged: (manual) {
                       setState(() => _isManualPriceList[i] = manual);
@@ -424,8 +439,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
                         DatabaseHelper.instance
                             .getProductUnits(product!.id!)
                             .then((u) {
-                          _unitsCache[product.id!] = u;
-                        });
+                              _unitsCache[product.id!] = u;
+                            });
                       }
                     },
                     onTaxableChanged: (value) {
@@ -450,9 +465,29 @@ class _QuotationScreenState extends State<QuotationScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                AmountField(
+                  controller: _discountController,
+                  decoration: InputDecoration(
+                    labelText: l10n.discount,
+                    prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+                  ),
+                  textInputAction: TextInputAction.next,
+                  maxDecimals: 4,
+                  showMultipliers: true,
+                  onChanged: (_) => setState(() {}),
+                  onTap: () {
+                    if (_discountController.text.isNotEmpty) {
+                      _discountController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _discountController.text.length,
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
                 AppTotalsCard(
                   subtotal: totals.subtotal,
-                  discount: 0,
+                  discount: NumberInput.parse(_discountController.text) ?? 0,
                   taxAmount: totals.taxAmount,
                   taxRate: _business?.taxRate ?? 0,
                   total: totals.total,
