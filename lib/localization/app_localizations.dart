@@ -122,8 +122,8 @@ class AppLocalizations {
   String get reason => _t('السبب', 'Reason');
 
   // ========== PAYMENT ==========
-  String get receivedFrom => _t('المستلم من', 'Received From');
-  String get paidTo => _t('دُفع إلى', 'Paid To');
+  String get receivedFrom => _t('استلمنا من', 'Received From');
+  String get paidTo => _t('دفعنا إلى', 'Paid To');
   String get paymentMethod => _t('طريقة الدفع', 'Payment Method');
   String get cash => _t('نقداً', 'Cash');
   String get bankTransfer => _t('تحويل بنكي', 'Bank Transfer');
@@ -225,7 +225,7 @@ class AppLocalizations {
   String get validUntil => _t('صالح حتى', 'Valid Until');
   String get validityDays =>
       _t('مدة صلاحية العرض', 'Quotation Validity Period');
-  String get title => _t('العنوان', 'Title');
+  String get title => _t('عنوان المستند', 'Title');
   String get content => _t('المحتوى', 'Content');
 
   // ========== VALIDATION ==========
@@ -350,11 +350,11 @@ class AppLocalizations {
         'Keep it in a safe place and do not share it with anyone you do not trust.',
   );
   String get backupEncryptionQuestion =>
-      _t('هل تريد حماية النسخة بكلمة سر؟', 'Do you want to protect this backup with a password?');
+      _t('هل تريد حماية النسخة بكلمة مرور؟', 'Do you want to protect this backup with a password?');
   String get backupWithoutPassword =>
-      _t('لا، بدون كلمة سر (غير مشفرة)', 'No, without password (unencrypted)');
+      _t('لا، بدون كلمة مرور (غير مشفرة)', 'No, without password (unencrypted)');
   String get backupWithPassword =>
-      _t('نعم، حماية بكلمة سر', 'Yes, protect with password');
+      _t('نعم، حماية بكلمة مرور', 'Yes, protect with password');
   String get backupPassword => _t('كلمة المرور', 'Password');
   String get backupConfirmPassword =>
       _t('تأكيد كلمة المرور', 'Confirm password');
@@ -375,7 +375,7 @@ class AppLocalizations {
   String get backupEncryptedTitle =>
       _t('نسخة احتياطية مشفرة', 'Encrypted Backup');
   String get backupEnterPasswordMessage => _t(
-    'هذه النسخة محمية بكلمة سر. أدخل كلمة المرور لاستعادتها:',
+    'هذه النسخة محمية بكلمة مرور. أدخل كلمة المرور لاستعادتها:',
     'This backup is password-protected. Enter the password to restore it:',
   );
   String get backupIncorrectPassword =>
@@ -524,7 +524,7 @@ class AppLocalizations {
   String get productItem => _t('منتج', 'Product');
   String get serviceItem => _t('خدمة', 'Service');
   String get barcode => _t('الباركود', 'Barcode');
-  String get sku => _t('رمز المخزون (SKU)', 'SKU');
+  String get sku => _t('رمز المنتج (SKU)', 'SKU');
   String get unit => _t('وحدة القياس', 'Unit');
   String get active => _t('نشط', 'Active');
   String get inactive => _t('غير نشط', 'Inactive');
@@ -561,7 +561,7 @@ class AppLocalizations {
     'Cannot convert a product with stock to a service. Please adjust stock to 0 first',
   );
   String get stockCannotBeEditedDirectly => _t(
-    'لا يمكن تعديل كمية المخزون مباشرة هنا. استخدم تسوية المخزون للتعديل',
+    'لا يمكن تعديل كمية المخزون مباشرة هنا. استخدم «تعديل المخزون».',
     'Stock quantity cannot be edited directly here. Use stock adjustment to modify',
   );
 
@@ -581,11 +581,11 @@ class AppLocalizations {
   String get suppliersOnly => _t('الموردون', 'Suppliers');
   String get noSuppliers => _t('لا يوجد موردون بعد', 'No suppliers yet');
   String get supplierBalance => _t('رصيد المورد', 'Supplier Balance');
-  String get payable => _t('مستحق الدفع', 'Payable');
+  String get payable => _t('مستحق عليك', 'Payable');
 
   // ========== CUSTOMERS EXTENDED ==========
   String get customerBalance => _t('رصيد العميل', 'Customer Balance');
-  String get receivable => _t('مستحق الاستلام', 'Receivable');
+  String get receivable => _t('مستحق لك', 'Receivable');
   String get deactivateContact => _t('تعطيل جهة الاتصال', 'Deactivate Contact');
   String get activateContact => _t('تفعيل جهة الاتصال', 'Activate Contact');
   String get deactivateContactMessage => _t(
@@ -702,7 +702,7 @@ class AppLocalizations {
   String get paperSize => _t('حجم الورق', 'Paper Size');
   String get paperA4 => _t('A4', 'A4');
   String get paperA5 => _t('A5', 'A5');
-  String get paperThermal80 => _t('حرارية 80مم', 'Thermal 80mm');
+  String get paperThermal80 => _t('ورق حراري 80 مم', 'Thermal 80mm');
   String get defaultPaperSize =>
       _t('حجم الورق الافتراضي', 'Default Paper Size');
 
@@ -830,16 +830,16 @@ class AppLocalizations {
   String get noUnits =>
       _t('لا توجد وحدات بيع إضافية', 'No additional units yet');
   String get defaultTaxProfile =>
-      _t('ملف ضريبي افتراضي', 'Default Tax Profile');
+      _t('نسبة ضريبة افتراضية', 'Default Tax Profile');
   String get noDefaultProfile =>
-      _t('لا يوجد ملف افتراضي', 'No default profile');
+      _t('لا توجد نسبة افتراضية', 'No default profile');
 
-  String get taxProfiles => _t('ملفات الضريبة', 'Tax Profiles');
+  String get taxProfiles => _t('نسب الضريبة', 'Tax Profiles');
   String get taxProfilesDesc =>
       _t('إنشاء وإدارة معدلات الضريبة', 'Create and manage tax rates');
-  String get addTaxProfile => _t('إضافة ملف ضريبي', 'Add Tax Profile');
-  String get editTaxProfile => _t('تعديل الملف الضريبي', 'Edit Tax Profile');
-  String get taxProfileName => _t('اسم الملف الضريبي', 'Profile Name');
+  String get addTaxProfile => _t('إضافة نسبة ضريبة', 'Add Tax Profile');
+  String get editTaxProfile => _t('تعديل نسبة الضريبة', 'Edit Tax Profile');
+  String get taxProfileName => _t('اسم النسبة', 'Profile Name');
   String get taxProfileType => _t('نوع الضريبة', 'Tax Type');
   String get taxProfileRate => _t('نسبة الضريبة (%)', 'Tax Rate (%)');
   String get taxProfileDefault => _t('افتراضي', 'Default');
@@ -849,9 +849,9 @@ class AppLocalizations {
       _t('غير شامل (يضاف للسعر)', 'Exclusive (added on top)');
   String get calculationMode => _t('طريقة الاحتساب', 'Calculation Mode');
   String get noTaxProfiles =>
-      _t('لا توجد ملفات ضريبية بعد', 'No tax profiles yet');
+      _t('لا توجد نسب ضريبة بعد', 'No tax profiles yet');
   String get confirmDeleteProfile =>
-      _t('حذف الملف الضريبي؟', 'Delete Tax Profile?');
+      _t('حذف نسبة الضريبة؟', 'Delete Tax Profile?');
   String get taxTypeVat => _t('ضريبة القيمة المضافة', 'VAT');
   String get taxTypeSalesTax => _t('ضريبة المبيعات', 'Sales Tax');
   String get taxTypeServiceCharge => _t('رسوم خدمة', 'Service Charge');
@@ -872,8 +872,8 @@ class AppLocalizations {
   String get contactLegalName =>
       _t('الاسم القانوني للجهة', 'Contact Legal Name');
   String get contactTaxId => _t('الرقم الضريبي للجهة', 'Contact Tax ID');
-  String get taxProfile => _t('الملف الضريبي', 'Tax Profile');
-  String get noTaxProfile => _t('بدون ملف ضريبي', 'No Tax Profile');
+  String get taxProfile => _t('نسبة الضريبة', 'Tax Profile');
+  String get noTaxProfile => _t('بدون نسبة ضريبة', 'No Tax Profile');
   String get taxIncluded => _t('الضريبة (مشمولة)', 'Tax (Included)');
   String get netTaxableBase =>
       _t('المبلغ الخاضع للضريبة (غير شامل)', 'Taxable Base (Excl. Tax)');
@@ -911,7 +911,7 @@ class AppLocalizations {
   );
   String get disableMethodAction => _t('تعطيل الطريقة', 'Disable Method');
   String get taxSettingsManagedInFinancial => _t(
-    'يتم ضبط خيارات الضريبة وملفات الأسعار من شاشة الإعدادات المالية.',
+    'تُضبط خيارات الضريبة ونسبها من شاشة الإعدادات المالية.',
     'Tax options and rates are configured in Financial Settings.',
   );
   String get taxesStatus => _t('حالة نظام الضريبة', 'Tax System Status');
@@ -919,7 +919,7 @@ class AppLocalizations {
   String get taxesDisabledInactive =>
       _t('الضريبة معطلة (0%)', 'Taxes Disabled (0%)');
   String get productTaxOverrideNote => _t(
-    'يمكن تخصيص ملف ضريبي مختلف لكل منتج على حدة من شاشة تفاصيل المنتج (مثل: المنتجات المعفاة أو الخاضعة لنسبة صفرية).',
+    'يمكنك تحديد نسبة ضريبة مختلفة لكل منتج من شاشة تفاصيل المنتج (مثل: المنتجات المعفاة أو ذات النسبة الصفرية).',
     'Individual products can override this default with their own tax profile (e.g. zero-rated or exempt items).',
   );
   String get taxExclusiveExplained => _t(
@@ -931,7 +931,7 @@ class AppLocalizations {
     'Prices include tax: tax is extracted from the item price without increasing the total.',
   );
   String get taxSampleEnteredPrice =>
-      _t('سعر الصنف المدخل', 'Entered Item Price');
+      _t('سعر المنتج المدخل', 'Entered Item Price');
   String get taxSampleNetBase =>
       _t('الأساس الخاضع للضريبة', 'Net Taxable Base');
   String get taxSampleTaxAmount => _t('مبلغ الضريبة', 'Tax Amount');
@@ -1370,9 +1370,9 @@ class AppLocalizations {
   String get entryInvoicePayment => _t('تحصيل فاتورة', 'Invoice payment');
   String get entryPurchasePayment =>
       _t('سداد أمر شراء', 'Purchase order payment');
-  String get entryCostOfSales => _t('تكلفة المبيعات', 'Cost of sales');
+  String get entryCostOfSales => _t('تكلفة البضاعة المباعة', 'Cost of sales');
   String get entryOpeningStock => _t('مخزون افتتاحي', 'Opening stock');
-  String get entryStockAdjustment => _t('تسوية مخزون', 'Stock adjustment');
+  String get entryStockAdjustment => _t('تعديل مخزون', 'Stock adjustment');
 
   String accountName(String code) => switch (code) {
     '1110' => _t('الصندوق (النقدية)', 'Cash on hand'),
@@ -1476,7 +1476,7 @@ class AppLocalizations {
   String get unresolvedCostProducts =>
       _t('منتجات بدون تكلفة', 'Unresolved Cost Products');
   String get averageCost => _t('متوسط التكلفة', 'Average Cost');
-  String get cogs => _t('تكلفة المبيعات', 'Cost of Goods Sold');
+  String get cogs => _t('تكلفة البضاعة المباعة', 'Cost of Goods Sold');
   String get profitMargin => _t('هامش الربح', 'Profit Margin');
   String get costIncomplete => _t('تكلفة غير مكتملة', 'Incomplete Cost');
   String get costReliable => _t('تكلفة موثوقة', 'Reliable Cost');
@@ -1560,7 +1560,7 @@ class AppLocalizations {
   String get featureStocktake =>
       _t('جرد وتسوية المخزون', 'Stocktake & Reconciliation');
   String get featureBulkPriceUpdate =>
-      _t('تعديل الأسعار بالجملة', 'Bulk Price Editing');
+      _t('تعديل الأسعار دفعة واحدة', 'Bulk Price Editing');
   String get featureCsvImportExport =>
       _t('استيراد وتصدير CSV', 'CSV Import & Export');
   String get featureInventoryAudit =>
@@ -1599,7 +1599,7 @@ class AppLocalizations {
   );
 
   String get bulkPricingTitle =>
-      _t('تعديل الأسعار بالجملة', 'Bulk Price Editing');
+      _t('تعديل الأسعار دفعة واحدة', 'Bulk Price Editing');
   String get selectProducts => _t('تحديد المنتجات', 'Select Products');
   String get selectAll => _t('تحديد الكل', 'Select All');
   String get deselectAll => _t('إلغاء تحديد الكل', 'Deselect All');
@@ -1738,7 +1738,7 @@ class AppLocalizations {
   String get reportCatSalesPurchases =>
       _t('المبيعات والمشتريات والمدفوعات', 'Sales, Purchases & Payments');
   String get reportCatInventory =>
-      _t('المخزون وحركة المواد', 'Inventory & Stock Analytics');
+      _t('المخزون وحركته', 'Inventory & Stock Analytics');
   String get reportCatAudit =>
       _t('سجلات التدقيق والمراجعة', 'Audit & Activity Logs');
   String get reportSubtitleSales => _t(
@@ -1766,7 +1766,7 @@ class AppLocalizations {
     'Supplier balances, purchases & payables',
   );
   String get reportSubtitleInventory => _t(
-    'تقييم المخزون الحالي بالتكلفة وحالة توفر المواد',
+    'تقييم المخزون الحالي بالتكلفة وحالة توفره',
     'Stock valuation at cost and availability',
   );
   String get reportSubtitleLowStock => _t(
@@ -2186,7 +2186,7 @@ class AppLocalizations {
       _t('الملخص المالي والحسابات', 'Financial Summary & Balance');
 
   String get errorDuplicateSku => _t(
-    'رمز المنتج (SKU) مسجل مسبقاً لمنتج آخر',
+    'رمز المنتج مستخدم لمنتج آخر',
     'Product SKU is already in use by another product',
   );
   String get errorDuplicateRecord => _t(
