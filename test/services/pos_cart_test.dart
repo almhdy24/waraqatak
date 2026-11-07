@@ -133,5 +133,13 @@ void main() {
         ..add(item);
       expect(c.subtotal, closeTo(0.334, 0.0001));
     });
+
+    test('B2-6: floating point tolerance in stock checks (0.3 total stock)', () {
+      const p = Product(id: 50, name: 'تفاح', salePrice: 10, stockQuantity: 0.3);
+      final c = PosCart();
+      expect(c.add(p, quantity: 0.1), isNull, reason: 'first 0.1 should fit');
+      expect(c.add(p, quantity: 0.2), isNull, reason: '0.1+0.2 ≈ 0.3 should fit within tolerance');
+      expect(c.add(p, quantity: 0.4), PosCartError.outOfStock);
+    });
   });
 }

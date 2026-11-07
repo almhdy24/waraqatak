@@ -2864,7 +2864,7 @@ class DatabaseHelper {
       final previouslyDeducted = previouslyDeductedByProduct[productId] ?? 0.0;
       final availableStock = currentStock + previouslyDeducted;
 
-      if (availableStock < requiredBaseQty) {
+      if (requiredBaseQty - availableStock > 1e-9) {
         final name = pRows.first['name'] as String? ?? '';
         throw StateError(
           'Insufficient stock for "$name": available ${FormatUtils.formatQuantity(availableStock)}, required ${FormatUtils.formatQuantity(requiredBaseQty)}',
