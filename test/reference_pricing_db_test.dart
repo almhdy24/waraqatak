@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1109,6 +1109,24 @@ void main() {
       expect(await ReferencePricingDao.getRates(rawDb), isNotEmpty);
 
       // 3. Path: Drive Cloud restoreFromDrive exact path
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
+      final driveTempDir = Directory.systemTemp.createTempSync('ref_pricing_drive_test');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        pathProviderChannel,
+        (MethodCall methodCall) async => driveTempDir.path,
+      );
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(pathProviderChannel, null);
+        try {
+          if (driveTempDir.existsSync()) {
+            driveTempDir.deleteSync(recursive: true);
+          }
+        } catch (_) {}
+      });
+
       final driveStorage = <String, Uint8List>{
         'v25_cloud_file': Uint8List.fromList(utf8.encode(jsonStr)),
       };
