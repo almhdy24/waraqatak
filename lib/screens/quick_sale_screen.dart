@@ -12,6 +12,7 @@ import '../models/document_item.dart';
 import '../models/payment_method.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
+import '../models/currency.dart';
 import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../services/pos_cart.dart';
@@ -87,6 +88,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       _methods = methods;
       _productUnits = units;
       _cart.setWholesalePricingEnabled(business?.wholesalePricingEnabled ?? false);
+      if (business != null) {
+        _cart.setDecimalDigits(Currency.decimalDigitsForCode(business.currencyCode));
+      }
       _method ??= methods
               .where((m) => m.isDefault)
               .map((m) => m.key)
@@ -405,7 +409,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         contact: _cart.customer,
       );
       if (!mounted) return;
-      final change = received == null ? 0.0 : PosCart.changeFor(total: total, received: received);
+      final change = received == null
+          ? 0.0
+          : PosCart.changeFor(
+              total: total,
+              received: received,
+              decimalDigits: _cart.decimalDigits,
+            );
       HapticFeedback.mediumImpact();
       if (MediaQuery.sizeOf(context).width < 840) {
         Navigator.of(context).popUntil((r) => r is! PopupRoute); // close cart sheet

@@ -45,6 +45,23 @@ class DocumentItemInput {
       MoneyUtils.round(quantity * price, digits ?? decimalDigits ?? 2);
 
   double get total => calculateTotal();
+
+  DocumentItemInput withDigits(int digits) {
+    if (decimalDigits == digits) return this;
+    return DocumentItemInput(
+      description: description,
+      quantity: quantity,
+      price: price,
+      taxable: taxable,
+      productId: productId,
+      taxRate: taxRate,
+      pricingCategory: pricingCategory,
+      saleUnit: saleUnit,
+      unitConversionFactor: unitConversionFactor,
+      baseQuantity: baseQuantity,
+      decimalDigits: digits,
+    );
+  }
 }
 
 class DocumentService {
@@ -111,9 +128,11 @@ class DocumentService {
     double remaining = 0;
 
     final decimalDigits = Currency.decimalDigitsForCode(business.currencyCode);
-    final effectiveItems = (!isFinancial && !isCustom)
-        ? await resolveItemsTaxRates(items, business)
-        : items;
+    final effectiveItems = ((!isFinancial && !isCustom)
+            ? await resolveItemsTaxRates(items, business)
+            : items)
+        .map((i) => i.withDigits(decimalDigits))
+        .toList();
     final effectiveTaxRate = await resolveEffectiveTaxRate(business);
     final effectivePricesIncludeTax =
         business.taxesEnabled && business.pricesIncludeTax;
@@ -312,9 +331,11 @@ class DocumentService {
     double remaining = 0;
 
     final decimalDigits = Currency.decimalDigitsForCode(existing.currencyCode);
-    final effectiveItems = (!isFinancial && !isCustom)
-        ? await resolveItemsTaxRates(items, business)
-        : items;
+    final effectiveItems = ((!isFinancial && !isCustom)
+            ? await resolveItemsTaxRates(items, business)
+            : items)
+        .map((i) => i.withDigits(decimalDigits))
+        .toList();
     final effectiveTaxRate = await resolveEffectiveTaxRate(business);
     final effectivePricesIncludeTax =
         business.taxesEnabled && business.pricesIncludeTax;
@@ -628,6 +649,7 @@ class DocumentService {
                 saleUnit: item.saleUnit,
                 unitConversionFactor: item.unitConversionFactor,
                 baseQuantity: item.baseQuantity,
+                decimalDigits: item.decimalDigits,
               ))
           .toList();
     }
@@ -657,6 +679,7 @@ class DocumentService {
               saleUnit: item.saleUnit,
               unitConversionFactor: item.unitConversionFactor,
               baseQuantity: item.baseQuantity,
+              decimalDigits: item.decimalDigits,
             ));
             continue;
           }
@@ -676,6 +699,7 @@ class DocumentService {
                 saleUnit: item.saleUnit,
                 unitConversionFactor: item.unitConversionFactor,
                 baseQuantity: item.baseQuantity,
+                decimalDigits: item.decimalDigits,
               ));
               continue;
             }
@@ -709,10 +733,11 @@ class DocumentService {
     bool pricesIncludeTax = false,
     int decimalDigits = 2,
   }) {
-    final subtotal = MoneyUtils.round(_calculateSubtotal(items), decimalDigits);
+    final normalized = items.map((i) => i.withDigits(decimalDigits)).toList();
+    final subtotal = MoneyUtils.round(_calculateSubtotal(normalized), decimalDigits);
     final canonicalDiscount = MoneyUtils.round(discount, decimalDigits);
     final taxAmount = _calculateTaxMultiRate(
-      items,
+      normalized,
       canonicalDiscount,
       taxRate,
       subtotal,

@@ -295,4 +295,24 @@ void main() {
       );
     });
   });
+
+  // ── B2-5: withDigits / decimal rounding ───────────────────────────────────
+  group('B2-5: calculateInvoiceTotals respects decimalDigits for line totals', () {
+    test('subtotal rounds to 3 digits (before fix would return 0.33)', () {
+      final t = DocumentService.calculateInvoiceTotals(
+        items: [
+          const DocumentItemInput(
+            description: 'x',
+            quantity: 1,
+            price: 0.3336,
+            decimalDigits: 3,
+          ),
+        ],
+        discount: 0,
+        taxRate: 0,
+        decimalDigits: 3,
+      );
+      expect(t.subtotal, closeTo(0.334, 0.0001));
+    });
+  });
 }

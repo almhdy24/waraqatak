@@ -125,5 +125,13 @@ void main() {
       expect(FormatUtils.parseQuantity(null), isNull);
       expect(FormatUtils.parseQuantity('abc'), isNull);
     });
+
+    test('B2-5: setDecimalDigits(3) gives subtotal 0.334 for qty=1 price=0.3336', () {
+      const item = Product(id: 99, name: 'ثلاثة أرقام', salePrice: 0.3336, type: Product.typeService);
+      final c = PosCart()
+        ..setDecimalDigits(3)
+        ..add(item);
+      expect(c.subtotal, closeTo(0.334, 0.0001));
+    });
   });
 }

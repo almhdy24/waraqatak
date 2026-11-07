@@ -46,6 +46,8 @@ class PosCartLine {
 
   double get total => MoneyUtils.round(quantity * unitPrice);
 
+  double totalFor(int digits) => MoneyUtils.round(quantity * unitPrice, digits);
+
   PosCartLine withQuantity(double q) => PosCartLine(
         product,
         q,
@@ -95,11 +97,17 @@ class PosCart {
   String _pricingCategory = Contact.categoryRetail;
   Contact? _customer;
   bool _wholesalePricingEnabled = false;
+  int _decimalDigits = 2;
+  int get decimalDigits => _decimalDigits;
+  void setDecimalDigits(int digits) {
+    _decimalDigits = digits;
+    _clampDiscount();
+  }
 
   List<PosCartLine> get lines => List.unmodifiable(_lines);
   bool get isEmpty => _lines.isEmpty;
   double get itemCount => _lines.fold(0, (s, l) => s + l.quantity);
-  double get subtotal => _lines.fold(0, (s, l) => s + l.total);
+  double get subtotal => _lines.fold(0, (s, l) => s + l.totalFor(_decimalDigits));
   double get discount => _discount;
   String get pricingCategory => _pricingCategory;
   Contact? get customer => _customer;
@@ -312,6 +320,7 @@ class PosCart {
             saleUnit: l.unit?.unitName ?? l.product.unit,
             unitConversionFactor: l.unit?.conversionFactor ?? 1.0,
             baseQuantity: l.baseQuantity,
+            decimalDigits: _decimalDigits,
           ),
       ];
 
@@ -325,6 +334,7 @@ class PosCart {
         discount: _discount,
         taxRate: taxRate,
         pricesIncludeTax: pricesIncludeTax,
+        decimalDigits: _decimalDigits,
       );
 
   /// Change to give back for a cash payment of [received] (never negative).
