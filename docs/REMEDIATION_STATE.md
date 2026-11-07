@@ -24,7 +24,7 @@
 | **Batch 9** | Deep financial review | DONE | Verified financial report queries exclude draft/cancelled, segregate currencies, round via MoneyUtils; verified CSV exports use UTF-8 BOM and import fallback to Windows-1256 |
 | **Batch 10** | IMPLEMENT: Backup hardening | DONE | Single PBKDF2 key derivation per backup/restore, strict future version rejection, post-restore PRAGMA integrity_check, pure unit tests passed |
 | **Batch 11** | Localization | SKIPPED BY USER | Skipped per supplemental override A2; user will run dedicated language prompt |
-| **Batch 12** | Licensing & entitlements | PENDING | UTC clock, offline fallback |
+| **Batch 12** | Licensing & entitlements | DONE | Verified UTC clock comparisons, monotonic last-seen guard, rollback protection, unreachable network offline preservation, and core offline features unblocked; 68 unit tests passed |
 | **Batch 13** | Hostile review & final verdict | PENDING | Adversarial diff review, final verdict |
 
 ---
