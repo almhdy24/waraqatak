@@ -423,12 +423,12 @@ class AppLocalizations {
     'Cancelling this receipt will reverse its payment and update the invoice.',
   );
   String cannotCancelWithActiveVouchers(String voucherNumbers) => _t(
-    'لا يمكن إلغاء المستند لوجود سندات قبض/صرف نشطة مرتبطة به ($voucherNumbers). يرجى إلغاء هذه السندات أولاً.',
+    'لا يمكن إلغاء المستند لوجود سندات قبض/صرف نشطة مرتبطة به (${_iso(voucherNumbers)}). ألغِ هذه السندات أولاً.',
     'Cannot cancel document with active payment receipts/vouchers ($voucherNumbers). Please cancel these vouchers first.',
   );
   String get cancelPaidDocumentTitle => _t('تأكيد إلغاء مستند مسدد', 'Confirm Cancellation of Paid Document');
   String cancelPaidRecordedAmount(String amount, String symbol) => _t(
-    'المبلغ المسدد المسجل: $amount $symbol',
+    'المبلغ المسدد المسجل: ${_iso('$amount $symbol')}',
     'Recorded paid amount: $amount $symbol',
   );
   String get cancelPaidReportsWarning => _t(
@@ -1074,7 +1074,7 @@ class AppLocalizations {
   String get copySupportInfo => _t('نسخ معلومات الدعم الفني', 'Copy support info');
   String get supportInfoCopied =>
       _t('تم نسخ معلومات الدعم الفني للحافظة', 'Support info copied to clipboard');
-  String referenceIdLabel(String id) => _t('الرقم المرجعي: $id', 'Reference ID: $id');
+  String referenceIdLabel(String id) => _t('الرقم المرجعي: ${_iso(id)}', 'Reference ID: $id');
   String get copiedToClipboard => _t('تم النسخ للحافظة', 'Copied to clipboard');
   String get transferNoticeTitle => _t('نقل الترخيص إلى جهاز آخر', 'License Transfer');
   String get transferNoticeBody => _t(
@@ -1428,7 +1428,7 @@ class AppLocalizations {
     'Warning: Statement contains reconciliation adjustments',
   );
   String statementWarningDetail(String inv, String amount, String symbol) => _t(
-    'الفاتورة #${_iso(inv)} تتضمن فارقاً محاسبياً بمقدار ${_iso(amount)} ${_iso(symbol)} ناتجاً عن تعديل يدوي سابق.',
+    'الفاتورة #${_iso(inv)} تتضمن فرقاً بمقدار ${_iso('$amount $symbol')} ناتجاً عن تعديل سابق.',
     'Invoice #$inv has a discrepancy of $amount $symbol due to an earlier manual edit.',
   );
   String get cancelledReceiptsTitle => _t(
