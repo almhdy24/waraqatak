@@ -1,6 +1,7 @@
 import '../models/contact.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
+import '../models/tax_profile.dart';
 import '../utils/money_utils.dart';
 import 'document_service.dart';
 
@@ -49,14 +50,14 @@ class PosCartLine {
   double totalFor(int digits) => MoneyUtils.round(quantity * unitPrice, digits);
 
   PosCartLine withQuantity(double q) => PosCartLine(
-        product,
-        q,
-        taxRate: taxRate,
-        unit: unit,
-        pricingCategory: pricingCategory,
-        priceOverride: priceOverride,
-        wholesalePricingEnabled: wholesalePricingEnabled,
-      );
+    product,
+    q,
+    taxRate: taxRate,
+    unit: unit,
+    pricingCategory: pricingCategory,
+    priceOverride: priceOverride,
+    wholesalePricingEnabled: wholesalePricingEnabled,
+  );
 
   PosCartLine copyWith({
     Product? product,
@@ -75,8 +76,9 @@ class PosCartLine {
       taxRate: taxRate ?? this.taxRate,
       unit: clearUnit ? null : (unit ?? this.unit),
       pricingCategory: pricingCategory ?? this.pricingCategory,
-      priceOverride:
-          clearPriceOverride ? null : (priceOverride ?? this.priceOverride),
+      priceOverride: clearPriceOverride
+          ? null
+          : (priceOverride ?? this.priceOverride),
       wholesalePricingEnabled:
           wholesalePricingEnabled ?? this.wholesalePricingEnabled,
     );
@@ -106,12 +108,68 @@ class PosCart {
 
   bool _enforceStock = true;
   bool get enforceStock => _enforceStock;
-  void setEnforceStock(bool value) { _enforceStock = value; }
+  void setEnforceStock(bool value) {
+    _enforceStock = value;
+  }
+
+  Map<int, TaxProfile> _taxProfiles = const {};
+  bool _taxesEnabled = true;
+  double _businessTaxRate = 0.0;
+
+  Map<int, TaxProfile> get taxProfiles => _taxProfiles;
+  bool get taxesEnabled => _taxesEnabled;
+  double get businessTaxRate => _businessTaxRate;
+
+  void setTaxConfiguration({
+    bool? taxesEnabled,
+    double? businessTaxRate,
+    Map<int, TaxProfile>? taxProfiles,
+  }) {
+    if (taxesEnabled != null) _taxesEnabled = taxesEnabled;
+    if (businessTaxRate != null) _businessTaxRate = businessTaxRate;
+    if (taxProfiles != null) _taxProfiles = taxProfiles;
+  }
+
+  void setTaxProfiles(Map<int, TaxProfile> profiles) {
+    _taxProfiles = profiles;
+  }
+
+  /// Resolves the per-line tax rate matching DocumentService.resolveItemsTaxRates:
+  /// 1. taxes disabled -> 0.0
+  /// 2. explicit per-line rate provided -> line.taxRate
+  /// 3. non-taxable product -> 0.0
+  /// 4. active tax profile -> profile.rate
+  /// 5. else -> business default rate
+  double resolveLineTaxRate(
+    PosCartLine line, {
+    bool? taxesEnabled,
+    double? businessTaxRate,
+    Map<int, TaxProfile>? taxProfiles,
+  }) {
+    final enabled = taxesEnabled ?? _taxesEnabled;
+    final fallbackRate = businessTaxRate ?? _businessTaxRate;
+    final profiles = taxProfiles ?? _taxProfiles;
+
+    if (!enabled) return 0.0;
+    if (line.taxRate != null) return line.taxRate!;
+    if (!line.product.isTaxable) return 0.0;
+
+    final profileId = line.product.taxProfileId;
+    if (profileId != null && profiles.containsKey(profileId)) {
+      final profile = profiles[profileId]!;
+      if (profile.isActive) {
+        return profile.rate;
+      }
+    }
+
+    return fallbackRate;
+  }
 
   List<PosCartLine> get lines => List.unmodifiable(_lines);
   bool get isEmpty => _lines.isEmpty;
   double get itemCount => _lines.fold(0, (s, l) => s + l.quantity);
-  double get subtotal => _lines.fold(0, (s, l) => s + l.totalFor(_decimalDigits));
+  double get subtotal =>
+      _lines.fold(0, (s, l) => s + l.totalFor(_decimalDigits));
   double get discount => _discount;
   String get pricingCategory => _pricingCategory;
   Contact? get customer => _customer;
@@ -166,8 +224,9 @@ class PosCart {
     for (int i = 0; i < _lines.length; i++) {
       final line = _lines[i];
       _lines[i] = line.copyWith(
-        pricingCategory:
-            _customer != null ? _customer!.pricingCategory : _pricingCategory,
+        pricingCategory: _customer != null
+            ? _customer!.pricingCategory
+            : _pricingCategory,
         wholesalePricingEnabled: _wholesalePricingEnabled,
       );
     }
@@ -193,15 +252,18 @@ class PosCart {
     final addedBaseQty = quantity * factor;
 
     // Check if line with same unit and pricing category already exists without override
-    final i = _lines.indexWhere((l) =>
-        l.product.id == product.id &&
-        l.unit?.id == unit?.id &&
-        l.unit?.unitName == unit?.unitName &&
-        l.pricingCategory == effectiveCategory &&
-        l.priceOverride == priceOverride);
+    final i = _lines.indexWhere(
+      (l) =>
+          l.product.id == product.id &&
+          l.unit?.id == unit?.id &&
+          l.unit?.unitName == unit?.unitName &&
+          l.pricingCategory == effectiveCategory &&
+          l.priceOverride == priceOverride,
+    );
 
-    final currentTotalBase =
-        product.id != null ? baseQuantityOf(product.id!) : 0.0;
+    final currentTotalBase = product.id != null
+        ? baseQuantityOf(product.id!)
+        : 0.0;
     if (_enforceStock &&
         (tracksStock(product) &&
             (currentTotalBase + addedBaseQty) - product.stockQuantity > 1e-9)) {
@@ -210,15 +272,17 @@ class PosCart {
 
     final lineRate = taxRate ?? (product.isTaxable ? null : 0.0);
     if (i < 0) {
-      _lines.add(PosCartLine(
-        product,
-        quantity,
-        taxRate: lineRate,
-        unit: unit,
-        pricingCategory: effectiveCategory,
-        priceOverride: priceOverride,
-        wholesalePricingEnabled: effectiveWholesaleEnabled,
-      ));
+      _lines.add(
+        PosCartLine(
+          product,
+          quantity,
+          taxRate: lineRate,
+          unit: unit,
+          pricingCategory: effectiveCategory,
+          priceOverride: priceOverride,
+          wholesalePricingEnabled: effectiveWholesaleEnabled,
+        ),
+      );
     } else {
       _lines[i] = _lines[i].withQuantity(_lines[i].quantity + quantity);
     }
@@ -244,7 +308,8 @@ class PosCart {
     final factor = line.unit?.conversionFactor ?? 1.0;
     final nextBase = quantity * factor;
     if (_enforceStock &&
-        (tracksStock(p) && (otherLinesBase + nextBase) - p.stockQuantity > 1e-9)) {
+        (tracksStock(p) &&
+            (otherLinesBase + nextBase) - p.stockQuantity > 1e-9)) {
       return PosCartError.outOfStock;
     }
     _lines[index] = line.withQuantity(quantity);
@@ -280,7 +345,8 @@ class PosCart {
         .where((e) => e.key != index && e.value.product.id == p.id)
         .fold(0.0, (s, e) => s + e.value.baseQuantity);
     if (_enforceStock &&
-        (tracksStock(p) && (otherLinesBase + nextBase) - p.stockQuantity > 1e-9)) {
+        (tracksStock(p) &&
+            (otherLinesBase + nextBase) - p.stockQuantity > 1e-9)) {
       return PosCartError.outOfStock;
     }
 
@@ -314,35 +380,63 @@ class PosCart {
     if (_discount > subtotal) _discount = subtotal;
   }
 
-  List<DocumentItemInput> toItemInputs() => [
-        for (final l in _lines)
-          DocumentItemInput(
+  List<DocumentItemInput> toItemInputs({
+    bool? taxesEnabled,
+    double? businessTaxRate,
+    Map<int, TaxProfile>? taxProfiles,
+  }) {
+    final enabled = taxesEnabled ?? _taxesEnabled;
+    final fallbackRate = businessTaxRate ?? _businessTaxRate;
+    final profiles = taxProfiles ?? _taxProfiles;
+
+    return [
+      for (final l in _lines)
+        () {
+          final lineRate = resolveLineTaxRate(
+            l,
+            taxesEnabled: enabled,
+            businessTaxRate: fallbackRate,
+            taxProfiles: profiles,
+          );
+          final isTaxable = enabled && l.product.isTaxable && (lineRate > 0);
+          return DocumentItemInput(
             description: l.product.name,
             quantity: l.quantity,
             price: l.unitPrice,
-            taxable: l.product.isTaxable,
+            taxable: isTaxable,
             productId: l.product.id,
-            taxRate: l.taxRate,
+            taxRate: lineRate,
             pricingCategory: l.pricingCategory,
             saleUnit: l.unit?.unitName ?? l.product.unit,
             unitConversionFactor: l.unit?.conversionFactor ?? 1.0,
             baseQuantity: l.baseQuantity,
             decimalDigits: _decimalDigits,
-          ),
-      ];
+          );
+        }(),
+    ];
+  }
 
   /// Totals using the same rules as invoices.
   ({double subtotal, double taxAmount, double total}) totals({
     required double taxRate,
     required bool pricesIncludeTax,
-  }) =>
-      DocumentService.calculateInvoiceTotals(
-        items: toItemInputs(),
-        discount: _discount,
-        taxRate: taxRate,
-        pricesIncludeTax: pricesIncludeTax,
-        decimalDigits: _decimalDigits,
-      );
+    bool? taxesEnabled,
+    Map<int, TaxProfile>? taxProfiles,
+  }) {
+    final enabled = taxesEnabled ?? _taxesEnabled;
+    final profiles = taxProfiles ?? _taxProfiles;
+    return DocumentService.calculateInvoiceTotals(
+      items: toItemInputs(
+        taxesEnabled: enabled,
+        businessTaxRate: taxRate,
+        taxProfiles: profiles,
+      ),
+      discount: _discount,
+      taxRate: taxRate,
+      pricesIncludeTax: pricesIncludeTax,
+      decimalDigits: _decimalDigits,
+    );
+  }
 
   /// Change to give back for a cash payment of [received] (never negative).
   static double changeFor({

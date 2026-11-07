@@ -12,6 +12,7 @@ import '../models/document_item.dart';
 import '../models/payment_method.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
+import '../models/tax_profile.dart';
 import '../models/currency.dart';
 import '../services/document_service.dart';
 import '../services/feature_access.dart';
@@ -89,26 +90,41 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         ProductService.getAllProducts(activeOnly: true),
         db.getEnabledPaymentMethods(),
         db.getAllProductUnits(),
+        db.getTaxProfiles(),
       ]);
       final entitlement = await LicenseService.instance.checkEntitlement();
       if (!mounted) return;
       final business = results[0] as Business?;
       final methods = results[2] as List<PaymentMethod>;
       final units = results[3] as Map<int, List<ProductUnit>>;
+      final taxProfilesList = results[4] as List<TaxProfile>;
+      final taxProfilesMap = {
+        for (final p in taxProfilesList)
+          if (p.id != null) p.id!: p,
+      };
       setState(() {
         _business = business;
         _products = results[1] as List<Product>;
         _methods = methods;
         _productUnits = units;
-        _cart.setEnforceStock(FeatureAccess.canAccess(Feature.inventory, entitlement));
-        _cart.setWholesalePricingEnabled(business?.wholesalePricingEnabled ?? false);
+        _cart.setEnforceStock(
+          FeatureAccess.canAccess(Feature.inventory, entitlement),
+        );
+        _cart.setWholesalePricingEnabled(
+          business?.wholesalePricingEnabled ?? false,
+        );
         if (business != null) {
-          _cart.setDecimalDigits(Currency.decimalDigitsForCode(business.currencyCode));
+          _cart.setDecimalDigits(
+            Currency.decimalDigitsForCode(business.currencyCode),
+          );
+          _cart.setTaxConfiguration(
+            taxesEnabled: business.taxesEnabled,
+            businessTaxRate: business.effectiveTaxRate,
+            taxProfiles: taxProfilesMap,
+          );
         }
-        _method ??= methods
-                .where((m) => m.isDefault)
-                .map((m) => m.key)
-                .firstOrNull ??
+        _method ??=
+            methods.where((m) => m.isDefault).map((m) => m.key).firstOrNull ??
             methods.firstOrNull?.key;
         _loading = false;
       });
@@ -128,17 +144,22 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return _products;
     return _products
-        .where((p) =>
-            p.name.toLowerCase().contains(q) ||
-            (p.code?.toLowerCase().contains(q) ?? false) ||
-            (p.barcode?.toLowerCase() == q))
+        .where(
+          (p) =>
+              p.name.toLowerCase().contains(q) ||
+              (p.code?.toLowerCase().contains(q) ?? false) ||
+              (p.barcode?.toLowerCase() == q),
+        )
         .toList();
   }
 
   ({double subtotal, double taxAmount, double total}) get _totals =>
       _cart.totals(
         taxRate: _business?.effectiveTaxRate ?? 0,
-        pricesIncludeTax: (_business?.taxesEnabled ?? false) && (_business?.pricesIncludeTax ?? false),
+        pricesIncludeTax:
+            (_business?.taxesEnabled ?? false) &&
+            (_business?.pricesIncludeTax ?? false),
+        taxesEnabled: _business?.taxesEnabled ?? false,
       );
 
   void _toast(String msg) {
@@ -147,7 +168,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   void _addProduct(Product p, {double quantity = 1}) {
     final l10n = AppLocalizations.of(context);
-    final units = p.id != null ? (_productUnits[p.id!] ?? const <ProductUnit>[]) : const <ProductUnit>[];
+    final units = p.id != null
+        ? (_productUnits[p.id!] ?? const <ProductUnit>[])
+        : const <ProductUnit>[];
     final defaultUnit = units.where((u) => u.isDefaultSale).firstOrNull;
     final err = _cart.add(p, quantity: quantity, unit: defaultUnit);
     if (err == PosCartError.outOfStock) {
@@ -185,7 +208,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             children: [
               Text(
                 l10n.itemQuantity,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 8),
               AmountField(
@@ -268,7 +294,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             children: [
               Text(
                 l10n.itemQuantity,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
               const SizedBox(height: 8),
               AmountField(
@@ -336,8 +365,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final d = _cart.discount;
     final shown = NumberInput.parse(_discountCtrl.text) ?? 0;
     if (shown != d) {
-      _discountCtrl.text =
-          d == 0 ? '' : NumberInput.formatForInput(d, maxDecimals: 4);
+      _discountCtrl.text = d == 0
+          ? ''
+          : NumberInput.formatForInput(d, maxDecimals: 4);
     }
   }
 
@@ -354,8 +384,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   /// Search field "enter": an exact barcode/code match goes to the cart.
   void _addByCode(String code, AppLocalizations l10n) {
     final c = code.trim().toLowerCase();
-    final match = _products.where((p) =>
-        p.barcode?.toLowerCase() == c || p.code?.toLowerCase() == c);
+    final match = _products.where(
+      (p) => p.barcode?.toLowerCase() == c || p.code?.toLowerCase() == c,
+    );
     if (match.isEmpty) {
       _toast(l10n.posProductNotFound);
       return;
@@ -430,7 +461,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             );
       HapticFeedback.mediumImpact();
       if (MediaQuery.sizeOf(context).width < 840) {
-        Navigator.of(context).popUntil((r) => r is! PopupRoute); // close cart sheet
+        Navigator.of(
+          context,
+        ).popUntil((r) => r is! PopupRoute); // close cart sheet
       }
       await _showDone(docId, total: total, change: change);
       _resetSale();
@@ -443,7 +476,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     }
   }
 
-  Future<void> _showDone(int docId, {required double total, required double change}) async {
+  Future<void> _showDone(
+    int docId, {
+    required double total,
+    required double change,
+  }) async {
     final l10n = AppLocalizations.of(context);
     await showDialog<void>(
       context: context,
@@ -455,8 +492,12 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         onShare: () => _shareReceipt(docId),
         onView: () {
           Navigator.pop(ctx);
-          Navigator.push(context,
-              MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: docId)));
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DocumentDetailScreen(documentId: docId),
+            ),
+          );
         },
         onNewSale: () => Navigator.pop(ctx),
         l10n: l10n,
@@ -464,7 +505,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
   }
 
-  Future<({Document doc, List<DocumentItem> items})?> _loadDoc(int docId) async {
+  Future<({Document doc, List<DocumentItem> items})?> _loadDoc(
+    int docId,
+  ) async {
     final db = DatabaseHelper.instance;
     final doc = await db.getDocumentById(docId);
     if (doc == null) return null;
@@ -544,22 +587,22 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         body: _loading
             ? const AppLoadingView()
             : _business == null
-                ? Center(child: Text(l10n.posSetupBusinessFirst))
-                : wide
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(child: _productPicker(l10n)),
-                          const VerticalDivider(width: 1),
-                          SizedBox(width: 400, child: _cartPanel(l10n)),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          Expanded(child: _productPicker(l10n)),
-                          _cartBar(l10n),
-                        ],
-                      ),
+            ? Center(child: Text(l10n.posSetupBusinessFirst))
+            : wide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _productPicker(l10n)),
+                  const VerticalDivider(width: 1),
+                  SizedBox(width: 400, child: _cartPanel(l10n)),
+                ],
+              )
+            : Column(
+                children: [
+                  Expanded(child: _productPicker(l10n)),
+                  _cartBar(l10n),
+                ],
+              ),
       ),
     );
   }
@@ -600,7 +643,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(
-                      _products.isEmpty ? l10n.noProducts : l10n.posProductNotFound,
+                      _products.isEmpty
+                          ? l10n.noProducts
+                          : l10n.posProductNotFound,
                       textAlign: TextAlign.center,
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
@@ -608,8 +653,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 )
               : Builder(
                   builder: (context) {
-                    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-                    final tileHeight = (116.0 * textScale.clamp(1.0, 1.6)).roundToDouble();
+                    final textScale = MediaQuery.textScalerOf(
+                      context,
+                    ).scale(1.0);
+                    final tileHeight = (116.0 * textScale.clamp(1.0, 1.6))
+                        .roundToDouble();
                     return GridView.builder(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
@@ -621,7 +669,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                       itemCount: products.length,
                       itemBuilder: (_, i) => _ProductTile(
                         product: products[i],
-                        inCart: products[i].id == null ? 0 : _cart.quantityOf(products[i].id!),
+                        inCart: products[i].id == null
+                            ? 0
+                            : _cart.quantityOf(products[i].id!),
                         price: _fmt(products[i].salePrice),
                         l10n: l10n,
                         enforceStock: _cart.enforceStock,
@@ -657,8 +707,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      l10n.posItemsCount(FormatUtils.formatQuantity(_cart.itemCount)),
-                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                      l10n.posItemsCount(
+                        FormatUtils.formatQuantity(_cart.itemCount),
+                      ),
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
                     ),
                     AppAmountText(
                       amount: total,
@@ -695,10 +750,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
           child: SizedBox(
             height: MediaQuery.sizeOf(ctx).height * 0.85,
-            child: _cartPanel(l10n, refresh: () {
-              setSheet(() {});
-              setState(() {});
-            }),
+            child: _cartPanel(
+              l10n,
+              refresh: () {
+                setSheet(() {});
+                setState(() {});
+              },
+            ),
           ),
         ),
       ),
@@ -720,11 +778,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       text: FormatUtils.formatQuantity(line.quantity),
     );
     final priceCtrl = TextEditingController(
-        text: NumberInput.formatForInput(line.unitPrice, maxDecimals: 4));
+      text: NumberInput.formatForInput(line.unitPrice, maxDecimals: 4),
+    );
     bool isCustomPrice = line.priceOverride != null;
 
-    double currentQty() =>
-        NumberInput.parse(qtyCtrl.text) ?? line.quantity;
+    double currentQty() => NumberInput.parse(qtyCtrl.text) ?? line.quantity;
 
     final result = await showDialog<bool>(
       context: context,
@@ -737,9 +795,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (units.isNotEmpty) ...[
-                  Text(l10n.salesUnit,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(
+                    l10n.salesUnit,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
@@ -754,16 +816,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               if (!isCustomPrice) {
                                 final resPrice =
                                     DocumentService.resolveLinePrice(
-                                  product: p,
-                                  availableUnits: units,
-                                  unit: null,
-                                  targetCategory: selectedCategory,
-                                  quantity: currentQty(),
-                                  wholesalePricingEnabled: wholesaleEnabled,
-                                );
+                                      product: p,
+                                      availableUnits: units,
+                                      unit: null,
+                                      targetCategory: selectedCategory,
+                                      quantity: currentQty(),
+                                      wholesalePricingEnabled: wholesaleEnabled,
+                                    );
                                 priceCtrl.text = NumberInput.formatForInput(
-                                    resPrice,
-                                    maxDecimals: 4);
+                                  resPrice,
+                                  maxDecimals: 4,
+                                );
                               }
                             });
                           }
@@ -772,7 +835,8 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                       for (final u in units)
                         ChoiceChip(
                           label: Text(u.unitName),
-                          selected: selectedUnit?.id == u.id &&
+                          selected:
+                              selectedUnit?.id == u.id &&
                               selectedUnit?.unitName == u.unitName,
                           onSelected: (sel) {
                             if (sel) {
@@ -780,17 +844,19 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                 selectedUnit = u;
                                 if (!isCustomPrice) {
                                   final resPrice =
-                                    DocumentService.resolveLinePrice(
-                                    product: p,
-                                    availableUnits: units,
-                                    unit: u,
-                                    targetCategory: selectedCategory,
-                                    quantity: currentQty(),
-                                    wholesalePricingEnabled: wholesaleEnabled,
-                                  );
+                                      DocumentService.resolveLinePrice(
+                                        product: p,
+                                        availableUnits: units,
+                                        unit: u,
+                                        targetCategory: selectedCategory,
+                                        quantity: currentQty(),
+                                        wholesalePricingEnabled:
+                                            wholesaleEnabled,
+                                      );
                                   priceCtrl.text = NumberInput.formatForInput(
                                     resPrice,
-                                    maxDecimals: 4);
+                                    maxDecimals: 4,
+                                  );
                                 }
                               });
                             }
@@ -801,9 +867,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   const SizedBox(height: 12),
                 ],
                 if (wholesaleEnabled) ...[
-                  Text(l10n.pricingCategory,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(
+                    l10n.pricingCategory,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Wrap(
                     spacing: 6,
@@ -818,16 +888,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               if (!isCustomPrice) {
                                 final resPrice =
                                     DocumentService.resolveLinePrice(
-                                  product: p,
-                                  availableUnits: units,
-                                  unit: selectedUnit,
-                                  targetCategory: selectedCategory,
-                                  quantity: currentQty(),
-                                  wholesalePricingEnabled: wholesaleEnabled,
-                                );
+                                      product: p,
+                                      availableUnits: units,
+                                      unit: selectedUnit,
+                                      targetCategory: selectedCategory,
+                                      quantity: currentQty(),
+                                      wholesalePricingEnabled: wholesaleEnabled,
+                                    );
                                 priceCtrl.text = NumberInput.formatForInput(
-                                    resPrice,
-                                    maxDecimals: 4);
+                                  resPrice,
+                                  maxDecimals: 4,
+                                );
                               }
                             });
                           }
@@ -843,16 +914,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                               if (!isCustomPrice) {
                                 final resPrice =
                                     DocumentService.resolveLinePrice(
-                                  product: p,
-                                  availableUnits: units,
-                                  unit: selectedUnit,
-                                  targetCategory: selectedCategory,
-                                  quantity: currentQty(),
-                                  wholesalePricingEnabled: wholesaleEnabled,
-                                );
+                                      product: p,
+                                      availableUnits: units,
+                                      unit: selectedUnit,
+                                      targetCategory: selectedCategory,
+                                      quantity: currentQty(),
+                                      wholesalePricingEnabled: wholesaleEnabled,
+                                    );
                                 priceCtrl.text = NumberInput.formatForInput(
-                                    resPrice,
-                                    maxDecimals: 4);
+                                  resPrice,
+                                  maxDecimals: 4,
+                                );
                               }
                             });
                           }
@@ -862,9 +934,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                Text(l10n.itemQuantity,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(
+                  l10n.itemQuantity,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 AmountField(
                   controller: qtyCtrl,
@@ -888,17 +964,22 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                             wholesalePricingEnabled: wholesaleEnabled,
                           );
                           priceCtrl.text = NumberInput.formatForInput(
-                              resPrice,
-                              maxDecimals: 4);
+                            resPrice,
+                            maxDecimals: 4,
+                          );
                         });
                       }
                     }
                   },
                 ),
                 const SizedBox(height: 12),
-                Text(l10n.unitPrice,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13)),
+                Text(
+                  l10n.unitPrice,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 AmountField(
                   controller: priceCtrl,
@@ -916,16 +997,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                 isCustomPrice = false;
                                 final resPrice =
                                     DocumentService.resolveLinePrice(
-                                  product: p,
-                                  availableUnits: units,
-                                  unit: selectedUnit,
-                                  targetCategory: selectedCategory,
-                                  quantity: currentQty(),
-                                  wholesalePricingEnabled: wholesaleEnabled,
-                                );
+                                      product: p,
+                                      availableUnits: units,
+                                      unit: selectedUnit,
+                                      targetCategory: selectedCategory,
+                                      quantity: currentQty(),
+                                      wholesalePricingEnabled: wholesaleEnabled,
+                                    );
                                 priceCtrl.text = NumberInput.formatForInput(
-                                    resPrice,
-                                    maxDecimals: 4);
+                                  resPrice,
+                                  maxDecimals: 4,
+                                );
                               });
                             },
                           )
@@ -956,10 +1038,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
 
     if (result == true) {
-      final overridePrice =
-          isCustomPrice ? NumberInput.parse(priceCtrl.text.trim()) : null;
-      final newQty =
-          NumberInput.parse(qtyCtrl.text.trim()) ?? line.quantity;
+      final overridePrice = isCustomPrice
+          ? NumberInput.parse(priceCtrl.text.trim())
+          : null;
+      final newQty = NumberInput.parse(qtyCtrl.text.trim()) ?? line.quantity;
       update(() {
         final err = _cart.updateLine(
           index,
@@ -987,7 +1069,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     final t = _totals;
     final received = NumberInput.parse(_receivedCtrl.text);
-    final change = received == null ? 0.0 : PosCart.changeFor(total: t.total, received: received);
+    final change = received == null
+        ? 0.0
+        : PosCart.changeFor(total: t.total, received: received);
 
     if (_cart.isEmpty) {
       return Center(
@@ -998,9 +1082,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             children: [
               Icon(Icons.shopping_cart_outlined, size: 56, color: cs.outline),
               const SizedBox(height: 8),
-              Text(l10n.posCartEmpty,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: cs.onSurfaceVariant)),
+              Text(
+                l10n.posCartEmpty,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant),
+              ),
             ],
           ),
         ),
@@ -1017,15 +1103,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 ChoiceChip(
                   label: Text(l10n.retail),
                   selected: _cart.pricingCategory == Contact.categoryRetail,
-                  onSelected: (_) =>
-                      update(() => _cart.setPricingCategory(Contact.categoryRetail)),
+                  onSelected: (_) => update(
+                    () => _cart.setPricingCategory(Contact.categoryRetail),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
                   label: Text(l10n.wholesale),
                   selected: _cart.pricingCategory == Contact.categoryWholesale,
                   onSelected: (_) => update(
-                      () => _cart.setPricingCategory(Contact.categoryWholesale)),
+                    () => _cart.setPricingCategory(Contact.categoryWholesale),
+                  ),
                 ),
               ],
             ),
@@ -1037,21 +1125,24 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (_, i) {
               final line = _cart.lines[i];
-              final unitLabel =
-                  line.unit?.unitName ?? line.product.unit ?? '';
-              final tierLabel = (_business?.wholesalePricingEnabled == true &&
+              final unitLabel = line.unit?.unitName ?? line.product.unit ?? '';
+              final tierLabel =
+                  (_business?.wholesalePricingEnabled == true &&
                       line.pricingCategory == Contact.categoryWholesale)
                   ? ' (${l10n.wholesalePricing})'
                   : '';
               return ListTile(
                 dense: true,
                 onTap: () => _editLine(i, update),
-                title: Text(line.product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                title: Text(
+                  line.product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 subtitle: Text(
-                    '${_fmt(line.unitPrice)} × ${FormatUtils.formatQuantity(line.quantity)} $unitLabel$tierLabel = ${_fmt(line.total)}'),
+                  '${_fmt(line.unitPrice)} × ${FormatUtils.formatQuantity(line.quantity)} $unitLabel$tierLabel = ${_fmt(line.total)}',
+                ),
                 trailing: _QtyStepper(
                   quantity: line.quantity,
                   onMinus: () => update(() => _setQty(i, line.quantity - 1)),
@@ -1068,27 +1159,37 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: [
-                Expanded(
-                  child: AmountField(
-                    controller: _discountCtrl,
-                    maxDecimals: 4,
-                    showMultipliers: true,
-                    decoration: InputDecoration(labelText: l10n.discount, isDense: true),
-                    onChanged: (v) => update(() => _cart.discount = NumberInput.parse(v) ?? 0),
+              Row(
+                children: [
+                  Expanded(
+                    child: AmountField(
+                      controller: _discountCtrl,
+                      maxDecimals: 4,
+                      showMultipliers: true,
+                      decoration: InputDecoration(
+                        labelText: l10n.discount,
+                        isDense: true,
+                      ),
+                      onChanged: (v) => update(
+                        () => _cart.discount = NumberInput.parse(v) ?? 0,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: AmountField(
-                    controller: _receivedCtrl,
-                    maxDecimals: 4,
-                    showMultipliers: true,
-                    decoration: InputDecoration(labelText: l10n.posAmountReceived, isDense: true),
-                    onChanged: (_) => update(() {}),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AmountField(
+                      controller: _receivedCtrl,
+                      maxDecimals: 4,
+                      showMultipliers: true,
+                      decoration: InputDecoration(
+                        labelText: l10n.posAmountReceived,
+                        isDense: true,
+                      ),
+                      onChanged: (_) => update(() {}),
+                    ),
                   ),
-                ),
-              ]),
+                ],
+              ),
               const SizedBox(height: 10),
               if (_methods.isNotEmpty)
                 Wrap(
@@ -1105,7 +1206,8 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 ),
               const SizedBox(height: 8),
               _totalRow(l10n.subtotal, _fmt(t.subtotal)),
-              if (_cart.discount > 0) _totalRow(l10n.discount, '- ${_fmt(_cart.discount)}'),
+              if (_cart.discount > 0)
+                _totalRow(l10n.discount, '- ${_fmt(_cart.discount)}'),
               if (t.taxAmount > 0) _totalRow(l10n.tax, _fmt(t.taxAmount)),
               _totalRow(l10n.grandTotal, _fmt(t.total), big: true),
               if (change > 0)
@@ -1121,11 +1223,15 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   onPressed: _saving || _method == null ? null : _completeSale,
                   icon: _saving
                       ? const SizedBox(
-                          width: 20, height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.check_circle_outline),
-                  label: Text('${l10n.posCompleteSale} · ${_fmt(t.total)}',
-                      style: const TextStyle(fontSize: 16)),
+                  label: Text(
+                    '${l10n.posCompleteSale} · ${_fmt(t.total)}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
                 ),
               ),
             ],
@@ -1135,7 +1241,12 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
   }
 
-  Widget _totalRow(String label, String value, {bool big = false, Color? color}) {
+  Widget _totalRow(
+    String label,
+    String value, {
+    bool big = false,
+    Color? color,
+  }) {
     final style = TextStyle(
       fontSize: big ? 18 : 13.5,
       fontWeight: big ? FontWeight.bold : FontWeight.w500,
@@ -1145,7 +1256,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [Text(label, style: style), Text(value, style: style)],
+        children: [
+          Text(label, style: style),
+          Text(value, style: style),
+        ],
       ),
     );
   }
@@ -1212,7 +1326,10 @@ class _ProductTile extends StatelessWidget {
                   ),
                   if (inCart > 0)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: cs.primary,
                         borderRadius: BorderRadius.circular(20),
@@ -1220,7 +1337,10 @@ class _ProductTile extends StatelessWidget {
                       child: Text(
                         FormatUtils.formatQuantity(inCart),
                         style: TextStyle(
-                            color: cs.onPrimary, fontSize: 12, fontWeight: FontWeight.bold),
+                          color: cs.onPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                 ],
@@ -1230,15 +1350,22 @@ class _ProductTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(price,
-                      style: TextStyle(fontWeight: FontWeight.bold, color: cs.primary)),
+                  Text(
+                    price,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: cs.primary,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     !tracks
                         ? l10n.posService
                         : soldOut
-                            ? l10n.outOfStock
-                            : l10n.posInStock(FormatUtils.formatQuantity(available)),
+                        ? l10n.outOfStock
+                        : l10n.posInStock(
+                            FormatUtils.formatQuantity(available),
+                          ),
                     style: TextStyle(
                       fontSize: 11.5,
                       color: soldOut ? cs.error : cs.onSurfaceVariant,
@@ -1283,10 +1410,11 @@ class _QtyStepper extends StatelessWidget {
               minWidth: AppDesignTokens.minTouchTarget,
               minHeight: AppDesignTokens.minTouchTarget,
             ),
-            icon: Icon(quantity <= 1 ? Icons.delete_outline : Icons.remove, size: 20),
-            tooltip: quantity <= 1
-                ? AppLocalizations.of(context).delete
-                : null,
+            icon: Icon(
+              quantity <= 1 ? Icons.delete_outline : Icons.remove,
+              size: 20,
+            ),
+            tooltip: quantity <= 1 ? AppLocalizations.of(context).delete : null,
             onPressed: onMinus,
           ),
           InkWell(
@@ -1296,7 +1424,10 @@ class _QtyStepper extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Text(
                 FormatUtils.formatQuantity(quantity),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
@@ -1342,30 +1473,45 @@ class _SaleDoneDialog extends StatelessWidget {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(total, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: cs.primary)),
+          Text(
+            total,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: cs.primary,
+            ),
+          ),
           if (change != null) ...[
             const SizedBox(height: 8),
-            Text('${l10n.posChange}: $change',
-                style: TextStyle(fontSize: 16, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+            Text(
+              '${l10n.posChange}: $change',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.green.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
           const SizedBox(height: 16),
-          Row(children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onPrint,
-                icon: const Icon(Icons.print_outlined),
-                label: Text(l10n.posPrintReceipt),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onPrint,
+                  icon: const Icon(Icons.print_outlined),
+                  label: Text(l10n.posPrintReceipt),
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: onShare,
-                icon: const Icon(Icons.share_outlined),
-                label: Text(l10n.posShare),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onShare,
+                  icon: const Icon(Icons.share_outlined),
+                  label: Text(l10n.posShare),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ],
       ),
       actions: [

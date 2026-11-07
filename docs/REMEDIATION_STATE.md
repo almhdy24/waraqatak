@@ -19,7 +19,7 @@
 | **Batch 4** | FIFO allocation verification & implementation | DONE | Supplemental D: PaymentAllocator pure Dart logic, DatabaseHelper.recordFifoPayment, DocumentService.recordFifoPayment, VoucherScreen FIFO UI & validation, l10n strings, ErrorUtils error mappings, Linux CI test suite |
 | **Batch 5** | Inventory & POS audit | DONE | INV-16 single stock writer audit; POS and stock flows audited |
 | **Batch 6** | IMPLEMENT: DB constraints + audit atomicity | DONE | Migration v26: unique indexes, safe de-duplication, atomic audit logging, period lock in issueDocument |
-| **Batch 7** | IMPLEMENT: POS tax, purchase units, track_inventory | IN PROGRESS | POS tax parity, track_inventory (optional last item per A3) |
+| **Batch 7** | IMPLEMENT: POS tax, purchase units, track_inventory | DONE (POS tax) / DEFERRED (track_inventory) | POS tax preview parity (Fact B4) resolved and verified with pure unit tests; track_inventory deferred to last item per Override A3; purchase units unreachable per B5 |
 | **Batch 8** | IMPLEMENT: Arabic search, number formatting, UI error handling | PENDING | Arabic search normalization, AmountField consistency, unhandled async states |
 | **Batch 9** | Deep financial review | PENDING | Line-by-line report queries, currencies, rounding, CSV |
 | **Batch 10** | IMPLEMENT: Backup hardening | PENDING | Key derivation once, version validation, atomic swap |
