@@ -189,9 +189,9 @@ class AppLocalizations {
   String get customerHasDocumentsTitle =>
       _t('للعميل معاملات مسجلة', 'Customer has transactions');
   String get customerHasDocumentsMessage => _t(
-        'لهذا العميل مستندات مسجلة، والحذف سيمحو سجل حسابه وأرصدته. أرشف العميل بدلًا من ذلك: يختفي من المستندات الجديدة وتبقى كل السجلات سليمة.',
-        'This customer has recorded documents. Deleting would erase their account history and balances. Archive the customer instead: they stop appearing for new documents, and all records stay intact.',
-      );
+    'لهذا العميل مستندات مسجلة، والحذف سيمحو سجل حسابه وأرصدته. أرشف العميل بدلًا من ذلك: يختفي من المستندات الجديدة وتبقى كل السجلات سليمة.',
+    'This customer has recorded documents. Deleting would erase their account history and balances. Archive the customer instead: they stop appearing for new documents, and all records stay intact.',
+  );
   String get archiveCustomer => _t('أرشفة العميل', 'Archive customer');
   String get deleteProductMessage =>
       _t('هل تريد حذف هذا المنتج؟', 'Delete this product?');
@@ -349,8 +349,10 @@ class AppLocalizations {
     'The backup file contains your data in unencrypted form. '
         'Keep it in a safe place and do not share it with anyone you do not trust.',
   );
-  String get backupEncryptionQuestion =>
-      _t('هل تريد حماية النسخة بكلمة سر؟', 'Do you want to protect this backup with a password?');
+  String get backupEncryptionQuestion => _t(
+    'هل تريد حماية النسخة بكلمة سر؟',
+    'Do you want to protect this backup with a password?',
+  );
   String get backupWithoutPassword =>
       _t('لا، بدون كلمة سر (غير مشفرة)', 'No, without password (unencrypted)');
   String get backupWithPassword =>
@@ -360,8 +362,10 @@ class AppLocalizations {
       _t('تأكيد كلمة المرور', 'Confirm password');
   String get backupPasswordRequired =>
       _t('يرجى إدخال كلمة المرور', 'Please enter a password');
-  String get backupPasswordMinLength =>
-      _t('كلمة المرور يجب أن لا تقل عن 8 أحرف', 'Password must be at least 8 characters');
+  String get backupPasswordMinLength => _t(
+    'كلمة المرور يجب أن لا تقل عن 8 أحرف',
+    'Password must be at least 8 characters',
+  );
   String get backupPasswordsDoNotMatch =>
       _t('كلمتا المرور غير متطابقتين', 'Passwords do not match');
   String get backupPasswordWarning => _t(
@@ -378,16 +382,24 @@ class AppLocalizations {
     'هذه النسخة محمية بكلمة سر. أدخل كلمة المرور لاستعادتها:',
     'This backup is password-protected. Enter the password to restore it:',
   );
-  String get backupIncorrectPassword =>
-      _t('كلمة المرور غير صحيحة أو الملف تالف', 'Incorrect password or corrupted backup file');
+  String get backupIncorrectPassword => _t(
+    'كلمة المرور غير صحيحة أو الملف تالف',
+    'Incorrect password or corrupted backup file',
+  );
   String get backupUpdateRequired =>
       _t('حدّث التطبيق لفتح هذه النسخة', 'Update the app to open this backup');
-  String get backupCorrupted =>
-      _t('ملف النسخة الاحتياطية تالف أو غير صالح', 'Backup file is corrupted or invalid');
-  String get backupDecrypting =>
-      _t('جاري فك التشفير والتحقق من البيانات…', 'Decrypting and verifying data…');
-  String get backupEncrypting =>
-      _t('جاري تشفير النسخة الاحتياطية والتحقق…', 'Encrypting backup and verifying…');
+  String get backupCorrupted => _t(
+    'ملف النسخة الاحتياطية تالف أو غير صالح',
+    'Backup file is corrupted or invalid',
+  );
+  String get backupDecrypting => _t(
+    'جاري فك التشفير والتحقق من البيانات…',
+    'Decrypting and verifying data…',
+  );
+  String get backupEncrypting => _t(
+    'جاري تشفير النسخة الاحتياطية والتحقق…',
+    'Encrypting backup and verifying…',
+  );
   String get backupSlowNotice => _t(
     'قد تستغرق هذه العملية دقيقة على الهواتف القديمة',
     'This operation may take up to a minute on older phones',
@@ -426,7 +438,8 @@ class AppLocalizations {
     'لا يمكن إلغاء المستند لوجود سندات قبض/صرف نشطة مرتبطة به ($voucherNumbers). يرجى إلغاء هذه السندات أولاً.',
     'Cannot cancel document with active payment receipts/vouchers ($voucherNumbers). Please cancel these vouchers first.',
   );
-  String get cancelPaidDocumentTitle => _t('تأكيد إلغاء مستند مسدد', 'Confirm Cancellation of Paid Document');
+  String get cancelPaidDocumentTitle =>
+      _t('تأكيد إلغاء مستند مسدد', 'Confirm Cancellation of Paid Document');
   String cancelPaidRecordedAmount(String amount, String symbol) => _t(
     'المبلغ المسدد المسجل: $amount $symbol',
     'Recorded paid amount: $amount $symbol',
@@ -472,10 +485,8 @@ class AppLocalizations {
     'المبلغ أكبر من المستحق على الطرف.',
     'The amount is more than the outstanding balance.',
   );
-  String get errorDocumentAlreadyCancelled => _t(
-    'المستند ملغى بالفعل.',
-    'Document is already cancelled.',
-  );
+  String get errorDocumentAlreadyCancelled =>
+      _t('المستند ملغى بالفعل.', 'Document is already cancelled.');
   String get errorCannotReduceTotalBelowPayments => _t(
     'لا يمكن تقليل الإجمالي إلى أقل من المدفوعات المسجلة.',
     'Cannot reduce total below recorded payments.',
@@ -503,15 +514,20 @@ class AppLocalizations {
   );
   String get refundStatusRefunded => _t('تم رد المبلغ', 'Refunded');
   String get refundStatusNotRefunded => _t('لم يُرد بعد', 'Not refunded yet');
-  String get refundStatusNotRecorded => _t('لم تُسجَّل حالة الرد', 'Refund status not recorded');
-  String get keepDocument => _t('تراجع (إبقاء المستند)', 'Go Back (Keep Document)');
-  String get confirmAndCancel => _t('تأكيد وإلغاء المستند', 'Confirm & Cancel Document');
-  String get updateRefundStatus => _t('تعديل حالة رد المبلغ', 'Update Refund Status');
+  String get refundStatusNotRecorded =>
+      _t('لم تُسجَّل حالة الرد', 'Refund status not recorded');
+  String get keepDocument =>
+      _t('تراجع (إبقاء المستند)', 'Go Back (Keep Document)');
+  String get confirmAndCancel =>
+      _t('تأكيد وإلغاء المستند', 'Confirm & Cancel Document');
+  String get updateRefundStatus =>
+      _t('تعديل حالة رد المبلغ', 'Update Refund Status');
   String get refundAuditCardDisclaimer => _t(
     'هذه الملاحظة للسجلات الإدارية فقط ولا تؤثر على التقارير أو الأرصدة الحسابية.',
     'This note is for record-keeping only and does not affect reports or balances.',
   );
-  String get cancelledDocumentMoneyCardTitle => _t('حالة أموال المستند الملغى', 'Cancelled Document Money Status');
+  String get cancelledDocumentMoneyCardTitle =>
+      _t('حالة أموال المستند الملغى', 'Cancelled Document Money Status');
   String get changeStatus => _t('تعديل الحالة', 'Change Status');
 
   // ========== DRAFT / ISSUE ==========
@@ -653,8 +669,10 @@ class AppLocalizations {
   String get addStock => _t('إضافة مخزون (+)', 'Add Stock (+)');
   String get removeStock => _t('خصم مخزون (−)', 'Remove Stock (−)');
   String get adjustmentQuantity => _t('كمية التعديل', 'Adjustment Quantity');
-  String get confirmAddStock => _t('تأكيد إضافة المخزون', 'Confirm Stock Addition');
-  String get confirmRemoveStock => _t('تأكيد خصم المخزون', 'Confirm Stock Removal');
+  String get confirmAddStock =>
+      _t('تأكيد إضافة المخزون', 'Confirm Stock Addition');
+  String get confirmRemoveStock =>
+      _t('تأكيد خصم المخزون', 'Confirm Stock Removal');
   String get adjustmentDelta =>
       _t('كمية التعديل (+ أو -)', 'Adjustment Delta (+ or -)');
   String get noMovements => _t('لا توجد حركات مخزون', 'No stock movements');
@@ -820,26 +838,28 @@ class AppLocalizations {
   String get wholesalePricing =>
       _t('تسعير الجملة والتجزئة', 'Wholesale & Retail Pricing');
   String get wholesalePricingDesc => _t(
-        'تفعيل أسعار الجملة والتجزئة للمنتجات والعملاء',
-        'Enable wholesale and retail prices for products and customers',
-      );
+    'تفعيل أسعار الجملة والتجزئة للمنتجات والعملاء',
+    'Enable wholesale and retail prices for products and customers',
+  );
   String get wholesalePricingDisableWarning => _t(
-        'عند تعطيل تسعير الجملة، ستعتمد الفواتير الجديدة سعر التجزئة الافتراضي.',
-        'When wholesale pricing is disabled, new documents will use standard retail pricing.',
-      );
+    'عند تعطيل تسعير الجملة، ستعتمد الفواتير الجديدة سعر التجزئة الافتراضي.',
+    'When wholesale pricing is disabled, new documents will use standard retail pricing.',
+  );
   String get disableAction => _t('تعطيل', 'Disable');
   String get wholesalePrice => _t('سعر الجملة', 'Wholesale Price');
   String get wholesaleMinQuantity =>
       _t('الحد الأدنى للجملة', 'Wholesale Min Quantity');
   String get wholesaleMinQuantityHelp => _t(
-        'أقل كمية لتطبيق سعر الجملة تلقائياً',
-        'Minimum quantity to automatically apply wholesale price',
-      );
+    'أقل كمية لتطبيق سعر الجملة تلقائياً',
+    'Minimum quantity to automatically apply wholesale price',
+  );
   String get pricingCategory => _t('فئة التسعير', 'Pricing Category');
   String get retail => _t('تجزئة', 'Retail');
   String get wholesale => _t('جملة', 'Wholesale');
-  String get pricingCategoryCustomerDesc =>
-      _t('فئة السعر الافتراضية لهذا العميل', 'Default pricing tier for this customer');
+  String get pricingCategoryCustomerDesc => _t(
+    'فئة السعر الافتراضية لهذا العميل',
+    'Default pricing tier for this customer',
+  );
   String get pricingTier => _t('فئة السعر', 'Pricing Tier');
   String get linePriceRetail => _t('تجزئة', 'Retail');
   String get linePriceWholesale => _t('جملة', 'Wholesale');
@@ -847,11 +867,13 @@ class AppLocalizations {
   String get itemTierWholesaleBadge => _t('سعر جملة', 'Wholesale Tier');
   String get itemTierRetailBadge => _t('سعر تجزئة', 'Retail Tier');
   String get bulkPricingCustomUnitsWarning => _t(
-        'تنبيه: التعديل الجماعي للأسعار ينطبق على الوحدة الأساسية فقط ولا يغير أسعار وحدات البيع الإضافية.',
-        'Notice: Bulk price adjustment applies to base units only and does not change additional sales unit prices.',
-      );
-  String get duplicateUnitNameError =>
-      _t('اسم الوحدة موجود بالفعل لهذا المنتج', 'Unit name already exists for this product');
+    'تنبيه: التعديل الجماعي للأسعار ينطبق على الوحدة الأساسية فقط ولا يغير أسعار وحدات البيع الإضافية.',
+    'Notice: Bulk price adjustment applies to base units only and does not change additional sales unit prices.',
+  );
+  String get duplicateUnitNameError => _t(
+    'اسم الوحدة موجود بالفعل لهذا المنتج',
+    'Unit name already exists for this product',
+  );
   String get reset => _t('إعادة ضبط', 'Reset');
   String get additionalSalesUnits =>
       _t('وحدات البيع الإضافية', 'Additional Sales Units');
@@ -860,13 +882,13 @@ class AppLocalizations {
   String get salesUnitName => _t('اسم الوحدة', 'Unit Name');
   String get conversionFactor => _t('معامل التحويل', 'Conversion Factor');
   String get conversionFactorHelp => _t(
-        'عدد الوحدات الأساسية التي تعادل وحدة البيع هذه (مثال: 1 كرتونة = 10 قطع)',
-        'How many base units equal 1 of this sales unit (e.g., 1 carton = 10 pieces)',
-      );
+    'عدد الوحدات الأساسية التي تعادل وحدة البيع هذه (مثال: 1 كرتونة = 10 قطع)',
+    'How many base units equal 1 of this sales unit (e.g., 1 carton = 10 pieces)',
+  );
   String get invalidConversionFactor => _t(
-        'يجب أن يكون معامل التحويل أكبر من صفر',
-        'Conversion factor must be greater than zero',
-      );
+    'يجب أن يكون معامل التحويل أكبر من صفر',
+    'Conversion factor must be greater than zero',
+  );
   String get salesUnit => _t('وحدة البيع', 'Sales Unit');
   String get baseUnit => _t('الوحدة الأساسية', 'Base Unit');
   String get defaultSaleUnit =>
@@ -1109,19 +1131,26 @@ class AppLocalizations {
   String get deviceModelLabel => _t('موديل الجهاز', 'Device Model');
   String get deviceIdLabel => _t('معرّف الجهاز', 'Device Identifier');
   String get copyDeviceId => _t('نسخ معرّف الجهاز', 'Copy device identifier');
-  String get deviceIdCopied =>
-      _t('تم نسخ معرّف الجهاز إلى الحافظة', 'Device identifier copied to clipboard');
+  String get deviceIdCopied => _t(
+    'تم نسخ معرّف الجهاز إلى الحافظة',
+    'Device identifier copied to clipboard',
+  );
   String get supportFromAboutPage => _t(
     'إذا استمرت المشكلة، يمكنك طلب الدعم الفني من صفحة "حول التطبيق".',
     'If the problem continues, contact support from the About page.',
   );
   String get openAboutPage => _t('صفحة حول التطبيق', 'About page');
-  String get copySupportInfo => _t('نسخ معلومات الدعم الفني', 'Copy support info');
-  String get supportInfoCopied =>
-      _t('تم نسخ معلومات الدعم الفني للحافظة', 'Support info copied to clipboard');
-  String referenceIdLabel(String id) => _t('الرقم المرجعي: $id', 'Reference ID: $id');
+  String get copySupportInfo =>
+      _t('نسخ معلومات الدعم الفني', 'Copy support info');
+  String get supportInfoCopied => _t(
+    'تم نسخ معلومات الدعم الفني للحافظة',
+    'Support info copied to clipboard',
+  );
+  String referenceIdLabel(String id) =>
+      _t('الرقم المرجعي: $id', 'Reference ID: $id');
   String get copiedToClipboard => _t('تم النسخ للحافظة', 'Copied to clipboard');
-  String get transferNoticeTitle => _t('نقل الترخيص إلى جهاز آخر', 'License Transfer');
+  String get transferNoticeTitle =>
+      _t('نقل الترخيص إلى جهاز آخر', 'License Transfer');
   String get transferNoticeBody => _t(
     'لترخيص جهاز جديد، يرجى إزالة المفتاح من هذا الجهاز أولاً عبر الزر أدناه لتتمكن من تفعيله على جهازك الآخر.',
     'To activate on another device, remove the key from this device first using the button below.',
@@ -1133,14 +1162,84 @@ class AppLocalizations {
   );
   String get viewDocument => _t('عرض المستند', 'View Document');
   String get helpCenter => _t('مركز المساعدة', 'Help Center');
-  String get helpCenterSubtitle =>
-      _t('دليل الاستخدام والأسئلة الشائعة عبر الإنترنت', 'Online user guides & FAQs');
+  String get helpCenterSubtitle => _t(
+    'دليل الاستخدام والأسئلة الشائعة عبر الإنترنت',
+    'Online user guides & FAQs',
+  );
   String get openDestination => _t('فتح', 'Open');
   String get entityLabel => _t('الكيان', 'Entity');
   String get actionTypeLabel => _t('نوع الإجراء', 'Action Type');
   String get detailsLabel => _t('التفاصيل', 'Details');
 
   // ── License screen (Settings → License) ───────────────────────────────────
+  String get licenseScreenRedesignTitle =>
+      _t('تفعيل ورقتك Pro', 'Activate Waraqatak Pro');
+  String get whatIsLicenseKeyTitle =>
+      _t('ما هو مفتاح التفعيل؟', 'What is an activation key?');
+  String get whatIsLicenseKeyBody => _t(
+    'مفتاح التفعيل رمز خاص بك تحصل عليه بعد الاشتراك، تدخله في التطبيق لتفتح مميزات ورقتك Pro على جهازك.',
+    'An activation key is your unique code obtained after subscribing, which you enter in the app to unlock Waraqatak Pro features on your device.',
+  );
+  String trialActiveStatusWithDays(int days) => _t(
+    'عندك تجربة مجانية لمدة 14 يوماً لكامل مميزات ورقتك Pro. متبقي $days يوم.',
+    'You have a 14-day free trial for all Waraqatak Pro features. $days day(s) remaining.',
+  );
+  String get trialExpiredStatusMessage => _t(
+    'انتهت التجربة المجانية. للاستمرار في استخدام مميزات Pro، احصل على مفتاح التفعيل عبر واتساب.',
+    'The free trial has expired. To continue using Pro features, get an activation key via WhatsApp.',
+  );
+  String get howToGetKeyTitle =>
+      _t('كيف أحصل على المفتاح؟', 'How do I get the key?');
+  String get howToGetKeyStep1 => _t(
+    'اضغط على زر "تواصل عبر واتساب" بالأسفل.',
+    'Tap the "Contact via WhatsApp" button below.',
+  );
+  String howToGetKeyStep2(String name) =>
+      _t('ستفتح محادثة مع $name.', 'A chat with $name will open.');
+  String get howToGetKeyStep3 => _t(
+    'اكتب له واسأله عن الاشتراك والباقات المتاحة.',
+    'Write to him and ask about subscription and available packages.',
+  );
+  String get howToGetKeyStep4 => _t(
+    'بعد إتمام الاشتراك يرسل لك مفتاح التفعيل.',
+    'After completing subscription, he will send you the activation key.',
+  );
+  String get howToGetKeyStep5 => _t(
+    'ارجع للتطبيق وأدخل المفتاح في الخانة أدناه.',
+    'Return to the app and enter the key in the field below.',
+  );
+  String get whatsappOfficialNotice => _t(
+    'واتساب هو الطريقة الرسمية الوحيدة للاشتراك والحصول على المفتاح. لا تدفع لأي جهة أخرى.',
+    'WhatsApp is the only official method to subscribe and obtain the key. Do not pay any other entity.',
+  );
+  String get contactWhatsAppForActivationButton => _t(
+    'تواصل عبر واتساب للحصول على المفتاح',
+    'Contact via WhatsApp to get key',
+  );
+  String get whatsappNotInstalled => _t(
+    'واتساب غير مثبت على جهازك',
+    'WhatsApp is not installed on your device',
+  );
+  String get freeVsProIntroText => _t(
+    'تحميل ورقتك مجاني. تجربة Pro كاملة 14 يوماً بدون دفع، وبعدها تحتاج مفتاح تفعيل.',
+    'Downloading Waraqatak is free. Full Pro trial for 14 days without payment, afterwards an activation key is needed.',
+  );
+  String get freeTierHeader => _t('المجاني', 'Free');
+  String get proTierHeader => _t('Pro (مع المفتاح)', 'Pro (with key)');
+  String get alreadyHaveKeyTitle => _t('عندك مفتاح؟', 'Already have a key?');
+  String get enterKeyHintText => _t(
+    'الصق المفتاح هنا ثم اضغط "تفعيل".',
+    'Paste the key here and tap "Activate".',
+  );
+  String get activationSuccessDone => _t(
+    'تم التفعيل بنجاح، مميزات Pro صارت متاحة لك.',
+    'Activated successfully! Pro features are now available to you.',
+  );
+  String get activationFailureGuidance => _t(
+    'تعذّر التفعيل. تأكد أن المفتاح منسوخ كاملاً بدون مسافات وأن الإنترنت شغال. إذا استمرت المشكلة، تواصل معنا عبر واتساب.',
+    'Activation failed. Ensure the key is copied in full without spaces and that internet is working. If the problem persists, contact us via WhatsApp.',
+  );
+
   String get licenseScreenTitle => _t('التفعيل والترخيص', 'License');
   String get licenseStatusLabel => _t('الحالة', 'Status');
   String get licenseTypeLabel => _t('النوع', 'Type');
@@ -1273,8 +1372,10 @@ class AppLocalizations {
     'أكمل بيانات النشاط التجاري أولاً من الإعدادات',
     'Complete your business profile in Settings first',
   );
-  String posNotEnoughStock(String name) =>
-      _t('الكمية المتوفرة من "${_iso(name)}" لا تكفي', 'Not enough stock for "$name"');
+  String posNotEnoughStock(String name) => _t(
+    'الكمية المتوفرة من "${_iso(name)}" لا تكفي',
+    'Not enough stock for "$name"',
+  );
   String posItemsCount(String n) {
     final parsed = num.tryParse(n.replaceAll(',', '').trim());
     if (parsed == null) {
@@ -1292,6 +1393,7 @@ class AppLocalizations {
       enOther: '$n items',
     );
   }
+
   String posInStock(String n) => _t('متوفر: ${_iso(n)}', 'In stock: $n');
 
   // ========== ABOUT & SUPPORT ==========
@@ -1455,14 +1557,20 @@ class AppLocalizations {
   String get categoryTips => _t('نصائح وإرشادات', 'Tips & Guides');
   String get undo => _t('تراجع', 'Undo');
   String get deleteAll => _t('حذف الكل', 'Delete all');
-  String get confirmDeleteAll => _t('تأكيد حذف جميع التنبيهات؟', 'Delete all notifications?');
+  String get confirmDeleteAll =>
+      _t('تأكيد حذف جميع التنبيهات؟', 'Delete all notifications?');
   String get confirmDeleteAllMessage => _t(
     'سيتم حذف جميع التنبيهات والإعلانات القابلة للحذف نهائياً. التنبيهات الهامة ستبقى محفوظة.',
     'All dismissible announcements will be permanently deleted. Critical notices will be preserved.',
   );
-  String get notificationDeleted => _t('تم حذف التنبيه', 'Notification deleted');
-  String get notificationsDeleted => _t('تم حذف التنبيهات المحددة', 'Selected notifications deleted');
-  String get cannotDeleteCritical => _t('لا يمكن حذف التنبيهات الهامة أو الحرجة', 'Critical notifications cannot be deleted');
+  String get notificationDeleted =>
+      _t('تم حذف التنبيه', 'Notification deleted');
+  String get notificationsDeleted =>
+      _t('تم حذف التنبيهات المحددة', 'Selected notifications deleted');
+  String get cannotDeleteCritical => _t(
+    'لا يمكن حذف التنبيهات الهامة أو الحرجة',
+    'Critical notifications cannot be deleted',
+  );
   String get selectedCount => _t('محدد', 'selected');
 
   // ========== CUSTOMER ACCOUNT STATEMENT ==========
@@ -2059,10 +2167,8 @@ class AppLocalizations {
     'هل أنت متأكد من حذف هذه النسخة الاحتياطية من Google Drive؟ لا يمكن التراجع عن هذا الإجراء.',
     'Are you sure you want to delete this backup from Google Drive? This action cannot be undone.',
   );
-  String get googleDriveDeleting => _t(
-    'جارٍ حذف النسخة الاحتياطية…',
-    'Deleting backup from Google Drive…',
-  );
+  String get googleDriveDeleting =>
+      _t('جارٍ حذف النسخة الاحتياطية…', 'Deleting backup from Google Drive…');
   String get googleDriveDeleteSuccess => _t(
     'تم حذف النسخة الاحتياطية من Google Drive بنجاح',
     'Backup deleted from Google Drive successfully',
@@ -2212,12 +2318,15 @@ class AppLocalizations {
       enOther: '~$days days',
     );
   }
-  String reorderSuggestionTag(String qty) => _t('طلب: ${_iso(qty)}', 'Order: $qty');
+
+  String reorderSuggestionTag(String qty) =>
+      _t('طلب: ${_iso(qty)}', 'Order: $qty');
   String get noProductsBelowCost => _t(
     'ممتاز! لا توجد منتجات تباع بأقل من متوسط التكلفة',
     'Great! No products sold below average cost',
   );
-  String lossAmount(String amount) => _t('خسارة: -${_iso(amount)}', 'Loss: -$amount');
+  String lossAmount(String amount) =>
+      _t('خسارة: -${_iso(amount)}', 'Loss: -$amount');
   String unvaluedSalesNotice(int count) {
     return _plural(
       count,
@@ -2296,10 +2405,14 @@ class AppLocalizations {
     'حالة مطابقة دفتر اليومية المزدوج ومصدر تقارير القوائم المالية',
     'Double-entry journal parity status and financial report source',
   );
-  String get journalParityVerified =>
-      _t('مطابقة تامة (100%) مع الدفتر المشتق', 'Exact 100% parity with derived ledger');
-  String get journalParityMismatch =>
-      _t('يوجد عدم تطابق بين الدفتر واليومية', 'Parity mismatch between ledger and journal');
+  String get journalParityVerified => _t(
+    'مطابقة تامة (100%) مع الدفتر المشتق',
+    'Exact 100% parity with derived ledger',
+  );
+  String get journalParityMismatch => _t(
+    'يوجد عدم تطابق بين الدفتر واليومية',
+    'Parity mismatch between ledger and journal',
+  );
   String get journalReportSource =>
       _t('مصدر التقارير المالية', 'Financial Reports Source');
   String get journalSourceDerived =>
@@ -2324,8 +2437,7 @@ class AppLocalizations {
       _t('تسوية جرد (زيادة مخزون)', 'Stock Count (Gain)');
   String get adjustmentReasonCountLoss =>
       _t('تسوية جرد (عجز مخزون)', 'Stock Count (Loss)');
-  String get adjustmentReasonDamageLoss =>
-      _t('تلف مخزون', 'Damaged Goods');
+  String get adjustmentReasonDamageLoss => _t('تلف مخزون', 'Damaged Goods');
   String get adjustmentReasonExpiryLoss =>
       _t('انتهاء الصلاحية', 'Expired Stock');
   String get adjustmentReasonOpeningStock =>
@@ -2345,8 +2457,7 @@ class AppLocalizations {
       _t('الدفاتر مقفلة حتى', 'Books closed through');
   String get periodLockOpen =>
       _t('الفترة مفتوحة بالكامل (لا يوجد إقفال)', 'All periods open (No lock)');
-  String get setPeriodLock =>
-      _t('تحديد تاريخ الإقفال', 'Set Lock Date');
+  String get setPeriodLock => _t('تحديد تاريخ الإقفال', 'Set Lock Date');
   String get clearPeriodLock =>
       _t('فتح الفترة (إلغاء الإقفال)', 'Clear Period Lock');
   String get confirmSetPeriodLockTitle =>
@@ -2369,9 +2480,9 @@ class AppLocalizations {
   // ========== REFERENCE PRICING ==========
   String get exchangeRates => _t('أسعار الصرف', 'Exchange rates');
   String get exchangeRatesDesc => _t(
-        'سعّر منتجاتك بعملة أخرى وحدّث سعر الصرف يدويًا',
-        'Price products in another currency and update the rate manually',
-      );
+    'سعّر منتجاتك بعملة أخرى وحدّث سعر الصرف يدويًا',
+    'Price products in another currency and update the rate manually',
+  );
   String get pricingCurrency => _t('عملة التسعير', 'Pricing currency');
   String get exchangeRate => _t('سعر الصرف', 'Exchange rate');
   String get addCurrency => _t('إضافة عملة', 'Add currency');
@@ -2380,57 +2491,58 @@ class AppLocalizations {
   String get currencySymbol => _t('الرمز المختصر', 'Symbol');
   String get roundingNone => _t('بدون تقريب', 'No rounding');
   String get roundingChangedRecalculatePrompt => _t(
-        'تغيّر التقريب. هل تريد إعادة حساب الأسعار الآن؟',
-        'Rounding changed. Recalculate prices now?',
-      );
+    'تغيّر التقريب. هل تريد إعادة حساب الأسعار الآن؟',
+    'Rounding changed. Recalculate prices now?',
+  );
   String get rateMissingForCurrency => _t(
-        'لا يوجد سعر صرف لهذه العملة. أضف سعر الصرف أولًا.',
-        'No exchange rate for this currency. Add the rate first.',
-      );
+    'لا يوجد سعر صرف لهذه العملة. أضف سعر الصرف أولًا.',
+    'No exchange rate for this currency. Add the rate first.',
+  );
   String get repriceConfirmTitle => _t('تحديث الأسعار', 'Update prices');
   String repriceConfirmBody(Object products, Object units) => _t(
-        'سيتم تحديث أسعار ${_iso(products)} منتج و${_iso(units)} وحدة.',
-        'Prices of $products products and $units units will be updated.',
-      );
+    'سيتم تحديث أسعار ${_iso(products)} منتج و${_iso(units)} وحدة.',
+    'Prices of $products products and $units units will be updated.',
+  );
   String repriceDone(Object products, Object units) => _t(
-        'تم تحديث ${_iso(products)} منتج و${_iso(units)} وحدة.',
-        'Updated $products products and $units units.',
-      );
-  String get recalculateAll => _t('إعادة حساب كل الأسعار', 'Recalculate all prices');
+    'تم تحديث ${_iso(products)} منتج و${_iso(units)} وحدة.',
+    'Updated $products products and $units units.',
+  );
+  String get recalculateAll =>
+      _t('إعادة حساب كل الأسعار', 'Recalculate all prices');
   String get currencyInUse => _t(
-        'لا يمكن حذف عملة مستخدمة في منتجات. يمكنك أرشفتها.',
-        'A currency used by products cannot be deleted. You can archive it.',
-      );
+    'لا يمكن حذف عملة مستخدمة في منتجات. يمكنك أرشفتها.',
+    'A currency used by products cannot be deleted. You can archive it.',
+  );
   String get archiveCurrency => _t('أرشفة', 'Archive');
   String get unarchiveCurrency => _t('إلغاء الأرشفة', 'Unarchive');
   String get switchToBaseConfirm => _t(
-        'سيتحول المنتج إلى العملة الأساسية وتبقى أسعاره الحالية كما هي.',
-        'The product will switch to the base currency and keep its current prices.',
-      );
+    'سيتحول المنتج إلى العملة الأساسية وتبقى أسعاره الحالية كما هي.',
+    'The product will switch to the base currency and keep its current prices.',
+  );
   String keepsCurrentBasePrice(Object value) => _t(
-        'إن تُرك فارغًا يبقى السعر الحالي بالعملة الأساسية: ${_iso(value)}',
-        'If left empty, the current base-currency price stays: $value',
-      );
+    'إن تُرك فارغًا يبقى السعر الحالي بالعملة الأساسية: ${_iso(value)}',
+    'If left empty, the current base-currency price stays: $value',
+  );
   String get unitReferencePricesCleared => _t(
-        'تم مسح الأسعار المرجعية للوحدات. أدخلها بالعملة الجديدة.',
-        'Unit reference prices were cleared. Enter them in the new currency.',
-      );
+    'تم مسح الأسعار المرجعية للوحدات. أدخلها بالعملة الجديدة.',
+    'Unit reference prices were cleared. Enter them in the new currency.',
+  );
   String bulkSkippedReference(Object count) => _t(
-        'تم تخطي ${_iso(count)} سعر مرتبط بعملة أخرى.',
-        'Skipped $count prices linked to another currency.',
-      );
+    'تم تخطي ${_iso(count)} سعر مرتبط بعملة أخرى.',
+    'Skipped $count prices linked to another currency.',
+  );
   String csvSkippedReference(Object count) => _t(
-        'لم يتم تغيير ${_iso(count)} سعر مرتبط بعملة أخرى.',
-        '$count prices linked to another currency were not changed.',
-      );
+    'لم يتم تغيير ${_iso(count)} سعر مرتبط بعملة أخرى.',
+    '$count prices linked to another currency were not changed.',
+  );
   String get catalogUpdatedCartKept => _t(
-        'تم تحديث الكتالوج. المنتجات الموجودة في السلة تحتفظ بأسعارها السابقة.',
-        'The catalog was updated. Items already in the cart keep their previous prices.',
-      );
+    'تم تحديث الكتالوج. المنتجات الموجودة في السلة تحتفظ بأسعارها السابقة.',
+    'The catalog was updated. Items already in the cart keep their previous prices.',
+  );
   String get currencyChangeBlockedByRates => _t(
-        'لا يمكن تغيير العملة الأساسية بعد إضافة أسعار صرف.',
-        'The base currency cannot be changed after exchange rates are added.',
-      );
+    'لا يمكن تغيير العملة الأساسية بعد إضافة أسعار صرف.',
+    'The base currency cannot be changed after exchange rates are added.',
+  );
   String get setupBusinessFirst =>
       _t('أكمل بيانات النشاط أولًا.', 'Complete the business details first.');
   String get chooseCurrency => _t('اختر العملة', 'Choose currency');
@@ -2438,77 +2550,78 @@ class AppLocalizations {
       _t('رمز العملة (مثال: EUR)', 'Currency code (e.g. EUR)');
   String get currencyNameArField =>
       _t('اسم العملة بالعربية', 'Currency name in Arabic');
-  String get currencyNameEnField =>
-      _t('اسم العملة بالإنجليزية (اختياري)', 'Currency name in English (optional)');
+  String get currencyNameEnField => _t(
+    'اسم العملة بالإنجليزية (اختياري)',
+    'Currency name in English (optional)',
+  );
   String get currencySymbolField =>
       _t('رمز العرض (اختياري، مثل: €)', 'Display symbol (optional, e.g. €)');
   String get currencyRateField => _t('سعر الصرف', 'Exchange rate');
   String get currencyRateHelper => _t(
-        'كم وحدة من عملتك الأساسية تساوي 1 من هذه العملة',
-        'How many units of your base currency equal 1 of this currency',
-      );
-  String get updateExchangeRate => _t('تحديث سعر الصرف', 'Update exchange rate');
+    'كم وحدة من عملتك الأساسية تساوي 1 من هذه العملة',
+    'How many units of your base currency equal 1 of this currency',
+  );
+  String get updateExchangeRate =>
+      _t('تحديث سعر الصرف', 'Update exchange rate');
   String get recalculatePrices =>
       _t('إعادة تسعير المنتجات الآن', 'Recalculate product prices now');
   String get recalculateAllConfirm => _t(
-        'سيُعاد حساب أسعار الأساس لكل المنتجات المرتبطة بعملات صرف بسعر الصرف الحالي لكل عملة. متابعة؟',
-        'Base prices of all products linked to an exchange rate will be recalculated. Continue?',
-      );
+    'سيُعاد حساب أسعار الأساس لكل المنتجات المرتبطة بعملات صرف بسعر الصرف الحالي لكل عملة. متابعة؟',
+    'Base prices of all products linked to an exchange rate will be recalculated. Continue?',
+  );
   String get repricePreviewTitle =>
       _t('معاينة إعادة التسعير', 'Reprice preview');
   String repricePreviewDesc(Object productCount, Object unitCount) => _t(
-        'سيتم تحديث ${_iso(productCount)} منتج و${_iso(unitCount)} وحدة تسعير.',
-        '$productCount products and $unitCount units will be updated.',
-      );
+    'سيتم تحديث ${_iso(productCount)} منتج و${_iso(unitCount)} وحدة تسعير.',
+    '$productCount products and $unitCount units will be updated.',
+  );
   String repriceSuccess(Object count) => _t(
-        'تم تحديث أسعار ${_iso(count)} منتج بنجاح',
-        'Successfully updated prices for $count products',
-      );
+    'تم تحديث أسعار ${_iso(count)} منتج بنجاح',
+    'Successfully updated prices for $count products',
+  );
   String get archiveCurrencyConfirm => _t(
-        'لن تظهر هذه العملة عند إنشاء أو تعديل منتجات جديدة. المنتجات الحالية تبقى مرتبطة بها.',
-        'This currency will not appear when pricing new products. Existing products keep their pricing.',
-      );
+    'لن تظهر هذه العملة عند إنشاء أو تعديل منتجات جديدة. المنتجات الحالية تبقى مرتبطة بها.',
+    'This currency will not appear when pricing new products. Existing products keep their pricing.',
+  );
   String get deleteCurrencyConfirm => _t(
-        'حذف هذه العملة المخصصة نهائيًا؟',
-        'Permanently delete this custom currency?',
-      );
+    'حذف هذه العملة المخصصة نهائيًا؟',
+    'Permanently delete this custom currency?',
+  );
   String roundingNearest(Object step) =>
       _t('لأقرب ${_iso(step)} وحدة', 'To nearest $step units');
 
   String get refErrInvalidRate => _t(
-        'سعر الصرف يجب أن يكون رقمًا أكبر من الصفر وبما لا يتجاوز 6 خانات عشرية.',
-        'Exchange rate must be > 0 with up to 6 decimal places.',
-      );
+    'سعر الصرف يجب أن يكون رقمًا أكبر من الصفر وبما لا يتجاوز 6 خانات عشرية.',
+    'Exchange rate must be > 0 with up to 6 decimal places.',
+  );
   String get refErrInvalidPrice => _t(
-        'السعر المرجعي يجب أن يكون رقمًا موجبًا وبما لا يتجاوز 4 خانات عشرية.',
-        'Reference price must be positive with up to 4 decimal places.',
-      );
+    'السعر المرجعي يجب أن يكون رقمًا موجبًا وبما لا يتجاوز 4 خانات عشرية.',
+    'Reference price must be positive with up to 4 decimal places.',
+  );
   String get refErrPriceOutOfRange => _t(
-        'السعر المحوّل يتجاوز الحد المسموح.',
-        'Converted price exceeds the allowed range.',
-      );
+    'السعر المحوّل يتجاوز الحد المسموح.',
+    'Converted price exceeds the allowed range.',
+  );
   String get refErrReferencePriceRequired => _t(
-        'السعر المرجعي الأساسي مطلوب للمنتجات المسعّرة بعملة أخرى.',
-        'Primary reference price is required when pricing in another currency.',
-      );
+    'السعر المرجعي الأساسي مطلوب للمنتجات المسعّرة بعملة أخرى.',
+    'Primary reference price is required when pricing in another currency.',
+  );
   String get refErrRepricingBusy => _t(
-        'هناك عملية إعادة تسعير جارية حاليًا. يرجى الانتظار.',
-        'Repricing already in progress. Please wait.',
-      );
+    'هناك عملية إعادة تسعير جارية حاليًا. يرجى الانتظار.',
+    'Repricing already in progress. Please wait.',
+  );
   String get refErrCurrencyExists =>
       _t('رمز العملة مسجل مسبقًا.', 'Currency code already exists.');
   String get refErrCurrencyIsBase => _t(
-        'لا يمكن إضافة العملة الأساسية كعملة صرف.',
-        'Cannot add base currency as an exchange rate.',
-      );
+    'لا يمكن إضافة العملة الأساسية كعملة صرف.',
+    'Cannot add base currency as an exchange rate.',
+  );
   String get refErrCurrencyArchived => _t(
-        'العملة المختارة مؤرشفة حاليًا. تم استرجاع الإعداد السابق.',
-        'Selected currency is archived. Previous selection restored.',
-      );
-  String get refErrGeneric => _t(
-        'حدث خطأ في التسعير المرجعي.',
-        'A reference pricing error occurred.',
-      );
+    'العملة المختارة مؤرشفة حاليًا. تم استرجاع الإعداد السابق.',
+    'Selected currency is archived. Previous selection restored.',
+  );
+  String get refErrGeneric =>
+      _t('حدث خطأ في التسعير المرجعي.', 'A reference pricing error occurred.');
 
   bool get isArabic => langCode == 'ar';
 
