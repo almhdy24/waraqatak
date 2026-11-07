@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:printing/printing.dart';
 
+import '../core/catalog_events.dart';
+
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
@@ -58,15 +60,25 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   @override
   void initState() {
     super.initState();
+    CatalogEvents.pricesChanged.addListener(_onCatalogChanged);
     _load();
   }
 
   @override
   void dispose() {
+    CatalogEvents.pricesChanged.removeListener(_onCatalogChanged);
     _searchCtrl.dispose();
     _discountCtrl.dispose();
     _receivedCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _onCatalogChanged() async {
+    if (!mounted) return;
+    await _load();
+    if (!_cart.isEmpty && mounted) {
+      _toast(AppLocalizations.of(context).catalogUpdatedCartKept);
+    }
   }
 
   Future<void> _load() async {
