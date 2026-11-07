@@ -411,6 +411,7 @@ class BackupService {
       if (await tableExists('journal_entries')) await txn.delete('journal_entries');
       if (await tableExists('accounts')) await txn.delete('accounts');
       if (await tableExists('app_settings')) await txn.delete('app_settings');
+      if (await tableExists('exchange_rates')) await txn.delete('exchange_rates');
       await txn.delete('document_payments');
       await txn.delete('document_items');
       await txn.delete('stocktake_items');
@@ -444,6 +445,13 @@ class BackupService {
         final puCols = await getTableCols('product_units');
         for (final row in _convertRows(data['product_units'])) {
           await txn.insert('product_units', sanitizeRow(row, puCols));
+        }
+      }
+      if (data.containsKey('exchange_rates') &&
+          data['exchange_rates'] is List) {
+        final erCols = await getTableCols('exchange_rates');
+        for (final row in _convertRows(data['exchange_rates'])) {
+          await txn.insert('exchange_rates', sanitizeRow(row, erCols));
         }
       }
 
@@ -740,6 +748,7 @@ class BackupService {
         'journal_entries': await db.query('journal_entries'),
         'journal_lines': await db.query('journal_lines'),
         'app_settings': await db.query('app_settings'),
+        'exchange_rates': await db.query('exchange_rates'),
       },
       'assets': {'logo_base64': logoBase64},
     };
