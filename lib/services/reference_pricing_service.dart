@@ -1,6 +1,8 @@
 /// Application service for reference pricing and exchange rates management.
 library;
 
+import 'package:meta/meta.dart';
+
 import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../database/reference_pricing_dao.dart';
@@ -13,6 +15,10 @@ import '../models/reference_pricing_types.dart';
 /// to [ReferencePricingDao].
 abstract final class ReferencePricingService {
   static bool _busy = false;
+
+  /// Sets the internal busy re-entrancy flag for testing.
+  @visibleForTesting
+  static void setBusyForTest(bool val) => _busy = val;
 
   /// Fetches registered exchange rates, optionally filtering to active ones.
   static Future<List<ExchangeRate>> getRates({bool activeOnly = false}) async {
