@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:warqatek/services/activation_service.dart';
-import 'package:warqatek/services/license_service.dart';
 
 import 'test_keys.dart';
 
@@ -31,7 +30,7 @@ void main() {
   // verification added in Item 3 (storeLicense) works correctly on the host VM.
   const storageChannel =
       MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
-  final _fakeStorage = <String, String>{};
+  final fakeStorage = <String, String>{};
   setUpAll(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(storageChannel, (call) async {
@@ -39,14 +38,14 @@ void main() {
         case 'write':
           final key = call.arguments['key']?.toString();
           final value = call.arguments['value']?.toString();
-          if (key != null && value != null) _fakeStorage[key] = value;
+          if (key != null && value != null) fakeStorage[key] = value;
           return null;
         case 'read':
           final key = call.arguments['key']?.toString();
-          return key != null ? _fakeStorage[key] : null;
+          return key != null ? fakeStorage[key] : null;
         case 'delete':
           final key = call.arguments['key']?.toString();
-          if (key != null) _fakeStorage.remove(key);
+          if (key != null) fakeStorage.remove(key);
           return null;
         default:
           return null;
@@ -59,7 +58,7 @@ void main() {
   });
 
   // Clear fake storage between tests so they remain independent.
-  setUp(() => _fakeStorage.clear());
+  setUp(() => fakeStorage.clear());
 
   tearDown(ActivationService.debugResetClient);
 

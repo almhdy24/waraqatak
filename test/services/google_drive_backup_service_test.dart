@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -130,10 +129,16 @@ void main() {
       final sampleBackupFile = File('${tempDir.path}/warqatek_backup_${DateTime.now().millisecondsSinceEpoch}.waraq');
       await sampleBackupFile.writeAsString(jsonEncode({
         'app': 'warqatek',
-        'version': 4,
+        'backup_version': 5,
+        'database_version': 28,
         'created_at': DateTime.now().toIso8601String(),
         'data': {
-          'business': [{'name': 'متجر تجريبي'}],
+          'businesses': [{'name': 'متجر تجريبي'}],
+          'contacts': [],
+          'products': [],
+          'documents': [],
+          'document_items': [],
+          'document_counters': [],
         },
       }));
       return sampleBackupFile.path;
