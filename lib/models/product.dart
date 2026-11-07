@@ -1,36 +1,108 @@
+/// Product model representing an item in catalog.
+library;
+
+/// Represents a product or service in the catalog.
 class Product {
+  /// Type identifier for physical goods with tracked inventory.
   static const String typeProduct = 'product';
+
+  /// Type identifier for non-inventory services.
   static const String typeService = 'service';
 
+  /// Cost status indicating unit cost is tracked and authoritative.
   static const String costStatusKnown = 'known';
+
+  /// Cost status indicating unit cost is unknown.
   static const String costStatusUnknown = 'unknown';
 
+  /// Unique database ID.
   final int? id;
+
+  /// Display name.
   final String name;
+
+  /// Product type ('product' or 'service').
   final String type;
+
+  /// Optional SKU or internal product code.
   final String? code;
+
+  /// Optional barcode string.
   final String? barcode;
+
+  /// Base measurement unit name (e.g. piece, kg).
   final String? unit;
+
+  /// Base-currency selling price.
   final double salePrice;
+
+  /// Base-currency wholesale selling price.
   final double? wholesalePrice;
+
+  /// Minimum quantity required for wholesale pricing.
   final double? wholesaleMinQuantity;
+
+  /// Base-currency purchase cost.
   final double purchasePrice;
+
+  /// Current physical stock quantity.
   final double stockQuantity;
+
+  /// Low stock warning threshold.
   final double minStock;
+
+  /// Whether sales tax applies to this product.
   final bool isTaxable;
+
+  /// Whether product is active for selection.
   final bool isActive;
+
+  /// General notes.
   final String? notes;
+
+  /// Product category tag.
   final String? category;
+
+  /// Associated tax profile foreign key.
   final int? taxProfileId;
+
+  /// Moving average unit cost in base currency.
   final double? averageCost;
+
+  /// Costing status ('known' or 'unknown').
   final String costStatus;
+
+  /// Pricing reference currency code (null if priced directly in base currency).
+  final String? priceCurrency;
+
+  /// Reference sale price in [priceCurrency].
+  final double? referenceSalePrice;
+
+  /// Reference wholesale price in [priceCurrency].
+  final double? referenceWholesalePrice;
+
+  /// Reference purchase price in [priceCurrency].
+  final double? referencePurchasePrice;
+
+  /// Creation timestamp.
   final DateTime? createdAt;
+
+  /// Last modification timestamp.
   final DateTime? updatedAt;
 
+  /// Whether this item is a service.
   bool get isService => type == typeService;
+
+  /// Whether this item is a physical product.
   bool get isProduct => type == typeProduct;
+
+  /// Whether moving average cost is known and valid.
   bool get isCostKnown => costStatus == costStatusKnown && averageCost != null;
 
+  /// Whether this product is priced using a reference currency.
+  bool get hasReferencePricing => priceCurrency != null;
+
+  /// Creates a [Product].
   const Product({
     this.id,
     required this.name,
@@ -51,10 +123,15 @@ class Product {
     this.taxProfileId,
     this.averageCost,
     this.costStatus = costStatusUnknown,
+    this.priceCurrency,
+    this.referenceSalePrice,
+    this.referenceWholesalePrice,
+    this.referencePurchasePrice,
     this.createdAt,
     this.updatedAt,
   });
 
+  /// Creates a copy of this [Product] with modified fields.
   Product copyWith({
     int? id,
     String? name,
@@ -75,6 +152,14 @@ class Product {
     int? taxProfileId,
     double? averageCost,
     String? costStatus,
+    String? priceCurrency,
+    double? referenceSalePrice,
+    double? referenceWholesalePrice,
+    double? referencePurchasePrice,
+    bool clearPriceCurrency = false,
+    bool clearReferenceSalePrice = false,
+    bool clearReferenceWholesalePrice = false,
+    bool clearReferencePurchasePrice = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) =>
@@ -98,10 +183,20 @@ class Product {
         taxProfileId: taxProfileId ?? this.taxProfileId,
         averageCost: averageCost ?? this.averageCost,
         costStatus: costStatus ?? this.costStatus,
+        priceCurrency: clearPriceCurrency ? null : (priceCurrency ?? this.priceCurrency),
+        referenceSalePrice:
+            clearReferenceSalePrice ? null : (referenceSalePrice ?? this.referenceSalePrice),
+        referenceWholesalePrice: clearReferenceWholesalePrice
+            ? null
+            : (referenceWholesalePrice ?? this.referenceWholesalePrice),
+        referencePurchasePrice: clearReferencePurchasePrice
+            ? null
+            : (referencePurchasePrice ?? this.referencePurchasePrice),
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );
 
+  /// Converts this [Product] to a database map.
   Map<String, dynamic> toMap() => {
         'id': id,
         'name': name,
@@ -122,10 +217,15 @@ class Product {
         'tax_profile_id': taxProfileId,
         'average_cost': averageCost,
         'cost_status': costStatus,
+        'price_currency': priceCurrency,
+        'reference_sale_price': referenceSalePrice,
+        'reference_wholesale_price': referenceWholesalePrice,
+        'reference_purchase_price': referencePurchasePrice,
         'created_at': createdAt?.toIso8601String(),
         'updated_at': updatedAt?.toIso8601String(),
       };
 
+  /// Constructs a [Product] from a database row.
   factory Product.fromMap(Map<String, dynamic> map) => Product(
         id: map['id'] as int?,
         name: map['name'] as String,
@@ -147,6 +247,12 @@ class Product {
         taxProfileId: map['tax_profile_id'] as int?,
         averageCost: (map['average_cost'] as num?)?.toDouble(),
         costStatus: map['cost_status'] as String? ?? costStatusUnknown,
+        priceCurrency: map['price_currency'] as String?,
+        referenceSalePrice: (map['reference_sale_price'] as num?)?.toDouble(),
+        referenceWholesalePrice:
+            (map['reference_wholesale_price'] as num?)?.toDouble(),
+        referencePurchasePrice:
+            (map['reference_purchase_price'] as num?)?.toDouble(),
         createdAt: map['created_at'] != null
             ? DateTime.tryParse(map['created_at'] as String)
             : null,
