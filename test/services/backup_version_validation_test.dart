@@ -12,7 +12,7 @@ void main() {
         final futureBackupMap = {
           'app': 'warqatek',
           'backup_version': 99,
-          'database_version': 27,
+          'database_version': 28,
           'data': {
             'businesses': [],
             'contacts': [],
@@ -46,7 +46,7 @@ void main() {
       final invalidBackupMap = {
         'app': 'warqatek',
         'backup_version': 0,
-        'database_version': 27,
+        'database_version': 28,
         'data': {},
       };
 
@@ -102,7 +102,7 @@ void main() {
           BackupService.buildBackupJsonOverride = () async => jsonEncode({
             'app': 'warqatek',
             'backup_version': 5,
-            'database_version': 27,
+            'database_version': 28,
             'data': {
               'businesses': [],
               'contacts': [],

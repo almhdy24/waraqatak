@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
@@ -47,7 +48,12 @@ class _ProductsScreenState extends State<ProductsScreen> {
   @override
   void initState() {
     super.initState();
+    CatalogEvents.pricesChanged.addListener(_onCatalogChanged);
     _load();
+  }
+
+  void _onCatalogChanged() {
+    if (mounted) _load();
   }
 
   @override
@@ -58,6 +64,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   void dispose() {
+    CatalogEvents.pricesChanged.removeListener(_onCatalogChanged);
     _debounceTimer?.cancel();
     _searchCtrl.dispose();
     super.dispose();
@@ -706,6 +713,15 @@ class _ProductCard extends StatelessWidget {
                           color: cs.primary,
                         ),
                       ),
+                      if (product.priceCurrency != null &&
+                          product.referenceSalePrice != null)
+                        Text(
+                          '${priceFmt.format(product.referenceSalePrice)} ${product.priceCurrency}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
                       Text(l10n.unitPrice,
                           style: TextStyle(
                               fontSize: 10, color: Colors.grey.shade500)),

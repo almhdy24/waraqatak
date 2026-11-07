@@ -124,6 +124,13 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
         '${l10n.importedCount}: ${result.importedCount} • ${l10n.updatedCount}: ${result.updatedCount}',
         severity: AppSnackBarSeverity.success,
       );
+      if (result.skippedReferenceFields > 0) {
+        AppSnackBar.show(
+          context,
+          l10n.csvSkippedReference(result.skippedReferenceFields),
+          severity: AppSnackBarSeverity.warning,
+        );
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
@@ -381,6 +388,16 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                               Text('${l10n.importedCount}: ${_lastResult!.importedCount}'),
                               Text('${l10n.updatedCount}: ${_lastResult!.updatedCount}'),
                               Text('${l10n.skippedCount}: ${_lastResult!.skippedCount}'),
+                              if (_lastResult!.skippedReferenceFields > 0)
+                                Text(
+                                  l10n.csvSkippedReference(
+                                    _lastResult!.skippedReferenceFields,
+                                  ),
+                                  style: TextStyle(
+                                    color: Colors.amber.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                             ],
                           ),
                         ),

@@ -186,7 +186,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
     if (confirmed == true) {
       setState(() => _loading = true);
       try {
-        await BulkPricingService.instance.applyBatch(
+        final result = await BulkPricingService.instance.applyBatch(
           items: _previewItems,
           opType: _opType,
           opValue: val,
@@ -198,6 +198,13 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
           l10n.pricesUpdatedSuccess,
           severity: AppSnackBarSeverity.success,
         );
+        if (result.skippedCount > 0) {
+          AppSnackBar.show(
+            context,
+            l10n.bulkSkippedReference(result.skippedCount),
+            severity: AppSnackBarSeverity.info,
+          );
+        }
         await _load();
         if (!mounted) return;
       } catch (e) {
