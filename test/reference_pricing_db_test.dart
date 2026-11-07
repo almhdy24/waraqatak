@@ -217,7 +217,7 @@ void main() {
     final audit = await rawDb.query(
       'audit_log',
       where: 'action = ?',
-      whereArgs: ['update_rate_reprice'],
+      whereArgs: ['exchange_rate_updated'],
     );
     expect(audit, isNotEmpty);
 
@@ -732,7 +732,8 @@ void main() {
     final backupPath = await BackupService.createLocalBackup();
     final jsonStr = await File(backupPath).readAsString();
     final backupData = jsonDecode(jsonStr) as Map<String, dynamic>;
-    expect(backupData.containsKey('exchange_rates'), isTrue);
+    final data = backupData['data'] as Map<String, dynamic>;
+    expect(data.containsKey('exchange_rates'), isTrue);
 
     // Delete custom currency
     await ReferencePricingDao.deleteCustomIfUnused(rawDb, 'EUR');
