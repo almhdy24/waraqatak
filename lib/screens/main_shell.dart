@@ -17,6 +17,7 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _index = 0;
+  final Set<int> _built = {0};
   int _documentsRefreshToken = 0;
   int _customersRefreshToken = 0;
   int _productsRefreshToken = 0;
@@ -37,6 +38,7 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _select(int i) {
+    _built.add(i);
     setState(() => _index = i);
     switch (i) {
       case 0:
@@ -52,6 +54,16 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _index != 0) _select(0);
+      },
+      child: _buildShell(context),
+    );
+  }
+
+  Widget _buildShell(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final destinations = [
       (Icons.home_outlined, Icons.home, l10n.home),
@@ -64,10 +76,16 @@ class _MainShellState extends State<MainShell> {
       index: _index,
       children: [
         HomeScreen(key: _homeKey),
-        DocumentsScreen(refreshToken: _documentsRefreshToken),
-        CustomersScreen(refreshToken: _customersRefreshToken),
-        ProductsScreen(refreshToken: _productsRefreshToken),
-        const SettingsScreen(),
+        _built.contains(1)
+            ? DocumentsScreen(refreshToken: _documentsRefreshToken)
+            : const SizedBox.shrink(),
+        _built.contains(2)
+            ? CustomersScreen(refreshToken: _customersRefreshToken)
+            : const SizedBox.shrink(),
+        _built.contains(3)
+            ? ProductsScreen(refreshToken: _productsRefreshToken)
+            : const SizedBox.shrink(),
+        _built.contains(4) ? const SettingsScreen() : const SizedBox.shrink(),
       ],
     );
 
