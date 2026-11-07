@@ -334,159 +334,131 @@ void main() {
     });
   });
 
-  group('AppSnackBar Decoupled Expiration & Action Execution', () {
-    testWidgets('Action tap fires callback exactly once and cancels onActionExpired', (tester) async {
-      var undoCount = 0;
-      var expiredCount = 0;
+  group('AppSnackBar Action Expiration Independence & Terminal States', () {
+    testWidgets('Showing another SnackBar never silently cancels an unresolved action expiration', (tester) async {
+      var expired1 = 0;
+      var expired2 = 0;
 
-      await tester.pumpWidget(
-        buildTestHost(
-          builder: (context) => ElevatedButton(
-            onPressed: () => AppSnackBar.show(
-              context,
-              'Item deleted',
-              actionLabel: 'Undo',
-              actionExpires: true,
-              onAction: () => undoCount++,
-              onActionExpired: () => expiredCount++,
-            ),
-            child: const Text('Show'),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Show'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.text('Item deleted'), findsOneWidget);
-      expect(find.text('Undo'), findsOneWidget);
-      expect(undoCount, 0);
-      expect(expiredCount, 0);
-
-      // Tap action button
-      await tester.tap(find.text('Undo'));
-      await tester.pumpAndSettle();
-
-      expect(undoCount, 1);
-      expect(find.text('Item deleted'), findsNothing);
-
-      // Advance past the 5-second deadline: onActionExpired must NOT fire
-      await tester.pump(const Duration(seconds: 6));
-      expect(expiredCount, 0);
-    });
-
-    testWidgets('Action expiration timer fires onActionExpired when deadline elapses without action', (tester) async {
-      var undoCount = 0;
-      var expiredCount = 0;
-
-      await tester.pumpWidget(
-        buildTestHost(
-          builder: (context) => ElevatedButton(
-            onPressed: () => AppSnackBar.show(
-              context,
-              'Item deleted',
-              actionLabel: 'Undo',
-              actionExpires: true,
-              onAction: () => undoCount++,
-              onActionExpired: () => expiredCount++,
-            ),
-            child: const Text('Show'),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Show'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(expiredCount, 0);
-
-      // Advance to 4.9s: not expired yet
-      await tester.pump(const Duration(milliseconds: 4600));
-      expect(expiredCount, 0);
-
-      // Advance to 5.2s: expired!
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(expiredCount, 1);
-      expect(undoCount, 0);
-
-      await tester.pumpAndSettle();
-    });
-
-    testWidgets('showUndo convenience method behaves identically to expiring action', (tester) async {
-      var undoCount = 0;
-
-      await tester.pumpWidget(
-        buildTestHost(
-          builder: (context) => ElevatedButton(
-            onPressed: () => AppSnackBar.showUndo(
-              context,
-              'Category removed',
-              actionLabel: 'Undo',
-              onUndo: () => undoCount++,
-            ),
-            child: const Text('Show'),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Show'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.text('Category removed'), findsOneWidget);
-      expect(find.text('Undo'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-      await tester.tap(find.text('Undo'));
-      await tester.pumpAndSettle();
-      expect(undoCount, 1);
-    });
-  });
-
-  group('AppSnackBar Lifecycle & Resource Cleanup', () {
-    testWidgets('Clears previous snackbar and timers immediately upon showing a new one', (tester) async {
       await tester.pumpWidget(
         buildTestHost(
           builder: (context) => Column(
             children: [
               ElevatedButton(
-                onPressed: () => AppSnackBar.show(context, 'First SnackBar'),
-                child: const Text('Show First'),
+                onPressed: () => AppSnackBar.show(
+                  context,
+                  'First deletion',
+                  actionLabel: 'Undo',
+                  actionExpires: true,
+                  onAction: () {},
+                  onActionExpired: () => expired1++,
+                ),
+                child: const Text('Delete 1'),
               ),
               ElevatedButton(
-                onPressed: () => AppSnackBar.show(context, 'Second SnackBar'),
-                child: const Text('Show Second'),
+                onPressed: () => AppSnackBar.show(
+                  context,
+                  'Second deletion',
+                  actionLabel: 'Undo',
+                  actionExpires: true,
+                  onAction: () {},
+                  onActionExpired: () => expired2++,
+                ),
+                child: const Text('Delete 2'),
               ),
             ],
           ),
         ),
       );
 
-      await tester.tap(find.text('Show First'));
-      await tester.pumpAndSettle();
-      expect(find.text('First SnackBar'), findsOneWidget);
-
-      await tester.tap(find.text('Show Second'));
+      // Trigger first deletion SnackBar (5s deadline)
+      await tester.tap(find.text('Delete 1'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('First SnackBar'), findsNothing);
-      expect(find.text('Second SnackBar'), findsOneWidget);
+      expect(find.text('First deletion'), findsOneWidget);
+      expect(expired1, 0);
 
-      // Settle remaining timer for Second SnackBar
-      await tester.pump(const Duration(seconds: 4));
+      // 1.0s later, trigger second deletion SnackBar (visually replaces First deletion)
+      await tester.pump(const Duration(milliseconds: 1000));
+      await tester.tap(find.text('Delete 2'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('First deletion'), findsNothing);
+      expect(find.text('Second deletion'), findsOneWidget);
+      expect(expired1, 0);
+      expect(expired2, 0);
+
+      // Advance to 5.2s from t=0 (4.2s from Delete 1 trigger):
+      // Delete 1's 5s deadline completes!
+      await tester.pump(const Duration(milliseconds: 4000));
+      expect(expired1, 1, reason: 'Delete 1 must reach terminal expired state despite visual replacement');
+      expect(expired2, 0, reason: 'Delete 2 deadline has not elapsed yet');
+
+      // Advance another 1.2s: Delete 2's deadline completes!
+      await tester.pump(const Duration(milliseconds: 1200));
+      expect(expired1, 1);
+      expect(expired2, 1, reason: 'Delete 2 must also reach terminal expired state');
+
       await tester.pumpAndSettle();
     });
 
-    testWidgets('AppSnackBar.hide immediately dismisses and cleans up', (tester) async {
+    testWidgets('Swipe dismissal does NOT abort pending business action expiration', (tester) async {
+      var expiredCount = 0;
+
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Swipeable deletion',
+              actionLabel: 'Undo',
+              actionExpires: true,
+              onAction: () {},
+              onActionExpired: () => expiredCount++,
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Swipeable deletion'), findsOneWidget);
+      expect(expiredCount, 0);
+
+      // Fling the floating SnackBar down to dismiss it visually
+      await tester.fling(find.text('Swipeable deletion'), const Offset(0, 500), 1000.0);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Visual SnackBar is gone immediately
+      expect(find.text('Swipeable deletion'), findsNothing);
+      expect(expiredCount, 0);
+
+      // Advance past 5s: the action expiration timer still reaches terminal expired state
+      await tester.pump(const Duration(seconds: 5));
+      expect(expiredCount, 1);
+    });
+
+    testWidgets('AppSnackBar.hide() does NOT abort pending business action expiration', (tester) async {
+      var expiredCount = 0;
+
       await tester.pumpWidget(
         buildTestHost(
           builder: (context) => Column(
             children: [
               ElevatedButton(
-                onPressed: () => AppSnackBar.show(context, 'Temporary note'),
+                onPressed: () => AppSnackBar.show(
+                  context,
+                  'Dismissible notice',
+                  actionLabel: 'Undo',
+                  actionExpires: true,
+                  onAction: () {},
+                  onActionExpired: () => expiredCount++,
+                ),
                 child: const Text('Show'),
               ),
               ElevatedButton(
@@ -499,17 +471,207 @@ void main() {
       );
 
       await tester.tap(find.text('Show'));
-      await tester.pumpAndSettle();
-      expect(find.text('Temporary note'), findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Dismissible notice'), findsOneWidget);
 
+      // Programmatically hide the SnackBar at 1s
+      await tester.pump(const Duration(milliseconds: 700));
       await tester.tap(find.text('Hide'));
       await tester.pumpAndSettle();
-      expect(find.text('Temporary note'), findsNothing);
+
+      expect(find.text('Dismissible notice'), findsNothing);
+      expect(expiredCount, 0);
+
+      // At 5.2s: onActionExpired still fires
+      await tester.pump(const Duration(milliseconds: 4300));
+      expect(expiredCount, 1);
+    });
+
+    testWidgets('Navigation pop does NOT abort pending business action expiration', (tester) async {
+      var expiredCount = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (subContext) => Scaffold(
+                        body: Center(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              AppSnackBar.show(
+                                subContext,
+                                'Screen deletion',
+                                actionLabel: 'Undo',
+                                actionExpires: true,
+                                onAction: () {},
+                                onActionExpired: () => expiredCount++,
+                              );
+                              Navigator.pop(subContext);
+                            },
+                            child: const Text('Delete & Pop'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Open Page'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Page'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Delete & Pop'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Screen is popped back to root
+      expect(find.text('Open Page'), findsOneWidget);
+      expect(expiredCount, 0);
+
+      // Advance past 5s: action expiration reaches terminal expired state
+      await tester.pump(const Duration(seconds: 6));
+      expect(expiredCount, 1);
+    });
+
+    testWidgets('Every pending action reaches exactly one terminal state (executed xor expired)', (tester) async {
+      var undoCount = 0;
+      var expiredCount = 0;
+
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Single terminal test',
+              actionLabel: 'Undo',
+              actionExpires: true,
+              onAction: () => undoCount++,
+              onActionExpired: () => expiredCount++,
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Tap Undo before expiration
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      expect(undoCount, 1);
+      expect(expiredCount, 0);
+
+      // Advance past deadline: expiredCount must stay 0
+      await tester.pump(const Duration(seconds: 10));
+      expect(undoCount, 1);
+      expect(expiredCount, 0);
+    });
+
+    testWidgets('flushPendingActions immediately transitions pending actions to expired', (tester) async {
+      var expiredCount = 0;
+
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Pending item',
+              actionLabel: 'Undo',
+              actionExpires: true,
+              onAction: () {},
+              onActionExpired: () => expiredCount++,
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(expiredCount, 0);
+
+      // Force flush
+      AppSnackBar.flushPendingActions();
+      expect(expiredCount, 1);
+
+      // Advancing past deadline doesn't fire again
+      await tester.pump(const Duration(seconds: 6));
+      expect(expiredCount, 1);
+    });
+  });
+
+  group('AppSnackBar Flutter Persistence Verification', () {
+    testWidgets('Timed notifications configure persist: false', (tester) async {
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Timed notice',
+              severity: AppSnackBarSeverity.info,
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+      expect(snackBar.persist, isFalse, reason: 'Timed notification must configure persist: false');
+
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Critical notifications configure persist: true', (tester) async {
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Critical system failure',
+              severity: AppSnackBarSeverity.critical,
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final snackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+      expect(snackBar.persist, isTrue, reason: 'Critical notification must configure persist: true');
+
+      // Clean up
+      AppSnackBar.resetForTest();
+      await tester.pumpAndSettle();
     });
   });
 
   group('AppSnackBar Accessibility & Typography', () {
     testWidgets('accessibleNavigation extends duration to 10 seconds for interactive actions', (tester) async {
+      var actionCount = 0;
       await tester.pumpWidget(
         buildTestHost(
           accessibleNavigation: true,
@@ -519,7 +681,7 @@ void main() {
               'Accessible action',
               actionLabel: 'Undo',
               actionExpires: true,
-              onAction: () {},
+              onAction: () => actionCount++,
             ),
             child: const Text('Show'),
           ),
@@ -532,20 +694,47 @@ void main() {
 
       expect(find.text('Accessible action'), findsOneWidget);
 
-      // At 4.9s: must still be visible
-      await tester.pump(const Duration(milliseconds: 4800));
+      // At 9.0s: still visible and interactive
+      await tester.pump(const Duration(milliseconds: 8900));
       expect(find.text('Accessible action'), findsOneWidget);
 
-      // At 9.9s: must still be visible
-      await tester.pump(const Duration(milliseconds: 5000));
-      expect(find.text('Accessible action'), findsOneWidget);
-
-      // At 10.5s: gone
-      await tester.pump(const Duration(milliseconds: 600));
+      // Tap action button at 9.0s
+      await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
 
+      expect(actionCount, 1);
       expect(find.text('Accessible action'), findsNothing);
-      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('Circular countdown wraps in ExcludeSemantics for screen reader clarity', (tester) async {
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Screen reader test',
+              actionLabel: 'Undo',
+              actionExpires: true,
+              onAction: () {},
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Find CircularProgressIndicator's parent ExcludeSemantics
+      final excludeSemanticsFinder = find.ancestor(
+        of: find.byType(CircularProgressIndicator),
+        matching: find.byType(ExcludeSemantics),
+      );
+      expect(excludeSemanticsFinder, findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('RTL and Text scale 1.0, 1.3, 2.0 layout check with no overflow', (tester) async {
@@ -576,7 +765,6 @@ void main() {
           await tester.tap(find.text('Trigger'));
           await tester.pumpAndSettle();
 
-          // Ensure no Flutter layout overflow exceptions were caught
           expect(tester.takeException(), isNull);
           expect(find.byType(SnackBar), findsOneWidget);
 

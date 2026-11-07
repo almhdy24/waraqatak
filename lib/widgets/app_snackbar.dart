@@ -47,9 +47,11 @@ class AppSnackBar {
   /// Fallback timer buffer to guarantee dismissal even if animation/event pump lags.
   static const Duration fallbackBuffer = Duration(milliseconds: 300);
 
-  // Active singleton timer holders to prevent duplicate/competing timers
+  // Active singleton timer for the visible SnackBar presentation fallback
   static Timer? _activeFallbackTimer;
-  static Timer? _activeExpirationTimer;
+
+  // Active action trackers to ensure independent lifecycles and orphan prevention
+  static final List<_ActionTracker> _activeActionTrackers = [];
 
   /// Resolves the effective duration based on explicit overrides, accessibility settings,
   /// action expiration deadlines, and semantic severity.
@@ -97,7 +99,8 @@ class AppSnackBar {
 
   /// Shows an auto-dismissing or persistent floating SnackBar.
   ///
-  /// - Automatically clears any existing SnackBars.
+  /// - Automatically clears any existing visual SnackBars.
+  /// - Configures [SnackBar.persist] explicitly: false for timed notifications, true for critical.
   /// - Sets default durations context-aware by severity:
   ///   * Success: 2 seconds ([durationSuccess])
   ///   * Informational: 2.5 seconds ([durationInfo])
@@ -108,7 +111,8 @@ class AppSnackBar {
   /// - Supports explicit [duration] override when justified.
   /// - Circular countdown appears ONLY when [actionExpires] is true and an action is provided.
   /// - When `accessibleNavigation` is active and an interactive action exists, duration extends to 10 seconds.
-  /// - A reliable fallback timer guarantees dismissal for non-persistent notices without competing timers.
+  /// - Business action expiration and visual dismissal have strictly independent lifecycles.
+  ///   Showing another SnackBar or visually dismissing a SnackBar never cancels an unresolved action.
   static ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? show(
     BuildContext context,
     String message, {
@@ -141,11 +145,9 @@ class AppSnackBar {
       severity: severity,
     );
 
-    // Cancel any active singleton timers from previous snackbars
+    // Cancel visual fallback timer for previous visible SnackBar
     _activeFallbackTimer?.cancel();
     _activeFallbackTimer = null;
-    _activeExpirationTimer?.cancel();
-    _activeExpirationTimer = null;
 
     final theme = Theme.of(context);
     Color? backgroundColor;
@@ -182,18 +184,27 @@ class AppSnackBar {
         break;
     }
 
-    var actionExecuted = false;
     ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? controller;
 
+    // Independent action tracker to guarantee exactly one terminal state: executed or expired
+    final _ActionTracker? actionTracker;
+    if (hasAction) {
+      actionTracker = _ActionTracker(
+        onAction: onAction,
+        onActionExpired: onActionExpired,
+        duration: effectiveDuration,
+      );
+      _activeActionTrackers.add(actionTracker);
+      actionTracker.start();
+    } else {
+      actionTracker = null;
+    }
+
     void handleAction() {
-      if (actionExecuted) return;
-      actionExecuted = true;
-      _activeExpirationTimer?.cancel();
-      _activeExpirationTimer = null;
       try {
         controller?.close();
       } catch (_) {}
-      onAction?.call();
+      actionTracker?.execute();
     }
 
     // Circular countdown appears ONLY when action genuinely expires and is not persistent
@@ -231,7 +242,7 @@ class AppSnackBar {
     final snackBar = SnackBar(
       content: contentWidget,
       duration: effectiveDuration,
-      persist: false,
+      persist: isPersistent,
       behavior: SnackBarBehavior.floating,
       backgroundColor: backgroundColor,
       showCloseIcon: shouldShowCloseIcon,
@@ -248,7 +259,7 @@ class AppSnackBar {
     messenger.clearSnackBars();
     controller = messenger.showSnackBar(snackBar);
 
-    // Fallback timer: guarantees dismissal for non-persistent snackbars even if
+    // Fallback timer: guarantees visual dismissal for non-persistent snackbars even if
     // the frame scheduler lags or is stalled.
     if (!isPersistent) {
       _activeFallbackTimer = Timer(effectiveDuration + fallbackBuffer, () {
@@ -258,23 +269,9 @@ class AppSnackBar {
       });
     }
 
-    // Action expiration timer: decoupled from visual dismissal so manual swipe
-    // or transient dismissals do not corrupt or prematurely trigger business operations.
-    if (hasAction && actionExpires && onActionExpired != null) {
-      _activeExpirationTimer = Timer(effectiveDuration, () {
-        if (!actionExecuted) {
-          onActionExpired();
-        }
-      });
-    }
-
     controller.closed.then((reason) {
       _activeFallbackTimer?.cancel();
       _activeFallbackTimer = null;
-      if (actionExecuted) {
-        _activeExpirationTimer?.cancel();
-        _activeExpirationTimer = null;
-      }
     }).catchError((_) {});
 
     return controller;
@@ -303,7 +300,9 @@ class AppSnackBar {
     );
   }
 
-  /// Dismisses any currently visible SnackBar and clears pending fallback timers.
+  /// Dismisses any currently visible visual SnackBar and clears visual fallback timers.
+  ///
+  /// Visual dismissal does NOT cancel or abort active business action deadlines.
   static void hide(BuildContext context) {
     _activeFallbackTimer?.cancel();
     _activeFallbackTimer = null;
@@ -311,13 +310,75 @@ class AppSnackBar {
     ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
   }
 
-  /// Resets internal timer states for test isolation.
+  /// Forces all pending unresolved actions to immediately reach terminal expired state.
+  static void flushPendingActions() {
+    final pending = List<_ActionTracker>.from(_activeActionTrackers);
+    for (final tracker in pending) {
+      if (!tracker.isTerminal) {
+        tracker.expire();
+      }
+    }
+  }
+
+  /// Resets internal timer and tracker states for test isolation.
   @visibleForTesting
   static void resetForTest() {
     _activeFallbackTimer?.cancel();
     _activeFallbackTimer = null;
-    _activeExpirationTimer?.cancel();
-    _activeExpirationTimer = null;
+    final pending = List<_ActionTracker>.from(_activeActionTrackers);
+    for (final tracker in pending) {
+      tracker.cancel();
+    }
+    _activeActionTrackers.clear();
+  }
+}
+
+/// Internal tracker managing the lifecycle of an action to guarantee exactly
+/// one terminal state: [executed] or [expired].
+class _ActionTracker {
+  final VoidCallback? onAction;
+  final VoidCallback? onActionExpired;
+  final Duration duration;
+  bool _isTerminal = false;
+  Timer? _timer;
+
+  _ActionTracker({
+    required this.onAction,
+    required this.onActionExpired,
+    required this.duration,
+  });
+
+  bool get isTerminal => _isTerminal;
+
+  void start() {
+    if (onActionExpired != null) {
+      _timer = Timer(duration, expire);
+    }
+  }
+
+  void execute() {
+    if (_isTerminal) return;
+    _isTerminal = true;
+    _timer?.cancel();
+    _timer = null;
+    AppSnackBar._activeActionTrackers.remove(this);
+    onAction?.call();
+  }
+
+  void expire() {
+    if (_isTerminal) return;
+    _isTerminal = true;
+    _timer?.cancel();
+    _timer = null;
+    AppSnackBar._activeActionTrackers.remove(this);
+    onActionExpired?.call();
+  }
+
+  void cancel() {
+    _isTerminal = true;
+    _timer?.cancel();
+    _timer = null;
+    AppSnackBar._activeActionTrackers.remove(this);
   }
 }
 
