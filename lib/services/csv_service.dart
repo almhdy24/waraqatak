@@ -299,9 +299,86 @@ class CsvService {
     return text;
   }
 
+  /// Decodes CSV bytes: UTF-8 first (strict); if that fails, Windows-1256
+  /// (the encoding Arabic Excel uses for "CSV (Comma delimited)").
+  static String decodeCsvBytes(List<int> bytes) {
+    try {
+      return utf8.decode(bytes);
+    } on FormatException {
+      return _decodeWindows1256(bytes);
+    }
+  }
+
+  static String _decodeWindows1256(List<int> bytes) {
+    final b = StringBuffer();
+    for (final v in bytes) {
+      if (v < 0x80) {
+        b.writeCharCode(v);
+      } else if (v >= 0xC1 && v <= 0xD6) {
+        b.writeCharCode(0x0621 + (v - 0xC1));
+      } else if (v >= 0xD8 && v <= 0xDB) {
+        b.writeCharCode(0x0637 + (v - 0xD8));
+      } else {
+        switch (v) {
+          case 0xA0:
+            b.write(' ');
+          case 0xA1:
+            b.write('\u060C');
+          case 0xBA:
+            b.write('\u061B');
+          case 0xBF:
+            b.write('\u061F');
+          case 0xDC:
+            b.write('\u0640');
+          case 0xDD:
+            b.write('\u0641');
+          case 0xDE:
+            b.write('\u0642');
+          case 0xDF:
+            b.write('\u0643');
+          case 0xE1:
+            b.write('\u0644');
+          case 0xE3:
+            b.write('\u0645');
+          case 0xE4:
+            b.write('\u0646');
+          case 0xE5:
+            b.write('\u0647');
+          case 0xE6:
+            b.write('\u0648');
+          case 0xEC:
+            b.write('\u0649');
+          case 0xED:
+            b.write('\u064A');
+          case 0xF0:
+            b.write('\u064B');
+          case 0xF1:
+            b.write('\u064C');
+          case 0xF2:
+            b.write('\u064D');
+          case 0xF3:
+            b.write('\u064E');
+          case 0xF5:
+            b.write('\u064F');
+          case 0xF6:
+            b.write('\u0650');
+          case 0xF8:
+            b.write('\u0651');
+          case 0xFA:
+            b.write('\u0652');
+          case 0xD7:
+            b.write('\u00D7');
+          default:
+            b.write('?');
+        }
+      }
+    }
+    return b.toString();
+  }
+
   /// Parses CSV and generates an actionable preview before any database changes.
   Future<CsvImportPreview> previewImport(Uint8List bytes) async {
-    final rawText = utf8.decode(bytes, allowMalformed: true);
+    final rawText = decodeCsvBytes(bytes);
     final rawRows = parseCsv(rawText);
 
     if (rawRows.isEmpty) {
