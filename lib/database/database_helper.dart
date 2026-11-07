@@ -32,7 +32,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 26;
+  static const int dbVersion = 27;
 
   static Database? _database;
 
@@ -1377,7 +1377,8 @@ class DatabaseHelper {
       }
     }
 
-    if (oldVersion < 26 && newVersion >= 26) {
+    // v26 is used by feat/reference-currency-pricing; this migration is v27.
+    if (oldVersion < 27 && newVersion >= 27) {
       // 1. Products barcode cleanup & unique index
       if (await tableExists('products')) {
         await db.execute(
@@ -1411,7 +1412,7 @@ class DatabaseHelper {
               whereArgs: [pId],
             );
             await db.insert('audit_log', {
-              'action': 'migration_v26_resolve_duplicate_barcode',
+              'action': 'migration_v27_resolve_duplicate_barcode',
               'entity_type': 'product',
               'entity_id': pId,
               'details': 'Renamed duplicate barcode "$bc" to "$newBc"',
@@ -1455,7 +1456,7 @@ class DatabaseHelper {
               whereArgs: [dId],
             );
             await db.insert('audit_log', {
-              'action': 'migration_v26_resolve_duplicate_document_number',
+              'action': 'migration_v27_resolve_duplicate_document_number',
               'entity_type': 'document',
               'entity_id': dId,
               'details':

@@ -9,7 +9,7 @@ void main() {
         final futureBackupMap = {
           'app': 'warqatek',
           'backup_version': 99,
-          'database_version': 26,
+          'database_version': 27,
           'data': {
             'businesses': [],
             'contacts': [],
@@ -43,7 +43,7 @@ void main() {
       final invalidBackupMap = {
         'app': 'warqatek',
         'backup_version': 0,
-        'database_version': 26,
+        'database_version': 27,
         'data': {},
       };
 

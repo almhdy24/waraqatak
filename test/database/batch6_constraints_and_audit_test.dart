@@ -23,9 +23,9 @@ void main() {
 
   group('Batch 6: DB Constraints & Audit Atomicity Tests', () {
     test(
-      '1. Fresh installation (v26) creates unique indexes for barcodes and document numbers',
+      '1. Fresh installation (v27) creates unique indexes for barcodes and document numbers',
       () async {
-        final dbPath = '${tempDir.path}/fresh_v26.db';
+        final dbPath = '${tempDir.path}/fresh_v27.db';
         final db = await databaseFactory.openDatabase(
           dbPath,
           options: OpenDatabaseOptions(
@@ -104,9 +104,9 @@ void main() {
     );
 
     test(
-      '2. Migration v25 -> v26 non-destructively resolves duplicates with audit logs',
+      '2. Migration v25 -> v27 non-destructively resolves duplicates with audit logs',
       () async {
-        final dbPath = '${tempDir.path}/upgrade_v25_v26.db';
+        final dbPath = '${tempDir.path}/upgrade_v25_v27.db';
         // Create v25 database with duplicate barcodes and duplicate document numbers
         final db = await databaseFactory.openDatabase(
           dbPath,
@@ -146,11 +146,11 @@ void main() {
 
         await db.close();
 
-        // Now open with version 26 to trigger migration
+        // Now open with version 27 to trigger migration
         final upgradedDb = await databaseFactory.openDatabase(
           dbPath,
           options: OpenDatabaseOptions(
-            version: 26,
+            version: 27,
             onUpgrade: (db, oldV, newV) async {
               await DatabaseHelper.instance.upgradeTablesForTest(
                 db,
@@ -205,10 +205,10 @@ void main() {
           // Audit log entries recorded for renames
           final auditLogs = await upgradedDb.query('audit_log');
           final actions = auditLogs.map((r) => r['action'] as String).toList();
-          expect(actions, contains('migration_v26_resolve_duplicate_barcode'));
+          expect(actions, contains('migration_v27_resolve_duplicate_barcode'));
           expect(
             actions,
-            contains('migration_v26_resolve_duplicate_document_number'),
+            contains('migration_v27_resolve_duplicate_document_number'),
           );
         } finally {
           await upgradedDb.close();
