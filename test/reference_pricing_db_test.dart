@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,7 +19,55 @@ import 'package:warqatek/services/backup_encryption_service.dart';
 import 'package:warqatek/services/backup_service.dart';
 import 'package:warqatek/services/bulk_pricing_service.dart';
 import 'package:warqatek/services/csv_service.dart';
+import 'package:warqatek/services/google_drive_backup_service.dart';
 import 'package:warqatek/services/reference_pricing_service.dart';
+
+class _FakeGoogleDriveClient implements GoogleDriveClient {
+  final Map<String, Uint8List> storage;
+  _FakeGoogleDriveClient(this.storage);
+
+  @override
+  Future<bool> signIn() async => true;
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<bool> isSignedIn() async => true;
+
+  @override
+  String? get currentUserEmail => 'test@example.com';
+
+  @override
+  Future<List<DriveBackupFile>> listBackups() async => [];
+
+  @override
+  Future<DriveBackupFile> uploadBackup({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    const id = 'drive_v25_file';
+    storage[id] = bytes;
+    return DriveBackupFile(
+      id: id,
+      name: fileName,
+      sizeBytes: bytes.length,
+      modifiedTime: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<Uint8List> downloadBackup(String fileId) async {
+    final bytes = storage[fileId];
+    if (bytes == null) throw Exception('File not found: $fileId');
+    return bytes;
+  }
+
+  @override
+  Future<void> deleteBackup(String fileId) async {
+    storage.remove(fileId);
+  }
+}
 
 String? _detectSqliteSkip() {
   try {
@@ -991,6 +1040,19 @@ void main() {
         'assets': {'logo_base64': null},
       };
 
+      // 0. Seed rates before restore to verify they get deleted by restore
+      await ReferencePricingService.addCurrencyWithRate(ExchangeRate(
+        code: 'USD',
+        nameAr: 'دولار',
+        symbol: '\$',
+        rate: 500.0,
+        isActive: true,
+        isCustom: false,
+        updatedAt: DateTime.now(),
+      ));
+      var existingRates = await ReferencePricingDao.getRates(rawDb);
+      expect(existingRates, isNotEmpty);
+
       // 1. Path: Local Unencrypted Restoration
       final jsonStr = jsonEncode(legacyV25Payload);
       final decodedJson = jsonDecode(jsonStr) as Map<String, dynamic>;
@@ -1004,7 +1066,22 @@ void main() {
       var restoredUnits = await db.getProductUnits(1);
       expect(restoredUnits.first.referenceCurrency, isNull);
       expect(restoredUnits.first.referenceSalePrice, isNull);
+      // Assert exchange_rates is wiped and empty
+      var ratesAfterRestore = await ReferencePricingDao.getRates(rawDb);
+      expect(ratesAfterRestore, isEmpty);
       expect(await ReferencePricingDao.verifyInvariants(rawDb), isEmpty);
+
+      // Re-seed rate to test deletion on encrypted path
+      await ReferencePricingService.addCurrencyWithRate(ExchangeRate(
+        code: 'USD',
+        nameAr: 'دولار',
+        symbol: '\$',
+        rate: 500.0,
+        isActive: true,
+        isCustom: false,
+        updatedAt: DateTime.now(),
+      ));
+      expect(await ReferencePricingDao.getRates(rawDb), isNotEmpty);
 
       // 2. Path: Local Encrypted Restoration
       final encryptedBytes = await BackupEncryptionService.encryptJson(jsonStr: jsonStr, password: 'P@ssword123');
@@ -1015,17 +1092,45 @@ void main() {
 
       restoredProd = (await db.getProductById(1))!;
       expect(restoredProd.priceCurrency, isNull);
+      ratesAfterRestore = await ReferencePricingDao.getRates(rawDb);
+      expect(ratesAfterRestore, isEmpty);
       expect(await ReferencePricingDao.verifyInvariants(rawDb), isEmpty);
 
-      // 3. Path: Drive Cloud Serialization
-      // GoogleDriveBackupService downloads payload bytes, decodes JSON, and restores through restoreFromJsonMap
-      final driveSuccess = await BackupService.restoreFromJsonMap(legacyV25Payload, createSafetyBackup: false);
+      // Re-seed rate to test deletion on Drive path
+      await ReferencePricingService.addCurrencyWithRate(ExchangeRate(
+        code: 'USD',
+        nameAr: 'دولار',
+        symbol: '\$',
+        rate: 500.0,
+        isActive: true,
+        isCustom: false,
+        updatedAt: DateTime.now(),
+      ));
+      expect(await ReferencePricingDao.getRates(rawDb), isNotEmpty);
+
+      // 3. Path: Drive Cloud restoreFromDrive exact path
+      final driveStorage = <String, Uint8List>{
+        'v25_cloud_file': Uint8List.fromList(utf8.encode(jsonStr)),
+      };
+      final fakeDrive = _FakeGoogleDriveClient(driveStorage);
+      GoogleDriveBackupService.instance.setClientForTesting(fakeDrive);
+
+      final driveSuccess = await GoogleDriveBackupService.instance.restoreFromDrive(
+        DriveBackupFile(
+          id: 'v25_cloud_file',
+          name: 'cloud_v25.waraq',
+          sizeBytes: driveStorage['v25_cloud_file']!.length,
+          modifiedTime: DateTime.now(),
+        ),
+      );
       expect(driveSuccess, isTrue);
 
       restoredProd = (await db.getProductById(1))!;
       expect(restoredProd.priceCurrency, isNull);
       restoredUnits = await db.getProductUnits(1);
       expect(restoredUnits.first.referenceCurrency, isNull);
+      ratesAfterRestore = await ReferencePricingDao.getRates(rawDb);
+      expect(ratesAfterRestore, isEmpty);
       expect(await ReferencePricingDao.verifyInvariants(rawDb), isEmpty);
     });
   }, skip: sqliteSkipReason ?? false);

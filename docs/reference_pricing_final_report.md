@@ -326,7 +326,10 @@ Under benchmark execution with 5,000 products and 2 units each (15,000 entities)
 
 ### 8.2 Items Not Verifiable Locally in Termux
 1. **Native SQLite FFI Execution in Local Termux Shell:**
-   Termux Android userland lacks standard GNU `libc.so.6`. SQLite FFI in `sqflite_common_ffi` requires glibc when running on Linux architecture. This was verified on CI (GitHub Actions run `42337733012` on Ubuntu Linux x86_64), where all test suites and APK builds succeeded.
+   Termux Android userland lacks standard GNU `libc.so.6`. SQLite FFI in `sqflite_common_ffi` requires glibc when running on Linux architecture.
+   - **Local Status:** Database tests D1–D21 are **NOT executed locally**; they are probed at declaration time and explicitly reported as **SKIPPED** (`~21`).
+   - **CI Status:** Previous GitHub Actions run `42337733012` on Ubuntu Linux tested commit `8b8d212` (which contained early returns). The current commit containing hardened test cases D20, D21, and unskipped CI enforcement has **NOT been pushed to CI**.
+   - **Explicit Confirmation:** Tests **D1–D21 have NOT been executed anywhere yet**. They will execute for the first time once pushed to GitHub Actions CI.
 2. **Physical UI Frame Rendering:**
    Headless Linux / Termux CLI lacks a display server or Android emulator for visual rendering. Widget structure and behavior were verified via headless `testWidgets` in `test/reference_pricing_widgets_test.dart`.
 

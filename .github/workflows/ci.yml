@@ -47,7 +47,7 @@ jobs:
         run: bash tool/check_play_compliance.sh
 
       - name: Analyze
-        run: flutter analyze
+        run: dart analyze
 
       - name: Reference Pricing & Guard Invariants Test (Unskipped Enforcement)
         run: |
