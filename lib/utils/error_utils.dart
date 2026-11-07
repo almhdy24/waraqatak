@@ -6,7 +6,10 @@ import '../models/reference_pricing_types.dart';
 /// into clear, actionable, friendly Arabic messages for business users,
 /// while maintaining full diagnostic logging for developers in debug mode.
 class ErrorUtils {
-  static String getFriendlyErrorMessage(Object error, {AppLocalizations? l10n}) {
+  static String getFriendlyErrorMessage(
+    Object error, {
+    AppLocalizations? l10n,
+  }) {
     if (l10n != null) {
       return toFriendlyMessage(error, l10n);
     }
@@ -31,8 +34,7 @@ class ErrorUtils {
           l10n.currencyChangeBlockedByRates,
         ReferencePricingError.businessNotConfigured => l10n.setupBusinessFirst,
         ReferencePricingError.implicitClear ||
-        ReferencePricingError.currencyNotFound =>
-          l10n.refErrGeneric,
+        ReferencePricingError.currencyNotFound => l10n.refErrGeneric,
       };
     }
 
@@ -75,7 +77,9 @@ class ErrorUtils {
     }
 
     final msg = error.toString();
-    if (msg.contains('Cannot delete product with existing invoice or purchase history')) {
+    if (msg.contains(
+      'Cannot delete product with existing invoice or purchase history',
+    )) {
       return l10n.errorDeleteProductHasHistory;
     }
     if (msg.contains('Discount cannot exceed subtotal')) {
@@ -114,9 +118,6 @@ class ErrorUtils {
         lower.contains('insufficient stock to cancel purchase') ||
         lower.contains('consumed this stock')) {
       return l10n.errorInsufficientStockToCancelPurchase;
-    }
-    if (lower.contains('cannot cancel document with active payment receipts')) {
-      return l10n.cannotCancelWithActiveVouchers('');
     }
 
     // Network / connectivity
@@ -163,10 +164,17 @@ class ErrorUtils {
 
     // Clean up technical prefixes like "Exception: ", "Bad state: ", "Invalid argument(s): "
     final cleaned = raw
-        .replaceFirst(RegExp(r'^(Exception|Bad state|Invalid argument\(s\)|DatabaseException):\s*'), '')
+        .replaceFirst(
+          RegExp(
+            r'^(Exception|Bad state|Invalid argument\(s\)|DatabaseException):\s*',
+          ),
+          '',
+        )
         .trim();
 
-    if (cleaned.isNotEmpty && !cleaned.contains('NoSuchMethodError') && !cleaned.contains('Null check operator')) {
+    if (cleaned.isNotEmpty &&
+        !cleaned.contains('NoSuchMethodError') &&
+        !cleaned.contains('Null check operator')) {
       return cleaned;
     }
 

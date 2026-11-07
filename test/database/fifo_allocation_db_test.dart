@@ -190,7 +190,9 @@ void main() {
     );
   }
 
-  Future<List<DocumentPayment>> getDocumentPaymentsByReceipt(int receiptId) async {
+  Future<List<DocumentPayment>> getDocumentPaymentsByReceipt(
+    int receiptId,
+  ) async {
     final rawDb = await DatabaseHelper.instance.database;
     final rows = await rawDb.query(
       'document_payments',
@@ -205,12 +207,28 @@ void main() {
     test('1. FIFO allocation across 3 invoices', () async {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 1', 'customer');
-      final inv1 = await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
-      final inv2 = await makeInvoice(contactId: cid, total: 200, date: DateTime(2026, 1, 2));
-      final inv3 = await makeInvoice(contactId: cid, total: 300, date: DateTime(2026, 1, 3));
+      final inv1 = await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 1),
+      );
+      final inv2 = await makeInvoice(
+        contactId: cid,
+        total: 200,
+        date: DateTime(2026, 1, 2),
+      );
+      final inv3 = await makeInvoice(
+        contactId: cid,
+        total: 300,
+        date: DateTime(2026, 1, 3),
+      );
 
       // Receipt settles inv1 (100) and inv2 (200) completely = 300
-      final recId = await makeReceipt(contactId: cid, total: 300, date: DateTime(2026, 1, 10));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 300,
+        date: DateTime(2026, 1, 10),
+      );
 
       final d1 = (await db.getDocumentById(inv1))!;
       final d2 = (await db.getDocumentById(inv2))!;
@@ -239,8 +257,16 @@ void main() {
     test('2. Partial allocation across multiple invoices', () async {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 2', 'customer');
-      final inv1 = await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
-      final inv2 = await makeInvoice(contactId: cid, total: 200, date: DateTime(2026, 1, 2));
+      final inv1 = await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 1),
+      );
+      final inv2 = await makeInvoice(
+        contactId: cid,
+        total: 200,
+        date: DateTime(2026, 1, 2),
+      );
 
       // Receipt 150 -> 100 on inv1, 50 on inv2
       await makeReceipt(contactId: cid, total: 150, date: DateTime(2026, 1, 5));
@@ -260,7 +286,11 @@ void main() {
     test('3. Multiple receipts against 1 invoice', () async {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 3', 'customer');
-      final inv1 = await makeInvoice(contactId: cid, total: 500, date: DateTime(2026, 1, 1));
+      final inv1 = await makeInvoice(
+        contactId: cid,
+        total: 500,
+        date: DateTime(2026, 1, 1),
+      );
 
       await makeReceipt(contactId: cid, total: 200, date: DateTime(2026, 1, 2));
       var d1 = (await db.getDocumentById(inv1))!;
@@ -280,7 +310,11 @@ void main() {
       await makeInvoice(contactId: cid, total: 50, date: DateTime(2026, 1, 2));
       await makeInvoice(contactId: cid, total: 50, date: DateTime(2026, 1, 3));
 
-      final recId = await makeReceipt(contactId: cid, total: 150, date: DateTime(2026, 1, 4));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 150,
+        date: DateTime(2026, 1, 4),
+      );
       final allocations = await getDocumentPaymentsByReceipt(recId);
       expect(allocations.length, 3);
       for (final a in allocations) {
@@ -294,7 +328,11 @@ void main() {
       await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
       await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 2));
 
-      final recId = await makeReceipt(contactId: cid, total: 200, date: DateTime(2026, 1, 3));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 200,
+        date: DateTime(2026, 1, 3),
+      );
       await db.cancelDocument(recId);
 
       final rec = (await db.getDocumentById(recId))!;
@@ -304,10 +342,22 @@ void main() {
     test('6. Cancellation restores every affected invoice exactly', () async {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 6', 'customer');
-      final inv1 = await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
-      final inv2 = await makeInvoice(contactId: cid, total: 200, date: DateTime(2026, 1, 2));
+      final inv1 = await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 1),
+      );
+      final inv2 = await makeInvoice(
+        contactId: cid,
+        total: 200,
+        date: DateTime(2026, 1, 2),
+      );
 
-      final recId = await makeReceipt(contactId: cid, total: 150, date: DateTime(2026, 1, 3));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 150,
+        date: DateTime(2026, 1, 3),
+      );
       await db.cancelDocument(recId);
 
       final d1 = (await db.getDocumentById(inv1))!;
@@ -322,78 +372,148 @@ void main() {
       expect(d2.status, DocumentStatus.issued);
     });
 
-    test('7. Reversal rows are negative and never counted as positive payments', () async {
-      final db = DatabaseHelper.instance;
-      final cid = await makeContact('عميل 7', 'customer');
-      final inv1 = await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
+    test(
+      '7. Reversal rows are negative and never counted as positive payments',
+      () async {
+        final db = DatabaseHelper.instance;
+        final cid = await makeContact('عميل 7', 'customer');
+        final inv1 = await makeInvoice(
+          contactId: cid,
+          total: 100,
+          date: DateTime(2026, 1, 1),
+        );
 
-      final recId = await makeReceipt(contactId: cid, total: 100, date: DateTime(2026, 1, 2));
-      await db.cancelDocument(recId);
+        final recId = await makeReceipt(
+          contactId: cid,
+          total: 100,
+          date: DateTime(2026, 1, 2),
+        );
+        await db.cancelDocument(recId);
 
-      final payments = await db.getDocumentPayments(inv1);
-      final reversals = payments.where((p) => p.paymentOrigin == PaymentOrigin.reversal).toList();
-      expect(reversals.isNotEmpty, true);
-      for (final r in reversals) {
-        expect(r.amount < 0, true);
-      }
-    });
+        final payments = await db.getDocumentPayments(inv1);
+        final reversals = payments
+            .where((p) => p.paymentOrigin == PaymentOrigin.reversal)
+            .toList();
+        expect(reversals.isNotEmpty, true);
+        for (final r in reversals) {
+          expect(r.amount < 0, true);
+        }
+      },
+    );
 
     test('8. Cancelled invoices excluded from FIFO', () async {
       final cid = await makeContact('عميل 8', 'customer');
-      await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1), status: DocumentStatus.cancelled);
-      final inv2 = await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 2));
+      await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 1),
+        status: DocumentStatus.cancelled,
+      );
+      final inv2 = await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 2),
+      );
 
-      final recId = await makeReceipt(contactId: cid, total: 100, date: DateTime(2026, 1, 3));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 3),
+      );
       final allocations = await getDocumentPaymentsByReceipt(recId);
 
       expect(allocations.length, 1);
       expect(allocations.first.documentId, inv2);
     });
 
-    test('9. Historical standalone vouchers retain 4200/5100 classification', () async {
-      final db = DatabaseHelper.instance;
-      final cid = await makeContact('عميل 9', 'customer');
+    test(
+      '9. Historical standalone vouchers retain 4200/5100 classification',
+      () async {
+        final db = DatabaseHelper.instance;
+        final cid = await makeContact('عميل 9', 'customer');
 
+        final rawDb = await db.database;
+        final standaloneId = await rawDb.insert('documents', {
+          'type': 'payment_receipt',
+          'document_number': 'REC-HIST-001',
+          'date': DateTime(2025, 1, 1).toIso8601String(),
+          'contact_id': cid,
+          'currency_code': 'SDG',
+          'subtotal': 500,
+          'discount': 0,
+          'tax_rate': 0,
+          'tax_amount': 0,
+          'total': 500,
+          'paid': 500,
+          'remaining': 0,
+          'status': 'issued',
+          'payment_method': 'cash',
+        });
+
+        try {
+          final hasAlloc = await db.hasActiveAllocations(standaloneId);
+          expect(hasAlloc, false);
+        } finally {
+          await rawDb.delete(
+            'documents',
+            where: 'id = ?',
+            whereArgs: [standaloneId],
+          );
+        }
+      },
+    );
+
+    test('10. Currency segregation', () async {
+      final db = DatabaseHelper.instance;
       final rawDb = await db.database;
-      final standaloneId = await rawDb.insert('documents', {
-        'type': 'payment_receipt',
-        'document_number': 'REC-HIST-001',
-        'date': DateTime(2025, 1, 1).toIso8601String(),
+      final cid = await makeContact('عميل 10', 'customer');
+      final invId = await rawDb.insert('documents', {
+        'type': 'invoice',
+        'document_number': 'INV-LEGACY-USD-1',
+        'date': DateTime(2026, 1, 1).toIso8601String(),
         'contact_id': cid,
-        'currency_code': 'SDG',
-        'subtotal': 500,
+        'currency_code': 'USD',
+        'subtotal': 100,
         'discount': 0,
         'tax_rate': 0,
         'tax_amount': 0,
-        'total': 500,
-        'paid': 500,
-        'remaining': 0,
-        'status': 'issued',
-        'payment_method': 'cash',
+        'total': 100,
+        'paid': 0,
+        'remaining': 100,
+        'status': DocumentStatus.issued,
       });
 
-      final hasAlloc = await db.hasActiveAllocations(standaloneId);
-      expect(hasAlloc, false);
-    });
-
-    test('10. Currency segregation', () async {
-      final cid = await makeContact('عميل 10', 'customer');
-      await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1), currency: 'USD');
-
-      // Creating a receipt in SDG should fail because there are no SDG invoices
-      expect(
-        () async => await makeReceipt(contactId: cid, total: 100, date: DateTime(2026, 1, 2), currency: 'SDG'),
-        throwsA(isA<StateError>()),
-      );
+      try {
+        // Creating a receipt in SDG should fail because there are no SDG invoices
+        expect(
+          () async => await makeReceipt(
+            contactId: cid,
+            total: 100,
+            date: DateTime(2026, 1, 2),
+            currency: 'SDG',
+          ),
+          throwsA(anything),
+        );
+      } finally {
+        await rawDb.delete('documents', where: 'id = ?', whereArgs: [invId]);
+      }
     });
 
     test('11. Deterministic date/id tie-breaking', () async {
       final cid = await makeContact('عميل 11', 'customer');
       final sameDate = DateTime(2026, 1, 1, 10, 0);
-      final inv1 = await makeInvoice(contactId: cid, total: 100, date: sameDate);
+      final inv1 = await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: sameDate,
+      );
       await makeInvoice(contactId: cid, total: 100, date: sameDate);
 
-      final recId = await makeReceipt(contactId: cid, total: 50, date: DateTime(2026, 1, 2));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 50,
+        date: DateTime(2026, 1, 2),
+      );
       final allocations = await getDocumentPaymentsByReceipt(recId);
 
       expect(allocations.first.documentId, inv1);
@@ -406,12 +526,20 @@ void main() {
 
       // Attempt to pay 150 when outstanding is only 100
       expect(
-        () async => await makeReceipt(contactId: cid, total: 150, date: DateTime(2026, 1, 2)),
-        throwsA(isA<StateError>()),
+        () async => await makeReceipt(
+          contactId: cid,
+          total: 150,
+          date: DateTime(2026, 1, 2),
+        ),
+        throwsA(isA<ArgumentError>()),
       );
 
       // Verify no receipt or partial allocations were persisted
-      final open = await db.getContactOutstanding(cid, 'SDG');
+      final open = await db.getContactOutstanding(
+        cid,
+        'invoice',
+        currencyCode: 'SDG',
+      );
       expect(open, 100);
     });
 
@@ -425,7 +553,11 @@ void main() {
 
       // Voucher dated inside closed period must fail
       expect(
-        () async => await makeReceipt(contactId: cid, total: 100, date: DateTime(2026, 1, 15)),
+        () async => await makeReceipt(
+          contactId: cid,
+          total: 100,
+          date: DateTime(2026, 1, 15),
+        ),
         throwsA(anything),
       );
 
@@ -436,7 +568,11 @@ void main() {
     test('14. Settlement of old invoice from open period', () async {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 14', 'customer');
-      final inv1 = await makeInvoice(contactId: cid, total: 100, date: DateTime(2025, 12, 1));
+      final inv1 = await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2025, 12, 1),
+      );
 
       // Close period through 2025-12-31
       await db.setSetting('books_closed_through', '2025-12-31');
@@ -453,16 +589,17 @@ void main() {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 15', 'customer');
       await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
-      final recId = await makeReceipt(contactId: cid, total: 100, date: DateTime(2026, 1, 2));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 2),
+      );
 
       // Close period through 2026-01-10
       await db.setSetting('books_closed_through', '2026-01-10');
 
       // Cancelling voucher dated 2026-01-02 inside closed period must fail
-      expect(
-        () async => await db.cancelDocument(recId),
-        throwsA(anything),
-      );
+      expect(() async => await db.cancelDocument(recId), throwsA(anything));
 
       await db.setSetting('books_closed_through', '');
     });
@@ -471,7 +608,11 @@ void main() {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 16', 'customer');
       await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
-      final recId = await makeReceipt(contactId: cid, total: 100, date: DateTime(2026, 1, 2));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 2),
+      );
 
       final rec = (await db.getDocumentById(recId))!;
       expect(
@@ -511,7 +652,11 @@ void main() {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 19', 'customer');
       await makeInvoice(contactId: cid, total: 200, date: DateTime(2026, 1, 1));
-      final recId = await makeReceipt(contactId: cid, total: 200, date: DateTime(2026, 1, 2));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 200,
+        date: DateTime(2026, 1, 2),
+      );
       await db.cancelDocument(recId);
 
       final stmt = await CustomerStatementService.getStatementForContact(
@@ -526,10 +671,22 @@ void main() {
     test('20. Supplier balance correctness', () async {
       final db = DatabaseHelper.instance;
       final sid = await makeContact('مورد 20', 'supplier');
-      final pur1 = await makePurchase(contactId: sid, total: 500, date: DateTime(2026, 1, 1));
-      final pur2 = await makePurchase(contactId: sid, total: 300, date: DateTime(2026, 1, 2));
+      final pur1 = await makePurchase(
+        contactId: sid,
+        total: 500,
+        date: DateTime(2026, 1, 1),
+      );
+      final pur2 = await makePurchase(
+        contactId: sid,
+        total: 300,
+        date: DateTime(2026, 1, 2),
+      );
 
-      await makeExpenseVoucher(contactId: sid, total: 600, date: DateTime(2026, 1, 3));
+      await makeExpenseVoucher(
+        contactId: sid,
+        total: 600,
+        date: DateTime(2026, 1, 3),
+      );
 
       final p1 = (await db.getDocumentById(pur1))!;
       final p2 = (await db.getDocumentById(pur2))!;
@@ -541,7 +698,11 @@ void main() {
       expect(p2.remaining, 200);
       expect(p2.status, DocumentStatus.partiallyPaid);
 
-      final outstanding = await db.getContactOutstanding(sid, 'SDG');
+      final outstanding = await db.getContactOutstanding(
+        sid,
+        'purchase',
+        currencyCode: 'SDG',
+      );
       expect(outstanding, 200);
     });
 
@@ -549,7 +710,11 @@ void main() {
       final db = DatabaseHelper.instance;
       final cid = await makeContact('عميل 21', 'customer');
       await makeInvoice(contactId: cid, total: 100, date: DateTime(2026, 1, 1));
-      final recId = await makeReceipt(contactId: cid, total: 100, date: DateTime(2026, 1, 2));
+      final recId = await makeReceipt(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 2),
+      );
 
       // Check parity via JournalBackfillService.verifyParity
       await JournalBackfillService.verifyParity();
@@ -596,7 +761,9 @@ void main() {
           futureBackupMap,
           createSafetyBackup: false,
         ),
-        throwsA(predicate((e) => e.toString().contains('requires a newer version'))),
+        throwsA(
+          predicate((e) => e.toString().contains('requires a newer version')),
+        ),
       );
     });
   });

@@ -611,9 +611,12 @@ void main() {
   });
 
   test('10. Detects duplicate active document numbers', () async {
-    late int docAId;
-    late int docBId;
+    int? docAId;
+    int? docBId;
 
+    await rawDb.execute(
+      'DROP INDEX IF EXISTS idx_documents_type_docnum_unique',
+    );
     try {
       docAId = await rawDb.insert('documents', {
         'type': 'invoice',
@@ -645,10 +648,19 @@ void main() {
       expect(dupFinding.affectedIds, containsAll([docAId, docBId]));
       expect(dupFinding.requiresManualReview, isTrue);
     } finally {
-      await rawDb.delete(
-        'documents',
-        where: 'id IN (?, ?)',
-        whereArgs: [docAId, docBId],
+      final idsToDelete = [
+        if (docAId != null) docAId,
+        if (docBId != null) docBId,
+      ];
+      if (idsToDelete.isNotEmpty) {
+        await rawDb.delete(
+          'documents',
+          where: 'id IN (${idsToDelete.map((_) => '?').join(',')})',
+          whereArgs: idsToDelete,
+        );
+      }
+      await rawDb.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_type_docnum_unique ON documents(type, document_number)',
       );
     }
   });

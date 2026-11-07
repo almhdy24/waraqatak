@@ -320,9 +320,15 @@ class DatabaseHelper {
       )
     ''');
     await db.execute('CREATE INDEX idx_products_name ON products(name)');
-    await db.execute(
-      "CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ''",
-    );
+    if (version >= 27) {
+      await db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ''",
+      );
+    } else {
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode)',
+      );
+    }
     await db.execute(
       'CREATE INDEX idx_products_category ON products(category)',
     );
@@ -429,9 +435,11 @@ class DatabaseHelper {
     await db.execute(
       'CREATE INDEX idx_documents_type_status_date ON documents(type, status, date)',
     );
-    await db.execute(
-      'CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_type_docnum_unique ON documents(type, document_number)',
-    );
+    if (version >= 27) {
+      await db.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_type_docnum_unique ON documents(type, document_number)',
+      );
+    }
 
     await db.execute('''
       CREATE TABLE document_items (
@@ -5824,7 +5832,6 @@ class DatabaseHelper {
       allocationsByDocId[receipt.relatedDocumentId!] = receipt.total;
     }
 
-    final now = DateTime.now();
     final docNum = receipt.documentNumber.isNotEmpty
         ? receipt.documentNumber
         : receiptId.toString();
@@ -5848,7 +5855,7 @@ class DatabaseHelper {
           'document_id': targetId,
           'amount': -canonicalReverse,
           'payment_method': receipt.paymentMethod,
-          'date': now.toIso8601String(),
+          'date': receipt.date.toIso8601String(),
           'notes': 'Reversal: cancelled $docType $docNum',
           'receipt_document_id': receiptId,
           'payment_origin': PaymentOrigin.reversal,

@@ -567,28 +567,41 @@ class DatabaseDiagnosticService {
     checks++;
     final hasBusinesses =
         Sqflite.firstIntValue(
-          await db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='businesses'"),
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='businesses'",
+          ),
         ) ==
         1;
     final hasDocuments =
         Sqflite.firstIntValue(
-          await db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='documents'"),
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='documents'",
+          ),
         ) ==
         1;
     if (hasBusinesses && hasDocuments) {
       final docCols = await db.rawQuery("PRAGMA table_info('documents')");
       final hasDocCurrency = docCols.any((c) => c['name'] == 'currency_code');
       if (hasDocCurrency) {
-        final bizRows = await db.rawQuery('SELECT currency_code FROM businesses LIMIT 1');
-        final baseCurrency = (bizRows.isNotEmpty ? (bizRows.first['currency_code'] as String?)?.trim() : null) ?? 'SDG';
+        final bizRows = await db.rawQuery(
+          'SELECT currency_code FROM businesses LIMIT 1',
+        );
+        final baseCurrency =
+            (bizRows.isNotEmpty
+                ? (bizRows.first['currency_code'] as String?)?.trim()
+                : null) ??
+            'SDG';
         final resolvedBase = baseCurrency.isNotEmpty ? baseCurrency : 'SDG';
-        final foreignDocs = await db.rawQuery('''
+        final foreignDocs = await db.rawQuery(
+          '''
           SELECT id, document_number, currency_code, total
           FROM documents
           WHERE currency_code IS NOT NULL
             AND TRIM(currency_code) != ''
             AND TRIM(currency_code) != ?
-        ''', [resolvedBase]);
+        ''',
+          [resolvedBase],
+        );
         if (foreignDocs.isNotEmpty) {
           final ids = foreignDocs.map((r) => r['id'] as int).toList();
           final foreignCurrencies = foreignDocs
@@ -757,9 +770,13 @@ class DatabaseDiagnosticService {
       );
     }
 
-    // 4.5 Active allocated voucher with allocation total inconsistent with voucher total
-    checks++;
-    final voucherAllocationMismatches = await db.rawQuery('''
+    final dpCols = await db.rawQuery("PRAGMA table_info('document_payments')");
+    final hasPaymentOrigin = dpCols.any((c) => c['name'] == 'payment_origin');
+
+    if (hasPaymentOrigin) {
+      // 4.5 Active allocated voucher with allocation total inconsistent with voucher total
+      checks++;
+      final voucherAllocationMismatches = await db.rawQuery('''
       SELECT r.id, r.document_number, r.total, SUM(dp.amount) AS alloc_sum
       FROM documents r
       JOIN document_payments dp ON dp.receipt_document_id = r.id
@@ -770,26 +787,28 @@ class DatabaseDiagnosticService {
       GROUP BY r.id
       HAVING abs(r.total - alloc_sum) > $_balanceEpsilon
     ''');
-    if (voucherAllocationMismatches.isNotEmpty) {
-      final ids = voucherAllocationMismatches.map((r) => r['id'] as int).toList();
-      findings.add(
-        DiagnosticFinding(
-          code: 'voucher_allocation_total_mismatch',
-          category: DiagnosticCategory.paymentMismatch,
-          severity: DiagnosticSeverity.error,
-          entityType: 'documents',
-          affectedIds: ids,
-          title: 'Voucher allocation total inconsistent with voucher total',
-          explanation:
-              'Found ${ids.length} active voucher(s) where total allocated document_payments differs from voucher total.',
-          requiresManualReview: true,
-        ),
-      );
-    }
+      if (voucherAllocationMismatches.isNotEmpty) {
+        final ids = voucherAllocationMismatches
+            .map((r) => r['id'] as int)
+            .toList();
+        findings.add(
+          DiagnosticFinding(
+            code: 'voucher_allocation_total_mismatch',
+            category: DiagnosticCategory.paymentMismatch,
+            severity: DiagnosticSeverity.error,
+            entityType: 'documents',
+            affectedIds: ids,
+            title: 'Voucher allocation total inconsistent with voucher total',
+            explanation:
+                'Found ${ids.length} active voucher(s) where total allocated document_payments differs from voucher total.',
+            requiresManualReview: true,
+          ),
+        );
+      }
 
-    // 4.6 Reversal inconsistencies: active vouchers with reversal rows
-    checks++;
-    final activeVouchersWithReversals = await db.rawQuery('''
+      // 4.6 Reversal inconsistencies: active vouchers with reversal rows
+      checks++;
+      final activeVouchersWithReversals = await db.rawQuery('''
       SELECT DISTINCT r.id
       FROM documents r
       JOIN document_payments dp ON dp.receipt_document_id = r.id
@@ -797,21 +816,24 @@ class DatabaseDiagnosticService {
         AND r.type IN ('payment_receipt', 'expense_voucher')
         AND (dp.payment_origin = 'reversal' OR dp.amount < 0)
     ''');
-    if (activeVouchersWithReversals.isNotEmpty) {
-      final ids = activeVouchersWithReversals.map((r) => r['id'] as int).toList();
-      findings.add(
-        DiagnosticFinding(
-          code: 'active_voucher_has_reversals',
-          category: DiagnosticCategory.paymentMismatch,
-          severity: DiagnosticSeverity.error,
-          entityType: 'documents',
-          affectedIds: ids,
-          title: 'Active voucher has reversal records',
-          explanation:
-              'Found ${ids.length} non-cancelled voucher(s) that have negative reversal payment records.',
-          requiresManualReview: true,
-        ),
-      );
+      if (activeVouchersWithReversals.isNotEmpty) {
+        final ids = activeVouchersWithReversals
+            .map((r) => r['id'] as int)
+            .toList();
+        findings.add(
+          DiagnosticFinding(
+            code: 'active_voucher_has_reversals',
+            category: DiagnosticCategory.paymentMismatch,
+            severity: DiagnosticSeverity.error,
+            entityType: 'documents',
+            affectedIds: ids,
+            title: 'Active voucher has reversal records',
+            explanation:
+                'Found ${ids.length} non-cancelled voucher(s) that have negative reversal payment records.',
+            requiresManualReview: true,
+          ),
+        );
+      }
     }
 
     return checks;
@@ -884,8 +906,12 @@ class DatabaseDiagnosticService {
     // 5.3 Document stock movements mismatch (expected vs actual net movements)
     checks++;
     final itemCols = await db.rawQuery("PRAGMA table_info('document_items')");
-    final hasFactor = itemCols.any((c) => c['name'] == 'unit_conversion_factor');
-    final factorExpr = hasFactor ? 'COALESCE(di.unit_conversion_factor, 1.0)' : '1.0';
+    final hasFactor = itemCols.any(
+      (c) => c['name'] == 'unit_conversion_factor',
+    );
+    final factorExpr = hasFactor
+        ? 'COALESCE(di.unit_conversion_factor, 1.0)'
+        : '1.0';
 
     final expectedDocMovements = await db.rawQuery('''
       SELECT 
@@ -922,7 +948,8 @@ class DatabaseDiagnosticService {
     for (final row in actualDocMovements) {
       final docId = row['doc_id'] as int;
       final prodId = row['product_id'] as int;
-      actualMap['${docId}_$prodId'] = (row['actual_movement'] as num).toDouble();
+      actualMap['${docId}_$prodId'] = (row['actual_movement'] as num)
+          .toDouble();
     }
 
     final docMismatchIds = <int>{};

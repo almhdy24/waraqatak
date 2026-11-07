@@ -23,13 +23,15 @@ void main() {
     tempDir = Directory.systemTemp.createTempSync('contact_integrity_db_test');
     await databaseFactory.setDatabasesPath(tempDir.path);
     final db = DatabaseHelper.instance;
-    await db.insertBusiness(const Business(
-      name: 'متجر الاختبار',
-      ownerName: 'أحمد',
-      phone: '0912345678',
-      address: 'الخرطوم',
-      taxRate: 0,
-    ));
+    await db.insertBusiness(
+      const Business(
+        name: 'متجر الاختبار',
+        ownerName: 'أحمد',
+        phone: '0912345678',
+        address: 'الخرطوم',
+        taxRate: 0,
+      ),
+    );
     business = (await db.getFirstBusiness())!;
   });
 
@@ -40,45 +42,46 @@ void main() {
     } catch (_) {}
   });
 
-  test('B2-3: contact with one document → deleteContact throws StateError; contact and document still exist', () async {
-    final db = DatabaseHelper.instance;
-    // Create a contact
-    final contactId = await db.insertContact(Contact(
-      name: 'عميل اختبار',
-      type: 'customer',
-    ));
+  test(
+    'B2-3: contact with one document → deleteContact throws StateError; contact and document still exist',
+    () async {
+      final db = DatabaseHelper.instance;
+      // Create a contact
+      final contactId = await db.insertContact(
+        Contact(name: 'عميل اختبار', type: 'customer'),
+      );
 
-    // Create a document referencing this contact
-    final contact = (await db.getContactById(contactId))!;
-    await DocumentService.createDocument(
-      type: 'payment_receipt',
-      business: business,
-      contact: contact,
-      paid: 100,
-      paymentMethod: 'cash',
-      items: [],
-    );
+      // Create a document referencing this contact
+      final contact = (await db.getContactById(contactId))!;
+      await DocumentService.createDocument(
+        type: 'invoice',
+        business: business,
+        contact: contact,
+        items: [
+          DocumentItemInput(description: 'صنف اختبار', quantity: 1, price: 100),
+        ],
+      );
 
-    // countContactDocuments must return > 0
-    final count = await db.countContactDocuments(contactId);
-    expect(count, greaterThan(0));
+      // countContactDocuments must return > 0
+      final count = await db.countContactDocuments(contactId);
+      expect(count, greaterThan(0));
 
-    // deleteContact must throw StateError
-    await expectLater(
-      () => db.deleteContact(contactId),
-      throwsA(isA<StateError>()),
-    );
+      // deleteContact must throw StateError
+      await expectLater(
+        () => db.deleteContact(contactId),
+        throwsA(isA<StateError>()),
+      );
 
-    // Contact still exists
-    expect(await db.getContactById(contactId), isNotNull);
-  });
+      // Contact still exists
+      expect(await db.getContactById(contactId), isNotNull);
+    },
+  );
 
   test('B2-3: contact with no documents → deleteContact succeeds', () async {
     final db = DatabaseHelper.instance;
-    final contactId = await db.insertContact(Contact(
-      name: 'عميل بدون مستندات',
-      type: 'customer',
-    ));
+    final contactId = await db.insertContact(
+      Contact(name: 'عميل بدون مستندات', type: 'customer'),
+    );
 
     final count = await db.countContactDocuments(contactId);
     expect(count, 0);
