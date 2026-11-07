@@ -775,4 +775,142 @@ void main() {
       }
     });
   });
+
+  group('AppSnackBar Acceptance & Concurrency Tests', () {
+    testWidgets('Undo tap racing against expiration at the exact deadline resolves to exactly one terminal state', (tester) async {
+      var undoCount = 0;
+      var expiredCount = 0;
+
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Racing item',
+              actionLabel: 'Undo',
+              actionExpires: true,
+              onAction: () => undoCount++,
+              onActionExpired: () => expiredCount++,
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Advance right to the 5.0s deadline boundary (4.7s more)
+      await tester.pump(const Duration(milliseconds: 4700));
+
+      // Tap action right as deadline arrives
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+
+      // Exactly one callback must have executed, never both
+      expect(undoCount + expiredCount, 1);
+      if (undoCount == 1) {
+        expect(expiredCount, 0);
+      } else {
+        expect(expiredCount, 1);
+      }
+    });
+
+    testWidgets('Repeated multi-taps on action button execute callback exactly once', (tester) async {
+      var undoCount = 0;
+
+      await tester.pumpWidget(
+        buildTestHost(
+          builder: (context) => ElevatedButton(
+            onPressed: () => AppSnackBar.show(
+              context,
+              'Multi-tap item',
+              actionLabel: 'Undo',
+              actionExpires: true,
+              onAction: () => undoCount++,
+            ),
+            child: const Text('Show'),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Show'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Rapidly tap the action 5 times in the same frame sequence
+      final undoFinder = find.text('Undo');
+      await tester.tap(undoFinder);
+      await tester.tap(undoFinder);
+      await tester.tap(undoFinder);
+      await tester.tap(undoFinder);
+      await tester.tap(undoFinder);
+      await tester.pumpAndSettle();
+
+      expect(undoCount, 1, reason: 'Action callback must execute strictly once despite repeated taps');
+    });
+
+    testWidgets('Critical persistent notification persists across route transitions', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => AppSnackBar.show(
+                        context,
+                        'Critical system alert',
+                        severity: AppSnackBarSeverity.critical,
+                      ),
+                      child: const Text('Show Critical'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (subContext) => Scaffold(
+                              appBar: AppBar(title: const Text('Subpage')),
+                              body: const Center(child: Text('On Subpage')),
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('Navigate'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Trigger critical notification
+      await tester.tap(find.text('Show Critical'));
+      await tester.pumpAndSettle();
+      expect(find.text('Critical system alert'), findsOneWidget);
+
+      // Navigate to another route
+      await tester.tap(find.text('Navigate'));
+      await tester.pumpAndSettle();
+
+      // On new route, critical SnackBar must persist
+      expect(find.text('On Subpage'), findsOneWidget);
+      expect(find.text('Critical system alert'), findsOneWidget);
+
+      // Tap close icon on the persistent notification to dismiss
+      final closeButton = find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.byType(IconButton),
+      );
+      await tester.tap(closeButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Critical system alert'), findsNothing);
+    });
+  });
 }
