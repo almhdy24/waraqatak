@@ -37,17 +37,24 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
-    final items = await AppOpsService.instance.getNotifications();
-    if (mounted) {
-      setState(() {
-        _notifications = items;
-        // Prune selected IDs that no longer exist
-        final existingIds = items.map((n) => n.serverId).toSet();
-        _selectedIds.retainWhere(existingIds.contains);
-        _loading = false;
-      });
+    final List<AppNotification> items;
+    try {
+      items = await AppOpsService.instance.getNotifications();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
     }
+    if (!mounted) return;
+    setState(() {
+      _notifications = items;
+      // Prune selected IDs that no longer exist
+      final existingIds = items.map((n) => n.serverId).toSet();
+      _selectedIds.retainWhere(existingIds.contains);
+      _loading = false;
+    });
   }
 
   Future<void> _sync() async {
