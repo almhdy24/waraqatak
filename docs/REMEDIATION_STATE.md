@@ -21,9 +21,9 @@
 | **Batch 5** | Inventory & POS audit | DONE | INV-16 single stock writer audit; POS and stock flows audited |
 | **Batch 6** | IMPLEMENT: DB constraints + audit atomicity | DONE | Migration v26: unique indexes, safe de-duplication, atomic audit logging, period lock in issueDocument |
 | **Batch 7** | IMPLEMENT: POS tax, purchase units, track_inventory | DONE (POS tax) / BLOCKED — USER DECISION (track_inventory) | POS tax preview parity (Fact B4) resolved and verified with pure unit tests; purchase units unreachable per B5; track_inventory marked BLOCKED — USER DECISION per Override A3 (type 'service' already bypasses stock checks; adding physical track_inventory requires UI product form & costing behavior decisions and would conflict with incoming reference-currency branch) |
-| **Batch 8** | IMPLEMENT: Arabic search, number formatting, UI error handling | DONE | ArabicSearchUtils (Alif variants, Taa Marbuta/Haa, Yaa/Alif Maqsura, Tashkeel/Tatweel removal, SQL normalize), NumberInput Arabic-Indic digits, ErrorUtils error mappings |
+| **Batch 8** | IMPLEMENT: Arabic search, number formatting, UI error handling | DONE | ArabicSearchUtils (Alif variants, Taa Marbuta/Haa, Yaa/Alif Maqsura, Tashkeel/Tatweel removal, SQL normalize), NumberInput Arabic-Indic digits, ErrorUtils error mappings, mounted guards across screen async methods, controller disposal in bulk pricing, and AppErrorState load-failed handling in edit document |
 | **Batch 9** | Deep financial review | DONE | Verified financial report queries exclude draft/cancelled, segregate currencies, round via MoneyUtils; verified CSV exports use UTF-8 BOM and import fallback to Windows-1256 |
-| **Batch 10** | IMPLEMENT: Backup hardening | DONE | Single PBKDF2 key derivation per backup/restore, strict future version rejection, post-restore PRAGMA integrity_check, pure unit tests passed |
+| **Batch 10** | IMPLEMENT: Backup hardening | DONE | Single PBKDF2 key derivation per operation, strict future version rejection, post-restore PRAGMA integrity_check, atomic local backup write via staging file rename with byte-identical failure preservation, safe logo restore clearing nonexistent paths, plain JSON encoding (withIndent removed), pure unit tests passed |
 | **Batch 11** | Localization | SKIPPED BY USER | Skipped per supplemental override A2; user will run dedicated language prompt |
 | **Batch 12** | Licensing & entitlements | DONE | Verified UTC clock comparisons, monotonic last-seen guard, rollback protection, unreachable network offline preservation, and core offline features unblocked; 68 unit tests passed |
 | **Batch 13** | Hostile review & final verdict | DONE | Adversarial git diff review, 0 analyze errors across target files, 103 pure unit and guard tests passed twice ("Double check the Double check"); Verdict: CONDITIONAL PASS — CI REQUIRED (integration tests never executed locally) |
@@ -37,8 +37,8 @@
 | **F-AUDIT-01** | High | `lib/database/database_helper.dart:6732` | `logAuditEvent` silently swallowed exceptions. | FIXED in Batch 6 |
 | **F-AUDIT-02** | High | `lib/database/database_helper.dart:3083, 5600` | Audit events in `adjustStock` and `recordPaymentWithReceipt` were outside transaction. | FIXED in Batch 6 |
 | **F-PERIOD-01** | Critical | `lib/database/database_helper.dart:5891` | `issueDocument` did not call `assertPeriodOpen`. | FIXED in Batch 6 |
-| **F-SCHEMA-01** | High | `lib/database/database_helper.dart:316` | `products.barcode` had non-unique index. | FIXED in Batch 6 (v26 unique partial index) |
-| **F-SCHEMA-02** | High | `lib/database/database_helper.dart:370` | `documents.document_number` lacked UNIQUE constraint. | FIXED in Batch 6 (v26 unique index per type) |
+| **F-SCHEMA-01** | High | `lib/database/database_helper.dart:316` | `products.barcode` had non-unique index. | FIXED in Batch 6 (v27 unique partial index) |
+| **F-SCHEMA-02** | High | `lib/database/database_helper.dart:370` | `documents.document_number` lacked UNIQUE constraint. | FIXED in Batch 6 (v27 unique index per type) |
 | **F-RACE-01** | Medium | `lib/database/database_helper.dart:6253` | `getNextDocumentNumber` did not guard against existing numbers or retry. | FIXED in Batch 6 |
 | **F-INVENTORY-01** | Medium | `lib/models/product.dart`, `database_helper.dart` | Missing `track_inventory` column for untracked physical products. | BLOCKED — USER DECISION per Override A3 (type 'service' already bypasses stock; physical untracked goods UI/costing specification needed) |
 
@@ -51,4 +51,5 @@
   - Non-destructive de-duplication of barcodes & document numbers
   - `CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ""`
   - `CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_type_docnum_unique ON documents(type, document_number)`
+- **Schema note:** dbVersion is 27 on this branch. Schema version 26 exists only on `feat/reference-currency-pricing`. Merging it requires an idempotent v26 block also re-run in a v28 block.
 - Any future migration added after reference-currency branch merge will be schema version >= 28.
