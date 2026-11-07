@@ -87,6 +87,38 @@ class _CustomersScreenState extends State<CustomersScreen>
 
   Future<void> _deleteContact(Contact contact) async {
     final l10n = AppLocalizations.of(context);
+    final docCount = await DatabaseHelper.instance.countContactDocuments(contact.id!);
+    if (!mounted) return;
+    if (docCount > 0) {
+      final archive = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.customerHasDocumentsTitle),
+          content: Text(l10n.customerHasDocumentsMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.archiveCustomer),
+            ),
+          ],
+        ),
+      );
+      if (archive == true && mounted && contact.active) {
+        await DatabaseHelper.instance.setContactActive(contact.id!, active: false);
+        if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          l10n.operationSuccessful,
+          severity: AppSnackBarSeverity.success,
+        );
+        _load();
+      }
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

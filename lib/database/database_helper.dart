@@ -2323,15 +2323,26 @@ class DatabaseHelper {
     return db.update('contacts', map, where: 'id = ?', whereArgs: [c.id]);
   }
 
+  Future<int> countContactDocuments(int id) async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM documents WHERE contact_id = ?',
+      [id],
+    );
+    return (rows.first['c'] as num?)?.toInt() ?? 0;
+  }
+
   Future<int> deleteContact(int id) async {
     final db = await database;
     return db.transaction((txn) async {
-      await txn.update(
-        'documents',
-        {'contact_id': null},
-        where: 'contact_id = ?',
-        whereArgs: [id],
+      final rows = await txn.rawQuery(
+        'SELECT COUNT(*) AS c FROM documents WHERE contact_id = ?',
+        [id],
       );
+      final count = (rows.first['c'] as num?)?.toInt() ?? 0;
+      if (count > 0) {
+        throw StateError('Cannot delete contact referenced in documents');
+      }
       return txn.delete('contacts', where: 'id = ?', whereArgs: [id]);
     });
   }
