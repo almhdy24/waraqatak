@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
+import '../database/reference_pricing_dao.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
+import '../models/reference_pricing_types.dart';
+import '../utils/reference_pricing_math.dart';
 
 enum CsvDuplicateStrategy {
   skip,
@@ -29,6 +33,10 @@ class CsvParsedRow {
   final String? errorMessage;
   final bool isExisting;
   final int? existingProductId;
+  final String? priceCurrency;
+  final double? referenceSalePrice;
+  final double? referenceWholesalePrice;
+  final double? referencePurchasePrice;
 
   const CsvParsedRow({
     required this.rowNumber,
@@ -49,6 +57,10 @@ class CsvParsedRow {
     this.errorMessage,
     this.isExisting = false,
     this.existingProductId,
+    this.priceCurrency,
+    this.referenceSalePrice,
+    this.referenceWholesalePrice,
+    this.referencePurchasePrice,
   });
 }
 
@@ -74,6 +86,7 @@ class CsvImportResult {
   final int updatedCount;
   final int skippedCount;
   final List<String> errors;
+  final int skippedReferenceFields;
 
   const CsvImportResult({
     required this.totalRows,
@@ -81,6 +94,7 @@ class CsvImportResult {
     required this.updatedCount,
     required this.skippedCount,
     required this.errors,
+    this.skippedReferenceFields = 0,
   });
 }
 
@@ -103,6 +117,10 @@ class CsvService {
     'MinStock',
     'CurrentStock_ReadOnly',
     'IsActive',
+    'PriceCurrency',
+    'ReferenceSalePrice',
+    'ReferenceWholesalePrice',
+    'ReferencePurchasePrice',
   ];
 
   /// Escapes a single cell for CSV RFC 4180 with spreadsheet formula injection protection.
@@ -160,6 +178,10 @@ class CsvService {
         '5',
         '0', // Informational only
         '1',
+        '',
+        '',
+        '',
+        '',
       ].join(','));
       return Uint8List.fromList(utf8.encode(buffer.toString()));
     }
@@ -167,6 +189,9 @@ class CsvService {
     final db = await DatabaseHelper.instance.database;
     final products = await db.query('products', orderBy: 'name ASC');
     final allUnits = await DatabaseHelper.instance.getAllProductUnits();
+
+    String formatRefPrice(double? v) =>
+        v != null ? double.parse(v.toStringAsFixed(4)).toString() : '';
 
     for (final row in products) {
       final pid = row['id'] as int;
@@ -180,6 +205,11 @@ class CsvService {
         }
         return buf.toString();
       }).join(';');
+
+      final priceCurr = row['price_currency'] as String? ?? '';
+      final refSale = (row['reference_sale_price'] as num?)?.toDouble();
+      final refWs = (row['reference_wholesale_price'] as num?)?.toDouble();
+      final refPur = (row['reference_purchase_price'] as num?)?.toDouble();
 
       buffer.writeln([
         sanitizeCell(row['name'] as String? ?? ''),
@@ -200,6 +230,10 @@ class CsvService {
         ((row['min_stock'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
         ((row['stock_quantity'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
         (row['is_active'] as int? ?? 1).toString(),
+        sanitizeCell(priceCurr),
+        formatRefPrice(refSale),
+        formatRefPrice(refWs),
+        formatRefPrice(refPur),
       ].join(','));
     }
 
@@ -238,18 +272,15 @@ class CsvService {
         } else {
           currentField.write(char);
           i++;
-          continue;
         }
       } else {
         if (char == '"') {
           insideQuotes = true;
           i++;
-          continue;
         } else if (char == ',') {
           currentRow.add(currentField.toString());
           currentField.clear();
           i++;
-          continue;
         } else if (char == '\r') {
           if (i + 1 < text.length && text[i + 1] == '\n') {
             i++;
@@ -259,18 +290,15 @@ class CsvService {
           rows.add(currentRow);
           currentRow = <String>[];
           i++;
-          continue;
         } else if (char == '\n') {
           currentRow.add(currentField.toString());
           currentField.clear();
           rows.add(currentRow);
           currentRow = <String>[];
           i++;
-          continue;
         } else {
           currentField.write(char);
           i++;
-          continue;
         }
       }
     }
@@ -283,20 +311,20 @@ class CsvService {
     return rows;
   }
 
-  /// Strips spreadsheet formula protection prefix if present
-  static String unescapeFormulaPrefix(String text) {
-    if (text.startsWith("'") && text.length > 1) {
-      final nextChar = text[1];
-      if (nextChar == '=' ||
-          nextChar == '+' ||
-          nextChar == '-' ||
-          nextChar == '@' ||
-          nextChar == '\t' ||
-          nextChar == '\r') {
-        return text.substring(1);
+  /// Removes single quote prepended to prevent formula injection.
+  static String unescapeFormulaPrefix(String cell) {
+    if (cell.startsWith("'") && cell.length > 1) {
+      final second = cell[1];
+      if (second == '=' ||
+          second == '+' ||
+          second == '-' ||
+          second == '@' ||
+          second == '\t' ||
+          second == '\r') {
+        return cell.substring(1);
       }
     }
-    return text;
+    return cell;
   }
 
   /// Parses CSV and generates an actionable preview before any database changes.
@@ -329,6 +357,12 @@ class CsvService {
     final salesUnitsIdx = headerRow.indexOf('salesunits');
     final minStockIdx = headerRow.indexOf('minstock');
     final isActiveIdx = headerRow.indexOf('isactive');
+
+    // Reference pricing optional column headers
+    final priceCurrIdx = headerRow.indexOf('pricecurrency');
+    final refSaleIdx = headerRow.indexOf('referencesaleprice');
+    final refWsIdx = headerRow.indexOf('referencewholesaleprice');
+    final refPurIdx = headerRow.indexOf('referencepurchaseprice');
 
     if (nameIdx == -1 || salePriceIdx == -1) {
       return CsvImportPreview(
@@ -367,6 +401,11 @@ class CsvService {
         existingByCode[code] = p;
       }
     }
+
+    final rates = await ReferencePricingDao.getRates(db);
+    final ratesMap = {for (final r in rates) r.code: r};
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    final baseCurrencyCode = business?.currencyCode.trim();
 
     final parsedRows = <CsvParsedRow>[];
     int validNew = 0;
@@ -414,6 +453,19 @@ class CsvService {
       final rawActive = isActiveIdx != -1 && isActiveIdx < row.length
           ? row[isActiveIdx].trim()
           : '1';
+
+      final rawPriceCurr = priceCurrIdx != -1 && priceCurrIdx < row.length
+          ? unescapeFormulaPrefix(row[priceCurrIdx].trim()).toUpperCase()
+          : '';
+      final rawRefSale = refSaleIdx != -1 && refSaleIdx < row.length
+          ? unescapeFormulaPrefix(row[refSaleIdx].trim())
+          : '';
+      final rawRefWs = refWsIdx != -1 && refWsIdx < row.length
+          ? unescapeFormulaPrefix(row[refWsIdx].trim())
+          : '';
+      final rawRefPur = refPurIdx != -1 && refPurIdx < row.length
+          ? unescapeFormulaPrefix(row[refPurIdx].trim())
+          : '';
 
       if (rawName.isEmpty) {
         error++;
@@ -545,6 +597,81 @@ class CsvService {
         match = existingByName[rawName.toLowerCase()];
       }
 
+      // Validate reference pricing columns
+      String? parsedPriceCurrency;
+      double? parsedRefSale;
+      double? parsedRefWs;
+      double? parsedRefPur;
+      String? refError;
+
+      if (rawPriceCurr.isNotEmpty) {
+        parsedPriceCurrency = rawPriceCurr;
+
+        if (baseCurrencyCode == null) {
+          refError = 'عملة التسعير غير معرّفة أو بلا سعر صرف';
+        } else if (parsedPriceCurrency == baseCurrencyCode) {
+          refError = 'عملة التسعير لا يمكن أن تكون العملة الأساسية';
+        } else if (!ratesMap.containsKey(parsedPriceCurrency) ||
+            !ReferencePricingMath.isValidRate(ratesMap[parsedPriceCurrency]!.rate)) {
+          refError = 'عملة التسعير غير معرّفة أو بلا سعر صرف';
+        } else if (!ratesMap[parsedPriceCurrency]!.isActive) {
+          final matchedCurrentCurrency = match != null ? match['price_currency'] as String? : null;
+          if (matchedCurrentCurrency != parsedPriceCurrency) {
+            refError = 'عملة التسعير مؤرشفة';
+          }
+        }
+
+        if (refError == null) {
+          if (rawRefSale.isEmpty) {
+            refError = 'السعر المرجعي للبيع مطلوب';
+          } else {
+            parsedRefSale = ReferencePricingMath.parseReferencePrice(
+              rawRefSale,
+              allowCommaDecimal: false,
+            );
+            if (parsedRefSale == null) {
+              refError = 'السعر المرجعي للبيع مطلوب';
+            }
+          }
+        }
+
+        if (refError == null && rawRefWs.isNotEmpty) {
+          parsedRefWs = ReferencePricingMath.parseReferencePrice(
+            rawRefWs,
+            allowCommaDecimal: false,
+          );
+          if (parsedRefWs == null) {
+            refError = 'السعر المرجعي غير صحيح';
+          }
+        }
+
+        if (refError == null && rawRefPur.isNotEmpty) {
+          parsedRefPur = ReferencePricingMath.parseReferencePrice(
+            rawRefPur,
+            allowCommaDecimal: false,
+          );
+          if (parsedRefPur == null) {
+            refError = 'السعر المرجعي غير صحيح';
+          }
+        }
+      } else {
+        if (rawRefSale.isNotEmpty || rawRefWs.isNotEmpty || rawRefPur.isNotEmpty) {
+          refError = 'أعمدة السعر المرجعي تتطلب عملة تسعير';
+        }
+      }
+
+      if (refError != null) {
+        error++;
+        parsedRows.add(CsvParsedRow(
+          rowNumber: r + 1,
+          name: rawName,
+          salePrice: salePrice,
+          isValid: false,
+          errorMessage: refError,
+        ));
+        continue;
+      }
+
       if (match != null) {
         existing++;
         parsedRows.add(CsvParsedRow(
@@ -565,6 +692,10 @@ class CsvService {
           isValid: true,
           isExisting: true,
           existingProductId: match['id'] as int?,
+          priceCurrency: parsedPriceCurrency,
+          referenceSalePrice: parsedRefSale,
+          referenceWholesalePrice: parsedRefWs,
+          referencePurchasePrice: parsedRefPur,
         ));
       } else {
         validNew++;
@@ -585,6 +716,10 @@ class CsvService {
           isActive: isActive,
           isValid: true,
           isExisting: false,
+          priceCurrency: parsedPriceCurrency,
+          referenceSalePrice: parsedRefSale,
+          referenceWholesalePrice: parsedRefWs,
+          referencePurchasePrice: parsedRefPur,
         ));
       }
     }
@@ -614,6 +749,7 @@ class CsvService {
       int imported = 0;
       int updated = 0;
       int skipped = 0;
+      int skippedReferenceFields = 0;
       final errors = <String>[];
       final now = DateTime.now().toIso8601String();
 
@@ -623,13 +759,27 @@ class CsvService {
             skipped++;
             continue;
           } else {
-            // Update existing catalog fields ONLY.
-            // NEVER alter stock_quantity or average_cost!
+            // Read current product from database inside txn
+            final existingProdRows = await txn.query(
+              'products',
+              columns: [
+                'id',
+                'price_currency',
+                'reference_wholesale_price',
+                'reference_purchase_price',
+              ],
+              where: 'id = ?',
+              whereArgs: [r.existingProductId],
+              limit: 1,
+            );
+            final existingProd = existingProdRows.isNotEmpty ? existingProdRows.first : null;
+            final currentCurrency = existingProd?['price_currency'] as String?;
+            final curRefWs = existingProd?['reference_wholesale_price'];
+            final curRefPur = existingProd?['reference_purchase_price'];
+
             final updateValues = <String, dynamic>{
               'name': r.name,
               'type': r.type,
-              'sale_price': r.salePrice,
-              'purchase_price': r.purchasePrice,
               'min_stock': r.minStock,
               'is_active': r.isActive ? 1 : 0,
               'updated_at': now,
@@ -646,11 +796,69 @@ class CsvService {
             if (r.unit != null && r.unit!.isNotEmpty) {
               updateValues['unit'] = r.unit;
             }
-            if (r.wholesalePrice != null) {
-              updateValues['wholesale_price'] = r.wholesalePrice;
-            }
             if (r.wholesaleMinQty != null) {
               updateValues['wholesale_min_quantity'] = r.wholesaleMinQty;
+            }
+
+            if (r.priceCurrency != null) {
+              try {
+                await ReferencePricingDao.assertAssignable(
+                  txn,
+                  r.priceCurrency!,
+                  currentCurrency: currentCurrency,
+                );
+                final d = await ReferencePricingDao.computeDerivedPrices(
+                  txn,
+                  currencyCode: r.priceCurrency!,
+                  referenceSale: r.referenceSalePrice,
+                  referenceWholesale: r.referenceWholesalePrice,
+                  referencePurchase: r.referencePurchasePrice,
+                );
+
+                updateValues['price_currency'] = r.priceCurrency;
+                updateValues['reference_sale_price'] = r.referenceSalePrice;
+                updateValues['reference_wholesale_price'] = r.referenceWholesalePrice;
+                updateValues['reference_purchase_price'] = r.referencePurchasePrice;
+                updateValues['sale_price'] = d.sale;
+                if (d.wholesale != null) {
+                  updateValues['wholesale_price'] = d.wholesale;
+                } else if (r.wholesalePrice != null) {
+                  updateValues['wholesale_price'] = r.wholesalePrice;
+                }
+                if (d.purchase != null) {
+                  updateValues['purchase_price'] = d.purchase;
+                } else {
+                  updateValues['purchase_price'] = r.purchasePrice;
+                }
+              } on ReferencePricingException catch (e) {
+                errors.add('صف ${r.rowNumber}: ${e.message}');
+                skipped++;
+                continue;
+              }
+            } else {
+              if (currentCurrency != null) {
+                // Existing product has reference pricing, row lacks PriceCurrency
+                skippedReferenceFields++; // Sale skipped every time
+                if (curRefPur != null) {
+                  skippedReferenceFields++;
+                } else {
+                  updateValues['purchase_price'] = r.purchasePrice;
+                }
+                if (curRefWs != null) {
+                  if (r.wholesalePrice != null) {
+                    skippedReferenceFields++;
+                  }
+                } else if (r.wholesalePrice != null) {
+                  updateValues['wholesale_price'] = r.wholesalePrice;
+                }
+              } else {
+                // Standard legacy product
+                updateValues['sale_price'] = r.salePrice;
+                updateValues['purchase_price'] = r.purchasePrice;
+                if (r.wholesalePrice != null) {
+                  updateValues['wholesale_price'] = r.wholesalePrice;
+                }
+              }
             }
 
             await txn.update(
@@ -659,6 +867,12 @@ class CsvService {
               where: 'id = ?',
               whereArgs: [r.existingProductId],
             );
+
+            if (r.priceCurrency != null &&
+                currentCurrency != r.priceCurrency &&
+                r.existingProductId != null) {
+              await ReferencePricingDao.clearUnitReferences(txn, r.existingProductId!);
+            }
 
             // Safe unit addition: only insert units that don't already exist for this product
             if (r.salesUnits != null &&
@@ -689,18 +903,14 @@ class CsvService {
             updated++;
           }
         } else {
-          // Insert new product record. Initial stock is 0.
-          // Stock additions must go through opening stock, adjustments, or purchases.
-          final newPid = await txn.insert('products', {
+          // New product record
+          final insertValues = <String, dynamic>{
             'name': r.name,
             'barcode': r.barcode,
             'code': r.code,
             'category': r.category,
             'type': r.type,
             'unit': r.unit,
-            'sale_price': r.salePrice,
-            'purchase_price': r.purchasePrice,
-            'wholesale_price': r.wholesalePrice,
             'wholesale_min_quantity': r.wholesaleMinQty,
             'stock_quantity': 0.0,
             'min_stock': r.minStock,
@@ -709,7 +919,42 @@ class CsvService {
             'cost_status': Product.costStatusUnknown,
             'created_at': now,
             'updated_at': now,
-          });
+          };
+
+          if (r.priceCurrency != null) {
+            try {
+              await ReferencePricingDao.assertAssignable(
+                txn,
+                r.priceCurrency!,
+                currentCurrency: null,
+              );
+              final d = await ReferencePricingDao.computeDerivedPrices(
+                txn,
+                currencyCode: r.priceCurrency!,
+                referenceSale: r.referenceSalePrice,
+                referenceWholesale: r.referenceWholesalePrice,
+                referencePurchase: r.referencePurchasePrice,
+              );
+
+              insertValues['price_currency'] = r.priceCurrency;
+              insertValues['reference_sale_price'] = r.referenceSalePrice;
+              insertValues['reference_wholesale_price'] = r.referenceWholesalePrice;
+              insertValues['reference_purchase_price'] = r.referencePurchasePrice;
+              insertValues['sale_price'] = d.sale;
+              insertValues['purchase_price'] = d.purchase ?? r.purchasePrice;
+              insertValues['wholesale_price'] = d.wholesale ?? r.wholesalePrice;
+            } on ReferencePricingException catch (e) {
+              errors.add('صف ${r.rowNumber}: ${e.message}');
+              skipped++;
+              continue;
+            }
+          } else {
+            insertValues['sale_price'] = r.salePrice;
+            insertValues['purchase_price'] = r.purchasePrice;
+            insertValues['wholesale_price'] = r.wholesalePrice;
+          }
+
+          final newPid = await txn.insert('products', insertValues);
 
           if (r.salesUnits != null && r.salesUnits!.isNotEmpty) {
             for (final u in r.salesUnits!) {
@@ -734,9 +979,13 @@ class CsvService {
         'entity_type': 'products_csv',
         'entity_id': imported + updated,
         'details':
-            'imported=$imported updated=$updated skipped=$skipped strategy=${strategy.name}',
+            'imported=$imported updated=$updated skipped=$skipped skippedReferenceFields=$skippedReferenceFields strategy=${strategy.name}',
         'timestamp': now,
       });
+
+      if (imported + updated > 0) {
+        CatalogEvents.notifyPricesChanged();
+      }
 
       return CsvImportResult(
         totalRows: rows.length,
@@ -744,6 +993,7 @@ class CsvService {
         updatedCount: updated,
         skippedCount: skipped,
         errors: errors,
+        skippedReferenceFields: skippedReferenceFields,
       );
     });
   }
