@@ -5,6 +5,7 @@ import '../../models/stocktake.dart';
 import '../../services/feature_access.dart';
 import '../../services/license_service.dart';
 import '../../services/stocktake_service.dart';
+import '../../utils/arabic_search_utils.dart';
 import '../../utils/format_utils.dart';
 import '../../utils/number_input.dart';
 import '../../widgets/amount_field.dart';
@@ -40,8 +41,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
   }
 
   Future<void> _checkEntitlementAndLoad() async {
-    final entitlement =
-        await LicenseService.instance.checkEntitlement(force: true);
+    final entitlement = await LicenseService.instance.checkEntitlement(
+      force: true,
+    );
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.stocktake, entitlement)) {
       if (mounted) {
@@ -67,10 +69,14 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
       _categories = catRows.map((r) => r['category'] as String).toList();
 
       if (widget.existingSessionId != null) {
-        _session = await StocktakeService.instance.getSession(widget.existingSessionId!);
+        _session = await StocktakeService.instance.getSession(
+          widget.existingSessionId!,
+        );
       } else {
         // Look for any active in-progress session
-        final sessions = await StocktakeService.instance.getAllSessions(limit: 5);
+        final sessions = await StocktakeService.instance.getAllSessions(
+          limit: 5,
+        );
         final active = sessions.where((s) => s.isActive).toList();
         if (active.isNotEmpty) {
           _session = active.first;
@@ -111,10 +117,16 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                   ),
                   initialValue: categoryFilter,
                   items: [
-                    DropdownMenuItem(value: null, child: Text(l10n.allCategories)),
-                    ..._categories.map((c) => DropdownMenuItem(value: c, child: Text(c))),
+                    DropdownMenuItem(
+                      value: null,
+                      child: Text(l10n.allCategories),
+                    ),
+                    ..._categories.map(
+                      (c) => DropdownMenuItem(value: c, child: Text(c)),
+                    ),
                   ],
-                  onChanged: (val) => setDialogState(() => categoryFilter = val),
+                  onChanged: (val) =>
+                      setDialogState(() => categoryFilter = val),
                 ),
               const SizedBox(height: 12),
               TextField(
@@ -145,7 +157,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
       try {
         final session = await StocktakeService.instance.startSession(
           categoryFilter: categoryFilter,
-          notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+          notes: notesController.text.trim().isEmpty
+              ? null
+              : notesController.text.trim(),
         );
         setState(() {
           _session = session;
@@ -167,7 +181,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
     if (_session?.isCompleted == true || _session?.isCancelled == true) return;
     final l10n = AppLocalizations.of(context);
     final countController = TextEditingController(
-      text: item.countedQuantity != null ? FormatUtils.formatQuantity(item.countedQuantity!) : '',
+      text: item.countedQuantity != null
+          ? FormatUtils.formatQuantity(item.countedQuantity!)
+          : '',
     );
     final notesController = TextEditingController(text: item.notes ?? '');
 
@@ -213,7 +229,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
               await StocktakeService.instance.recordCount(item.id!, null);
               if (ctx.mounted) Navigator.pop(ctx, true);
             },
-            child: Text(l10n.uncounted, style: const TextStyle(color: Colors.red)),
+            child: Text(
+              l10n.uncounted,
+              style: const TextStyle(color: Colors.red),
+            ),
           ),
           FilledButton(
             onPressed: () {
@@ -236,7 +255,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
       await StocktakeService.instance.recordCount(
         item.id!,
         qty,
-        notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+        notes: notesController.text.trim().isEmpty
+            ? null
+            : notesController.text.trim(),
       );
       await _load();
     }
@@ -248,7 +269,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
 
     setState(() => _loading = true);
     try {
-      final review = await StocktakeService.instance.reviewSession(_session!.id!);
+      final review = await StocktakeService.instance.reviewSession(
+        _session!.id!,
+      );
       setState(() => _loading = false);
       if (!mounted) return;
 
@@ -268,15 +291,31 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                   children: [
                     Text(
                       '${l10n.sessionNumber}: ${_session!.sessionNumber}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     _summaryRow(l10n.total, '${_items.length}'),
                     _summaryRow(l10n.countedQty, '${review.totalCounted}'),
-                    _summaryRow(l10n.uncounted, '${review.totalUncounted}', color: Colors.orange),
-                    _summaryRow(l10n.statusMatched, '${review.matchedCount}', color: Colors.teal),
-                    _summaryRow(l10n.variance, '${review.discrepantCount}',
-                        color: review.discrepantCount > 0 ? Colors.red : Colors.teal),
+                    _summaryRow(
+                      l10n.uncounted,
+                      '${review.totalUncounted}',
+                      color: Colors.orange,
+                    ),
+                    _summaryRow(
+                      l10n.statusMatched,
+                      '${review.matchedCount}',
+                      color: Colors.teal,
+                    ),
+                    _summaryRow(
+                      l10n.variance,
+                      '${review.discrepantCount}',
+                      color: review.discrepantCount > 0
+                          ? Colors.red
+                          : Colors.teal,
+                    ),
                     const Divider(height: 16),
                     if (review.hasInterimMovements) ...[
                       Container(
@@ -288,12 +327,19 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 20),
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.amber,
+                              size: 20,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 l10n.interimMovementWarning,
-                                style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.amber.shade900,
+                                ),
                               ),
                             ),
                           ],
@@ -309,7 +355,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                       ),
                       child: Text(
                         l10n.stocktakeDiscrepancyWarning,
-                        style: TextStyle(fontSize: 11, color: Colors.blue.shade900),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.blue.shade900,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -318,9 +367,13 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: Text(
                         l10n.confirmFinalizeStocktake,
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                      onChanged: (val) => setDialogState(() => confirmed = val ?? false),
+                      onChanged: (val) =>
+                          setDialogState(() => confirmed = val ?? false),
                     ),
                   ],
                 ),
@@ -332,9 +385,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                 child: Text(l10n.cancel),
               ),
               FilledButton(
-                onPressed: confirmed
-                    ? () => Navigator.pop(ctx, true)
-                    : null,
+                onPressed: confirmed ? () => Navigator.pop(ctx, true) : null,
                 child: Text(l10n.confirmFinalizeStocktake),
               ),
             ],
@@ -376,7 +427,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
         title: Text(l10n.cancelStocktakeSession),
         content: Text(l10n.confirmCancelSession),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
@@ -442,7 +496,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
               tooltip: l10n.auditHistoryTitle,
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const StocktakeHistoryScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const StocktakeHistoryScreen(),
+                ),
               ),
             ),
           ],
@@ -458,7 +514,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                   const SizedBox(height: 16),
                   Text(
                     l10n.stocktakeTitle,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -482,26 +541,30 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
 
     // Filter items
     final filtered = _items.where((it) {
-      if (_selectedCategory != null && it.productCategory != _selectedCategory) {
+      if (_selectedCategory != null &&
+          it.productCategory != _selectedCategory) {
         return false;
       }
       if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
-        final matchName = it.productName?.toLowerCase().contains(q) ?? false;
-        final matchBarcode = it.productBarcode?.toLowerCase().contains(q) ?? false;
-        final matchCode = it.productCode?.toLowerCase().contains(q) ?? false;
+        final q = _searchQuery.trim();
+        final matchName = ArabicSearchUtils.matches(it.productName, q);
+        final matchBarcode = ArabicSearchUtils.matches(it.productBarcode, q);
+        final matchCode = ArabicSearchUtils.matches(it.productCode, q);
         if (!matchName && !matchBarcode && !matchCode) return false;
       }
       if (_filterTab == 'uncounted' && it.isCounted) return false;
       if (_filterTab == 'counted' && !it.isCounted) return false;
-      if (_filterTab == 'discrepant' && (!it.isCounted || it.currentVariance.abs() < 0.0001)) {
+      if (_filterTab == 'discrepant' &&
+          (!it.isCounted || it.currentVariance.abs() < 0.0001)) {
         return false;
       }
       return true;
     }).toList();
 
     final countedCount = _items.where((i) => i.isCounted).length;
-    final discrepantCount = _items.where((i) => i.isCounted && i.currentVariance.abs() > 0.0001).length;
+    final discrepantCount = _items
+        .where((i) => i.isCounted && i.currentVariance.abs() > 0.0001)
+        .length;
 
     return Scaffold(
       appBar: AppBar(
@@ -511,7 +574,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
             Text(l10n.stocktakeTitle, style: const TextStyle(fontSize: 16)),
             Text(
               '${_session!.sessionNumber} (${_items.length} ${l10n.product})',
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.normal,
+              ),
             ),
           ],
         ),
@@ -534,9 +600,16 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                   value: 'cancel',
                   child: Row(
                     children: [
-                      const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
+                      const Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.red,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
-                      Text(l10n.cancelStocktakeSession, style: const TextStyle(color: Colors.red)),
+                      Text(
+                        l10n.cancelStocktakeSession,
+                        style: const TextStyle(color: Colors.red),
+                      ),
                     ],
                   ),
                 ),
@@ -555,10 +628,21 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _statChip(l10n.total, '${_items.length}'),
-                  _statChip(l10n.countedQty, '$countedCount', color: Colors.teal),
-                  _statChip(l10n.uncounted, '${_items.length - countedCount}', color: Colors.orange),
-                  _statChip(l10n.variance, '$discrepantCount',
-                      color: discrepantCount > 0 ? Colors.red : Colors.teal),
+                  _statChip(
+                    l10n.countedQty,
+                    '$countedCount',
+                    color: Colors.teal,
+                  ),
+                  _statChip(
+                    l10n.uncounted,
+                    '${_items.length - countedCount}',
+                    color: Colors.orange,
+                  ),
+                  _statChip(
+                    l10n.variance,
+                    '$discrepantCount',
+                    color: discrepantCount > 0 ? Colors.red : Colors.teal,
+                  ),
                 ],
               ),
             ),
@@ -574,22 +658,46 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                         hintText: l10n.searchProductsHint,
                         prefixIcon: const Icon(Icons.search, size: 20),
                         isDense: true,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
                       ),
-                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                      onChanged: (val) =>
+                          setState(() => _searchQuery = val.trim()),
                     ),
                   ),
                   if (_categories.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     DropdownButton<String?>(
                       value: _selectedCategory,
-                      hint: Text(l10n.category, style: const TextStyle(fontSize: 12)),
+                      hint: Text(
+                        l10n.category,
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       items: [
-                        DropdownMenuItem(value: null, child: Text(l10n.allCategories, style: const TextStyle(fontSize: 12))),
-                        ..._categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))),
+                        DropdownMenuItem(
+                          value: null,
+                          child: Text(
+                            l10n.allCategories,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        ..._categories.map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(
+                              c,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                        ),
                       ],
-                      onChanged: (val) => setState(() => _selectedCategory = val),
+                      onChanged: (val) =>
+                          setState(() => _selectedCategory = val),
                     ),
                   ],
                 ],
@@ -604,7 +712,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                 children: [
                   _tabChip('all', l10n.activeFilterAll),
                   const SizedBox(width: 6),
-                  _tabChip('uncounted', '${l10n.uncounted} (${_items.length - countedCount})'),
+                  _tabChip(
+                    'uncounted',
+                    '${l10n.uncounted} (${_items.length - countedCount})',
+                  ),
                   const SizedBox(width: 6),
                   _tabChip('counted', '${l10n.countedQty} ($countedCount)'),
                   const SizedBox(width: 6),
@@ -625,11 +736,17 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                       itemBuilder: (ctx, idx) {
                         final it = filtered[idx];
                         final variance = it.currentVariance;
-                        final hasDiscrepancy = it.isCounted && variance.abs() > 0.0001;
+                        final hasDiscrepancy =
+                            it.isCounted && variance.abs() > 0.0001;
 
                         return ListTile(
-                          title: Text(it.productName ?? l10n.product,
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          title: Text(
+                            it.productName ?? l10n.product,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                           subtitle: Text(
                             '${l10n.systemQty}: ${FormatUtils.formatQuantity(it.baselineQuantity)} ${it.productUnit ?? ""} '
                             '${it.productBarcode != null ? "• ${it.productBarcode}" : ""}',
@@ -649,7 +766,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
-                                      color: it.isCounted ? Colors.teal : Colors.orange,
+                                      color: it.isCounted
+                                          ? Colors.teal
+                                          : Colors.orange,
                                     ),
                                   ),
                                   if (it.isCounted)
@@ -661,7 +780,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                                         fontSize: 11,
                                         fontWeight: FontWeight.w500,
                                         color: hasDiscrepancy
-                                            ? (variance > 0 ? Colors.blue : Colors.red)
+                                            ? (variance > 0
+                                                  ? Colors.blue
+                                                  : Colors.red)
                                             : Colors.teal,
                                       ),
                                     ),
@@ -674,7 +795,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                                 ),
                             ],
                           ),
-                          onTap: _session!.isActive ? () => _editItemCount(it) : null,
+                          onTap: _session!.isActive
+                              ? () => _editItemCount(it)
+                              : null,
                         );
                       },
                     ),
@@ -715,7 +838,14 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
   Widget _statChip(String label, String value, {Color? color}) {
     return Column(
       children: [
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: color)),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: color,
+          ),
+        ),
         Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
       ],
     );

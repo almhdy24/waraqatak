@@ -6,6 +6,7 @@ import '../models/product.dart';
 import '../services/bulk_pricing_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../utils/arabic_search_utils.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
@@ -47,8 +48,9 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
   }
 
   Future<void> _checkEntitlementAndLoad() async {
-    final entitlement =
-        await LicenseService.instance.checkEntitlement(force: true);
+    final entitlement = await LicenseService.instance.checkEntitlement(
+      force: true,
+    );
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.bulkPriceUpdate, entitlement)) {
       if (mounted) {
@@ -106,7 +108,9 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
 
   void _updatePreview() {
     final val = NumberInput.parse(_valController.text.trim()) ?? 0.0;
-    final selectedProducts = _allProducts.where((p) => _selectedProductIds.contains(p.id)).toList();
+    final selectedProducts = _allProducts
+        .where((p) => _selectedProductIds.contains(p.id))
+        .toList();
 
     _previewItems = BulkPricingService.instance.preview(
       products: selectedProducts,
@@ -142,7 +146,9 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
     if (_previewItems.isEmpty) return;
 
     final hasCustomUnits = _previewItems.any(
-      (it) => it.product.id != null && _productIdsWithCustomUnits.contains(it.product.id!),
+      (it) =>
+          it.product.id != null &&
+          _productIdsWithCustomUnits.contains(it.product.id!),
     );
 
     final confirmed = await showDialog<bool>(
@@ -156,7 +162,10 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
           '${hasCustomUnits ? '\n\n${l10n.bulkPricingCustomUnitsWarning}' : ''}',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(l10n.applyChanges),
@@ -248,22 +257,21 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
         return false;
       }
       if (_searchQuery.isNotEmpty) {
-        final q = _searchQuery.toLowerCase();
-        final matchName = p.name.toLowerCase().contains(q);
-        final matchBarcode = p.barcode?.toLowerCase().contains(q) ?? false;
-        final matchCode = p.code?.toLowerCase().contains(q) ?? false;
+        final q = _searchQuery.trim();
+        final matchName = ArabicSearchUtils.matches(p.name, q);
+        final matchBarcode = ArabicSearchUtils.matches(p.barcode, q);
+        final matchCode = ArabicSearchUtils.matches(p.code, q);
         if (!matchName && !matchBarcode && !matchCode) return false;
       }
       return true;
     }).toList();
 
-    final allFilteredSelected = filteredProducts.isNotEmpty &&
+    final allFilteredSelected =
+        filteredProducts.isNotEmpty &&
         filteredProducts.every((p) => _selectedProductIds.contains(p.id));
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.bulkPricingTitle),
-      ),
+      appBar: AppBar(title: Text(l10n.bulkPricingTitle)),
       body: ResponsiveCenter(
         child: Column(
           children: [
@@ -272,7 +280,9 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
               margin: const EdgeInsets.all(12),
               elevation: 0,
               color: cs.surfaceContainerLow,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
@@ -285,13 +295,19 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                             decoration: InputDecoration(
                               labelText: l10n.operationType,
                               isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
                             ),
                             initialValue: _opType,
                             items: BulkPriceOpType.values.map((op) {
                               return DropdownMenuItem(
                                 value: op,
-                                child: Text(_getOpLabel(op, l10n), style: const TextStyle(fontSize: 12)),
+                                child: Text(
+                                  _getOpLabel(op, l10n),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               );
                             }).toList(),
                             onChanged: (val) {
@@ -316,7 +332,10 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                             decoration: InputDecoration(
                               labelText: l10n.value,
                               isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
                             ),
                             onChanged: (_) => setState(_updatePreview),
                           ),
@@ -332,13 +351,19 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                             decoration: InputDecoration(
                               labelText: l10n.targetPrice,
                               isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
                             ),
                             initialValue: _target,
                             items: BulkPriceTarget.values.map((t) {
                               return DropdownMenuItem(
                                 value: t,
-                                child: Text(_getTargetLabel(t, l10n), style: const TextStyle(fontSize: 12)),
+                                child: Text(
+                                  _getTargetLabel(t, l10n),
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               );
                             }).toList(),
                             onChanged: (val) {
@@ -359,14 +384,41 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                             decoration: InputDecoration(
                               labelText: l10n.roundingRule,
                               isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 10,
+                              ),
                             ),
                             initialValue: _rounding,
                             items: [
-                              DropdownMenuItem(value: BulkPriceRounding.none, child: Text(l10n.roundNone, style: const TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: BulkPriceRounding.nearestWhole, child: Text(l10n.roundNearestWhole, style: const TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: BulkPriceRounding.nearestTen, child: Text(l10n.roundNearestTen, style: const TextStyle(fontSize: 12))),
-                              DropdownMenuItem(value: BulkPriceRounding.ceilWhole, child: Text(l10n.roundUp, style: const TextStyle(fontSize: 12))),
+                              DropdownMenuItem(
+                                value: BulkPriceRounding.none,
+                                child: Text(
+                                  l10n.roundNone,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: BulkPriceRounding.nearestWhole,
+                                child: Text(
+                                  l10n.roundNearestWhole,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: BulkPriceRounding.nearestTen,
+                                child: Text(
+                                  l10n.roundNearestTen,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: BulkPriceRounding.ceilWhole,
+                                child: Text(
+                                  l10n.roundUp,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
                             ],
                             onChanged: (val) {
                               if (val != null) {
@@ -388,11 +440,17 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
             if (_categories.isNotEmpty)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 child: Row(
                   children: [
                     ChoiceChip(
-                      label: Text(l10n.allCategories, style: const TextStyle(fontSize: 11)),
+                      label: Text(
+                        l10n.allCategories,
+                        style: const TextStyle(fontSize: 11),
+                      ),
                       selected: _selectedCategory == null,
                       onSelected: (_) => setState(() {
                         _selectedCategory = null;
@@ -400,17 +458,19 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                       }),
                     ),
                     const SizedBox(width: 6),
-                    ..._categories.map((c) => Padding(
-                      padding: const EdgeInsetsDirectional.only(end: 6),
-                      child: ChoiceChip(
-                        label: Text(c, style: const TextStyle(fontSize: 11)),
-                        selected: _selectedCategory == c,
-                        onSelected: (_) => setState(() {
-                          _selectedCategory = c;
-                          _updatePreview();
-                        }),
+                    ..._categories.map(
+                      (c) => Padding(
+                        padding: const EdgeInsetsDirectional.only(end: 6),
+                        child: ChoiceChip(
+                          label: Text(c, style: const TextStyle(fontSize: 11)),
+                          selected: _selectedCategory == c,
+                          onSelected: (_) => setState(() {
+                            _selectedCategory = c;
+                            _updatePreview();
+                          }),
+                        ),
                       ),
-                    )),
+                    ),
                   ],
                 ),
               ),
@@ -439,7 +499,10 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                   ),
                   Text(
                     '${l10n.selectProducts} (${_selectedProductIds.length}/${_allProducts.length})',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const Spacer(),
                   // Search field
@@ -450,10 +513,16 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                         hintText: l10n.search,
                         prefixIcon: const Icon(Icons.search, size: 16),
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      onChanged: (val) => setState(() => _searchQuery = val.trim()),
+                      onChanged: (val) =>
+                          setState(() => _searchQuery = val.trim()),
                     ),
                   ),
                 ],
@@ -462,15 +531,21 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
 
             const Divider(height: 1),
 
-            if (_selectedProductIds.any((id) => _productIdsWithCustomUnits.contains(id)))
+            if (_selectedProductIds.any(
+              (id) => _productIdsWithCustomUnits.contains(id),
+            ))
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.4),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.errorContainer.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Theme.of(context).colorScheme.error.withValues(alpha: 0.3),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.error.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
@@ -503,7 +578,9 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (ctx, idx) {
                         final item = _previewItems[idx];
-                        final isSelected = _selectedProductIds.contains(item.product.id);
+                        final isSelected = _selectedProductIds.contains(
+                          item.product.id,
+                        );
 
                         final double oldDisplayPrice;
                         final double newDisplayPrice;
@@ -531,8 +608,13 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                               _updatePreview();
                             });
                           },
-                          title: Text(item.product.name,
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                          title: Text(
+                            item.product.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                           subtitle: Text(
                             '${l10n.currentPrice}: ${_numFmt.format(oldDisplayPrice)} ${item.product.category != null ? "• ${item.product.category}" : ""}',
                             style: const TextStyle(fontSize: 11),
@@ -581,9 +663,13 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                 children: [
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: _selectedProductIds.isNotEmpty ? _applyChanges : null,
+                      onPressed: _selectedProductIds.isNotEmpty
+                          ? _applyChanges
+                          : null,
                       icon: const Icon(Icons.check),
-                      label: Text('${l10n.applyChanges} (${_selectedProductIds.length})'),
+                      label: Text(
+                        '${l10n.applyChanges} (${_selectedProductIds.length})',
+                      ),
                     ),
                   ),
                 ],

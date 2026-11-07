@@ -20,7 +20,7 @@
 | **Batch 5** | Inventory & POS audit | DONE | INV-16 single stock writer audit; POS and stock flows audited |
 | **Batch 6** | IMPLEMENT: DB constraints + audit atomicity | DONE | Migration v26: unique indexes, safe de-duplication, atomic audit logging, period lock in issueDocument |
 | **Batch 7** | IMPLEMENT: POS tax, purchase units, track_inventory | DONE (POS tax) / DEFERRED (track_inventory) | POS tax preview parity (Fact B4) resolved and verified with pure unit tests; track_inventory deferred to last item per Override A3; purchase units unreachable per B5 |
-| **Batch 8** | IMPLEMENT: Arabic search, number formatting, UI error handling | PENDING | Arabic search normalization, AmountField consistency, unhandled async states |
+| **Batch 8** | IMPLEMENT: Arabic search, number formatting, UI error handling | DONE | ArabicSearchUtils (Alif variants, Taa Marbuta/Haa, Yaa/Alif Maqsura, Tashkeel/Tatweel removal, SQL normalize), NumberInput Arabic-Indic digits, ErrorUtils error mappings |
 | **Batch 9** | Deep financial review | PENDING | Line-by-line report queries, currencies, rounding, CSV |
 | **Batch 10** | IMPLEMENT: Backup hardening | PENDING | Key derivation once, version validation, atomic swap |
 | **Batch 11** | Localization | SKIPPED BY USER | Skipped per supplemental override A2; user will run dedicated language prompt |

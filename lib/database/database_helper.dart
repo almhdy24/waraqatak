@@ -24,6 +24,7 @@ import '../services/accounting/journal_writer.dart';
 import '../services/accounting/stock_ledger.dart';
 import '../services/inventory_costing_service.dart';
 import '../services/payment_allocator.dart';
+import '../utils/arabic_search_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
 
@@ -2601,8 +2602,10 @@ class DatabaseHelper {
     bool activeOnly = false,
   }) async {
     final db = await database;
-    String where = '(name LIKE ? OR phone LIKE ?)';
-    final args = ['%$query%', '%$query%'];
+    final normalizedQuery = ArabicSearchUtils.normalize(query);
+    final normName = ArabicSearchUtils.sqlNormalize('name');
+    String where = '($normName LIKE ? OR phone LIKE ?)';
+    final args = ['%$normalizedQuery%', '%$normalizedQuery%'];
     if (type != null && type.isNotEmpty) {
       where += ' AND type = ?';
       args.add(type);
@@ -2828,10 +2831,16 @@ class DatabaseHelper {
     String? category,
   }) async {
     final db = await database;
+    final normalizedQuery = ArabicSearchUtils.normalize(query);
+    final normName = ArabicSearchUtils.sqlNormalize('name');
     final conditions = <String>[
-      '(name LIKE ? OR code LIKE ? OR barcode LIKE ?)',
+      '($normName LIKE ? OR code LIKE ? OR barcode LIKE ?)',
     ];
-    final args = <Object?>['%$query%', '%$query%', '%$query%'];
+    final args = <Object?>[
+      '%$normalizedQuery%',
+      '%$normalizedQuery%',
+      '%$normalizedQuery%',
+    ];
     if (category != null && category.trim().isNotEmpty) {
       conditions.add('category = ?');
       args.add(category.trim());
@@ -2859,10 +2868,17 @@ class DatabaseHelper {
     int limit = 10,
   }) async {
     final db = await database;
+    final normalizedQuery = ArabicSearchUtils.normalize(query);
+    final normName = ArabicSearchUtils.sqlNormalize('name');
     final maps = await db.query(
       'products',
-      where: '(name LIKE ? OR code LIKE ? OR barcode LIKE ?) AND is_active = 1',
-      whereArgs: ['%$query%', '%$query%', '%$query%'],
+      where:
+          '($normName LIKE ? OR code LIKE ? OR barcode LIKE ?) AND is_active = 1',
+      whereArgs: [
+        '%$normalizedQuery%',
+        '%$normalizedQuery%',
+        '%$normalizedQuery%',
+      ],
       orderBy: 'name',
       limit: limit,
     );
@@ -6659,15 +6675,19 @@ class DatabaseHelper {
 
   Future<List<Document>> searchDocuments(String query, {String? type}) async {
     final db = await database;
+    final normalizedQuery = ArabicSearchUtils.normalize(query);
+    final normNotes = ArabicSearchUtils.sqlNormalize('notes');
+    final normRecip = ArabicSearchUtils.sqlNormalize('recipient_name');
+    final normContactName = ArabicSearchUtils.sqlNormalize('name');
     String where =
-        '(document_number LIKE ? OR notes LIKE ? OR recipient_name LIKE ? OR recipient_phone LIKE ? OR contact_id IN (SELECT id FROM contacts WHERE name LIKE ? OR phone LIKE ?))';
+        '(document_number LIKE ? OR $normNotes LIKE ? OR $normRecip LIKE ? OR recipient_phone LIKE ? OR contact_id IN (SELECT id FROM contacts WHERE $normContactName LIKE ? OR phone LIKE ?))';
     final args = [
-      '%$query%',
-      '%$query%',
-      '%$query%',
-      '%$query%',
-      '%$query%',
-      '%$query%',
+      '%$normalizedQuery%',
+      '%$normalizedQuery%',
+      '%$normalizedQuery%',
+      '%$normalizedQuery%',
+      '%$normalizedQuery%',
+      '%$normalizedQuery%',
     ];
     if (type != null) {
       where += ' AND type = ?';

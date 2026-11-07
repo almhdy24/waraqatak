@@ -20,6 +20,7 @@ import '../services/license_service.dart';
 import '../services/pdf_service.dart';
 import '../services/pos_cart.dart';
 import '../services/product_service.dart';
+import '../utils/arabic_search_utils.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/number_input.dart';
@@ -141,14 +142,14 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       '${_money.format(v)} ${_business?.currencySymbol ?? ''}'.trim();
 
   List<Product> get _filtered {
-    final q = _query.trim().toLowerCase();
+    final q = _query.trim();
     if (q.isEmpty) return _products;
     return _products
         .where(
           (p) =>
-              p.name.toLowerCase().contains(q) ||
-              (p.code?.toLowerCase().contains(q) ?? false) ||
-              (p.barcode?.toLowerCase() == q),
+              ArabicSearchUtils.matches(p.name, q) ||
+              (p.code != null && ArabicSearchUtils.matches(p.code, q)) ||
+              (p.barcode != null && ArabicSearchUtils.matches(p.barcode, q)),
         )
         .toList();
   }
