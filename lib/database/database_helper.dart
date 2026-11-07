@@ -30,7 +30,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 25;
+  static const int dbVersion = 26;
 
   static Database? _database;
 
@@ -308,6 +308,10 @@ class DatabaseHelper {
         tax_profile_id INTEGER,
         average_cost REAL,
         cost_status TEXT DEFAULT 'unknown',
+        price_currency TEXT,
+        reference_sale_price REAL,
+        reference_wholesale_price REAL,
+        reference_purchase_price REAL,
         created_at TEXT,
         updated_at TEXT
       )
@@ -316,6 +320,9 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_products_barcode ON products(barcode)');
     await db.execute(
       'CREATE INDEX idx_products_category ON products(category)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_products_price_currency ON products(price_currency)',
     );
 
     await db.execute('''
@@ -327,12 +334,28 @@ class DatabaseHelper {
         sale_price REAL,
         wholesale_price REAL,
         is_default_sale INTEGER DEFAULT 0,
+        reference_sale_price REAL,
+        reference_wholesale_price REAL,
+        reference_currency TEXT,
         FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
       )
     ''');
     await db.execute(
       'CREATE INDEX idx_product_units_product ON product_units(product_id)',
     );
+
+    await db.execute('''
+      CREATE TABLE exchange_rates (
+        code TEXT PRIMARY KEY,
+        name_ar TEXT NOT NULL,
+        name_en TEXT,
+        symbol TEXT NOT NULL,
+        rate REAL NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        is_custom INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      )
+    ''');
 
     await db.execute('''
       CREATE TABLE stock_movements (
@@ -1363,6 +1386,53 @@ class DatabaseHelper {
             'ALTER TABLE stock_movements ADD COLUMN target_movement_id INTEGER',
           );
         }
+      }
+    }
+
+    if (oldVersion < 26 && newVersion >= 26) {
+      if (await tableExists('products')) {
+        if (!await columnExists('products', 'price_currency')) {
+          await db.execute('ALTER TABLE products ADD COLUMN price_currency TEXT');
+        }
+        if (!await columnExists('products', 'reference_sale_price')) {
+          await db.execute('ALTER TABLE products ADD COLUMN reference_sale_price REAL');
+        }
+        if (!await columnExists('products', 'reference_wholesale_price')) {
+          await db.execute('ALTER TABLE products ADD COLUMN reference_wholesale_price REAL');
+        }
+        if (!await columnExists('products', 'reference_purchase_price')) {
+          await db.execute('ALTER TABLE products ADD COLUMN reference_purchase_price REAL');
+        }
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_products_price_currency ON products(price_currency)',
+        );
+      }
+
+      if (await tableExists('product_units')) {
+        if (!await columnExists('product_units', 'reference_sale_price')) {
+          await db.execute('ALTER TABLE product_units ADD COLUMN reference_sale_price REAL');
+        }
+        if (!await columnExists('product_units', 'reference_wholesale_price')) {
+          await db.execute('ALTER TABLE product_units ADD COLUMN reference_wholesale_price REAL');
+        }
+        if (!await columnExists('product_units', 'reference_currency')) {
+          await db.execute('ALTER TABLE product_units ADD COLUMN reference_currency TEXT');
+        }
+      }
+
+      if (!await tableExists('exchange_rates')) {
+        await db.execute('''
+          CREATE TABLE exchange_rates (
+            code TEXT PRIMARY KEY,
+            name_ar TEXT NOT NULL,
+            name_en TEXT,
+            symbol TEXT NOT NULL,
+            rate REAL NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            is_custom INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+          )
+        ''');
       }
     }
   }
