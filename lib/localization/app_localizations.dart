@@ -2349,33 +2349,81 @@ class AppLocalizations {
       );
   String get setupBusinessFirst =>
       _t('أكمل بيانات النشاط أولًا.', 'Complete the business details first.');
-  String get refErrInvalidRate =>
-      _t('سعر الصرف غير صالح.', 'Invalid exchange rate.');
-  String get refErrInvalidPrice =>
-      _t('السعر المرجعي غير صالح.', 'Invalid reference price.');
-  String get refErrPriceOutOfRange => _t(
-        'السعر الناتج خارج الحد المسموح.',
-        'The resulting price is out of the allowed range.',
+  String get chooseCurrency => _t('اختر العملة', 'Choose currency');
+  String get currencyCodeField =>
+      _t('رمز العملة (مثال: EUR)', 'Currency code (e.g. EUR)');
+  String get currencyNameArField =>
+      _t('اسم العملة بالعربية', 'Currency name in Arabic');
+  String get currencyNameEnField =>
+      _t('اسم العملة بالإنجليزية (اختياري)', 'Currency name in English (optional)');
+  String get currencySymbolField =>
+      _t('رمز العرض (اختياري، مثل: €)', 'Display symbol (optional, e.g. €)');
+  String get currencyRateField => _t('سعر الصرف', 'Exchange rate');
+  String get currencyRateHelper => _t(
+        'كم وحدة من عملتك الأساسية تساوي 1 من هذه العملة',
+        'How many units of your base currency equal 1 of this currency',
       );
-  String get refErrReferencePriceRequired =>
-      _t('أدخل السعر المرجعي للبيع.', 'Enter the reference sale price.');
+  String get updateExchangeRate => _t('تحديث سعر الصرف', 'Update exchange rate');
+  String get recalculatePrices =>
+      _t('إعادة تسعير المنتجات الآن', 'Recalculate product prices now');
+  String get recalculateAllConfirm => _t(
+        'سيُعاد حساب أسعار الأساس لكل المنتجات المرتبطة بعملات صرف بسعر الصرف الحالي لكل عملة. متابعة؟',
+        'Base prices of all products linked to an exchange rate will be recalculated. Continue?',
+      );
+  String get repricePreviewTitle =>
+      _t('معاينة إعادة التسعير', 'Reprice preview');
+  String repricePreviewDesc(Object productCount, Object unitCount) => _t(
+        'سيتم تحديث ${_iso(productCount)} منتج و${_iso(unitCount)} وحدة تسعير.',
+        '$productCount products and $unitCount units will be updated.',
+      );
+  String repriceSuccess(Object count) => _t(
+        'تم تحديث أسعار ${_iso(count)} منتج بنجاح',
+        'Successfully updated prices for $count products',
+      );
+  String get archiveCurrencyConfirm => _t(
+        'لن تظهر هذه العملة عند إنشاء أو تعديل منتجات جديدة. المنتجات الحالية تبقى مرتبطة بها.',
+        'This currency will not appear when pricing new products. Existing products keep their pricing.',
+      );
+  String get deleteCurrencyConfirm => _t(
+        'حذف هذه العملة المخصصة نهائيًا؟',
+        'Permanently delete this custom currency?',
+      );
+  String roundingNearest(Object step) =>
+      _t('لأقرب ${_iso(step)} وحدة', 'To nearest $step units');
+
+  String get refErrInvalidRate => _t(
+        'سعر الصرف يجب أن يكون رقمًا أكبر من الصفر وبما لا يتجاوز 6 خانات عشرية.',
+        'Exchange rate must be > 0 with up to 6 decimal places.',
+      );
+  String get refErrInvalidPrice => _t(
+        'السعر المرجعي يجب أن يكون رقمًا موجبًا وبما لا يتجاوز 4 خانات عشرية.',
+        'Reference price must be positive with up to 4 decimal places.',
+      );
+  String get refErrPriceOutOfRange => _t(
+        'السعر المحوّل يتجاوز الحد المسموح.',
+        'Converted price exceeds the allowed range.',
+      );
+  String get refErrReferencePriceRequired => _t(
+        'السعر المرجعي الأساسي مطلوب للمنتجات المسعّرة بعملة أخرى.',
+        'Primary reference price is required when pricing in another currency.',
+      );
   String get refErrRepricingBusy => _t(
-        'عملية تحديث الأسعار قيد التنفيذ. انتظر حتى تنتهي.',
-        'A price update is already running. Please wait.',
+        'هناك عملية إعادة تسعير جارية حاليًا. يرجى الانتظار.',
+        'Repricing already in progress. Please wait.',
       );
   String get refErrCurrencyExists =>
-      _t('هذه العملة مضافة مسبقًا.', 'This currency was already added.');
+      _t('رمز العملة مسجل مسبقًا.', 'Currency code already exists.');
   String get refErrCurrencyIsBase => _t(
-        'لا يمكن إضافة العملة الأساسية كعملة تسعير.',
-        'The base currency cannot be added as a pricing currency.',
+        'لا يمكن إضافة العملة الأساسية كعملة صرف.',
+        'Cannot add base currency as an exchange rate.',
       );
   String get refErrCurrencyArchived => _t(
-        'هذه العملة مؤرشفة ولا يمكن استخدامها لمنتج جديد.',
-        'This currency is archived and cannot be assigned to a product.',
+        'العملة المختارة مؤرشفة حاليًا. تم استرجاع الإعداد السابق.',
+        'Selected currency is archived. Previous selection restored.',
       );
   String get refErrGeneric => _t(
-        'تعذّر تنفيذ العملية. حاول مرة أخرى.',
-        'The operation could not be completed. Please try again.',
+        'حدث خطأ في التسعير المرجعي.',
+        'A reference pricing error occurred.',
       );
 
   bool get isArabic => langCode == 'ar';
