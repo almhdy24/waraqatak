@@ -81,4 +81,18 @@ void main() {
     await tester.pump();
     expect(find.text('×10'), findsNothing);
   });
+
+  testWidgets('forwards onTap', (tester) async {
+    final c = TextEditingController();
+    var taps = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AmountField(controller: c, onTap: () => taps++),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(TextFormField));
+    expect(taps, 1);
+  });
 }

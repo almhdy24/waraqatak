@@ -17,6 +17,7 @@ class AmountField extends StatefulWidget {
     this.onFieldSubmitted,
     this.onEditingComplete,
     this.onSaved,
+    this.onTap,
     this.textInputAction,
     this.autofocus = false,
     this.enabled = true,
@@ -38,6 +39,7 @@ class AmountField extends StatefulWidget {
   final ValueChanged<String>? onFieldSubmitted;
   final VoidCallback? onEditingComplete;
   final FormFieldSetter<String>? onSaved;
+  final VoidCallback? onTap;
   final TextInputAction? textInputAction;
   final bool autofocus;
   final bool enabled;
@@ -153,6 +155,7 @@ class _AmountFieldState extends State<AmountField> {
       onFieldSubmitted: widget.onFieldSubmitted,
       onEditingComplete: widget.onEditingComplete,
       onSaved: widget.onSaved,
+      onTap: widget.onTap,
       textInputAction: widget.textInputAction,
       autofocus: widget.autofocus,
       enabled: widget.enabled,
