@@ -30,7 +30,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 25;
+  static const int dbVersion = 26;
 
   static Database? _database;
 
@@ -176,11 +176,9 @@ class DatabaseHelper {
     }
 
     // 2. Clear default flag on existing predefined methods
-    await db.update(
-      'payment_methods',
-      {'is_default': 0},
-      where: 'is_predefined = 1',
-    );
+    await db.update('payment_methods', {
+      'is_default': 0,
+    }, where: 'is_predefined = 1');
 
     // 3. Seed / upsert the 6 new defaults in exact order (sort_order 1 to 6)
     for (final seed in _paymentMethodSeeds) {
@@ -313,7 +311,9 @@ class DatabaseHelper {
       )
     ''');
     await db.execute('CREATE INDEX idx_products_name ON products(name)');
-    await db.execute('CREATE INDEX idx_products_barcode ON products(barcode)');
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ""',
+    );
     await db.execute(
       'CREATE INDEX idx_products_category ON products(category)',
     );
@@ -392,10 +392,17 @@ class DatabaseHelper {
         FOREIGN KEY (related_document_id) REFERENCES documents (id)
       )
     ''');
-    await db.execute('CREATE INDEX idx_documents_contact ON documents(contact_id)');
-    await db.execute('CREATE INDEX idx_documents_related ON documents(related_document_id)');
+    await db.execute(
+      'CREATE INDEX idx_documents_contact ON documents(contact_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_documents_related ON documents(related_document_id)',
+    );
     await db.execute(
       'CREATE INDEX idx_documents_type_status_date ON documents(type, status, date)',
+    );
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_type_docnum_unique ON documents(type, document_number)',
     );
 
     await db.execute('''
@@ -1356,13 +1363,109 @@ class DatabaseHelper {
 
       if (await tableExists('stock_movements')) {
         if (!await columnExists('stock_movements', 'reason')) {
-          await db.execute('ALTER TABLE stock_movements ADD COLUMN reason TEXT');
+          await db.execute(
+            'ALTER TABLE stock_movements ADD COLUMN reason TEXT',
+          );
         }
         if (!await columnExists('stock_movements', 'target_movement_id')) {
           await db.execute(
             'ALTER TABLE stock_movements ADD COLUMN target_movement_id INTEGER',
           );
         }
+      }
+    }
+
+    if (oldVersion < 26 && newVersion >= 26) {
+      // 1. Products barcode cleanup & unique index
+      if (await tableExists('products')) {
+        await db.execute(
+          "UPDATE products SET barcode = NULL WHERE barcode IS NOT NULL AND TRIM(barcode) = ''",
+        );
+
+        final dupBarcodes = await db.rawQuery('''
+          SELECT barcode, COUNT(*) AS cnt
+          FROM products
+          WHERE barcode IS NOT NULL AND barcode != ''
+          GROUP BY barcode
+          HAVING cnt > 1
+        ''');
+
+        for (final row in dupBarcodes) {
+          final bc = row['barcode'] as String;
+          final prodRows = await db.query(
+            'products',
+            columns: ['id'],
+            where: 'barcode = ?',
+            whereArgs: [bc],
+            orderBy: 'id ASC',
+          );
+          for (int i = 1; i < prodRows.length; i++) {
+            final pId = prodRows[i]['id'] as int;
+            final newBc = '${bc}_dup_$pId';
+            await db.update(
+              'products',
+              {'barcode': newBc},
+              where: 'id = ?',
+              whereArgs: [pId],
+            );
+            await db.insert('audit_log', {
+              'action': 'migration_v26_resolve_duplicate_barcode',
+              'entity_type': 'product',
+              'entity_id': pId,
+              'details': 'Renamed duplicate barcode "$bc" to "$newBc"',
+              'timestamp': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+
+        await db.execute('DROP INDEX IF EXISTS idx_products_barcode');
+        await db.execute(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_products_barcode_unique ON products(barcode) WHERE barcode IS NOT NULL AND barcode != ""',
+        );
+      }
+
+      // 2. Documents (type, document_number) cleanup & unique index
+      if (await tableExists('documents')) {
+        final dupDocNums = await db.rawQuery('''
+          SELECT type, document_number, COUNT(*) AS cnt
+          FROM documents
+          GROUP BY type, document_number
+          HAVING cnt > 1
+        ''');
+
+        for (final row in dupDocNums) {
+          final dType = row['type'] as String;
+          final dNum = row['document_number'] as String;
+          final docRows = await db.query(
+            'documents',
+            columns: ['id'],
+            where: 'type = ? AND document_number = ?',
+            whereArgs: [dType, dNum],
+            orderBy: 'id ASC',
+          );
+          for (int i = 1; i < docRows.length; i++) {
+            final dId = docRows[i]['id'] as int;
+            final newDNum = '${dNum}_dup_$dId';
+            await db.update(
+              'documents',
+              {'document_number': newDNum},
+              where: 'id = ?',
+              whereArgs: [dId],
+            );
+            await db.insert('audit_log', {
+              'action': 'migration_v26_resolve_duplicate_document_number',
+              'entity_type': 'document',
+              'entity_id': dId,
+              'details':
+                  'Renamed duplicate document number "$dNum" to "$newDNum" for type "$dType"',
+              'timestamp': DateTime.now().toIso8601String(),
+            });
+          }
+        }
+
+        await db.execute(
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_type_docnum_unique ON documents(type, document_number)',
+        );
       }
     }
   }
@@ -1377,7 +1480,9 @@ class DatabaseHelper {
     final docRows = await db.rawQuery(
       "SELECT 1 FROM documents WHERE status != '${DocumentStatus.draft}' LIMIT 1",
     );
-    final payRows = await db.rawQuery('SELECT 1 FROM document_payments LIMIT 1');
+    final payRows = await db.rawQuery(
+      'SELECT 1 FROM document_payments LIMIT 1',
+    );
     final smRows = await db.rawQuery(
       'SELECT 1 FROM stock_movements WHERE quantity != 0 LIMIT 1',
     );
@@ -1394,23 +1499,118 @@ class DatabaseHelper {
   /// Seeds standard 13-account chart into accounts table if not already present.
   static Future<void> seedAccounts(DatabaseExecutor db) async {
     const systemAccounts = [
-      {'code': '1110', 'name_ar': 'الصندوق (النقدية)', 'name_en': 'Cash on hand', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
-      {'code': '1120', 'name_ar': 'البنوك والمحافظ الإلكترونية', 'name_en': 'Bank & e-wallets', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
-      {'code': '1130', 'name_ar': 'العملاء (ذمم مدينة)', 'name_en': 'Accounts receivable', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
-      {'code': '1140', 'name_ar': 'المخزون', 'name_en': 'Inventory', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
-      {'code': '1150', 'name_ar': 'ضريبة مستردة (مدخلات)', 'name_en': 'Tax receivable (input)', 'type': 'asset', 'normal_side': 'debit', 'is_system': 1},
-      {'code': '2110', 'name_ar': 'الموردون (ذمم دائنة)', 'name_en': 'Accounts payable', 'type': 'liability', 'normal_side': 'credit', 'is_system': 1},
-      {'code': '2120', 'name_ar': 'ضريبة مستحقة (مخرجات)', 'name_en': 'Tax payable (output)', 'type': 'liability', 'normal_side': 'credit', 'is_system': 1},
-      {'code': '3100', 'name_ar': 'رأس المال / أرصدة افتتاحية', 'name_en': 'Opening balance equity', 'type': 'equity', 'normal_side': 'credit', 'is_system': 1},
-      {'code': '4100', 'name_ar': 'إيرادات المبيعات', 'name_en': 'Sales revenue', 'type': 'revenue', 'normal_side': 'credit', 'is_system': 1},
-      {'code': '4900', 'name_ar': 'إيرادات أخرى', 'name_en': 'Other income', 'type': 'revenue', 'normal_side': 'credit', 'is_system': 1},
-      {'code': '5100', 'name_ar': 'تكلفة البضاعة المباعة', 'name_en': 'Cost of goods sold', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
-      {'code': '5200', 'name_ar': 'عجز وتسويات المخزون', 'name_en': 'Inventory adjustments', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
-      {'code': '6100', 'name_ar': 'المصروفات التشغيلية', 'name_en': 'Operating expenses', 'type': 'expense', 'normal_side': 'debit', 'is_system': 1},
+      {
+        'code': '1110',
+        'name_ar': 'الصندوق (النقدية)',
+        'name_en': 'Cash on hand',
+        'type': 'asset',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
+      {
+        'code': '1120',
+        'name_ar': 'البنوك والمحافظ الإلكترونية',
+        'name_en': 'Bank & e-wallets',
+        'type': 'asset',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
+      {
+        'code': '1130',
+        'name_ar': 'العملاء (ذمم مدينة)',
+        'name_en': 'Accounts receivable',
+        'type': 'asset',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
+      {
+        'code': '1140',
+        'name_ar': 'المخزون',
+        'name_en': 'Inventory',
+        'type': 'asset',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
+      {
+        'code': '1150',
+        'name_ar': 'ضريبة مستردة (مدخلات)',
+        'name_en': 'Tax receivable (input)',
+        'type': 'asset',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
+      {
+        'code': '2110',
+        'name_ar': 'الموردون (ذمم دائنة)',
+        'name_en': 'Accounts payable',
+        'type': 'liability',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      {
+        'code': '2120',
+        'name_ar': 'ضريبة مستحقة (مخرجات)',
+        'name_en': 'Tax payable (output)',
+        'type': 'liability',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      {
+        'code': '3100',
+        'name_ar': 'رأس المال / أرصدة افتتاحية',
+        'name_en': 'Opening balance equity',
+        'type': 'equity',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      {
+        'code': '4100',
+        'name_ar': 'إيرادات المبيعات',
+        'name_en': 'Sales revenue',
+        'type': 'revenue',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      {
+        'code': '4900',
+        'name_ar': 'إيرادات أخرى',
+        'name_en': 'Other income',
+        'type': 'revenue',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      {
+        'code': '5100',
+        'name_ar': 'تكلفة البضاعة المباعة',
+        'name_en': 'Cost of goods sold',
+        'type': 'expense',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
+      {
+        'code': '5200',
+        'name_ar': 'عجز وتسويات المخزون',
+        'name_en': 'Inventory adjustments',
+        'type': 'expense',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
+      {
+        'code': '6100',
+        'name_ar': 'المصروفات التشغيلية',
+        'name_en': 'Operating expenses',
+        'type': 'expense',
+        'normal_side': 'debit',
+        'is_system': 1,
+      },
     ];
 
     for (final acc in systemAccounts) {
-      await db.insert('accounts', acc, conflictAlgorithm: ConflictAlgorithm.ignore);
+      await db.insert(
+        'accounts',
+        acc,
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
     }
   }
 
@@ -1421,11 +1621,10 @@ class DatabaseHelper {
       'journal_reports_enabled': 'false',
     };
     for (final entry in defaults.entries) {
-      await db.insert(
-        'app_settings',
-        {'key': entry.key, 'value': entry.value},
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
+      await db.insert('app_settings', {
+        'key': entry.key,
+        'value': entry.value,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
 
@@ -1444,13 +1643,16 @@ class DatabaseHelper {
   }
 
   /// Inserts or updates a value in app_settings.
-  Future<void> setSetting(String key, String? value, {DatabaseExecutor? txn}) async {
+  Future<void> setSetting(
+    String key,
+    String? value, {
+    DatabaseExecutor? txn,
+  }) async {
     final exec = txn ?? (await database);
-    await exec.insert(
-      'app_settings',
-      {'key': key, 'value': value},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await exec.insert('app_settings', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   /// Flag indicating whether shadow posting to the journal is active (default true).
@@ -1473,7 +1675,10 @@ class DatabaseHelper {
   }
 
   /// Sets or clears the period lock cutoff date.
-  Future<void> setBooksClosedThrough(DateTime? date, {DatabaseExecutor? txn}) async {
+  Future<void> setBooksClosedThrough(
+    DateTime? date, {
+    DatabaseExecutor? txn,
+  }) async {
     await setSetting(
       'books_closed_through',
       date?.toIso8601String().substring(0, 10),
@@ -1565,14 +1770,17 @@ class DatabaseHelper {
 
       // Query earliest finalized inventory-affecting document (invoice or purchase).
       // Drafts, quotations, vouchers, and cancelled documents never affect stock.
-      final productDocRows = await db.rawQuery('''
+      final productDocRows = await db.rawQuery(
+        '''
         SELECT MIN(d.date) AS min_date
         FROM document_items di
         JOIN documents d ON d.id = di.document_id
         WHERE di.product_id = ?
           AND d.type IN ('invoice', 'purchase')
           AND d.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
-      ''', [pid]);
+      ''',
+        [pid],
+      );
       final productEarliestDocStr = productDocRows.isNotEmpty
           ? productDocRows.first['min_date'] as String?
           : null;
@@ -1583,11 +1791,13 @@ class DatabaseHelper {
         final docDatePart = productEarliestDocStr.length >= 10
             ? productEarliestDocStr.substring(0, 10)
             : productEarliestDocStr;
-        final createdDatePart = (createdAtStr != null && createdAtStr.length >= 10)
+        final createdDatePart =
+            (createdAtStr != null && createdAtStr.length >= 10)
             ? createdAtStr.substring(0, 10)
             : null;
 
-        if (createdDatePart != null && createdDatePart.compareTo(docDatePart) < 0) {
+        if (createdDatePart != null &&
+            createdDatePart.compareTo(docDatePart) < 0) {
           // Authentic catalog creation date occurred on a calendar day before first transaction.
           movementDate = createdAtStr!;
         } else {
@@ -1724,8 +1934,11 @@ class DatabaseHelper {
       final stock = (p['stock_quantity'] as num?)?.toDouble() ?? 0.0;
       if (stock <= 0) continue;
 
-      final reconstructedAvg =
-          await _reconstructProductCostBasis(db, pid, stock);
+      final reconstructedAvg = await _reconstructProductCostBasis(
+        db,
+        pid,
+        stock,
+      );
       if (reconstructedAvg != null) {
         await db.update(
           'products',
@@ -1739,10 +1952,7 @@ class DatabaseHelper {
       } else {
         await db.update(
           'products',
-          {
-            'average_cost': null,
-            'cost_status': Product.costStatusUnknown,
-          },
+          {'average_cost': null, 'cost_status': Product.costStatusUnknown},
           where: 'id = ?',
           whereArgs: [pid],
         );
@@ -1861,8 +2071,9 @@ class DatabaseHelper {
         } else if (mQty < 0) {
           // Purchase cancellation / reversal
           final removedQty = -mQty;
-          final removedCost =
-              tCost != null ? tCost.abs() : (removedQty * (mCost ?? 0.0));
+          final removedCost = tCost != null
+              ? tCost.abs()
+              : (removedQty * (mCost ?? 0.0));
           final newStock = runningStock - removedQty;
           if (newStock < -0.0001) {
             return null;
@@ -1876,8 +2087,10 @@ class DatabaseHelper {
               // Insolvent valuation: subsequent transactions consumed the purchase value
               return null;
             }
-            final remainVal =
-                (prevVal - removedCost).clamp(0.0, double.infinity);
+            final remainVal = (prevVal - removedCost).clamp(
+              0.0,
+              double.infinity,
+            );
             runningAvg = remainVal / newStock;
             runningStock = newStock;
           }
@@ -1986,10 +2199,7 @@ class DatabaseHelper {
         if (currentAvg != null || currentStatus != Product.costStatusUnknown) {
           await db.update(
             'products',
-            {
-              'average_cost': null,
-              'cost_status': Product.costStatusUnknown,
-            },
+            {'average_cost': null, 'cost_status': Product.costStatusUnknown},
             where: 'id = ?',
             whereArgs: [pid],
           );
@@ -2445,13 +2655,16 @@ class DatabaseHelper {
     String docType,
   ) async {
     final db = await database;
-    final rows = await db.rawQuery('''
+    final rows = await db.rawQuery(
+      '''
       SELECT currency_code, COALESCE(SUM(remaining), 0) AS outstanding
       FROM documents
       WHERE contact_id = ? AND type = ? AND status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
       GROUP BY currency_code
       HAVING outstanding > 0
-    ''', [contactId, docType]);
+    ''',
+      [contactId, docType],
+    );
     final map = <String, double>{};
     for (final r in rows) {
       final code = (r['currency_code'] as String?) ?? 'SDG';
@@ -2758,17 +2971,10 @@ class DatabaseHelper {
 
   Future<int> deleteProductUnit(int id) async {
     final db = await database;
-    return await db.delete(
-      'product_units',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return await db.delete('product_units', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<void> syncProductUnits(
-    int productId,
-    List<ProductUnit> units,
-  ) async {
+  Future<void> syncProductUnits(int productId, List<ProductUnit> units) async {
     final db = await database;
     await db.transaction((txn) async {
       await txn.delete(
@@ -2815,8 +3021,10 @@ class DatabaseHelper {
       } else if (raw is Map<String, dynamic>) {
         productId = raw['product_id'] as int?;
         qty = (raw['quantity'] as num?)?.toDouble() ?? 0.0;
-        effectiveBaseQty = (raw['base_quantity'] as num?)?.toDouble() ??
-            (qty * ((raw['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0));
+        effectiveBaseQty =
+            (raw['base_quantity'] as num?)?.toDouble() ??
+            (qty *
+                ((raw['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0));
       } else {
         continue;
       }
@@ -2993,13 +3201,15 @@ class DatabaseHelper {
         reason: reason,
         date: adjDate,
       );
+      await logAuditEvent(
+        'stock_adjusted',
+        entityType: 'product',
+        entityId: productId,
+        details:
+            'delta=$delta${reason != null ? " reason=$reason" : ""}${notes != null ? " notes=$notes" : ""}',
+        txn: txn,
+      );
     });
-    await logAuditEvent(
-      'stock_adjusted',
-      entityType: 'product',
-      entityId: productId,
-      details: 'delta=$delta${reason != null ? " reason=$reason" : ""}${notes != null ? " notes=$notes" : ""}',
-    );
   }
 
   Future<void> reconcileProductCost({
@@ -3051,7 +3261,7 @@ class DatabaseHelper {
       }
 
       final docNumber = await getNextDocumentNumber(txn, doc.type);
-      final newDoc = Document(
+      var newDoc = Document(
         type: doc.type,
         documentNumber: docNumber,
         date: doc.date,
@@ -3073,7 +3283,19 @@ class DatabaseHelper {
         currencyCode: doc.currencyCode,
       );
 
-      final docId = await txn.insert('documents', newDoc.toMap());
+      int docId;
+      try {
+        docId = await txn.insert('documents', newDoc.toMap());
+      } on DatabaseException catch (e) {
+        if (e.isUniqueConstraintError() ||
+            e.toString().toLowerCase().contains('unique')) {
+          final retryNumber = await getNextDocumentNumber(txn, doc.type);
+          newDoc = newDoc.copyWith(documentNumber: retryNumber);
+          docId = await txn.insert('documents', newDoc.toMap());
+        } else {
+          rethrow;
+        }
+      }
       final isDraft = doc.status == DocumentStatus.draft;
       if (!isDraft || doc.paid > 0) {
         await _lockCurrencyTxn(txn);
@@ -3305,16 +3527,13 @@ class DatabaseHelper {
       final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
 
       final insertedDoc = newDoc.copyWith(id: docId);
-      if (newDoc.type == 'payment_receipt' || newDoc.type == 'expense_voucher') {
+      if (newDoc.type == 'payment_receipt' ||
+          newDoc.type == 'expense_voucher') {
         if (contactId != null) {
           await _allocateVoucherFifoTxn(txn, insertedDoc);
         }
       }
-      await JournalWriter.postDocumentIssued(
-        txn,
-        insertedDoc,
-        persistedItems,
-      );
+      await JournalWriter.postDocumentIssued(txn, insertedDoc, persistedItems);
 
       return docId;
     });
@@ -3338,7 +3557,8 @@ class DatabaseHelper {
       if (pid == null) continue;
       final qty = (old['quantity'] as num?)?.toDouble() ?? 0.0;
       final factor = (old['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
-      final baseQty = (old['base_quantity'] as num?)?.toDouble() ?? (qty * factor);
+      final baseQty =
+          (old['base_quantity'] as num?)?.toDouble() ?? (qty * factor);
       final price = (old['price'] as num?)?.toDouble() ?? 0.0;
       if (baseQty > 0) {
         oldQtyByProduct[pid] = (oldQtyByProduct[pid] ?? 0.0) + baseQty;
@@ -3403,8 +3623,9 @@ class DatabaseHelper {
         if (deltaQty > 0.0001) {
           final incomingQty = deltaQty;
           final incomingCost = deltaCost;
-          final incomingUnitCost =
-              incomingQty > 0 ? (incomingCost / incomingQty) : 0.0;
+          final incomingUnitCost = incomingQty > 0
+              ? (incomingCost / incomingQty)
+              : 0.0;
 
           final double newAvgCost;
           final String newCostStatus;
@@ -3474,8 +3695,10 @@ class DatabaseHelper {
                 'Cannot edit purchase for "$name" because subsequent sales or movements consumed this stock value',
               );
             }
-            final remainVal =
-                (prevVal - removedCost).clamp(0.0, double.infinity);
+            final remainVal = (prevVal - removedCost).clamp(
+              0.0,
+              double.infinity,
+            );
             newAvgCost = remainVal / newStock;
             newCostStatus = (newAvgCost > 0)
                 ? Product.costStatusKnown
@@ -3493,8 +3716,9 @@ class DatabaseHelper {
             whereArgs: [pid],
           );
 
-          final avgUnitCost =
-              removedQty > 0 ? (removedCost / removedQty) : null;
+          final avgUnitCost = removedQty > 0
+              ? (removedCost / removedQty)
+              : null;
           await _insertStockMovement(
             txn,
             productId: pid,
@@ -3519,13 +3743,13 @@ class DatabaseHelper {
                 'Cannot edit purchase for "$name" because subsequent sales or movements consumed this stock value',
               );
             }
-            final newAvgCost =
-                (newVal / currentStock).clamp(0.0, double.infinity);
+            final newAvgCost = (newVal / currentStock).clamp(
+              0.0,
+              double.infinity,
+            );
             await txn.update(
               'products',
-              {
-                'average_cost': newAvgCost,
-              },
+              {'average_cost': newAvgCost},
               where: 'id = ?',
               whereArgs: [pid],
             );
@@ -3664,17 +3888,21 @@ class DatabaseHelper {
       if (oldType == 'payment_receipt' || oldType == 'expense_voucher') {
         final hasAlloc = await hasActiveAllocations(oldDoc.id!, txn: txn);
         if (hasAlloc) {
-          throw StateError('Allocated vouchers cannot be edited. Cancel and re-issue.');
+          throw StateError(
+            'Allocated vouchers cannot be edited. Cancel and re-issue.',
+          );
         }
       }
 
       if (oldStatus == DocumentStatus.cancelled) {
         throw StateError('Cannot edit a cancelled document');
       }
-      if (oldStatus != DocumentStatus.draft && doc.status == DocumentStatus.draft) {
+      if (oldStatus != DocumentStatus.draft &&
+          doc.status == DocumentStatus.draft) {
         throw StateError('Cannot convert an issued document to draft');
       }
-      if (oldStatus != DocumentStatus.draft && doc.currencyCode != oldDoc.currencyCode) {
+      if (oldStatus != DocumentStatus.draft &&
+          doc.currencyCode != oldDoc.currencyCode) {
         throw ArgumentError(
           'Cannot change currency of an issued document (${oldDoc.currencyCode} to ${doc.currencyCode}).',
         );
@@ -3708,10 +3936,12 @@ class DatabaseHelper {
         await _assertSaleStockAvailable(txn, newItems, documentId: doc.id);
       }
 
-      final oldWasIssued = (oldType == 'invoice' || oldType == 'purchase') &&
+      final oldWasIssued =
+          (oldType == 'invoice' || oldType == 'purchase') &&
           oldStatus != DocumentStatus.draft &&
           oldStatus != DocumentStatus.cancelled;
-      final newIsIssued = (doc.type == 'invoice' || doc.type == 'purchase') &&
+      final newIsIssued =
+          (doc.type == 'invoice' || doc.type == 'purchase') &&
           !newIsDraft &&
           doc.status != DocumentStatus.cancelled;
 
@@ -3763,8 +3993,9 @@ class DatabaseHelper {
                   'Cannot modify payment for a cancelled parent document',
                 );
               }
-              final parentDecimalDigits =
-                  Currency.decimalDigitsForCode(parent.currencyCode);
+              final parentDecimalDigits = Currency.decimalDigitsForCode(
+                parent.currencyCode,
+              );
               final newParentPaid = MoneyUtils.round(
                 parent.paid + amountDiff,
                 parentDecimalDigits,
@@ -3830,7 +4061,10 @@ class DatabaseHelper {
         final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
         final canonicalIncomingPaid = MoneyUtils.round(doc.paid, decimalDigits);
         final canonicalOldPaid = MoneyUtils.round(oldDoc.paid, decimalDigits);
-        final canonicalIncomingTotal = MoneyUtils.round(doc.total, decimalDigits);
+        final canonicalIncomingTotal = MoneyUtils.round(
+          doc.total,
+          decimalDigits,
+        );
         final canonicalOldTotal = MoneyUtils.round(oldDoc.total, decimalDigits);
         final epsilon = 1.0 / math.pow(10, decimalDigits + 1);
 
@@ -3879,24 +4113,30 @@ class DatabaseHelper {
 
           // 1. Genuine upfront rows: explicitly recorded upfront down-payments (must have no linked receipt)
           final upfrontRows = paymentRows
-              .where((r) =>
-                  r['payment_origin'] == PaymentOrigin.upfront &&
-                  r['receipt_document_id'] == null)
+              .where(
+                (r) =>
+                    r['payment_origin'] == PaymentOrigin.upfront &&
+                    r['receipt_document_id'] == null,
+              )
               .toList();
 
           // 2. Receipt and reversal rows: associated with payment receipts or expense vouchers
           final linkedReceiptRows = paymentRows
-              .where((r) =>
-                  r['receipt_document_id'] != null ||
-                  r['payment_origin'] == PaymentOrigin.receipt ||
-                  r['payment_origin'] == PaymentOrigin.reversal)
+              .where(
+                (r) =>
+                    r['receipt_document_id'] != null ||
+                    r['payment_origin'] == PaymentOrigin.receipt ||
+                    r['payment_origin'] == PaymentOrigin.reversal,
+              )
               .toList();
 
           // 3. Unclassified legacy rows: rows from older versions where payment_origin is NULL and receipt_document_id is NULL
           final unclassifiedLegacyRows = paymentRows
-              .where((r) =>
-                  r['receipt_document_id'] == null &&
-                  r['payment_origin'] == null)
+              .where(
+                (r) =>
+                    r['receipt_document_id'] == null &&
+                    r['payment_origin'] == null,
+              )
               .toList();
 
           final netLinkedReceiptPaid = MoneyUtils.round(
@@ -4085,7 +4325,8 @@ class DatabaseHelper {
               if (pRows.isNotEmpty && pRows.first['type'] == 'product') {
                 final currentStock =
                     (pRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-                final avgCost = (pRows.first['average_cost'] as num?)?.toDouble();
+                final avgCost = (pRows.first['average_cost'] as num?)
+                    ?.toDouble();
                 final costStatus =
                     pRows.first['cost_status'] as String? ??
                     Product.costStatusUnknown;
@@ -4107,7 +4348,9 @@ class DatabaseHelper {
                 if (deductQty > 0) {
                   // If stock was partially oversold, cost for the whole line is incomplete
                   // and must NOT be marked as fully trusted on document_items.
-                  itemUnitCost = (isCostKnown && isFullyBacked) ? avgCost : null;
+                  itemUnitCost = (isCostKnown && isFullyBacked)
+                      ? avgCost
+                      : null;
                   itemTotalCost = (isCostKnown && isFullyBacked)
                       ? effectiveBaseQty * avgCost
                       : null;
@@ -4237,8 +4480,8 @@ class DatabaseHelper {
                 whereArgs: [item.productId],
               );
               if (pRows.isNotEmpty) {
-                final avgCost =
-                    (pRows.first['average_cost'] as num?)?.toDouble();
+                final avgCost = (pRows.first['average_cost'] as num?)
+                    ?.toDouble();
                 final costStatus =
                     pRows.first['cost_status'] as String? ??
                     Product.costStatusUnknown;
@@ -4274,10 +4517,12 @@ class DatabaseHelper {
 
       final shadowEnabled = await isJournalShadowWriteEnabled(txn: txn);
       if (shadowEnabled) {
-        final wasIssued = oldDoc.status != DocumentStatus.draft &&
+        final wasIssued =
+            oldDoc.status != DocumentStatus.draft &&
             oldDoc.status != DocumentStatus.cancelled &&
             oldDoc.type != 'quotation';
-        final isIssued = effectiveStatus != DocumentStatus.draft &&
+        final isIssued =
+            effectiveStatus != DocumentStatus.draft &&
             effectiveStatus != DocumentStatus.cancelled &&
             doc.type != 'quotation';
 
@@ -4322,7 +4567,11 @@ class DatabaseHelper {
               subtotal: effectiveSubtotal,
               total: effectiveTotal,
             );
-            await JournalWriter.postDocumentIssued(txn, finalDoc, persistedItems);
+            await JournalWriter.postDocumentIssued(
+              txn,
+              finalDoc,
+              persistedItems,
+            );
           }
         }
       }
@@ -4399,7 +4648,8 @@ class DatabaseHelper {
 
       // Guard against deleting an invoice or purchase with active payment receipts/vouchers or payment history
       if (doc.type == 'invoice' || doc.type == 'purchase') {
-        final activeReceipts = await txn.rawQuery('''
+        final activeReceipts = await txn.rawQuery(
+          '''
           SELECT DISTINCT d.document_number
           FROM document_payments dp
           JOIN documents d ON dp.receipt_document_id = d.id
@@ -4413,13 +4663,15 @@ class DatabaseHelper {
           WHERE related_document_id = ?
             AND type IN ('payment_receipt', 'expense_voucher')
             AND status != ?
-        ''', [
-          id,
-          PaymentOrigin.reversal,
-          DocumentStatus.cancelled,
-          id,
-          DocumentStatus.cancelled,
-        ]);
+        ''',
+          [
+            id,
+            PaymentOrigin.reversal,
+            DocumentStatus.cancelled,
+            id,
+            DocumentStatus.cancelled,
+          ],
+        );
         if (activeReceipts.isNotEmpty) {
           final receiptNums = activeReceipts
               .map((r) => r['document_number'] as String)
@@ -4463,7 +4715,8 @@ class DatabaseHelper {
               final mType = m['type'] as String;
               final mQty = (m['quantity'] as num).toDouble();
               final uCost = (m['unit_cost'] as num?)?.toDouble();
-              final tCost = (m['total_cost'] as num?)?.toDouble() ??
+              final tCost =
+                  (m['total_cost'] as num?)?.toDouble() ??
                   (uCost != null ? mQty * uCost : null);
               if (mType == StockMovement.typePurchase) {
                 netPurchaseQtyByProduct[productId] =
@@ -4529,8 +4782,8 @@ class DatabaseHelper {
                 );
               }
 
-              final currentAvg =
-                  (pRows.first['average_cost'] as num?)?.toDouble();
+              final currentAvg = (pRows.first['average_cost'] as num?)
+                  ?.toDouble();
               final currentStatus =
                   pRows.first['cost_status'] as String? ??
                   Product.costStatusUnknown;
@@ -4550,8 +4803,10 @@ class DatabaseHelper {
                     'Cannot delete purchase for "$name" because subsequent sales or movements consumed this stock',
                   );
                 }
-                final remainVal =
-                    (prevVal - removedCost).clamp(0.0, double.infinity);
+                final remainVal = (prevVal - removedCost).clamp(
+                  0.0,
+                  double.infinity,
+                );
                 newAvgCost = remainVal / newStock;
                 newCostStatus = (newAvgCost > 0)
                     ? Product.costStatusKnown
@@ -4605,8 +4860,8 @@ class DatabaseHelper {
               final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
               final factor =
                   (item['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
-              final baseQty = (item['base_quantity'] as num?)?.toDouble() ??
-                  (qty * factor);
+              final baseQty =
+                  (item['base_quantity'] as num?)?.toDouble() ?? (qty * factor);
               if (productId != null && baseQty > 0) {
                 await txn.rawUpdate(
                   'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
@@ -4691,7 +4946,8 @@ class DatabaseHelper {
 
       // Guard against cancelling an invoice or purchase with active payment receipts/vouchers
       if (doc.type == 'invoice' || doc.type == 'purchase') {
-        final activeReceipts = await txn.rawQuery('''
+        final activeReceipts = await txn.rawQuery(
+          '''
           SELECT DISTINCT d.document_number
           FROM document_payments dp
           JOIN documents d ON dp.receipt_document_id = d.id
@@ -4705,13 +4961,15 @@ class DatabaseHelper {
           WHERE related_document_id = ?
             AND type IN ('payment_receipt', 'expense_voucher')
             AND status != ?
-        ''', [
-          id,
-          PaymentOrigin.reversal,
-          DocumentStatus.cancelled,
-          id,
-          DocumentStatus.cancelled,
-        ]);
+        ''',
+          [
+            id,
+            PaymentOrigin.reversal,
+            DocumentStatus.cancelled,
+            id,
+            DocumentStatus.cancelled,
+          ],
+        );
         if (activeReceipts.isNotEmpty) {
           final receiptNums = activeReceipts
               .map((r) => r['document_number'] as String)
@@ -4746,7 +5004,8 @@ class DatabaseHelper {
               final mType = m['type'] as String;
               final mQty = (m['quantity'] as num).toDouble();
               final uCost = (m['unit_cost'] as num?)?.toDouble();
-              final tCost = (m['total_cost'] as num?)?.toDouble() ??
+              final tCost =
+                  (m['total_cost'] as num?)?.toDouble() ??
                   (uCost != null ? mQty * uCost : null);
               if (mType == StockMovement.typePurchase) {
                 netPurchaseQtyByProduct[productId] =
@@ -4807,8 +5066,8 @@ class DatabaseHelper {
                 );
               }
 
-              final currentAvg =
-                  (pRows.first['average_cost'] as num?)?.toDouble();
+              final currentAvg = (pRows.first['average_cost'] as num?)
+                  ?.toDouble();
               final currentStatus =
                   pRows.first['cost_status'] as String? ??
                   Product.costStatusUnknown;
@@ -4828,8 +5087,10 @@ class DatabaseHelper {
                     'Cannot cancel purchase for "$name" because subsequent sales or movements consumed this stock',
                   );
                 }
-                final remainVal =
-                    (prevVal - removedCost).clamp(0.0, double.infinity);
+                final remainVal = (prevVal - removedCost).clamp(
+                  0.0,
+                  double.infinity,
+                );
                 newAvgCost = remainVal / newStock;
                 newCostStatus = (newAvgCost > 0)
                     ? Product.costStatusKnown
@@ -4867,8 +5128,7 @@ class DatabaseHelper {
         } else if (doc.type == 'invoice') {
           final movements = await txn.query(
             'stock_movements',
-            where:
-                'reference_document_id = ? AND type IN (?, ?)',
+            where: 'reference_document_id = ? AND type IN (?, ?)',
             whereArgs: [
               id,
               StockMovement.typeSale,
@@ -4886,12 +5146,11 @@ class DatabaseHelper {
               netSalesQtyByProduct[productId] =
                   (netSalesQtyByProduct[productId] ?? 0.0) + mQty;
               if (m['unit_cost'] != null) {
-                lastCostByProduct[productId] =
-                    (m['unit_cost'] as num).toDouble();
+                lastCostByProduct[productId] = (m['unit_cost'] as num)
+                    .toDouble();
               }
               if (m['cost_status'] != null) {
-                lastStatusByProduct[productId] =
-                    m['cost_status'] as String;
+                lastStatusByProduct[productId] = m['cost_status'] as String;
               }
             }
 
@@ -4901,9 +5160,11 @@ class DatabaseHelper {
               final revertQty = -netQty;
               if (revertQty > 0) {
                 final unitCost = lastCostByProduct[productId];
-                final totalCost =
-                    unitCost != null ? revertQty * unitCost : null;
-                final costStatus = lastStatusByProduct[productId] ??
+                final totalCost = unitCost != null
+                    ? revertQty * unitCost
+                    : null;
+                final costStatus =
+                    lastStatusByProduct[productId] ??
                     StockMovement.costStatusUnknown;
 
                 await txn.rawUpdate(
@@ -4930,8 +5191,8 @@ class DatabaseHelper {
               final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
               final factor =
                   (item['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0;
-              final baseQty = (item['base_quantity'] as num?)?.toDouble() ??
-                  (qty * factor);
+              final baseQty =
+                  (item['base_quantity'] as num?)?.toDouble() ?? (qty * factor);
               if (productId != null && baseQty > 0) {
                 await txn.rawUpdate(
                   'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
@@ -4974,7 +5235,8 @@ class DatabaseHelper {
             'amount': doc.paid,
             'currency': doc.currencyCode,
             'doc_type': doc.type,
-            if (refundNotes != null && refundNotes.isNotEmpty) 'notes': refundNotes,
+            if (refundNotes != null && refundNotes.isNotEmpty)
+              'notes': refundNotes,
           }),
           'timestamp': DateTime.now().toIso8601String(),
         });
@@ -5013,11 +5275,14 @@ class DatabaseHelper {
   }
 
   /// Queries the latest refund status recorded for a document in audit_log.
-  Future<Map<String, dynamic>?> getLatestDocumentRefundStatus(int documentId) async {
+  Future<Map<String, dynamic>?> getLatestDocumentRefundStatus(
+    int documentId,
+  ) async {
     final db = await database;
     final rows = await db.query(
       'audit_log',
-      where: "entity_type = 'document' AND entity_id = ? AND action = 'document_refund_status'",
+      where:
+          "entity_type = 'document' AND entity_id = ? AND action = 'document_refund_status'",
       whereArgs: [documentId],
       orderBy: 'id DESC',
       limit: 1,
@@ -5050,13 +5315,16 @@ class DatabaseHelper {
     DatabaseExecutor? txn,
   }) async {
     final exec = txn ?? await database;
-    final rows = await exec.rawQuery('''
+    final rows = await exec.rawQuery(
+      '''
       SELECT 1 FROM document_payments
       WHERE receipt_document_id = ?
         AND (payment_origin IS NULL OR payment_origin != ?)
         AND amount > 0
       LIMIT 1
-    ''', [voucherId, PaymentOrigin.reversal]);
+    ''',
+      [voucherId, PaymentOrigin.reversal],
+    );
     return rows.isNotEmpty;
   }
 
@@ -5091,10 +5359,14 @@ class DatabaseHelper {
     }
     final contactType = contactRows.first['type'] as String? ?? 'customer';
     if (voucher.type == 'payment_receipt' && contactType != 'customer') {
-      throw ArgumentError('Payment receipts can only be allocated to customer contacts.');
+      throw ArgumentError(
+        'Payment receipts can only be allocated to customer contacts.',
+      );
     }
     if (voucher.type == 'expense_voucher' && contactType != 'supplier') {
-      throw ArgumentError('Expense vouchers can only be allocated to supplier contacts.');
+      throw ArgumentError(
+        'Expense vouchers can only be allocated to supplier contacts.',
+      );
     }
 
     final decimalDigits = Currency.decimalDigitsForCode(voucher.currencyCode);
@@ -5119,19 +5391,28 @@ class DatabaseHelper {
     }
 
     // 2. Currency segregation check
-    final foreignCurrencyRows = allOpenRows.where(
-      (r) => (r['currency_code'] as String? ?? 'SDG') != voucher.currencyCode,
-    ).toList();
+    final foreignCurrencyRows = allOpenRows
+        .where(
+          (r) =>
+              (r['currency_code'] as String? ?? 'SDG') != voucher.currencyCode,
+        )
+        .toList();
     if (foreignCurrencyRows.isNotEmpty &&
-        !allOpenRows.any((r) => (r['currency_code'] as String? ?? 'SDG') == voucher.currencyCode)) {
+        !allOpenRows.any(
+          (r) =>
+              (r['currency_code'] as String? ?? 'SDG') == voucher.currencyCode,
+        )) {
       throw ArgumentError(
         'Voucher currency (${voucher.currencyCode}) does not match outstanding currency.',
       );
     }
 
-    final eligibleRows = allOpenRows.where(
-      (r) => (r['currency_code'] as String? ?? 'SDG') == voucher.currencyCode,
-    ).toList();
+    final eligibleRows = allOpenRows
+        .where(
+          (r) =>
+              (r['currency_code'] as String? ?? 'SDG') == voucher.currencyCode,
+        )
+        .toList();
     if (eligibleRows.isEmpty) {
       throw StateError(
         'No eligible outstanding $targetType documents found in currency ${voucher.currencyCode}.',
@@ -5145,7 +5426,11 @@ class DatabaseHelper {
     }
     totalOutstanding = MoneyUtils.round(totalOutstanding, decimalDigits);
 
-    if (MoneyUtils.isOverpayment(voucherTotal, totalOutstanding, decimalDigits)) {
+    if (MoneyUtils.isOverpayment(
+      voucherTotal,
+      totalOutstanding,
+      decimalDigits,
+    )) {
       throw ArgumentError(
         'Voucher amount ($voucherTotal) exceeds total outstanding balance ($totalOutstanding). Overpayment is not allowed.',
       );
@@ -5192,11 +5477,7 @@ class DatabaseHelper {
 
       await txn.update(
         'documents',
-        {
-          'paid': newPaid,
-          'remaining': newRemaining,
-          'status': newStatus,
-        },
+        {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
         where: 'id = ?',
         whereArgs: [targetId],
       );
@@ -5251,7 +5532,9 @@ class DatabaseHelper {
     }
 
     final now = DateTime.now();
-    final docNum = receipt.documentNumber.isNotEmpty ? receipt.documentNumber : receiptId.toString();
+    final docNum = receipt.documentNumber.isNotEmpty
+        ? receipt.documentNumber
+        : receiptId.toString();
     final docType = receipt.type;
 
     for (final entry in allocationsByDocId.entries) {
@@ -5366,8 +5649,10 @@ class DatabaseHelper {
         'payment_origin': PaymentOrigin.receipt,
       });
 
-      final newPaid =
-          MoneyUtils.round(doc.paid + canonicalAmount, decimalDigits);
+      final newPaid = MoneyUtils.round(
+        doc.paid + canonicalAmount,
+        decimalDigits,
+      );
       final newRemaining = MoneyUtils.calculateRemaining(
         doc.total,
         newPaid,
@@ -5411,7 +5696,7 @@ class DatabaseHelper {
     String? notes,
   }) async {
     final db = await database;
-    final receiptId = await db.transaction(
+    return await db.transaction(
       (txn) => _recordPaymentTxn(
         txn,
         documentId: documentId,
@@ -5420,13 +5705,6 @@ class DatabaseHelper {
         notes: notes,
       ),
     );
-    await logAuditEvent(
-      'payment_recorded',
-      entityType: 'document',
-      entityId: documentId,
-      details: 'amount=$amount method=$paymentMethod',
-    );
-    return receiptId;
   }
 
   /// Records a payment against an invoice/purchase inside [txn]: creates the
@@ -5467,7 +5745,11 @@ class DatabaseHelper {
     if (canonicalAmount <= 0) {
       throw ArgumentError('Payment amount must be greater than zero');
     }
-    if (MoneyUtils.isOverpayment(canonicalAmount, doc.remaining, decimalDigits)) {
+    if (MoneyUtils.isOverpayment(
+      canonicalAmount,
+      doc.remaining,
+      decimalDigits,
+    )) {
       throw ArgumentError('Payment cannot exceed remaining amount');
     }
 
@@ -5477,27 +5759,60 @@ class DatabaseHelper {
         : 'payment_receipt';
     final linkedNumber = await getNextDocumentNumber(txn, linkedType);
     final now = DateTime.now();
-    final receiptId = await txn.insert('documents', {
-      'type': linkedType,
-      'document_number': linkedNumber,
-      'date': now.toIso8601String(),
-      'contact_id': doc.contactId,
-      'recipient_name': doc.recipientName,
-      'recipient_phone': doc.recipientPhone,
-      'subtotal': canonicalAmount,
-      'discount': 0.0,
-      'tax_rate': 0.0,
-      'tax_amount': 0.0,
-      'total': canonicalAmount,
-      'paid': canonicalAmount,
-      'remaining': 0.0,
-      'payment_method': paymentMethod,
-      'valid_until': null,
-      'notes': doc.documentNumber,
-      'related_document_id': documentId,
-      'status': DocumentStatus.issued,
-      'currency_code': doc.currencyCode,
-    });
+    int receiptId;
+    String finalLinkedNumber = linkedNumber;
+    try {
+      receiptId = await txn.insert('documents', {
+        'type': linkedType,
+        'document_number': linkedNumber,
+        'date': now.toIso8601String(),
+        'contact_id': doc.contactId,
+        'recipient_name': doc.recipientName,
+        'recipient_phone': doc.recipientPhone,
+        'subtotal': canonicalAmount,
+        'discount': 0.0,
+        'tax_rate': 0.0,
+        'tax_amount': 0.0,
+        'total': canonicalAmount,
+        'paid': canonicalAmount,
+        'remaining': 0.0,
+        'payment_method': paymentMethod,
+        'valid_until': null,
+        'notes': doc.documentNumber,
+        'related_document_id': documentId,
+        'status': DocumentStatus.issued,
+        'currency_code': doc.currencyCode,
+      });
+    } on DatabaseException catch (e) {
+      if (e.isUniqueConstraintError() ||
+          e.toString().toLowerCase().contains('unique')) {
+        final retryNumber = await getNextDocumentNumber(txn, linkedType);
+        finalLinkedNumber = retryNumber;
+        receiptId = await txn.insert('documents', {
+          'type': linkedType,
+          'document_number': retryNumber,
+          'date': now.toIso8601String(),
+          'contact_id': doc.contactId,
+          'recipient_name': doc.recipientName,
+          'recipient_phone': doc.recipientPhone,
+          'subtotal': canonicalAmount,
+          'discount': 0.0,
+          'tax_rate': 0.0,
+          'tax_amount': 0.0,
+          'total': canonicalAmount,
+          'paid': canonicalAmount,
+          'remaining': 0.0,
+          'payment_method': paymentMethod,
+          'valid_until': null,
+          'notes': doc.documentNumber,
+          'related_document_id': documentId,
+          'status': DocumentStatus.issued,
+          'currency_code': doc.currencyCode,
+        });
+      } else {
+        rethrow;
+      }
+    }
 
     // Record the payment row linked to the receipt
     await _insertDocumentPaymentTxn(txn, {
@@ -5512,8 +5827,16 @@ class DatabaseHelper {
 
     // Update invoice totals
     final newPaid = MoneyUtils.round(doc.paid + canonicalAmount, decimalDigits);
-    final newRemaining = MoneyUtils.calculateRemaining(doc.total, newPaid, decimalDigits);
-    final newStatus = DocumentStatus.fromPayment(newPaid, doc.total, decimalDigits: decimalDigits);
+    final newRemaining = MoneyUtils.calculateRemaining(
+      doc.total,
+      newPaid,
+      decimalDigits,
+    );
+    final newStatus = DocumentStatus.fromPayment(
+      newPaid,
+      doc.total,
+      decimalDigits: decimalDigits,
+    );
 
     await txn.update(
       'documents',
@@ -5525,7 +5848,7 @@ class DatabaseHelper {
     final receiptDoc = Document(
       id: receiptId,
       type: linkedType,
-      documentNumber: linkedNumber,
+      documentNumber: finalLinkedNumber,
       date: now,
       contactId: doc.contactId,
       recipientName: doc.recipientName,
@@ -5550,6 +5873,14 @@ class DatabaseHelper {
       receiptDoc,
       const [],
       parentDoc: doc,
+    );
+
+    await logAuditEvent(
+      'payment_recorded',
+      entityType: 'document',
+      entityId: documentId,
+      details: 'amount=$canonicalAmount method=$paymentMethod',
+      txn: txn,
     );
 
     return receiptId;
@@ -5680,27 +6011,58 @@ class DatabaseHelper {
       final invoiceNumber = await getNextDocumentNumber(txn, 'invoice');
       final now = DateTime.now();
 
-      final invoiceId = await txn.insert('documents', {
-        'type': 'invoice',
-        'document_number': invoiceNumber,
-        'date': now.toIso8601String(),
-        'contact_id': quotation.contactId,
-        'recipient_name': quotation.recipientName,
-        'recipient_phone': quotation.recipientPhone,
-        'subtotal': quotation.subtotal,
-        'discount': quotation.discount,
-        'tax_rate': quotation.taxRate,
-        'tax_amount': quotation.taxAmount,
-        'total': quotation.total,
-        'paid': 0.0,
-        'remaining': quotation.total,
-        'payment_method': null,
-        'valid_until': null,
-        'notes': quotation.notes,
-        'related_document_id': quotationId,
-        'status': DocumentStatus.draft,
-        'currency_code': quotation.currencyCode,
-      });
+      int invoiceId;
+      try {
+        invoiceId = await txn.insert('documents', {
+          'type': 'invoice',
+          'document_number': invoiceNumber,
+          'date': now.toIso8601String(),
+          'contact_id': quotation.contactId,
+          'recipient_name': quotation.recipientName,
+          'recipient_phone': quotation.recipientPhone,
+          'subtotal': quotation.subtotal,
+          'discount': quotation.discount,
+          'tax_rate': quotation.taxRate,
+          'tax_amount': quotation.taxAmount,
+          'total': quotation.total,
+          'paid': 0.0,
+          'remaining': quotation.total,
+          'payment_method': null,
+          'valid_until': null,
+          'notes': quotation.notes,
+          'related_document_id': quotationId,
+          'status': DocumentStatus.draft,
+          'currency_code': quotation.currencyCode,
+        });
+      } on DatabaseException catch (e) {
+        if (e.isUniqueConstraintError() ||
+            e.toString().toLowerCase().contains('unique')) {
+          final retryNumber = await getNextDocumentNumber(txn, 'invoice');
+          invoiceId = await txn.insert('documents', {
+            'type': 'invoice',
+            'document_number': retryNumber,
+            'date': now.toIso8601String(),
+            'contact_id': quotation.contactId,
+            'recipient_name': quotation.recipientName,
+            'recipient_phone': quotation.recipientPhone,
+            'subtotal': quotation.subtotal,
+            'discount': quotation.discount,
+            'tax_rate': quotation.taxRate,
+            'tax_amount': quotation.taxAmount,
+            'total': quotation.total,
+            'paid': 0.0,
+            'remaining': quotation.total,
+            'payment_method': null,
+            'valid_until': null,
+            'notes': quotation.notes,
+            'related_document_id': quotationId,
+            'status': DocumentStatus.draft,
+            'currency_code': quotation.currencyCode,
+          });
+        } else {
+          rethrow;
+        }
+      }
 
       // Copy items (no stock deduction — draft)
       final qItems = await txn.query(
@@ -5745,6 +6107,8 @@ class DatabaseHelper {
         throw StateError('Document is not a draft');
       }
 
+      await assertPeriodOpen(doc.date, txn: txn);
+
       final bRows = await txn.query('businesses', limit: 1);
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
@@ -5771,8 +6135,11 @@ class DatabaseHelper {
           final productId = item['product_id'] as int?;
           final qty = (item['quantity'] as num?)?.toDouble() ?? 0;
           if (productId == null || qty <= 0) continue;
-          final effectiveQty = (item['base_quantity'] as num?)?.toDouble() ??
-              (qty * ((item['unit_conversion_factor'] as num?)?.toDouble() ?? 1.0));
+          final effectiveQty =
+              (item['base_quantity'] as num?)?.toDouble() ??
+              (qty *
+                  ((item['unit_conversion_factor'] as num?)?.toDouble() ??
+                      1.0));
           final pRows = await txn.query(
             'products',
             columns: ['type', 'stock_quantity', 'average_cost', 'cost_status'],
@@ -5874,8 +6241,8 @@ class DatabaseHelper {
                 'SELECT COALESCE(SUM(quantity), 0) AS total_qty FROM stock_movements WHERE product_id = ?',
                 [productId],
               );
-              final movementTotal =
-                  (movementSumRows.first['total_qty'] as num).toDouble();
+              final movementTotal = (movementSumRows.first['total_qty'] as num)
+                  .toDouble();
               final isCleanLedger =
                   (movementTotal - currentStock).abs() <= 0.001 &&
                   movementTotal >= -0.0001;
@@ -5953,8 +6320,10 @@ class DatabaseHelper {
         );
 
         if (canonicalPaid > totalExistingPaid) {
-          final missingAmount =
-              MoneyUtils.round(canonicalPaid - totalExistingPaid, decimalDigits);
+          final missingAmount = MoneyUtils.round(
+            canonicalPaid - totalExistingPaid,
+            decimalDigits,
+          );
           await _insertDocumentPaymentTxn(txn, {
             'document_id': id,
             'amount': missingAmount,
@@ -6006,11 +6375,7 @@ class DatabaseHelper {
         whereArgs: [id],
       );
       final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
-      await JournalWriter.postDocumentIssued(
-        txn,
-        updatedDoc,
-        persistedItems,
-      );
+      await JournalWriter.postDocumentIssued(txn, updatedDoc, persistedItems);
     });
   }
 
@@ -6049,29 +6414,62 @@ class DatabaseHelper {
       final newPaid = isItemBased ? 0.0 : source.total;
       final newRemaining = isItemBased ? source.total : 0.0;
 
-      final newId = await txn.insert('documents', {
-        'type': source.type,
-        'document_number': newNumber,
-        'date': now.toIso8601String(),
-        'contact_id': source.contactId,
-        'recipient_name': source.recipientName,
-        'recipient_phone': source.recipientPhone,
-        'subtotal': source.subtotal,
-        'discount': source.discount,
-        'tax_rate': source.taxRate,
-        'tax_amount': source.taxAmount,
-        'total': source.total,
-        'paid': newPaid,
-        'remaining': newRemaining,
-        'payment_method': source.paymentMethod,
-        'valid_until': source.type == 'quotation'
-            ? source.validUntil?.toIso8601String()
-            : null,
-        'notes': source.notes,
-        'related_document_id': null,
-        'status': newStatus,
-        'currency_code': source.currencyCode,
-      });
+      int newId;
+      try {
+        newId = await txn.insert('documents', {
+          'type': source.type,
+          'document_number': newNumber,
+          'date': now.toIso8601String(),
+          'contact_id': source.contactId,
+          'recipient_name': source.recipientName,
+          'recipient_phone': source.recipientPhone,
+          'subtotal': source.subtotal,
+          'discount': source.discount,
+          'tax_rate': source.taxRate,
+          'tax_amount': source.taxAmount,
+          'total': source.total,
+          'paid': newPaid,
+          'remaining': newRemaining,
+          'payment_method': source.paymentMethod,
+          'valid_until': source.type == 'quotation'
+              ? source.validUntil?.toIso8601String()
+              : null,
+          'notes': source.notes,
+          'related_document_id': null,
+          'status': newStatus,
+          'currency_code': source.currencyCode,
+        });
+      } on DatabaseException catch (e) {
+        if (e.isUniqueConstraintError() ||
+            e.toString().toLowerCase().contains('unique')) {
+          final retryNumber = await getNextDocumentNumber(txn, source.type);
+          newId = await txn.insert('documents', {
+            'type': source.type,
+            'document_number': retryNumber,
+            'date': now.toIso8601String(),
+            'contact_id': source.contactId,
+            'recipient_name': source.recipientName,
+            'recipient_phone': source.recipientPhone,
+            'subtotal': source.subtotal,
+            'discount': source.discount,
+            'tax_rate': source.taxRate,
+            'tax_amount': source.taxAmount,
+            'total': source.total,
+            'paid': newPaid,
+            'remaining': newRemaining,
+            'payment_method': source.paymentMethod,
+            'valid_until': source.type == 'quotation'
+                ? source.validUntil?.toIso8601String()
+                : null,
+            'notes': source.notes,
+            'related_document_id': null,
+            'status': newStatus,
+            'currency_code': source.currencyCode,
+          });
+        } else {
+          rethrow;
+        }
+      }
 
       if (isItemBased) {
         final items = await txn.query(
@@ -6122,6 +6520,26 @@ class DatabaseHelper {
     int next = 1;
     if (rows.isNotEmpty) {
       next = (rows.first['next_number'] as num).toInt();
+    }
+
+    // Ensure candidate number is not already used in documents table
+    String candidate;
+    while (true) {
+      candidate = '$prefix-${next.toString().padLeft(5, '0')}';
+      final existing = await txn.query(
+        'documents',
+        columns: ['id'],
+        where: 'type = ? AND document_number = ?',
+        whereArgs: [type, candidate],
+        limit: 1,
+      );
+      if (existing.isEmpty) {
+        break;
+      }
+      next++;
+    }
+
+    if (rows.isNotEmpty) {
       await txn.update(
         'document_counters',
         {'next_number': next + 1},
@@ -6129,9 +6547,12 @@ class DatabaseHelper {
         whereArgs: [type],
       );
     } else {
-      await txn.insert('document_counters', {'type': type, 'next_number': 2});
+      await txn.insert('document_counters', {
+        'type': type,
+        'next_number': next + 1,
+      });
     }
-    return '$prefix-${next.toString().padLeft(5, '0')}';
+    return candidate;
   }
 
   Future<List<Document>> getAllDocuments() async {
@@ -6208,28 +6629,23 @@ class DatabaseHelper {
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
     final end = start.add(const Duration(days: 1));
-    final whereBuffer = StringBuffer(
-      '''
+    final whereBuffer = StringBuffer('''
       date >= ? AND date < ?
         AND status != '${DocumentStatus.draft}'
         AND status != '${DocumentStatus.cancelled}'
-      ''',
-    );
+      ''');
     final args = <Object?>[start.toIso8601String(), end.toIso8601String()];
     if (currencyCode != null && currencyCode.isNotEmpty) {
       whereBuffer.write(' AND currency_code = ?');
       args.add(currencyCode);
     }
-    final result = await db.rawQuery(
-      '''
+    final result = await db.rawQuery('''
       SELECT
         SUM(CASE WHEN type = 'invoice' THEN total ELSE 0 END) as sales,
         SUM(CASE WHEN type = 'invoice' THEN remaining ELSE 0 END) as outstanding
       FROM documents
       WHERE $whereBuffer
-    ''',
-      args,
-    );
+    ''', args);
     if (result.isEmpty || result.first['sales'] == null) {
       return {'sales': 0, 'outstanding': 0};
     }
@@ -6343,21 +6759,22 @@ class DatabaseHelper {
         if (cust > 0 || supp > 0) {
           allCurrencies.add(code);
         }
-        balMap[code] = (
-          customerOutstanding: cust,
-          supplierPayable: supp,
-        );
+        balMap[code] = (customerOutstanding: cust, supplierPayable: supp);
       }
     }
 
-    final totalsByCurrency = <String, ({
-      double sales,
-      double purchases,
-      double paymentsIn,
-      double paymentsOut,
-      double customerOutstanding,
-      double supplierPayable,
-    })>{};
+    final totalsByCurrency =
+        <
+          String,
+          ({
+            double sales,
+            double purchases,
+            double paymentsIn,
+            double paymentsOut,
+            double customerOutstanding,
+            double supplierPayable,
+          })
+        >{};
 
     for (final c in allCurrencies) {
       totalsByCurrency[c] = (
@@ -6544,8 +6961,7 @@ class DatabaseHelper {
       whereBuffer.write(' AND d.currency_code = ?');
       args.add(currencyCode);
     }
-    return db.rawQuery(
-      '''
+    return db.rawQuery('''
       SELECT
         dp.id, dp.amount, dp.payment_method, dp.date, dp.notes,
         dp.document_id,
@@ -6555,9 +6971,7 @@ class DatabaseHelper {
       JOIN documents d ON d.id = dp.document_id
       WHERE $whereBuffer
       ORDER BY dp.date DESC
-    ''',
-      args,
-    );
+    ''', args);
   }
 
   Future<void> logAuditEvent(
@@ -6567,8 +6981,8 @@ class DatabaseHelper {
     String? details,
     DatabaseExecutor? txn,
   }) async {
+    final db = txn ?? await database;
     try {
-      final db = txn ?? await database;
       await db.insert('audit_log', {
         'action': action,
         'entity_type': entityType,
@@ -6576,8 +6990,13 @@ class DatabaseHelper {
         'details': details,
         'timestamp': DateTime.now().toIso8601String(),
       });
-    } catch (_) {
-      // Never fail the main operation due to audit logging
+    } catch (e) {
+      if (txn != null) {
+        // Inside a business transaction: failure MUST roll back the transaction
+        rethrow;
+      }
+      debugPrint('Audit log insert failed: $e');
+      rethrow;
     }
   }
 
@@ -6823,7 +7242,9 @@ class DatabaseHelper {
     }
     final key = rows.first['key'] as String;
     if (await isPaymentMethodUsedInDocuments(key)) {
-      throw StateError('Cannot delete payment method: in use by existing transactions');
+      throw StateError(
+        'Cannot delete payment method: in use by existing transactions',
+      );
     }
     return db.delete(
       'payment_methods',
@@ -6925,7 +7346,9 @@ class DatabaseHelper {
   }
 
   /// Data-only bulk deletion of cached notifications, optionally preserving critical alerts.
-  Future<int> deleteAllCachedNotifications({bool preserveCritical = true}) async {
+  Future<int> deleteAllCachedNotifications({
+    bool preserveCritical = true,
+  }) async {
     final db = await database;
     if (preserveCritical) {
       return await db.delete(
