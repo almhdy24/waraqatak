@@ -71,6 +71,31 @@ class ErrorUtils {
       return l10n.errorValidUntilBeforeDate;
     }
 
+    // FIFO allocation errors (D5)
+    if (lower.contains('payment exceeds outstanding balance')) {
+      return l10n.errorPaymentExceedsOutstanding;
+    }
+    if (lower.contains('no open documents for this contact')) {
+      return l10n.voucherNoOpenDocuments;
+    }
+
+    // Cancellation & editing errors (B7)
+    if (lower.contains('document is already cancelled')) {
+      return l10n.errorDocumentAlreadyCancelled;
+    }
+    if (lower.contains('cannot reduce total') ||
+        lower.contains('below recorded payments')) {
+      return l10n.errorCannotReduceTotalBelowPayments;
+    }
+    if (lower.contains('cannot cancel purchase') ||
+        lower.contains('insufficient stock to cancel purchase') ||
+        lower.contains('consumed this stock')) {
+      return l10n.errorInsufficientStockToCancelPurchase;
+    }
+    if (lower.contains('cannot cancel document with active payment receipts')) {
+      return l10n.cannotCancelWithActiveVouchers('');
+    }
+
     // Network / connectivity
     if (lower.contains('socketexception') ||
         lower.contains('clientexception') ||

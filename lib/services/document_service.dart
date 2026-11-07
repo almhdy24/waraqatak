@@ -18,7 +18,8 @@ class DocumentItemInput {
   final bool taxable;
   final int? productId;
   final double? taxRate; // per-item rate snapshot; null = use business default
-  final String? pricingCategory; // 'retail' | 'wholesale' | null (legacy/manual)
+  final String?
+  pricingCategory; // 'retail' | 'wholesale' | null (legacy/manual)
   final String? saleUnit;
   final double unitConversionFactor;
   final double? baseQuantity;
@@ -128,11 +129,12 @@ class DocumentService {
     double remaining = 0;
 
     final decimalDigits = Currency.decimalDigitsForCode(business.currencyCode);
-    final effectiveItems = ((!isFinancial && !isCustom)
-            ? await resolveItemsTaxRates(items, business)
-            : items)
-        .map((i) => i.withDigits(decimalDigits))
-        .toList();
+    final effectiveItems =
+        ((!isFinancial && !isCustom)
+                ? await resolveItemsTaxRates(items, business)
+                : items)
+            .map((i) => i.withDigits(decimalDigits))
+            .toList();
     final effectiveTaxRate = await resolveEffectiveTaxRate(business);
     final effectivePricesIncludeTax =
         business.taxesEnabled && business.pricesIncludeTax;
@@ -147,19 +149,30 @@ class DocumentService {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
+      subtotal = MoneyUtils.round(
+        _calculateSubtotal(effectiveItems),
+        decimalDigits,
+      );
       discountApplied = 0;
       taxRate = effectiveTaxRate;
       taxAmount = _calculateTaxMultiRate(
-          effectiveItems, discountApplied, taxRate, subtotal, effectivePricesIncludeTax,
-          decimalDigits: decimalDigits);
+        effectiveItems,
+        discountApplied,
+        taxRate,
+        subtotal,
+        effectivePricesIncludeTax,
+        decimalDigits: decimalDigits,
+      );
       total = effectivePricesIncludeTax
           ? subtotal
           : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
+      subtotal = MoneyUtils.round(
+        _calculateSubtotal(effectiveItems),
+        decimalDigits,
+      );
       discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
@@ -185,7 +198,11 @@ class DocumentService {
         throw ArgumentError('Paid amount cannot exceed total');
       }
       finalPaid = canonicalPaid;
-      remaining = MoneyUtils.calculateRemaining(total, finalPaid, decimalDigits);
+      remaining = MoneyUtils.calculateRemaining(
+        total,
+        finalPaid,
+        decimalDigits,
+      );
     } else if (isCustom) {
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
       subtotal = canonicalPaid;
@@ -203,7 +220,11 @@ class DocumentService {
     if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       status = DocumentStatus.draft;
     } else if (isInvoice || isPurchase) {
-      status = DocumentStatus.fromPayment(finalPaid, total, decimalDigits: decimalDigits);
+      status = DocumentStatus.fromPayment(
+        finalPaid,
+        total,
+        decimalDigits: decimalDigits,
+      );
     } else {
       status = DocumentStatus.issued;
     }
@@ -227,20 +248,24 @@ class DocumentService {
       currencyCode: business.currencyCode,
     );
 
-    final documentItems = effectiveItems.map((item) => DocumentItem(
-      documentId: 0,
-      productId: item.productId,
-      description: item.description,
-      quantity: item.quantity,
-      price: item.price,
-      total: item.total,
-      taxable: item.taxable,
-      taxRate: item.taxRate,
-      pricingCategory: item.pricingCategory,
-      saleUnit: item.saleUnit,
-      unitConversionFactor: item.unitConversionFactor,
-      baseQuantity: item.effectiveBaseQuantity,
-    )).toList();
+    final documentItems = effectiveItems
+        .map(
+          (item) => DocumentItem(
+            documentId: 0,
+            productId: item.productId,
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            taxable: item.taxable,
+            taxRate: item.taxRate,
+            pricingCategory: item.pricingCategory,
+            saleUnit: item.saleUnit,
+            unitConversionFactor: item.unitConversionFactor,
+            baseQuantity: item.effectiveBaseQuantity,
+          ),
+        )
+        .toList();
 
     final bool enforceStock;
     if (strictStock != null) {
@@ -331,11 +356,12 @@ class DocumentService {
     double remaining = 0;
 
     final decimalDigits = Currency.decimalDigitsForCode(existing.currencyCode);
-    final effectiveItems = ((!isFinancial && !isCustom)
-            ? await resolveItemsTaxRates(items, business)
-            : items)
-        .map((i) => i.withDigits(decimalDigits))
-        .toList();
+    final effectiveItems =
+        ((!isFinancial && !isCustom)
+                ? await resolveItemsTaxRates(items, business)
+                : items)
+            .map((i) => i.withDigits(decimalDigits))
+            .toList();
     final effectiveTaxRate = await resolveEffectiveTaxRate(business);
     final effectivePricesIncludeTax =
         business.taxesEnabled && business.pricesIncludeTax;
@@ -350,19 +376,30 @@ class DocumentService {
       if (validUntil == null || !validUntil.isAfter(documentDate)) {
         throw ArgumentError('Valid until must be after document date');
       }
-      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
+      subtotal = MoneyUtils.round(
+        _calculateSubtotal(effectiveItems),
+        decimalDigits,
+      );
       discountApplied = 0;
       taxRate = effectiveTaxRate;
       taxAmount = _calculateTaxMultiRate(
-          effectiveItems, discountApplied, taxRate, subtotal, effectivePricesIncludeTax,
-          decimalDigits: decimalDigits);
+        effectiveItems,
+        discountApplied,
+        taxRate,
+        subtotal,
+        effectivePricesIncludeTax,
+        decimalDigits: decimalDigits,
+      );
       total = effectivePricesIncludeTax
           ? subtotal
           : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
-      subtotal = MoneyUtils.round(_calculateSubtotal(effectiveItems), decimalDigits);
+      subtotal = MoneyUtils.round(
+        _calculateSubtotal(effectiveItems),
+        decimalDigits,
+      );
       discountApplied = MoneyUtils.round(discount, decimalDigits);
       if (discountApplied < 0) {
         throw ArgumentError('Discount cannot be negative');
@@ -388,7 +425,11 @@ class DocumentService {
         throw ArgumentError('Paid amount cannot exceed total');
       }
       finalPaid = canonicalPaid;
-      remaining = MoneyUtils.calculateRemaining(total, finalPaid, decimalDigits);
+      remaining = MoneyUtils.calculateRemaining(
+        total,
+        finalPaid,
+        decimalDigits,
+      );
     } else if (isCustom) {
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
       subtotal = canonicalPaid;
@@ -399,14 +440,19 @@ class DocumentService {
       throw ArgumentError('Unknown document type: $type');
     }
 
-    final effectiveRelatedDocumentId = relatedDocumentId ?? existing.relatedDocumentId;
+    final effectiveRelatedDocumentId =
+        relatedDocumentId ?? existing.relatedDocumentId;
 
     // Compute new status (same logic as createDocument)
     final String newStatus;
     if (isDraft && (isInvoice || isQuotation || isPurchase)) {
       newStatus = DocumentStatus.draft;
     } else if (isInvoice || isPurchase) {
-      newStatus = DocumentStatus.fromPayment(finalPaid, total, decimalDigits: decimalDigits);
+      newStatus = DocumentStatus.fromPayment(
+        finalPaid,
+        total,
+        decimalDigits: decimalDigits,
+      );
     } else {
       newStatus = DocumentStatus.issued;
     }
@@ -434,20 +480,24 @@ class DocumentService {
       currencyCode: existing.currencyCode,
     );
 
-    final documentItems = effectiveItems.map((item) => DocumentItem(
-      documentId: documentId,
-      productId: item.productId,
-      description: item.description,
-      quantity: item.quantity,
-      price: item.price,
-      total: item.total,
-      taxable: item.taxable,
-      taxRate: item.taxRate,
-      pricingCategory: item.pricingCategory,
-      saleUnit: item.saleUnit,
-      unitConversionFactor: item.unitConversionFactor,
-      baseQuantity: item.effectiveBaseQuantity,
-    )).toList();
+    final documentItems = effectiveItems
+        .map(
+          (item) => DocumentItem(
+            documentId: documentId,
+            productId: item.productId,
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            taxable: item.taxable,
+            taxRate: item.taxRate,
+            pricingCategory: item.pricingCategory,
+            saleUnit: item.saleUnit,
+            unitConversionFactor: item.unitConversionFactor,
+            baseQuantity: item.effectiveBaseQuantity,
+          ),
+        )
+        .toList();
 
     final bool enforceStock;
     if (strictStock != null) {
@@ -475,13 +525,46 @@ class DocumentService {
     String? paymentMethod,
     String? notes,
   }) async {
-    if (amount <= 0) throw ArgumentError('Payment amount must be greater than zero');
+    if (amount <= 0) {
+      throw ArgumentError('Payment amount must be greater than zero');
+    }
     return DatabaseHelper.instance.recordPaymentWithReceipt(
       documentId: documentId,
       amount: amount,
       paymentMethod: paymentMethod,
       notes: notes,
     );
+  }
+
+  /// Records payment allocated across open documents for [contactId] using FIFO.
+  /// Validates [amount] > 0, delegates to [DatabaseHelper.recordFifoPayment],
+  /// logs audit event, and returns receipt IDs.
+  static Future<List<int>> recordFifoPayment({
+    required int contactId,
+    required bool isCustomer,
+    required double amount,
+    String? paymentMethod,
+    String? notes,
+  }) async {
+    if (amount <= 0) {
+      throw ArgumentError('Payment amount must be greater than zero');
+    }
+    final docType = isCustomer ? 'invoice' : 'purchase';
+    final receiptIds = await DatabaseHelper.instance.recordFifoPayment(
+      contactId: contactId,
+      documentType: docType,
+      amount: amount,
+      paymentMethod: paymentMethod,
+      notes: notes,
+    );
+    await DatabaseHelper.instance.logAuditEvent(
+      'payment_allocated',
+      entityType: 'contact',
+      entityId: contactId,
+      details:
+          'amount=$amount docType=$docType receipts=${receiptIds.join(",")}',
+    );
+    return receiptIds;
   }
 
   /// Marks a document as cancelled.
@@ -497,8 +580,11 @@ class DocumentService {
       refundStatus: refundStatus,
       refundNotes: refundNotes,
     );
-    await DatabaseHelper.instance.logAuditEvent('document_cancelled',
-        entityType: 'document', entityId: documentId);
+    await DatabaseHelper.instance.logAuditEvent(
+      'document_cancelled',
+      entityType: 'document',
+      entityId: documentId,
+    );
   }
 
   /// Updates or records the refund status for a cancelled document.
@@ -536,9 +622,15 @@ class DocumentService {
       final entitlement = await LicenseService.instance.checkEntitlement();
       enforceStock = FeatureAccess.canAccess(Feature.inventory, entitlement);
     }
-    await DatabaseHelper.instance.issueDocument(documentId, strictStock: enforceStock);
-    await DatabaseHelper.instance.logAuditEvent('document_issued',
-        entityType: 'document', entityId: documentId);
+    await DatabaseHelper.instance.issueDocument(
+      documentId,
+      strictStock: enforceStock,
+    );
+    await DatabaseHelper.instance.logAuditEvent(
+      'document_issued',
+      entityType: 'document',
+      entityId: documentId,
+    );
   }
 
   /// Creates a new draft copy of an existing document.
@@ -578,7 +670,9 @@ class DocumentService {
     }
   }
 
-  static Future<void> _validateProductsExist(List<DocumentItemInput> items) async {
+  static Future<void> _validateProductsExist(
+    List<DocumentItemInput> items,
+  ) async {
     final db = DatabaseHelper.instance;
     final productIds = items
         .map((item) => item.productId)
@@ -615,8 +709,9 @@ class DocumentService {
     if (!business.taxesEnabled) return 0.0;
     final database = db ?? DatabaseHelper.instance;
     if (business.defaultTaxProfileId != null) {
-      final profile =
-          await database.getTaxProfileById(business.defaultTaxProfileId!);
+      final profile = await database.getTaxProfileById(
+        business.defaultTaxProfileId!,
+      );
       if (profile != null && profile.isActive) {
         return profile.rate;
       }
@@ -638,19 +733,21 @@ class DocumentService {
   }) async {
     if (!business.taxesEnabled) {
       return items
-          .map((item) => DocumentItemInput(
-                description: item.description,
-                quantity: item.quantity,
-                price: item.price,
-                taxable: false,
-                productId: item.productId,
-                taxRate: 0.0,
-                pricingCategory: item.pricingCategory,
-                saleUnit: item.saleUnit,
-                unitConversionFactor: item.unitConversionFactor,
-                baseQuantity: item.baseQuantity,
-                decimalDigits: item.decimalDigits,
-              ))
+          .map(
+            (item) => DocumentItemInput(
+              description: item.description,
+              quantity: item.quantity,
+              price: item.price,
+              taxable: false,
+              productId: item.productId,
+              taxRate: 0.0,
+              pricingCategory: item.pricingCategory,
+              saleUnit: item.saleUnit,
+              unitConversionFactor: item.unitConversionFactor,
+              baseQuantity: item.baseQuantity,
+              decimalDigits: item.decimalDigits,
+            ),
+          )
           .toList();
     }
 
@@ -668,39 +765,44 @@ class DocumentService {
         final product = await database.getProductById(item.productId!);
         if (product != null) {
           if (!product.isTaxable) {
-            resolved.add(DocumentItemInput(
-              description: item.description,
-              quantity: item.quantity,
-              price: item.price,
-              taxable: false,
-              productId: item.productId,
-              taxRate: 0.0,
-              pricingCategory: item.pricingCategory,
-              saleUnit: item.saleUnit,
-              unitConversionFactor: item.unitConversionFactor,
-              baseQuantity: item.baseQuantity,
-              decimalDigits: item.decimalDigits,
-            ));
-            continue;
-          }
-
-          if (product.taxProfileId != null) {
-            final profile =
-                await database.getTaxProfileById(product.taxProfileId!);
-            if (profile != null && profile.isActive) {
-              resolved.add(DocumentItemInput(
+            resolved.add(
+              DocumentItemInput(
                 description: item.description,
                 quantity: item.quantity,
                 price: item.price,
-                taxable: true,
+                taxable: false,
                 productId: item.productId,
-                taxRate: profile.rate,
+                taxRate: 0.0,
                 pricingCategory: item.pricingCategory,
                 saleUnit: item.saleUnit,
                 unitConversionFactor: item.unitConversionFactor,
                 baseQuantity: item.baseQuantity,
                 decimalDigits: item.decimalDigits,
-              ));
+              ),
+            );
+            continue;
+          }
+
+          if (product.taxProfileId != null) {
+            final profile = await database.getTaxProfileById(
+              product.taxProfileId!,
+            );
+            if (profile != null && profile.isActive) {
+              resolved.add(
+                DocumentItemInput(
+                  description: item.description,
+                  quantity: item.quantity,
+                  price: item.price,
+                  taxable: true,
+                  productId: item.productId,
+                  taxRate: profile.rate,
+                  pricingCategory: item.pricingCategory,
+                  saleUnit: item.saleUnit,
+                  unitConversionFactor: item.unitConversionFactor,
+                  baseQuantity: item.baseQuantity,
+                  decimalDigits: item.decimalDigits,
+                ),
+              );
               continue;
             }
           }
@@ -726,7 +828,7 @@ class DocumentService {
   ///
   /// [decimalDigits] defines the currency's canonical rounding scale (default: 2).
   static ({double subtotal, double taxAmount, double total})
-      calculateInvoiceTotals({
+  calculateInvoiceTotals({
     required List<DocumentItemInput> items,
     required double discount,
     required double taxRate,
@@ -734,7 +836,10 @@ class DocumentService {
     int decimalDigits = 2,
   }) {
     final normalized = items.map((i) => i.withDigits(decimalDigits)).toList();
-    final subtotal = MoneyUtils.round(_calculateSubtotal(normalized), decimalDigits);
+    final subtotal = MoneyUtils.round(
+      _calculateSubtotal(normalized),
+      decimalDigits,
+    );
     final canonicalDiscount = MoneyUtils.round(discount, decimalDigits);
     final taxAmount = _calculateTaxMultiRate(
       normalized,
@@ -746,7 +851,10 @@ class DocumentService {
     );
     final total = pricesIncludeTax
         ? MoneyUtils.round(subtotal - canonicalDiscount, decimalDigits)
-        : MoneyUtils.round(subtotal - canonicalDiscount + taxAmount, decimalDigits);
+        : MoneyUtils.round(
+            subtotal - canonicalDiscount + taxAmount,
+            decimalDigits,
+          );
     return (subtotal: subtotal, taxAmount: taxAmount, total: total);
   }
 
@@ -768,7 +876,9 @@ class DocumentService {
       final itemAfterDiscount = item.total * discountRatio;
       if (itemAfterDiscount <= 0) continue;
       totalTax += pricesIncludeTax
-          ? itemAfterDiscount * rate / (100 + rate) // extract from inclusive price
+          ? itemAfterDiscount *
+                rate /
+                (100 + rate) // extract from inclusive price
           : itemAfterDiscount * rate / 100; // add on top (exclusive)
     }
     return MoneyUtils.round(totalTax < 0 ? 0.0 : totalTax, decimalDigits);
@@ -865,7 +975,8 @@ class DocumentService {
 
     ProductUnit? matchingUnit = unit;
     if (matchingUnit == null) {
-      final isBaseUnit = saleUnit == null ||
+      final isBaseUnit =
+          saleUnit == null ||
           saleUnit.trim().isEmpty ||
           saleUnit.trim() == product.unit?.trim();
 
@@ -898,7 +1009,8 @@ class DocumentService {
       }
     } else {
       if (unitConversionFactor != null &&
-          (unitConversionFactor - matchingUnit.conversionFactor).abs() > 0.0001) {
+          (unitConversionFactor - matchingUnit.conversionFactor).abs() >
+              0.0001) {
         if (currentPrice != null) return currentPrice;
       }
     }

@@ -439,6 +439,51 @@ class AppLocalizations {
     'يجب تسليم هذا المبلغ للعميل يدوياً خارج التطبيق.',
     'This money must be returned to the customer manually outside the app.',
   );
+
+  String voucherOutstandingCustomer(String amount) => _t(
+    'المستحق على العميل: ${_iso(amount)}',
+    'Customer owes: ${_iso(amount)}',
+  );
+  String voucherOutstandingSupplier(String amount) => _t(
+    'المستحق للمورد: ${_iso(amount)}',
+    'Owed to supplier: ${_iso(amount)}',
+  );
+  String get voucherAllocationHintCustomer => _t(
+    'يُسدَّد المبلغ على فواتير العميل المفتوحة من الأقدم إلى الأحدث.',
+    'The amount settles the customer open invoices from oldest to newest.',
+  );
+  String get voucherAllocationHintSupplier => _t(
+    'يُسدَّد المبلغ على فواتير شراء المورد المفتوحة من الأقدم إلى الأحدث.',
+    'The amount settles the supplier open purchases from oldest to newest.',
+  );
+  String voucherAmountExceedsOutstanding(String amount) => _t(
+    'المبلغ أكبر من المستحق (${_iso(amount)}).',
+    'The amount is more than the outstanding balance (${_iso(amount)}).',
+  );
+  String get voucherNoOpenDocuments => _t(
+    'لا توجد مستندات مفتوحة لهذا الطرف. اترك الحقل فارغاً لتسجيل المبلغ كإيراد أو مصروف آخر.',
+    'There are no open documents for this contact. Leave the contact empty to record the amount as other income or expense.',
+  );
+  String voucherAllocatedSnack(String count) => _t(
+    'تم توزيع المبلغ على عدة مستندات (${_iso(count)})، وأُنشئ سند لكل مستند.',
+    'The amount was split across several documents (${_iso(count)}); a receipt was created for each.',
+  );
+  String get errorPaymentExceedsOutstanding => _t(
+    'المبلغ أكبر من المستحق على الطرف.',
+    'The amount is more than the outstanding balance.',
+  );
+  String get errorDocumentAlreadyCancelled => _t(
+    'المستند ملغى بالفعل.',
+    'Document is already cancelled.',
+  );
+  String get errorCannotReduceTotalBelowPayments => _t(
+    'لا يمكن تقليل الإجمالي إلى أقل من المدفوعات المسجلة.',
+    'Cannot reduce total below recorded payments.',
+  );
+  String get errorInsufficientStockToCancelPurchase => _t(
+    'لا يمكن إلغاء فاتورة الشراء لعدم توفر مخزون كافٍ.',
+    'Cannot cancel purchase due to insufficient stock.',
+  );
   String get cancelPaidSupplierReturnInstruction => _t(
     'يجب استرداد هذا المبلغ من المورد يدوياً خارج التطبيق.',
     'This money must be recovered from the supplier manually outside the app.',

@@ -23,6 +23,7 @@ import '../models/stocktake.dart';
 import '../services/accounting/journal_writer.dart';
 import '../services/accounting/stock_ledger.dart';
 import '../services/inventory_costing_service.dart';
+import '../services/payment_allocator.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
 
@@ -5884,6 +5885,90 @@ class DatabaseHelper {
     );
 
     return receiptId;
+  }
+
+  /// Returns non-draft, non-cancelled documents with remaining balance > 0
+  /// for [contactId] where type matches [documentType] ('invoice' or 'purchase').
+  /// Only documents in the base business currency are included.
+  /// Ordered oldest-first: date ASC, id ASC.
+  Future<List<Map<String, Object?>>> getOpenDocumentsForContact(
+    int contactId,
+    String documentType, {
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    final biz = await getFirstBusiness(txn: exec);
+    final baseCurrency = biz?.currencyCode ?? 'SDG';
+
+    final rows = await exec.query(
+      'documents',
+      columns: [
+        'id',
+        'document_number',
+        'date',
+        'total',
+        'paid',
+        'remaining',
+        'currency_code',
+      ],
+      where:
+          "contact_id = ? AND type = ? AND status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}', '${DocumentStatus.paid}') AND remaining > 0 AND (currency_code = ? OR currency_code IS NULL)",
+      whereArgs: [contactId, documentType, baseCurrency],
+      orderBy: 'date ASC, id ASC',
+    );
+    return rows;
+  }
+
+  /// Allocates payment across open documents for [contactId] using oldest-first (FIFO) order.
+  /// Executes inside a single database transaction.
+  Future<List<int>> recordFifoPayment({
+    required int contactId,
+    required String documentType,
+    required double amount,
+    String? paymentMethod,
+    String? notes,
+  }) async {
+    final db = await database;
+    return db.transaction((txn) async {
+      final now = DateTime.now();
+      await assertPeriodOpen(now, txn: txn);
+
+      final openDocs = await getOpenDocumentsForContact(
+        contactId,
+        documentType,
+        txn: txn,
+      );
+
+      final biz = await getFirstBusiness(txn: txn);
+      final currencyCode = biz?.currencyCode ?? 'SDG';
+      final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+
+      final openBalances = openDocs.map((d) {
+        final rem =
+            (d['remaining'] as num?)?.toDouble() ??
+            ((d['total'] as num).toDouble() - (d['paid'] as num).toDouble());
+        return OpenDocumentBalance(id: d['id'] as int, remaining: rem);
+      }).toList();
+
+      final plan = PaymentAllocator.planFifo(
+        open: openBalances,
+        amount: amount,
+        decimalDigits: decimalDigits,
+      );
+
+      final receiptIds = <int>[];
+      for (final alloc in plan) {
+        final receiptId = await _recordPaymentTxn(
+          txn,
+          documentId: alloc.documentId,
+          amount: alloc.amount,
+          paymentMethod: paymentMethod,
+          notes: notes,
+        );
+        receiptIds.add(receiptId);
+      }
+      return receiptIds;
+    });
   }
 
   /// Consistent read-only snapshot of everything the derived accounting
