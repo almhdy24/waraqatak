@@ -258,6 +258,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (confirmed == true) {
       final qty = NumberInput.parse(qtyCtrl.text);
       if (qty != null && qty > 0) {
@@ -344,6 +345,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (confirmed == true) {
       final newQty = NumberInput.parse(qtyCtrl.text);
       if (newQty != null && newQty > 0) {
@@ -419,6 +421,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       confirmLabel: l10n.posClearCart,
       isDestructive: true,
     );
+    if (!mounted) return;
     if (ok) _resetSale();
   }
 
@@ -540,6 +543,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final l10n = AppLocalizations.of(context);
     try {
       final data = await _loadDoc(docId);
+      if (!mounted) return;
       if (data == null || _business == null) return;
       await PdfService.sharePdf(
         doc: data.doc,
@@ -548,6 +552,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         l10n: l10n,
         paperSize: PaperSize.thermal80mm,
       );
+      if (!mounted) return;
     } catch (e) {
       if (mounted) _toast('${l10n.operationFailed}: $e');
     }

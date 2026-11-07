@@ -87,8 +87,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
         _items = await StocktakeService.instance.getItems(_session!.id!);
       }
 
+      if (!mounted) return;
       setState(() => _loading = false);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -152,6 +154,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (started == true) {
       setState(() => _loading = true);
       try {
@@ -161,10 +164,12 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
               ? null
               : notesController.text.trim(),
         );
+        if (!mounted) return;
         setState(() {
           _session = session;
         });
         await _load();
+        if (!mounted) return;
       } catch (e) {
         if (!mounted) return;
         AppSnackBar.show(
@@ -272,8 +277,8 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
       final review = await StocktakeService.instance.reviewSession(
         _session!.id!,
       );
-      setState(() => _loading = false);
       if (!mounted) return;
+      setState(() => _loading = false);
 
       bool confirmed = false;
 
@@ -393,6 +398,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
         ),
       );
 
+      if (!mounted) return;
       if (result == true) {
         setState(() => _loading = true);
         await StocktakeService.instance.finalizeSession(
@@ -406,6 +412,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
           severity: AppSnackBarSeverity.success,
         );
         await _load();
+        if (!mounted) return;
       }
     } catch (e) {
       if (!mounted) return;
@@ -440,10 +447,13 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (confirmed == true) {
       setState(() => _loading = true);
       await StocktakeService.instance.cancelSession(_session!.id!);
+      if (!mounted) return;
       await _load();
+      if (!mounted) return;
     }
   }
 

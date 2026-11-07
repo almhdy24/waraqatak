@@ -47,6 +47,12 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
     _checkEntitlementAndLoad();
   }
 
+  @override
+  void dispose() {
+    _valController.dispose();
+    super.dispose();
+  }
+
   Future<void> _checkEntitlementAndLoad() async {
     final entitlement = await LicenseService.instance.checkEntitlement(
       force: true,
@@ -85,6 +91,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
       final unitRows = await db.rawQuery(
         'SELECT DISTINCT product_id FROM product_units',
       );
+      if (!mounted) return;
       _productIdsWithCustomUnits = {
         for (final r in unitRows)
           if (r['product_id'] != null) r['product_id'] as int,
@@ -99,6 +106,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
       _updatePreview();
       setState(() => _loading = false);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = ErrorUtils.getFriendlyErrorMessage(e);
         _loading = false;
@@ -174,6 +182,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
       ),
     );
 
+    if (!mounted) return;
     if (confirmed == true) {
       setState(() => _loading = true);
       try {
@@ -190,6 +199,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
           severity: AppSnackBarSeverity.success,
         );
         await _load();
+        if (!mounted) return;
       } catch (e) {
         if (!mounted) return;
         AppSnackBar.show(
