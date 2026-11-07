@@ -42,27 +42,7 @@ class ProductService {
   }
 
   static Future<void> updateProduct(Product product) async {
-    final updated = Product(
-      id: product.id,
-      name: product.name,
-      type: product.type,
-      code: product.code,
-      barcode: product.barcode,
-      unit: product.unit,
-      salePrice: product.salePrice,
-      wholesalePrice: product.wholesalePrice,
-      wholesaleMinQuantity: product.wholesaleMinQuantity,
-      purchasePrice: product.purchasePrice,
-      stockQuantity: product.stockQuantity,
-      minStock: product.minStock,
-      isTaxable: product.isTaxable,
-      isActive: product.isActive,
-      notes: product.notes,
-      category: product.category,
-      taxProfileId: product.taxProfileId,
-      createdAt: product.createdAt,
-      updatedAt: DateTime.now(),
-    );
+    final updated = product.copyWith(updatedAt: DateTime.now());
     await DatabaseHelper.instance.updateProduct(updated);
   }
 

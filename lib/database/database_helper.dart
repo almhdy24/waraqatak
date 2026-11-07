@@ -23,8 +23,11 @@ import '../models/stocktake.dart';
 import '../services/accounting/journal_writer.dart';
 import '../services/accounting/stock_ledger.dart';
 import '../services/inventory_costing_service.dart';
+import '../core/catalog_events.dart';
+import '../models/reference_pricing_types.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
+import 'reference_pricing_dao.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -2358,6 +2361,12 @@ class DatabaseHelper {
 
       final current = Business.fromMap(currentRows.first);
       if (current.currencyCode != b.currencyCode) {
+        if (await ReferencePricingDao.blocksBaseCurrencyChange(txn)) {
+          throw const ReferencePricingException(
+            ReferencePricingError.baseCurrencyChangeBlocked,
+            'Base currency cannot be changed when exchange rates or reference products exist.',
+          );
+        }
         final isLocked = await _isCurrencyLockedTxn(txn, current);
         if (isLocked) {
           throw StateError(
@@ -2523,72 +2532,156 @@ class DatabaseHelper {
   }
 
   // ========== Products ==========
-  Future<int> insertProduct(Product p) async {
-    final db = await database;
-    return db.transaction((txn) async {
-      final hasKnownCost =
-          p.isProduct && p.stockQuantity > 0 && p.purchasePrice > 0;
-      final avgCost = hasKnownCost ? p.purchasePrice : null;
-      final costStatus = hasKnownCost
-          ? Product.costStatusKnown
-          : Product.costStatusUnknown;
+  Future<int> _insertProductTxn(DatabaseExecutor txn, Product p) async {
+    p = await ReferencePricingDao.deriveProduct(txn, p);
+    final hasKnownCost =
+        p.isProduct && p.stockQuantity > 0 && p.purchasePrice > 0;
+    final avgCost = hasKnownCost ? p.purchasePrice : null;
+    final costStatus = hasKnownCost
+        ? Product.costStatusKnown
+        : Product.costStatusUnknown;
 
-      final pMap = p.toMap();
-      pMap['average_cost'] = avgCost;
-      pMap['cost_status'] = costStatus;
+    final pMap = p.toMap();
+    pMap['average_cost'] = avgCost;
+    pMap['cost_status'] = costStatus;
 
-      final id = await txn.insert('products', pMap);
-      if (p.isProduct && p.stockQuantity > 0) {
-        await _insertStockMovement(
-          txn,
-          productId: id,
-          type: StockMovement.typeOpening,
-          quantity: p.stockQuantity,
-          unitCost: avgCost,
-          totalCost: hasKnownCost ? p.stockQuantity * p.purchasePrice : null,
-          costStatus: costStatus,
-          provenance: 'opening_stock',
-          date: p.createdAt ?? DateTime.now(),
-        );
-      }
-      return id;
-    });
+    final id = await txn.insert('products', pMap);
+    if (p.isProduct && p.stockQuantity > 0) {
+      await _insertStockMovement(
+        txn,
+        productId: id,
+        type: StockMovement.typeOpening,
+        quantity: p.stockQuantity,
+        unitCost: avgCost,
+        totalCost: hasKnownCost ? p.stockQuantity * p.purchasePrice : null,
+        costStatus: costStatus,
+        provenance: 'opening_stock',
+        date: p.createdAt ?? DateTime.now(),
+      );
+    }
+    return id;
   }
 
-  Future<int> updateProduct(Product p) async {
-    final db = await database;
-    return db.transaction((txn) async {
-      final existingRows = await txn.query(
-        'products',
-        columns: ['stock_quantity', 'type'],
-        where: 'id = ?',
-        whereArgs: [p.id],
-      );
-      if (existingRows.isNotEmpty) {
-        final existingStock =
-            (existingRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
-        final existingType = existingRows.first['type'] as String? ?? 'product';
-        if (existingType == 'product' &&
-            p.type == 'service' &&
-            existingStock > 0) {
-          throw StateError(
-            'Cannot convert product with active stock ($existingStock) to service',
-          );
-        }
+  Future<int> _updateProductTxn(
+    DatabaseExecutor txn,
+    Product p, {
+    required bool allowClearReferencePricing,
+  }) async {
+    final existingRows = await txn.query(
+      'products',
+      columns: ['stock_quantity', 'type', 'price_currency'],
+      where: 'id = ?',
+      whereArgs: [p.id],
+    );
+    String? previous;
+    if (existingRows.isNotEmpty) {
+      final existingStock =
+          (existingRows.first['stock_quantity'] as num?)?.toDouble() ?? 0;
+      final existingType = existingRows.first['type'] as String? ?? 'product';
+      if (existingType == 'product' &&
+          p.type == 'service' &&
+          existingStock > 0) {
+        throw StateError(
+          'Cannot convert product with active stock ($existingStock) to service',
+        );
       }
-      final map = p.toMap();
-      // Prevent direct modification of stock_quantity through product metadata update.
-      map.remove('stock_quantity');
-      // Never overwrite costing fields through a metadata edit.
-      // average_cost and cost_status are managed exclusively by the costing
-      // service (purchase receipts, stock adjustments, cost reconciliation).
-      // Removing them from the update map preserves whatever the costing
-      // service last wrote, even when the user changes the catalog
-      // purchase_price in the product form.
-      map.remove('average_cost');
-      map.remove('cost_status');
-      return txn.update('products', map, where: 'id = ?', whereArgs: [p.id]);
+      previous = existingRows.first['price_currency'] as String?;
+    }
+
+    if (previous != null && p.priceCurrency == null && !allowClearReferencePricing) {
+      throw const ReferencePricingException(
+        ReferencePricingError.implicitClear,
+        'Cannot clear reference pricing implicitly without allowClearReferencePricing flag',
+      );
+    }
+
+    p = await ReferencePricingDao.deriveProduct(
+      txn,
+      p,
+      previousCurrency: previous,
+    );
+
+    final map = p.toMap();
+    // Prevent direct modification of stock_quantity through product metadata update.
+    map.remove('stock_quantity');
+    // Never overwrite costing fields through a metadata edit.
+    // average_cost and cost_status are managed exclusively by the costing
+    // service (purchase receipts, stock adjustments, cost reconciliation).
+    // Removing them from the update map preserves whatever the costing
+    // service last wrote, even when the user changes the catalog
+    // purchase_price in the product form.
+    map.remove('average_cost');
+    map.remove('cost_status');
+
+    final count = await txn.update(
+      'products',
+      map,
+      where: 'id = ?',
+      whereArgs: [p.id],
+    );
+
+    if (previous != p.priceCurrency && p.id != null) {
+      await ReferencePricingDao.clearUnitReferences(txn, p.id!);
+    }
+
+    return count;
+  }
+
+  Future<int> insertProduct(Product p) async {
+    final db = await database;
+    final id = await db.transaction((txn) => _insertProductTxn(txn, p));
+    CatalogEvents.notifyPricesChanged();
+    return id;
+  }
+
+  Future<int> updateProduct(
+    Product p, {
+    bool allowClearReferencePricing = false,
+  }) async {
+    final db = await database;
+    final count = await db.transaction(
+      (txn) => _updateProductTxn(
+        txn,
+        p,
+        allowClearReferencePricing: allowClearReferencePricing,
+      ),
+    );
+    CatalogEvents.notifyPricesChanged();
+    return count;
+  }
+
+  /// Atomically saves a product and its units in a single transaction.
+  ///
+  /// Replaces separate insert/update and syncProductUnits calls.
+  Future<int> saveProductWithUnits(
+    Product p,
+    List<ProductUnit> units, {
+    bool allowClearReferencePricing = false,
+  }) async {
+    final db = await database;
+    final productId = await db.transaction<int>((txn) async {
+      final int id;
+      if (p.id == null) {
+        id = await _insertProductTxn(txn, p);
+      } else {
+        await _updateProductTxn(
+          txn,
+          p,
+          allowClearReferencePricing: allowClearReferencePricing,
+        );
+        id = p.id!;
+      }
+      await _syncProductUnitsTxn(txn, id, units);
+      return id;
     });
+    CatalogEvents.notifyPricesChanged();
+    return productId;
+  }
+
+  /// Returns whether any exchange rates are registered.
+  Future<bool> hasExchangeRates() async {
+    final db = await database;
+    return ReferencePricingDao.hasAnyRate(db);
   }
 
   Future<int> deleteProduct(int id) async {
@@ -2774,18 +2867,46 @@ class DatabaseHelper {
     return rows.map((r) => ProductUnit.fromMap(r)).toList();
   }
 
-  Future<int> insertProductUnit(ProductUnit unit) async {
+  Future<int> _insertProductUnitTxn(
+    DatabaseExecutor txn,
+    ProductUnit unit,
+  ) async {
     if (unit.conversionFactor <= 0) {
       throw ArgumentError('Conversion factor must be greater than zero');
     }
     if (unit.unitName.trim().isEmpty) {
       throw ArgumentError('Unit name cannot be empty');
     }
-    final db = await database;
-    return await db.insert('product_units', unit.toMap());
+    final prodRows = await txn.query(
+      'products',
+      columns: ['price_currency'],
+      where: 'id = ?',
+      whereArgs: [unit.productId],
+      limit: 1,
+    );
+    final productCurrency = prodRows.isNotEmpty
+        ? prodRows.first['price_currency'] as String?
+        : null;
+
+    final normalized = await ReferencePricingDao.normalizeUnit(
+      txn,
+      productCurrency: productCurrency,
+      unit: unit,
+    );
+    return await txn.insert('product_units', normalized.toMap());
   }
 
-  Future<int> updateProductUnit(ProductUnit unit) async {
+  Future<int> insertProductUnit(ProductUnit unit) async {
+    final db = await database;
+    final id = await db.transaction((txn) => _insertProductUnitTxn(txn, unit));
+    CatalogEvents.notifyPricesChanged();
+    return id;
+  }
+
+  Future<int> _updateProductUnitTxn(
+    DatabaseExecutor txn,
+    ProductUnit unit,
+  ) async {
     if (unit.id == null) throw ArgumentError('Unit id required for update');
     if (unit.conversionFactor <= 0) {
       throw ArgumentError('Conversion factor must be greater than zero');
@@ -2793,13 +2914,35 @@ class DatabaseHelper {
     if (unit.unitName.trim().isEmpty) {
       throw ArgumentError('Unit name cannot be empty');
     }
-    final db = await database;
-    return await db.update(
+    final prodRows = await txn.query(
+      'products',
+      columns: ['price_currency'],
+      where: 'id = ?',
+      whereArgs: [unit.productId],
+      limit: 1,
+    );
+    final productCurrency = prodRows.isNotEmpty
+        ? prodRows.first['price_currency'] as String?
+        : null;
+
+    final normalized = await ReferencePricingDao.normalizeUnit(
+      txn,
+      productCurrency: productCurrency,
+      unit: unit,
+    );
+    return await txn.update(
       'product_units',
-      unit.toMap(),
+      normalized.toMap(),
       where: 'id = ?',
       whereArgs: [unit.id],
     );
+  }
+
+  Future<int> updateProductUnit(ProductUnit unit) async {
+    final db = await database;
+    final count = await db.transaction((txn) => _updateProductUnitTxn(txn, unit));
+    CatalogEvents.notifyPricesChanged();
+    return count;
   }
 
   Future<int> deleteProductUnit(int id) async {
@@ -2811,30 +2954,53 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> _syncProductUnitsTxn(
+    DatabaseExecutor txn,
+    int productId,
+    List<ProductUnit> units,
+  ) async {
+    final prodRows = await txn.query(
+      'products',
+      columns: ['price_currency'],
+      where: 'id = ?',
+      whereArgs: [productId],
+      limit: 1,
+    );
+    final productCurrency = prodRows.isNotEmpty
+        ? prodRows.first['price_currency'] as String?
+        : null;
+
+    await txn.delete(
+      'product_units',
+      where: 'product_id = ?',
+      whereArgs: [productId],
+    );
+    for (final rawUnit in units) {
+      if (rawUnit.conversionFactor <= 0) {
+        throw ArgumentError('Conversion factor must be greater than zero');
+      }
+      if (rawUnit.unitName.trim().isEmpty) {
+        throw ArgumentError('Unit name cannot be empty');
+      }
+      final u = await ReferencePricingDao.normalizeUnit(
+        txn,
+        productCurrency: productCurrency,
+        unit: rawUnit,
+      );
+      final map = u.toMap();
+      map['product_id'] = productId;
+      map.remove('id');
+      await txn.insert('product_units', map);
+    }
+  }
+
   Future<void> syncProductUnits(
     int productId,
     List<ProductUnit> units,
   ) async {
     final db = await database;
-    await db.transaction((txn) async {
-      await txn.delete(
-        'product_units',
-        where: 'product_id = ?',
-        whereArgs: [productId],
-      );
-      for (final u in units) {
-        if (u.conversionFactor <= 0) {
-          throw ArgumentError('Conversion factor must be greater than zero');
-        }
-        if (u.unitName.trim().isEmpty) {
-          throw ArgumentError('Unit name cannot be empty');
-        }
-        final map = u.toMap();
-        map['product_id'] = productId;
-        map.remove('id');
-        await txn.insert('product_units', map);
-      }
-    });
+    await db.transaction((txn) => _syncProductUnitsTxn(txn, productId, units));
+    CatalogEvents.notifyPricesChanged();
   }
 
   // ========== Stock Movements ==========
