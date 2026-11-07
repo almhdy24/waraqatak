@@ -9,6 +9,7 @@ import '../models/product_unit.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
+import '../utils/number_input.dart';
 import '../widgets/app_amount_text.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
@@ -173,11 +174,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   }
 
   double get _discount {
-    return double.tryParse(_discountController.text) ?? 0;
+    return NumberInput.parse(_discountController.text) ?? 0;
   }
 
   double get _paid {
-    return double.tryParse(_paidController.text) ?? 0;
+    return NumberInput.parse(_paidController.text) ?? 0;
   }
 
   ({double subtotal, double taxAmount, double total}) get _totals {
@@ -202,13 +203,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   List<DocumentItemInput> _buildItems() => List.generate(
     _descriptionControllers.length,
     (i) {
-      final q = double.tryParse(_quantityControllers[i].text) ?? 0;
+      final q = NumberInput.parse(_quantityControllers[i].text) ?? 0;
       final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
       final unit = i < _saleUnits.length ? _saleUnits[i] : null;
       return DocumentItemInput(
         description: _descriptionControllers[i].text.trim(),
         quantity: q,
-        price: double.tryParse(_priceControllers[i].text) ?? 0,
+        price: NumberInput.parse(_priceControllers[i].text) ?? 0,
         taxable: _taxableList[i],
         productId: _productIds[i],
         taxRate: _taxRates[i],
@@ -399,10 +400,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       if (!_isManualPriceList[i] && p != null) {
                         _pricingCategories[i] = newCat;
                         final q =
-                            double.tryParse(_quantityControllers[i].text) ??
+                            NumberInput.parse(_quantityControllers[i].text) ??
                             1.0;
                         final currentP =
-                            double.tryParse(_priceControllers[i].text);
+                            NumberInput.parse(_priceControllers[i].text);
                         List<ProductUnit> units =
                             _unitsCache[p.id] ?? const [];
                         if (units.isEmpty && p.id != null) {
@@ -425,7 +426,8 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           wholesalePricingEnabled: true,
                         );
                         _priceControllers[i].text =
-                            resolved.toStringAsFixed(2);
+                            NumberInput.formatForInput(resolved,
+                                maxDecimals: 4);
                       }
                     }
                     if (mounted) setState(() {});

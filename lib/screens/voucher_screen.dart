@@ -11,6 +11,8 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 
 enum VoucherType { paymentReceipt, expenseVoucher }
 
@@ -83,7 +85,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
     if (_business == null) return;
     setState(() => _saving = true);
 
-    final amount = double.tryParse(_amountController.text) ?? 0;
+    final amount = NumberInput.parse(_amountController.text) ?? 0;
     Contact? contact;
     if (_selectedContact != null) {
       contact = _selectedContact;
@@ -198,16 +200,17 @@ class _VoucherScreenState extends State<VoucherScreen> {
                   children: [
                     Text(l10n.amount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 12),
-                    TextFormField(
+                    AmountField(
                       controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      maxDecimals: 4,
+                      showMultipliers: true,
                       decoration: InputDecoration(
                         labelText: l10n.amount,
                         prefixIcon: const Icon(Icons.money),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       validator: (v) {
-                        final amount = double.tryParse(v ?? '');
+                        final amount = NumberInput.parse(v ?? '');
                         if (amount == null || amount <= 0) return l10n.invalidAmount;
                         return null;
                       },

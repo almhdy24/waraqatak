@@ -10,6 +10,8 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 
 class CustomDocumentScreen extends StatefulWidget {
   const CustomDocumentScreen({super.key});
@@ -75,7 +77,7 @@ class _CustomDocumentScreenState extends State<CustomDocumentScreen> {
     if (_business == null) return;
     setState(() => _saving = true);
 
-    final amount = double.tryParse(_amountController.text) ?? 0;
+    final amount = NumberInput.parse(_amountController.text) ?? 0;
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
     final notes = _notesController.text.trim();
@@ -214,13 +216,14 @@ class _CustomDocumentScreenState extends State<CustomDocumentScreen> {
                         children: [
                           Text(l10n.amount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                           const SizedBox(height: 12),
-                          TextFormField(
+                          AmountField(
                             controller: _amountController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            maxDecimals: 4,
+                            showMultipliers: true,
                             decoration: InputDecoration(labelText: l10n.amount, prefixIcon: const Icon(Icons.money), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                             validator: (v) {
                               if (v == null || v.isEmpty) return null;
-                              final amount = double.tryParse(v);
+                              final amount = NumberInput.parse(v);
                               if (amount == null || amount < 0) return l10n.invalidAmount;
                               return null;
                             },

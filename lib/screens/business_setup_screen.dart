@@ -11,6 +11,7 @@ import 'payment_methods_screen.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
+import '../utils/number_input.dart';
 
 class BusinessSetupScreen extends StatefulWidget {
   const BusinessSetupScreen({super.key});
@@ -67,7 +68,8 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
           _phoneController.text = business.phone;
           _addressController.text = business.address;
           _emailController.text = business.email ?? '';
-          _taxRateController.text = business.taxRate.toString();
+          _taxRateController.text =
+              NumberInput.formatForInput(business.taxRate, maxDecimals: 2);
           _logoPath = business.logoPath;
           _currencyCode = business.currencyCode;
         }
@@ -160,7 +162,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
             logoPath: _logoPath,
             currencyCode: _currencyCode,
             taxRate:
-                double.tryParse(_taxRateController.text) ?? _existing!.taxRate,
+                NumberInput.parse(_taxRateController.text) ?? _existing!.taxRate,
           )
         : Business(
             name: _nameController.text.trim(),
@@ -172,7 +174,7 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                 : _emailController.text.trim(),
             logoPath: _logoPath,
             currencyCode: _currencyCode,
-            taxRate: double.tryParse(_taxRateController.text) ?? 0,
+            taxRate: NumberInput.parse(_taxRateController.text) ?? 0,
           );
 
     try {

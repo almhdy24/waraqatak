@@ -9,6 +9,8 @@ import '../services/license_service.dart';
 import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_snackbar.dart';
@@ -64,12 +66,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _barcodeController.text = p.barcode ?? '';
       _unitController.text = p.unit ?? '';
       _categoryController.text = p.category ?? '';
-      _salePriceController.text = p.salePrice.toString();
-      _wholesalePriceController.text = p.wholesalePrice?.toString() ?? '';
+      _salePriceController.text =
+          NumberInput.formatForInput(p.salePrice, maxDecimals: 4);
+      _wholesalePriceController.text = p.wholesalePrice != null
+          ? NumberInput.formatForInput(p.wholesalePrice!, maxDecimals: 4)
+          : '';
       _wholesaleMinQuantityController.text = p.wholesaleMinQuantity != null
           ? FormatUtils.formatQuantity(p.wholesaleMinQuantity)
           : '';
-      _purchasePriceController.text = p.purchasePrice.toString();
+      _purchasePriceController.text =
+          NumberInput.formatForInput(p.purchasePrice, maxDecimals: 4);
       _currentStock = p.stockQuantity;
       _stockController.text = FormatUtils.formatQuantity(p.stockQuantity);
       _minStockController.text =
@@ -233,22 +239,22 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       code: _codeController.text.trim().isEmpty ? null : _codeController.text.trim(),
       barcode: barcode,
       unit: _unitController.text.trim().isEmpty ? null : _unitController.text.trim(),
-      salePrice: double.tryParse(_salePriceController.text) ?? 0,
+      salePrice: NumberInput.parse(_salePriceController.text) ?? 0,
       wholesalePrice: _wholesalePricingEnabled
-          ? double.tryParse(_wholesalePriceController.text.trim())
+          ? NumberInput.parse(_wholesalePriceController.text.trim())
           : widget.product?.wholesalePrice,
       wholesaleMinQuantity: _wholesalePricingEnabled
-          ? double.tryParse(_wholesaleMinQuantityController.text.trim())
+          ? NumberInput.parse(_wholesaleMinQuantityController.text.trim())
           : widget.product?.wholesaleMinQuantity,
-      purchasePrice: double.tryParse(_purchasePriceController.text) ?? 0,
+      purchasePrice: NumberInput.parse(_purchasePriceController.text) ?? 0,
       stockQuantity: isNew
           ? (_type == Product.typeService
               ? 0
-              : (double.tryParse(_stockController.text) ?? 0))
+              : (NumberInput.parse(_stockController.text) ?? 0))
           : _currentStock,
       minStock: _type == Product.typeService
           ? 0
-          : (double.tryParse(_minStockController.text) ?? 0),
+          : (NumberInput.parse(_minStockController.text) ?? 0),
       isTaxable: _taxable,
       isActive: _isActive,
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
@@ -286,14 +292,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final nameCtrl = TextEditingController(text: existing?.unitName ?? '');
     final factorCtrl = TextEditingController(
       text: existing != null
-          ? FormatUtils.formatQuantity(existing.conversionFactor)
+          ? NumberInput.formatForInput(existing.conversionFactor, maxDecimals: 4)
           : '',
     );
     final saleCtrl = TextEditingController(
-      text: existing?.salePrice?.toString() ?? '',
+      text: existing?.salePrice != null
+          ? NumberInput.formatForInput(existing!.salePrice!, maxDecimals: 4)
+          : '',
     );
     final wholesaleCtrl = TextEditingController(
-      text: existing?.wholesalePrice?.toString() ?? '',
+      text: existing?.wholesalePrice != null
+          ? NumberInput.formatForInput(existing!.wholesalePrice!, maxDecimals: 4)
+          : '',
     );
     bool isDefault = existing?.isDefaultSale ?? false;
     final formKey = GlobalKey<FormState>();
@@ -334,10 +344,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
+                  AmountField(
                     controller: factorCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    maxDecimals: 4,
+                    showMultipliers: false,
                     decoration: InputDecoration(
                       labelText: l10n.conversionFactor,
                       helperText: l10n.conversionFactorHelp,
@@ -346,7 +356,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return l10n.required;
-                      final f = double.tryParse(v.trim());
+                      final f = NumberInput.parse(v.trim());
                       if (f == null || f <= 0) {
                         return l10n.invalidConversionFactor;
                       }
@@ -354,10 +364,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
+                  AmountField(
                     controller: saleCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    maxDecimals: 4,
+                    showMultipliers: true,
                     decoration: InputDecoration(
                       labelText: '${l10n.unitPrice} (${l10n.optional})',
                       border: const OutlineInputBorder(),
@@ -365,10 +375,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   ),
                   if (_wholesalePricingEnabled) ...[
                     const SizedBox(height: 12),
-                    TextFormField(
+                    AmountField(
                       controller: wholesaleCtrl,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      maxDecimals: 4,
+                      showMultipliers: true,
                       decoration: InputDecoration(
                         labelText: '${l10n.wholesalePrice} (${l10n.optional})',
                         border: const OutlineInputBorder(),
@@ -399,10 +409,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     id: existing?.id,
                     productId: widget.product?.id ?? 0,
                     unitName: nameCtrl.text.trim(),
-                    conversionFactor: double.parse(factorCtrl.text.trim()),
-                    salePrice: double.tryParse(saleCtrl.text.trim()),
+                    conversionFactor:
+                        NumberInput.parse(factorCtrl.text.trim()) ?? 1.0,
+                    salePrice: NumberInput.parse(saleCtrl.text.trim()),
                     wholesalePrice: _wholesalePricingEnabled
-                        ? double.tryParse(wholesaleCtrl.text.trim())
+                        ? NumberInput.parse(wholesaleCtrl.text.trim())
                         : null,
                     isDefaultSale: isDefault,
                   );
@@ -512,9 +523,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _barcodeController.text != (p.barcode ?? '') ||
         _unitController.text != (p.unit ?? '') ||
         _categoryController.text != (p.category ?? '') ||
-        _salePriceController.text != p.salePrice.toString() ||
-        _wholesalePriceController.text != (p.wholesalePrice?.toString() ?? '') ||
-        _purchasePriceController.text != p.purchasePrice.toString() ||
+        _salePriceController.text !=
+            NumberInput.formatForInput(p.salePrice, maxDecimals: 4) ||
+        _wholesalePriceController.text !=
+            (p.wholesalePrice != null
+                ? NumberInput.formatForInput(p.wholesalePrice!, maxDecimals: 4)
+                : '') ||
+        _purchasePriceController.text !=
+            NumberInput.formatForInput(p.purchasePrice, maxDecimals: 4) ||
         _taxable != p.isTaxable ||
         _taxProfileId != p.taxProfileId ||
         _isActive != p.isActive ||
@@ -750,58 +766,63 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     Text(l10n.unitPrice,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 12),
-                    TextFormField(
+                    AmountField(
                       controller: _salePriceController,
+                      maxDecimals: 4,
+                      showMultipliers: true,
                       decoration: InputDecoration(
                         labelText: l10n.unitPrice,
                         prefixIcon: const Icon(Icons.money),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       validator: (v) {
-                        final price = double.tryParse(v ?? '');
+                        final price = NumberInput.parse(v ?? '');
                         if (price == null || price < 0) return l10n.invalidAmount;
                         return null;
                       },
                     ),
                     if (_wholesalePricingEnabled) ...[
                       const SizedBox(height: 12),
-                      TextFormField(
+                      AmountField(
                         controller: _wholesalePriceController,
+                        maxDecimals: 4,
+                        showMultipliers: true,
                         decoration: InputDecoration(
                           labelText: l10n.wholesalePrice,
                           prefixIcon: const Icon(Icons.storefront_outlined),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return null;
-                          final price = double.tryParse(v);
+                          final price = NumberInput.parse(v);
                           if (price == null || price < 0) return l10n.invalidAmount;
                           return null;
                         },
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
+                      AmountField(
                         controller: _wholesaleMinQuantityController,
+                        maxDecimals: 4,
+                        showMultipliers: false,
                         decoration: InputDecoration(
                           labelText: l10n.wholesaleMinQuantity,
                           helperText: l10n.wholesaleMinQuantityHelp,
                           prefixIcon: const Icon(Icons.format_list_numbered),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return null;
-                          final q = double.tryParse(v);
+                          final q = NumberInput.parse(v);
                           if (q == null || q < 0) return l10n.invalidQuantity;
                           return null;
                         },
                       ),
                     ],
                     const SizedBox(height: 12),
-                    TextFormField(
+                    AmountField(
                       controller: _purchasePriceController,
+                      maxDecimals: 4,
+                      showMultipliers: true,
                       decoration: InputDecoration(
                         labelText: l10n.purchasePrice,
                         prefixIcon: const Icon(Icons.money),
@@ -809,7 +830,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         helperMaxLines: 2,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
                   ],
                 ),
@@ -944,9 +964,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       Text(l10n.stock,
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 12),
-                      TextFormField(
+                      AmountField(
                         controller: _stockController,
                         readOnly: !isNew,
+                        maxDecimals: 4,
+                        showMultipliers: false,
                         decoration: InputDecoration(
                           labelText: isNew
                               ? l10n.openingStock
@@ -966,12 +988,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
+                      AmountField(
                         controller: _minStockController,
+                        maxDecimals: 4,
+                        showMultipliers: false,
                         decoration: InputDecoration(
                           labelText: l10n.lowStockThreshold,
                           prefixIcon:
@@ -979,8 +1001,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
                       ),
                     ],
                   ),

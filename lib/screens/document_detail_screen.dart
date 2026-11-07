@@ -17,6 +17,8 @@ import '../utils/currency_utils.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 import '../widgets/status_badge.dart';
 import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
@@ -384,7 +386,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   Future<void> _showRecordPaymentSheet() async {
     final l10n = AppLocalizations.of(context);
     final doc = _document!;
-    final amountController = TextEditingController(text: doc.remaining.toStringAsFixed(2));
+    final amountController = TextEditingController(
+        text: NumberInput.formatForInput(doc.remaining, maxDecimals: 4));
     String? selectedMethod = _enabledMethods.isNotEmpty ? _enabledMethods.first.key : null;
 
     await showModalBottomSheet(
@@ -425,9 +428,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 16),
-                      TextField(
+                      AmountField(
                         controller: amountController,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        maxDecimals: 4,
+                        showMultipliers: true,
                         decoration: InputDecoration(
                           labelText: l10n.paymentAmountLabel,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -452,7 +456,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       const SizedBox(height: 20),
                       FilledButton(
                         onPressed: () async {
-                          final amount = double.tryParse(amountController.text) ?? 0;
+                          final amount = NumberInput.parse(amountController.text) ?? 0;
                           final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
                           if (amount <= 0 || MoneyUtils.isOverpayment(amount, doc.remaining, decimalDigits)) {
                             AppSnackBar.show(

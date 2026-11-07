@@ -19,6 +19,8 @@ import '../services/pos_cart.dart';
 import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 import '../utils/print_settings.dart';
 import '../widgets/app_amount_text.dart';
 import '../widgets/app_confirm_dialog.dart';
@@ -167,23 +169,18 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 8),
-              TextFormField(
+              AmountField(
                 controller: qtyCtrl,
                 autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: false,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
-                ],
+                maxDecimals: 4,
+                showMultipliers: false,
                 decoration: InputDecoration(
                   isDense: true,
                   border: const OutlineInputBorder(),
                   suffixText: unitLabel.isNotEmpty ? unitLabel : null,
                 ),
                 validator: (val) {
-                  final parsed = FormatUtils.parseQuantity(val);
+                  final parsed = NumberInput.parse(val);
                   if (parsed == null || parsed <= 0) {
                     return l10n.invalidQuantity;
                   }
@@ -216,7 +213,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
 
     if (confirmed == true) {
-      final qty = FormatUtils.parseQuantity(qtyCtrl.text);
+      final qty = NumberInput.parse(qtyCtrl.text);
       if (qty != null && qty > 0) {
         _addProduct(p, quantity: qty);
       }
@@ -255,23 +252,18 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 8),
-              TextFormField(
+              AmountField(
                 controller: qtyCtrl,
                 autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                  signed: false,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
-                ],
+                maxDecimals: 4,
+                showMultipliers: false,
                 decoration: InputDecoration(
                   isDense: true,
                   border: const OutlineInputBorder(),
                   suffixText: unitLabel.isNotEmpty ? unitLabel : null,
                 ),
                 validator: (val) {
-                  final parsed = FormatUtils.parseQuantity(val);
+                  final parsed = NumberInput.parse(val);
                   if (parsed == null || parsed <= 0) {
                     return l10n.invalidQuantity;
                   }
@@ -304,7 +296,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
 
     if (confirmed == true) {
-      final newQty = FormatUtils.parseQuantity(qtyCtrl.text);
+      final newQty = NumberInput.parse(qtyCtrl.text);
       if (newQty != null && newQty > 0) {
         update(() => _setQty(index, newQty));
       }
@@ -323,9 +315,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   void _syncDiscountField() {
     final d = _cart.discount;
-    final shown = double.tryParse(_discountCtrl.text) ?? 0;
+    final shown = NumberInput.parse(_discountCtrl.text) ?? 0;
     if (shown != d) {
-      _discountCtrl.text = d == 0 ? '' : _money.format(d).replaceAll(',', '');
+      _discountCtrl.text =
+          d == 0 ? '' : NumberInput.formatForInput(d, maxDecimals: 4);
     }
   }
 
@@ -391,7 +384,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final business = _business;
     if (_saving || _cart.isEmpty || business == null || _method == null) return;
     final total = _totals.total;
-    final received = double.tryParse(_receivedCtrl.text.replaceAll(',', ''));
+    final received = NumberInput.parse(_receivedCtrl.text);
     if (received != null && received > 0 && received < total) {
       _toast(l10n.posReceivedLessThanTotal);
       return;
@@ -706,11 +699,12 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final qtyCtrl = TextEditingController(
       text: FormatUtils.formatQuantity(line.quantity),
     );
-    final priceCtrl = TextEditingController(text: line.unitPrice.toString());
+    final priceCtrl = TextEditingController(
+        text: NumberInput.formatForInput(line.unitPrice, maxDecimals: 4));
     bool isCustomPrice = line.priceOverride != null;
 
     double currentQty() =>
-        FormatUtils.parseQuantity(qtyCtrl.text) ?? line.quantity;
+        NumberInput.parse(qtyCtrl.text) ?? line.quantity;
 
     final result = await showDialog<bool>(
       context: context,
@@ -747,7 +741,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
-                                priceCtrl.text = resPrice.toString();
+                                priceCtrl.text = NumberInput.formatForInput(
+                                    resPrice,
+                                    maxDecimals: 4);
                               }
                             });
                           }
@@ -772,7 +768,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                     quantity: currentQty(),
                                     wholesalePricingEnabled: wholesaleEnabled,
                                   );
-                                  priceCtrl.text = resPrice.toString();
+                                  priceCtrl.text = NumberInput.formatForInput(
+                                    resPrice,
+                                    maxDecimals: 4);
                                 }
                               });
                             }
@@ -807,7 +805,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
-                                priceCtrl.text = resPrice.toString();
+                                priceCtrl.text = NumberInput.formatForInput(
+                                    resPrice,
+                                    maxDecimals: 4);
                               }
                             });
                           }
@@ -830,7 +830,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
-                                priceCtrl.text = resPrice.toString();
+                                priceCtrl.text = NumberInput.formatForInput(
+                                    resPrice,
+                                    maxDecimals: 4);
                               }
                             });
                           }
@@ -844,22 +846,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 6),
-                TextField(
+                AmountField(
                   controller: qtyCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: false,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
-                  ],
+                  maxDecimals: 4,
+                  showMultipliers: false,
                   decoration: InputDecoration(
                     isDense: true,
                     suffixText: selectedUnit?.unitName ?? p.unit ?? '',
                   ),
                   onChanged: (val) {
                     if (!isCustomPrice) {
-                      final enteredQty = FormatUtils.parseQuantity(val);
+                      final enteredQty = NumberInput.parse(val);
                       if (enteredQty != null && enteredQty > 0) {
                         setDialog(() {
                           final resPrice = DocumentService.resolveLinePrice(
@@ -870,7 +867,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                             quantity: enteredQty,
                             wholesalePricingEnabled: wholesaleEnabled,
                           );
-                          priceCtrl.text = resPrice.toString();
+                          priceCtrl.text = NumberInput.formatForInput(
+                              resPrice,
+                              maxDecimals: 4);
                         });
                       }
                     }
@@ -881,15 +880,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 13)),
                 const SizedBox(height: 6),
-                TextField(
+                AmountField(
                   controller: priceCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                    signed: false,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
-                  ],
+                  maxDecimals: 4,
+                  showMultipliers: true,
                   decoration: InputDecoration(
                     isDense: true,
                     suffixText: _business?.currencySymbol ?? '',
@@ -909,14 +903,16 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                                   quantity: currentQty(),
                                   wholesalePricingEnabled: wholesaleEnabled,
                                 );
-                                priceCtrl.text = resPrice.toString();
+                                priceCtrl.text = NumberInput.formatForInput(
+                                    resPrice,
+                                    maxDecimals: 4);
                               });
                             },
                           )
                         : null,
                   ),
                   onChanged: (val) {
-                    final entered = FormatUtils.parseQuantity(val.trim());
+                    final entered = NumberInput.parse(val.trim());
                     if (entered != null) {
                       isCustomPrice = true;
                     }
@@ -941,9 +937,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     if (result == true) {
       final overridePrice =
-          isCustomPrice ? FormatUtils.parseQuantity(priceCtrl.text.trim()) : null;
+          isCustomPrice ? NumberInput.parse(priceCtrl.text.trim()) : null;
       final newQty =
-          FormatUtils.parseQuantity(qtyCtrl.text.trim()) ?? line.quantity;
+          NumberInput.parse(qtyCtrl.text.trim()) ?? line.quantity;
       update(() {
         final err = _cart.updateLine(
           index,
@@ -970,7 +966,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     }
 
     final t = _totals;
-    final received = double.tryParse(_receivedCtrl.text.replaceAll(',', ''));
+    final received = NumberInput.parse(_receivedCtrl.text);
     final change = received == null ? 0.0 : PosCart.changeFor(total: t.total, received: received);
 
     if (_cart.isEmpty) {
@@ -1054,20 +1050,20 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             children: [
               Row(children: [
                 Expanded(
-                  child: TextField(
+                  child: AmountField(
                     controller: _discountCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                    maxDecimals: 4,
+                    showMultipliers: true,
                     decoration: InputDecoration(labelText: l10n.discount, isDense: true),
-                    onChanged: (v) => update(() => _cart.discount = double.tryParse(v) ?? 0),
+                    onChanged: (v) => update(() => _cart.discount = NumberInput.parse(v) ?? 0),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: TextField(
+                  child: AmountField(
                     controller: _receivedCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                    maxDecimals: 4,
+                    showMultipliers: true,
                     decoration: InputDecoration(labelText: l10n.posAmountReceived, isDense: true),
                     onChanged: (_) => update(() {}),
                   ),

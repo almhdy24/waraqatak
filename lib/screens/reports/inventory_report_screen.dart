@@ -9,6 +9,8 @@ import '../../services/inventory_costing_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
+import '../../utils/number_input.dart';
+import '../../widgets/amount_field.dart';
 import '../inventory_screen.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
@@ -247,9 +249,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            TextField(
+            AmountField(
               controller: costController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              maxDecimals: 4,
+              showMultipliers: true,
               decoration: InputDecoration(
                 labelText: l10n.enterCostBasis,
                 hintText: l10n.costBasisHint,
@@ -273,7 +276,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           ),
           FilledButton(
             onPressed: () async {
-              final val = double.tryParse(costController.text.trim());
+              final val = NumberInput.parse(costController.text.trim());
               if (val == null || val <= 0) return;
               Navigator.pop(ctx);
               try {

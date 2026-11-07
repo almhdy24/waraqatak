@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
@@ -8,6 +7,8 @@ import '../models/product.dart';
 import '../services/inventory_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 import '../widgets/app_design_tokens.dart';
 import 'barcode_scanner_screen.dart';
 import 'stock_movements_screen.dart';
@@ -72,7 +73,7 @@ class InventoryScreen extends StatefulWidget {
             final dangerColor = AppDesignTokens.semanticDanger(ctx);
             final activeColor = isAdd ? successColor : dangerColor;
 
-            final qty = FormatUtils.parseQuantity(qtyCtrl.text) ?? 0.0;
+            final qty = NumberInput.parse(qtyCtrl.text) ?? 0.0;
             final delta = isAdd ? qty : -qty;
             final newQty = product.stockQuantity + delta;
 
@@ -233,8 +234,10 @@ class InventoryScreen extends StatefulWidget {
                   ),
                   const SizedBox(height: 16),
 
-                  TextField(
+                  AmountField(
                     controller: qtyCtrl,
+                    maxDecimals: 4,
+                    showMultipliers: false,
                     decoration: InputDecoration(
                       labelText: l10n.adjustmentQuantity,
                       prefixIcon: Icon(
@@ -257,13 +260,6 @@ class InventoryScreen extends StatefulWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: false,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9.,،]')),
-                    ],
                     autofocus: true,
                     onChanged: (_) => setSheet(() {
                       validationError = null;
@@ -369,7 +365,7 @@ class InventoryScreen extends StatefulWidget {
                           ? null
                           : () async {
                               final parsedQty =
-                                  FormatUtils.parseQuantity(qtyCtrl.text);
+                                  NumberInput.parse(qtyCtrl.text);
                               final notes = notesCtrl.text.trim();
                               if (parsedQty == null || parsedQty <= 0) {
                                 setSheet(() => validationError =

@@ -7,6 +7,7 @@ import '../models/currency.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
+import '../utils/number_input.dart';
 import '../widgets/app_amount_text.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
@@ -148,8 +149,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     });
   }
 
-  double get _discount => double.tryParse(_discountController.text) ?? 0;
-  double get _paid => double.tryParse(_paidController.text) ?? 0;
+  double get _discount => NumberInput.parse(_discountController.text) ?? 0;
+  double get _paid => NumberInput.parse(_paidController.text) ?? 0;
 
   ({double subtotal, double taxAmount, double total}) get _totals {
     final items = _buildItems();
@@ -174,8 +175,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     _descriptionControllers.length,
     (i) => DocumentItemInput(
       description: _descriptionControllers[i].text.trim(),
-      quantity: double.tryParse(_quantityControllers[i].text) ?? 0,
-      price: double.tryParse(_priceControllers[i].text) ?? 0,
+      quantity: NumberInput.parse(_quantityControllers[i].text) ?? 0,
+      price: NumberInput.parse(_priceControllers[i].text) ?? 0,
       taxable: _taxableList[i],
       productId: _productIds[i],
       taxRate: _taxRates[i],

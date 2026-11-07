@@ -4,6 +4,8 @@ import '../localization/app_localizations.dart';
 import '../models/tax_profile.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 
 class TaxProfilesScreen extends StatefulWidget {
   const TaxProfilesScreen({super.key});
@@ -32,7 +34,9 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
     final nameCtrl =
         TextEditingController(text: profile?.name ?? '');
     final rateCtrl = TextEditingController(
-        text: profile != null ? profile.rate.toString() : '');
+        text: profile != null
+            ? NumberInput.formatForInput(profile.rate, maxDecimals: 2)
+            : '');
     final notesCtrl = TextEditingController(text: profile?.notes ?? '');
 
     String selectedType = profile?.type ?? 'vat';
@@ -80,12 +84,12 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                AmountField(
                   controller: rateCtrl,
+                  maxDecimals: 2,
+                  showMultipliers: false,
                   decoration:
                       InputDecoration(labelText: l10n.taxProfileRate),
-                  keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -134,7 +138,7 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
             FilledButton(
               onPressed: () async {
                 final name = nameCtrl.text.trim();
-                final rate = double.tryParse(rateCtrl.text.trim());
+                final rate = NumberInput.parse(rateCtrl.text.trim());
                 if (name.isEmpty || rate == null || rate < 0) {
                   AppSnackBar.show(
                     ctx,

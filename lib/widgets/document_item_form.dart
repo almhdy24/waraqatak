@@ -8,6 +8,7 @@ import '../screens/barcode_scanner_screen.dart';
 import '../screens/product_form_screen.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
+import '../utils/number_input.dart';
 import 'app_design_tokens.dart';
 import 'product_autocomplete_field.dart';
 
@@ -137,7 +138,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         widget.onPricingCategoryChanged?.call(tier);
       }
       widget.onManualPriceChanged?.call(false);
-      final q = double.tryParse(widget.quantityController.text) ?? 1.0;
+      final q = NumberInput.parse(widget.quantityController.text) ?? 1.0;
       price = DocumentService.resolveLinePrice(
         product: product,
         availableUnits: _availableUnits,
@@ -152,7 +153,8 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
       setState(() {
         _selectedProductId = product.id;
         widget.descriptionController.text = product.name;
-        widget.priceController.text = price.toStringAsFixed(2);
+        widget.priceController.text =
+            NumberInput.formatForInput(price, maxDecimals: 4);
         widget.onTaxableChanged(product.isTaxable);
       });
     }
@@ -168,7 +170,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     if (!widget.usePurchasePrice &&
         !widget.isManualPrice &&
         _selectedProduct != null) {
-      final q = double.tryParse(widget.quantityController.text) ?? 1.0;
+      final q = NumberInput.parse(widget.quantityController.text) ?? 1.0;
       final tier = widget.pricingCategory ?? widget.customerPricingCategory;
       final resolved = DocumentService.resolveLinePrice(
         product: _selectedProduct!,
@@ -178,7 +180,8 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         wholesalePricingEnabled: widget.wholesalePricingEnabled,
         unit: unit,
       );
-      widget.priceController.text = resolved.toStringAsFixed(2);
+      widget.priceController.text =
+          NumberInput.formatForInput(resolved, maxDecimals: 4);
     }
     widget.onChanged?.call();
   }
@@ -201,7 +204,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     widget.onManualPriceChanged?.call(false);
     widget.onPricingCategoryChanged?.call(tier);
     if (_selectedProduct != null) {
-      final q = double.tryParse(widget.quantityController.text) ?? 1.0;
+      final q = NumberInput.parse(widget.quantityController.text) ?? 1.0;
       final resolved = DocumentService.resolveLinePrice(
         product: _selectedProduct!,
         availableUnits: _availableUnits,
@@ -210,7 +213,8 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         wholesalePricingEnabled: true,
         unit: _selectedUnit,
       );
-      widget.priceController.text = resolved.toStringAsFixed(2);
+      widget.priceController.text =
+          NumberInput.formatForInput(resolved, maxDecimals: 4);
     }
     widget.onChanged?.call();
   }
@@ -219,7 +223,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     if (!widget.usePurchasePrice &&
         !widget.isManualPrice &&
         _selectedProduct != null) {
-      final q = double.tryParse(value) ?? 0.0;
+      final q = NumberInput.parse(value) ?? 0.0;
       final tier = widget.pricingCategory ?? widget.customerPricingCategory;
       final resolved = DocumentService.resolveLinePrice(
         product: _selectedProduct!,
@@ -229,9 +233,11 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         wholesalePricingEnabled: widget.wholesalePricingEnabled,
         unit: _selectedUnit,
       );
-      final currentP = double.tryParse(widget.priceController.text) ?? 0.0;
+      final currentP =
+          NumberInput.parse(widget.priceController.text) ?? 0.0;
       if ((resolved - currentP).abs() > 0.0001) {
-        widget.priceController.text = resolved.toStringAsFixed(2);
+        widget.priceController.text =
+            NumberInput.formatForInput(resolved, maxDecimals: 4);
       }
     }
     widget.onChanged?.call();
@@ -288,8 +294,8 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
-    final qty = double.tryParse(widget.quantityController.text) ?? 0.0;
-    final price = double.tryParse(widget.priceController.text) ?? 0.0;
+    final qty = NumberInput.parse(widget.quantityController.text) ?? 0.0;
+    final price = NumberInput.parse(widget.priceController.text) ?? 0.0;
     final lineTotal = qty * price;
 
     String taxBadgeLabel;
@@ -507,7 +513,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       decimal: true,
                     ),
                     validator: (v) {
-                      final q = double.tryParse(v ?? '');
+                      final q = NumberInput.parse(v ?? '');
                       if (q == null || q <= 0) return l10n.invalidQuantity;
                       return null;
                     },
@@ -540,7 +546,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       decimal: true,
                     ),
                     validator: (v) {
-                      final p = double.tryParse(v ?? '');
+                      final p = NumberInput.parse(v ?? '');
                       if (p == null || p < 0) return l10n.invalidAmount;
                       return null;
                     },

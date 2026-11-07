@@ -6,6 +6,8 @@ import '../../services/feature_access.dart';
 import '../../services/license_service.dart';
 import '../../services/stocktake_service.dart';
 import '../../utils/format_utils.dart';
+import '../../utils/number_input.dart';
+import '../../widgets/amount_field.dart';
 import '../../widgets/app_icons.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
@@ -182,9 +184,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
             const SizedBox(height: 12),
-            TextField(
+            AmountField(
               controller: countController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              maxDecimals: 4,
+              showMultipliers: false,
               autofocus: true,
               decoration: InputDecoration(
                 labelText: l10n.countedQty,
@@ -215,7 +218,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
           FilledButton(
             onPressed: () {
               final text = countController.text.trim();
-              final qty = double.tryParse(text);
+              final qty = NumberInput.parse(text);
               if (text.isNotEmpty && (qty == null || qty < 0)) {
                 return;
               }
@@ -229,7 +232,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
 
     if (updated == true) {
       final text = countController.text.trim();
-      final qty = text.isEmpty ? null : double.tryParse(text);
+      final qty = text.isEmpty ? null : NumberInput.parse(text);
       await StocktakeService.instance.recordCount(
         item.id!,
         qty,

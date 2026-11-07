@@ -10,6 +10,8 @@ import '../utils/error_utils.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 
 class BulkPricingScreen extends StatefulWidget {
   const BulkPricingScreen({super.key});
@@ -103,7 +105,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
   }
 
   void _updatePreview() {
-    final val = double.tryParse(_valController.text.trim()) ?? 0.0;
+    final val = NumberInput.parse(_valController.text.trim()) ?? 0.0;
     final selectedProducts = _allProducts.where((p) => _selectedProductIds.contains(p.id)).toList();
 
     _previewItems = BulkPricingService.instance.preview(
@@ -117,7 +119,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
 
   Future<void> _applyChanges() async {
     final l10n = AppLocalizations.of(context);
-    final val = double.tryParse(_valController.text.trim());
+    final val = NumberInput.parse(_valController.text.trim());
     if (val == null || val < 0) {
       AppSnackBar.show(
         context,
@@ -307,9 +309,10 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                         // Value
                         SizedBox(
                           width: 90,
-                          child: TextField(
+                          child: AmountField(
                             controller: _valController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            maxDecimals: 4,
+                            showMultipliers: false,
                             decoration: InputDecoration(
                               labelText: l10n.value,
                               isDense: true,

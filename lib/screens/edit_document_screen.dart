@@ -17,6 +17,8 @@ import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 
 class EditDocumentScreen extends StatefulWidget {
   final int documentId;
@@ -117,12 +119,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     _selectedDate = doc.date;
 
     _notesController.text = doc.notes ?? '';
-    _discountController.text = doc.discount == doc.discount.roundToDouble()
-        ? doc.discount.toInt().toString()
-        : doc.discount.toString();
-    _paidController.text = doc.paid == doc.paid.roundToDouble()
-        ? doc.paid.toInt().toString()
-        : doc.paid.toString();
+    _discountController.text =
+        NumberInput.formatForInput(doc.discount, maxDecimals: 4);
+    _paidController.text = NumberInput.formatForInput(doc.paid, maxDecimals: 4);
 
     if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
       _paymentMethod = doc.paymentMethod ?? 'cash';
@@ -131,23 +130,21 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     } else if (doc.type == 'quotation') {
       if (doc.validUntil != null) {
         final days = doc.validUntil!.difference(doc.date).inDays;
-        _validityDaysController.text = days.toString();
+        _validityDaysController.text =
+            NumberInput.formatForInput(days.toDouble(), maxDecimals: 0);
       }
     } else if (doc.type == 'custom') {
-      _amountController.text = doc.paid.toString();
+      _amountController.text =
+          NumberInput.formatForInput(doc.paid, maxDecimals: 4);
     }
 
     if (doc.type == 'invoice' || doc.type == 'quotation' || doc.type == 'purchase') {
       for (final item in items) {
         _descriptionControllers.add(TextEditingController(text: item.description));
         _quantityControllers.add(TextEditingController(
-            text: item.quantity % 1 == 0
-                ? item.quantity.toInt().toString()
-                : item.quantity.toString()));
+            text: NumberInput.formatForInput(item.quantity, maxDecimals: 4)));
         _priceControllers.add(TextEditingController(
-            text: item.price % 1 == 0
-                ? item.price.toInt().toString()
-                : item.price.toString()));
+            text: NumberInput.formatForInput(item.price, maxDecimals: 4)));
         _taxableList.add(item.taxable);
         _productIds.add(item.productId);
         _pricingCategories.add(item.pricingCategory);
@@ -262,14 +259,14 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final items = <DocumentItemInput>[];
     if (isInvoice || isQuotation || isPurchase) {
       for (int i = 0; i < _descriptionControllers.length; i++) {
-        final q = double.parse(_quantityControllers[i].text);
+        final q = NumberInput.parse(_quantityControllers[i].text) ?? 0;
         final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
         final unit = i < _saleUnits.length ? _saleUnits[i] : null;
         items.add(
           DocumentItemInput(
             description: _descriptionControllers[i].text.trim(),
             quantity: q,
-            price: double.parse(_priceControllers[i].text),
+            price: NumberInput.parse(_priceControllers[i].text) ?? 0,
             taxable: _taxableList[i],
             productId: _productIds[i],
             pricingCategory: _pricingCategories[i],
@@ -284,17 +281,18 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     double discount = 0;
     double paid = 0;
     if (isInvoice || isPurchase) {
-      discount = double.tryParse(_discountController.text) ?? 0;
-      paid = double.tryParse(_paidController.text) ?? 0;
+      discount = NumberInput.parse(_discountController.text) ?? 0;
+      paid = NumberInput.parse(_paidController.text) ?? 0;
     } else if (isFinancial) {
-      paid = double.tryParse(_paidController.text) ?? 0;
+      paid = NumberInput.parse(_paidController.text) ?? 0;
     } else if (isCustom) {
-      paid = double.tryParse(_amountController.text) ?? 0;
+      paid = NumberInput.parse(_amountController.text) ?? 0;
     }
 
     DateTime? validUntil;
     if (isQuotation) {
-      final days = int.tryParse(_validityDaysController.text) ?? 0;
+      final days =
+          NumberInput.parse(_validityDaysController.text)?.toInt() ?? 0;
       validUntil = (_selectedDate ?? _document!.date).add(Duration(days: days));
     }
 
@@ -410,8 +408,8 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                               final p = _cachedProducts[i];
                               if (!_isManualPriceList[i] && p != null) {
                                 _pricingCategories[i] = newCat;
-                                final q = double.tryParse(_quantityControllers[i].text) ?? 1.0;
-                                final currentP = double.tryParse(_priceControllers[i].text);
+                                final q = NumberInput.parse(_quantityControllers[i].text) ?? 1.0;
+                                final currentP = NumberInput.parse(_priceControllers[i].text);
                                 List<ProductUnit> units = _unitsCache[p.id] ?? const [];
                                 if (units.isEmpty && p.id != null) {
                                   try {
@@ -431,7 +429,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                                   isManualPrice: _isManualPriceList[i],
                                   wholesalePricingEnabled: true,
                                 );
-                                _priceControllers[i].text = resolved.toStringAsFixed(2);
+                                _priceControllers[i].text =
+                                    NumberInput.formatForInput(resolved,
+                                        maxDecimals: 4);
                               }
                             }
                             if (mounted) setState(() {});
@@ -504,16 +504,17 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                     children: [
                       Text(l10n.amount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 12),
-                      TextFormField(
+                      AmountField(
                         controller: _paidController,
+                        maxDecimals: 4,
+                        showMultipliers: true,
                         decoration: InputDecoration(
                           labelText: l10n.amount,
                           prefixIcon: const Icon(Icons.money),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         validator: (v) {
-                          final amount = double.tryParse(v ?? '');
+                          final amount = NumberInput.parse(v ?? '');
                           if (amount == null || amount <= 0) return l10n.invalidAmount;
                           return null;
                         },
@@ -597,23 +598,26 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
               ),
               const Divider(),
               if (isInvoice || isPurchase) ...[
-                TextFormField(
+                AmountField(
                   controller: _discountController,
+                  maxDecimals: 4,
+                  showMultipliers: true,
                   decoration: InputDecoration(labelText: l10n.discount),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 8),
-                TextFormField(
+                AmountField(
                   controller: _paidController,
+                  maxDecimals: 4,
+                  showMultipliers: true,
                   decoration: InputDecoration(labelText: l10n.paid),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
               ],
               if (isQuotation) ...[
-                TextFormField(
+                AmountField(
                   controller: _validityDaysController,
+                  maxDecimals: 0,
+                  showMultipliers: false,
                   decoration: InputDecoration(labelText: l10n.validityDays),
-                  keyboardType: TextInputType.number,
                 ),
               ],
               TextFormField(
@@ -632,17 +636,18 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                     children: [
                       Text(l10n.amount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 12),
-                      TextFormField(
+                      AmountField(
                         controller: _amountController,
+                        maxDecimals: 4,
+                        showMultipliers: true,
                         decoration: InputDecoration(
                           labelText: l10n.amount,
                           prefixIcon: const Icon(Icons.money),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         validator: (v) {
                           if (v == null || v.isEmpty) return null;
-                          final amount = double.tryParse(v);
+                          final amount = NumberInput.parse(v);
                           if (amount == null || amount < 0) return l10n.invalidAmount;
                           return null;
                         },

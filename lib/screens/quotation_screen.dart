@@ -17,6 +17,8 @@ import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
+import '../utils/number_input.dart';
+import '../widgets/amount_field.dart';
 
 class QuotationScreen extends StatefulWidget {
   const QuotationScreen({super.key});
@@ -176,13 +178,13 @@ class _QuotationScreenState extends State<QuotationScreen> {
   List<DocumentItemInput> _buildItems() => List.generate(
     _desc.length,
     (i) {
-      final q = double.tryParse(_qty[i].text) ?? 1;
+      final q = NumberInput.parse(_qty[i].text) ?? 1;
       final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
       final unit = i < _saleUnits.length ? _saleUnits[i] : null;
       return DocumentItemInput(
         description: _desc[i].text.trim(),
         quantity: q,
-        price: double.tryParse(_price[i].text) ?? 0,
+        price: NumberInput.parse(_price[i].text) ?? 0,
         taxable: _taxable[i],
         productId: _productIds[i],
         taxRate: _taxRates[i],
@@ -209,7 +211,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
     setState(() => _saving = true);
 
-    final int validityDays = int.tryParse(_validityController.text) ?? 7;
+    final int validityDays =
+        NumberInput.parse(_validityController.text)?.toInt() ?? 7;
     final DateTime documentDate = DateTime.now();
     final DateTime validUntil = documentDate.add(Duration(days: validityDays));
 
@@ -338,8 +341,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
                         final p = i < _cachedProducts.length ? _cachedProducts[i] : null;
                         if (i < _isManualPriceList.length && !_isManualPriceList[i] && p != null) {
                           _pricingCategories[i] = newCat;
-                          final q = double.tryParse(_qty[i].text) ?? 1.0;
-                          final currentP = double.tryParse(_price[i].text);
+                          final q = NumberInput.parse(_qty[i].text) ?? 1.0;
+                          final currentP = NumberInput.parse(_price[i].text);
                           List<ProductUnit> units = _unitsCache[p.id] ?? const [];
                           if (units.isEmpty && p.id != null) {
                             try {
@@ -359,7 +362,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
                             isManualPrice: _isManualPriceList[i],
                             wholesalePricingEnabled: true,
                           );
-                          _price[i].text = resolved.toStringAsFixed(2);
+                          _price[i].text = NumberInput.formatForInput(resolved,
+                              maxDecimals: 4);
                         }
                       }
                       if (mounted) setState(() {});
@@ -462,8 +466,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
                       : null,
                 ),
                 const SizedBox(height: 20),
-                TextFormField(
+                AmountField(
                   controller: _validityController,
+                  maxDecimals: 0,
+                  showMultipliers: false,
                   decoration: InputDecoration(
                     labelText: l10n.validityDays,
                     prefixIcon: const Icon(
@@ -471,7 +477,6 @@ class _QuotationScreenState extends State<QuotationScreen> {
                       size: 20,
                     ),
                   ),
-                  keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
