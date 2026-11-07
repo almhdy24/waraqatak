@@ -102,6 +102,24 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       return;
     }
 
+    if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
+      final isAlloc = await db.hasActiveAllocations(doc.id!);
+      if (isAlloc || doc.relatedDocumentId != null) {
+        if (mounted) {
+          final l10n = AppLocalizations.of(context);
+          AppSnackBar.show(
+            context,
+            l10n.isArabic
+                ? 'لا يمكن تعديل سند تم تخصيصه. يرجى إلغاء السند وإصدار سند جديد.'
+                : 'Allocated vouchers cannot be edited. Cancel and re-issue.',
+            severity: AppSnackBarSeverity.error,
+          );
+          Navigator.pop(context);
+        }
+        return;
+      }
+    }
+
     final business = await db.getFirstBusiness();
     final contact = doc.contactId != null ? await db.getContactById(doc.contactId!) : null;
     final items = await db.getDocumentItems(doc.id!);

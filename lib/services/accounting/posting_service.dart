@@ -38,6 +38,7 @@ class PostingService {
     DateTime? now,
     String origin = 'live',
     Document? parentDoc,
+    bool isAllocated = false,
   }) {
     // Drafts and quotations post nothing
     if (doc.status == DocumentStatus.draft ||
@@ -86,6 +87,7 @@ class PostingService {
           origin: origin,
           out: results,
           parentDoc: parentDoc,
+          isAllocated: isAllocated,
         );
         break;
 
@@ -98,6 +100,7 @@ class PostingService {
           origin: origin,
           out: results,
           parentDoc: parentDoc,
+          isAllocated: isAllocated,
         );
         break;
     }
@@ -363,6 +366,7 @@ class PostingService {
     required String origin,
     required List<JournalEntryDraft> out,
     Document? parentDoc,
+    bool isAllocated = false,
   }) {
     final totalMinor = MoneyUtils.toMinorUnits(doc.total, decimalDigits);
     if (totalMinor <= 0) return;
@@ -376,6 +380,8 @@ class PostingService {
       } else {
         creditAccountCode = Accounts.receivables.code;
       }
+    } else if (isAllocated) {
+      creditAccountCode = Accounts.receivables.code;
     } else {
       creditAccountCode = Accounts.otherIncome.code;
     }
@@ -412,6 +418,7 @@ class PostingService {
     required String origin,
     required List<JournalEntryDraft> out,
     Document? parentDoc,
+    bool isAllocated = false,
   }) {
     final totalMinor = MoneyUtils.toMinorUnits(doc.total, decimalDigits);
     if (totalMinor <= 0) return;
@@ -425,6 +432,8 @@ class PostingService {
       } else {
         debitAccountCode = Accounts.payables.code;
       }
+    } else if (isAllocated) {
+      debitAccountCode = Accounts.payables.code;
     } else {
       debitAccountCode = Accounts.operatingExpenses.code;
     }

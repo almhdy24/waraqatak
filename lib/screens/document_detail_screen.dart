@@ -46,6 +46,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   List<PaymentMethod> _enabledMethods = [];
   List<PaymentMethod> _allMethods = [];
   Map<String, dynamic>? _refundStatusInfo;
+  bool _isAllocatedVoucher = false;
   bool _loading = true;
   String? _error;
 
@@ -102,6 +103,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         refundInfo = await DocumentService.getLatestDocumentRefundStatus(doc.id!);
       }
 
+      bool isAllocatedVoucher = false;
+      if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
+        final hasAlloc = await db.hasActiveAllocations(doc.id!);
+        isAllocatedVoucher = hasAlloc || doc.relatedDocumentId != null;
+      }
+
       if (!mounted) return;
       setState(() {
         _document = doc;
@@ -114,6 +121,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _enabledMethods = enabledMethods;
         _allMethods = allMethods;
         _refundStatusInfo = refundInfo;
+        _isAllocatedVoucher = isAllocatedVoucher;
         _loading = false;
       });
     } catch (e) {
@@ -555,7 +563,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final canIssue      = isDraft && (isInvoice || isQuotation || isPurchase);
     final canConvert    = isQuotation && !isCancelled && _convertedInvoice == null;
     final canCancel     = !isCancelled;
-    final canEdit       = !isCancelled;
+    final canEdit       = !isCancelled && !_isAllocatedVoucher;
 
     // FAB priority: record payment > issue > convert
     Widget? fab;
@@ -648,6 +656,37 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       body: ResponsiveCenter(child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
+          if (_isAllocatedVoucher && !isCancelled) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      l10n.isArabic
+                          ? 'لا يمكن تعديل سند تم تخصيصه. لتعديله، يرجى إلغاء السند وإصدار سند جديد.'
+                          : 'Allocated vouchers cannot be edited. Cancel and re-issue to modify.',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (isCancelled && doc.paid > 0 && (isInvoice || isPurchase)) ...[
             _refundStatusCard(l10n, sym),
             const SizedBox(height: 10),

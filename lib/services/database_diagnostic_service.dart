@@ -757,6 +757,63 @@ class DatabaseDiagnosticService {
       );
     }
 
+    // 4.5 Active allocated voucher with allocation total inconsistent with voucher total
+    checks++;
+    final voucherAllocationMismatches = await db.rawQuery('''
+      SELECT r.id, r.document_number, r.total, SUM(dp.amount) AS alloc_sum
+      FROM documents r
+      JOIN document_payments dp ON dp.receipt_document_id = r.id
+      WHERE r.status != '${DocumentStatus.cancelled}'
+        AND r.type IN ('payment_receipt', 'expense_voucher')
+        AND (dp.payment_origin IS NULL OR dp.payment_origin != 'reversal')
+        AND dp.amount > 0
+      GROUP BY r.id
+      HAVING abs(r.total - alloc_sum) > $_balanceEpsilon
+    ''');
+    if (voucherAllocationMismatches.isNotEmpty) {
+      final ids = voucherAllocationMismatches.map((r) => r['id'] as int).toList();
+      findings.add(
+        DiagnosticFinding(
+          code: 'voucher_allocation_total_mismatch',
+          category: DiagnosticCategory.paymentMismatch,
+          severity: DiagnosticSeverity.error,
+          entityType: 'documents',
+          affectedIds: ids,
+          title: 'Voucher allocation total inconsistent with voucher total',
+          explanation:
+              'Found ${ids.length} active voucher(s) where total allocated document_payments differs from voucher total.',
+          requiresManualReview: true,
+        ),
+      );
+    }
+
+    // 4.6 Reversal inconsistencies: active vouchers with reversal rows
+    checks++;
+    final activeVouchersWithReversals = await db.rawQuery('''
+      SELECT DISTINCT r.id
+      FROM documents r
+      JOIN document_payments dp ON dp.receipt_document_id = r.id
+      WHERE r.status != '${DocumentStatus.cancelled}'
+        AND r.type IN ('payment_receipt', 'expense_voucher')
+        AND (dp.payment_origin = 'reversal' OR dp.amount < 0)
+    ''');
+    if (activeVouchersWithReversals.isNotEmpty) {
+      final ids = activeVouchersWithReversals.map((r) => r['id'] as int).toList();
+      findings.add(
+        DiagnosticFinding(
+          code: 'active_voucher_has_reversals',
+          category: DiagnosticCategory.paymentMismatch,
+          severity: DiagnosticSeverity.error,
+          entityType: 'documents',
+          affectedIds: ids,
+          title: 'Active voucher has reversal records',
+          explanation:
+              'Found ${ids.length} non-cancelled voucher(s) that have negative reversal payment records.',
+          requiresManualReview: true,
+        ),
+      );
+    }
+
     return checks;
   }
 

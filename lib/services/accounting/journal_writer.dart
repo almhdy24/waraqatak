@@ -241,12 +241,30 @@ class JournalWriter {
           }
         }
 
+        bool isAllocated = false;
+        if (effectiveParentDoc != null) {
+          isAllocated = true;
+        } else if (doc.id != null &&
+            (doc.type == 'payment_receipt' || doc.type == 'expense_voucher')) {
+          final allocRows = await txn.rawQuery('''
+            SELECT 1 FROM document_payments
+            WHERE receipt_document_id = ?
+              AND (payment_origin IS NULL OR payment_origin != 'reversal')
+              AND amount > 0
+            LIMIT 1
+          ''', [doc.id]);
+          if (allocRows.isNotEmpty) {
+            isAllocated = true;
+          }
+        }
+
         var entrySeq = 1;
         final drafts = PostingService.postDocumentIssued(
           doc: doc,
           items: items,
           products: products,
           parentDoc: effectiveParentDoc,
+          isAllocated: isAllocated,
           nextEntryNo: (prefix) =>
               '$prefix-${doc.id ?? 0}-${DateTime.now().microsecondsSinceEpoch}-${entrySeq++}',
           now: now,

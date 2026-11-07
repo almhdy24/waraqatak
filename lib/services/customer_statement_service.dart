@@ -3,6 +3,7 @@ import '../models/contact.dart';
 import '../models/currency.dart';
 import '../models/customer_statement.dart';
 import '../models/document.dart';
+import '../models/document_payment.dart';
 import '../models/document_status.dart';
 
 class CustomerStatementService {
@@ -45,9 +46,45 @@ class CustomerStatementService {
     final allDocs = await db.getDocumentsByContact(contactId);
     final targetCurrency = currencyCode ?? fallbackCurrency;
 
+    final invoiceIds = allDocs
+        .where((d) => d.type == 'invoice' && d.id != null)
+        .map((d) => d.id!)
+        .toList();
+    final receiptIds = allDocs
+        .where((d) => d.type == 'payment_receipt' && d.id != null)
+        .map((d) => d.id!)
+        .toList();
+
+    List<DocumentPayment> payments = const [];
+    if (invoiceIds.isNotEmpty || receiptIds.isNotEmpty) {
+      final dbExecutor = await db.database;
+      final whereParts = <String>[];
+      final args = <Object?>[];
+      if (invoiceIds.isNotEmpty) {
+        whereParts.add(
+          'document_id IN (${List.filled(invoiceIds.length, '?').join(',')})',
+        );
+        args.addAll(invoiceIds);
+      }
+      if (receiptIds.isNotEmpty) {
+        whereParts.add(
+          'receipt_document_id IN (${List.filled(receiptIds.length, '?').join(',')})',
+        );
+        args.addAll(receiptIds);
+      }
+      final rows = await dbExecutor.query(
+        'document_payments',
+        where: whereParts.join(' OR '),
+        whereArgs: args,
+        orderBy: 'date ASC, id ASC',
+      );
+      payments = rows.map(DocumentPayment.fromMap).toList();
+    }
+
     return generateStatement(
       contact: contact,
       documents: allDocs,
+      payments: payments,
       from: from,
       to: to,
       currencyCode: targetCurrency,
@@ -59,6 +96,7 @@ class CustomerStatementService {
   static CustomerStatement generateStatement({
     required Contact contact,
     required List<Document> documents,
+    List<DocumentPayment>? payments,
     required DateTime from,
     required DateTime to,
     String? currencyCode,
@@ -96,131 +134,268 @@ class CustomerStatementService {
         if (inv.id != null) inv.id!,
     };
 
-    // 2. Classify payment receipts:
-    // Active receipts linked to eligible invoices vs receipts linked to cancelled invoices.
-    final activeLinkedReceipts = <Document>[];
+    final rawEntries = <StatementEntry>[];
+    final warnings = <StatementWarning>[];
     final cancelledInvoiceReceipts = <CancelledInvoiceReceipt>[];
 
-    for (final doc in documents) {
-      if (doc.type != 'payment_receipt') continue;
-      if (doc.status == DocumentStatus.cancelled) continue;
-      if (doc.relatedDocumentId == null) continue;
-
-      final parent = byId[doc.relatedDocumentId];
-      if (parent == null || parent.type != 'invoice') continue;
-
-      final parentCurrency = parent.currencyCode.trim().isNotEmpty
-          ? parent.currencyCode
-          : businessCurrencyCode;
-      if (parentCurrency != targetCurrency) continue;
-
-      if (eligibleInvoiceIds.contains(parent.id)) {
-        activeLinkedReceipts.add(doc);
-      } else if (parent.status == DocumentStatus.cancelled) {
-        cancelledInvoiceReceipts.add(
-          CancelledInvoiceReceipt(
-            receiptId: doc.id ?? 0,
-            receiptNumber: doc.documentNumber,
-            date: doc.date,
-            amount: doc.total,
-            paymentMethod: doc.paymentMethod,
-            cancelledInvoiceId: parent.id ?? 0,
-            cancelledInvoiceNumber: parent.documentNumber,
-          ),
-        );
+    final bool hasPaymentRows = payments != null && payments.isNotEmpty;
+    final paymentsByDocId = <int, List<DocumentPayment>>{};
+    if (payments != null) {
+      for (final p in payments) {
+        paymentsByDocId.putIfAbsent(p.documentId, () => []).add(p);
       }
     }
 
-    // Map active receipts per parent invoice
-    final receiptsByInvoice = <int, List<Document>>{};
-    for (final r in activeLinkedReceipts) {
-      receiptsByInvoice.putIfAbsent(r.relatedDocumentId!, () => []).add(r);
-    }
-
-    // 3. Atomize transactions per invoice and detect discrepancies
-    final rawEntries = <StatementEntry>[];
-    final warnings = <StatementWarning>[];
-
-    for (final inv in eligibleInvoices) {
-      final linkedReceipts = receiptsByInvoice[inv.id] ?? const <Document>[];
-      final linkedTotal = linkedReceipts.fold<double>(0.0, (s, r) => s + r.total);
-      final initialPaid = inv.paid - linkedTotal;
-
-      // Invoice debit
-      rawEntries.add(
-        StatementEntry(
-          date: inv.date,
-          documentNumber: inv.documentNumber,
-          description: inv.documentNumber,
-          type: StatementEntryType.invoice,
-          debit: inv.total,
-          credit: 0.0,
-          runningBalance: 0.0,
-          documentId: inv.id,
-        ),
-      );
-
-      if (initialPaid >= -_eps) {
-        if (initialPaid > _eps) {
-          rawEntries.add(
-            StatementEntry(
-              date: inv.date,
-              documentNumber: inv.documentNumber,
-              description: inv.documentNumber,
-              type: StatementEntryType.initialPayment,
-              debit: 0.0,
-              credit: initialPaid,
-              runningBalance: 0.0,
-              documentId: inv.id,
-            ),
-          );
-        }
-      } else {
-        // Discrepancy: inv.paid < sum(linkedReceipts)
-        final discrepancy = initialPaid.abs();
-        warnings.add(
-          StatementWarning(
-            invoiceNumber: inv.documentNumber,
-            invoiceId: inv.id ?? 0,
-            storedPaid: inv.paid,
-            receiptsTotal: linkedTotal,
-            discrepancy: discrepancy,
-          ),
-        );
-        // Explicit debit reconciliation adjustment
+    if (hasPaymentRows) {
+      // Modern path: use explicit document_payments allocation rows
+      for (final inv in eligibleInvoices) {
+        // 1. Emit invoice debit
         rawEntries.add(
           StatementEntry(
             date: inv.date,
             documentNumber: inv.documentNumber,
             description: inv.documentNumber,
-            type: StatementEntryType.reconciliationAdjustment,
-            debit: discrepancy,
+            type: StatementEntryType.invoice,
+            debit: inv.total,
             credit: 0.0,
             runningBalance: 0.0,
             documentId: inv.id,
-            isAdjustment: true,
+          ),
+        );
+
+        final pRows = paymentsByDocId[inv.id] ?? const <DocumentPayment>[];
+        if (pRows.isEmpty) {
+          // Legacy invoice with no payment rows
+          if (inv.paid > _eps) {
+            rawEntries.add(
+              StatementEntry(
+                date: inv.date,
+                documentNumber: inv.documentNumber,
+                description: inv.documentNumber,
+                type: StatementEntryType.initialPayment,
+                debit: 0.0,
+                credit: inv.paid,
+                runningBalance: 0.0,
+                documentId: inv.id,
+              ),
+            );
+          }
+        } else {
+          // 2. Upfront payment rows
+          final upfrontRows = pRows
+              .where((p) =>
+                  p.paymentOrigin == PaymentOrigin.upfront ||
+                  (p.paymentOrigin == null && p.receiptDocumentId == null))
+              .toList();
+          for (final u in upfrontRows) {
+            if (u.amount > _eps) {
+              rawEntries.add(
+                StatementEntry(
+                  date: u.date,
+                  documentNumber: inv.documentNumber,
+                  description: inv.documentNumber,
+                  type: StatementEntryType.initialPayment,
+                  debit: 0.0,
+                  credit: u.amount,
+                  runningBalance: 0.0,
+                  documentId: inv.id,
+                ),
+              );
+            }
+          }
+
+          // 3. Receipt allocations
+          final allocRows = pRows
+              .where((p) =>
+                  p.receiptDocumentId != null &&
+                  p.paymentOrigin != PaymentOrigin.reversal &&
+                  p.amount > _eps)
+              .toList();
+
+          for (final a in allocRows) {
+            final voucher = byId[a.receiptDocumentId];
+            final voucherNum = voucher?.documentNumber ?? '';
+            rawEntries.add(
+              StatementEntry(
+                date: a.date,
+                documentNumber:
+                    voucherNum.isNotEmpty ? voucherNum : inv.documentNumber,
+                description: inv.documentNumber,
+                type: StatementEntryType.receipt,
+                debit: 0.0,
+                credit: a.amount,
+                runningBalance: 0.0,
+                documentId: a.receiptDocumentId,
+                relatedDocumentId: inv.id,
+              ),
+            );
+          }
+
+          // 4. Reversals
+          final revRows = pRows
+              .where((p) =>
+                  p.paymentOrigin == PaymentOrigin.reversal ||
+                  p.amount < -_eps)
+              .toList();
+
+          for (final r in revRows) {
+            final voucher =
+                r.receiptDocumentId != null ? byId[r.receiptDocumentId] : null;
+            final voucherNum = voucher?.documentNumber ?? '';
+            rawEntries.add(
+              StatementEntry(
+                date: r.date,
+                documentNumber:
+                    voucherNum.isNotEmpty ? voucherNum : inv.documentNumber,
+                description: inv.documentNumber,
+                type: StatementEntryType.reconciliationAdjustment,
+                debit: r.amount.abs(),
+                credit: 0.0,
+                runningBalance: 0.0,
+                documentId: r.receiptDocumentId,
+                relatedDocumentId: inv.id,
+                isAdjustment: true,
+              ),
+            );
+          }
+
+          // 5. Fallback for untracked legacy upfront if any
+          final trackedPaid =
+              pRows.fold<double>(0.0, (sum, p) => sum + p.amount);
+          final untracked = inv.paid - trackedPaid;
+          if (untracked > _eps && upfrontRows.isEmpty) {
+            rawEntries.add(
+              StatementEntry(
+                date: inv.date,
+                documentNumber: inv.documentNumber,
+                description: inv.documentNumber,
+                type: StatementEntryType.initialPayment,
+                debit: 0.0,
+                credit: untracked,
+                runningBalance: 0.0,
+                documentId: inv.id,
+              ),
+            );
+          }
+        }
+      }
+    } else {
+      // Legacy fallback path: classify payment receipts assuming single parent link
+      final activeLinkedReceipts = <Document>[];
+
+      for (final doc in documents) {
+        if (doc.type != 'payment_receipt') continue;
+        if (doc.status == DocumentStatus.cancelled) continue;
+        if (doc.relatedDocumentId == null) continue;
+
+        final parent = byId[doc.relatedDocumentId];
+        if (parent == null || parent.type != 'invoice') continue;
+
+        final parentCurrency = parent.currencyCode.trim().isNotEmpty
+            ? parent.currencyCode
+            : businessCurrencyCode;
+        if (parentCurrency != targetCurrency) continue;
+
+        if (eligibleInvoiceIds.contains(parent.id)) {
+          activeLinkedReceipts.add(doc);
+        } else if (parent.status == DocumentStatus.cancelled) {
+          cancelledInvoiceReceipts.add(
+            CancelledInvoiceReceipt(
+              receiptId: doc.id ?? 0,
+              receiptNumber: doc.documentNumber,
+              date: doc.date,
+              amount: doc.total,
+              paymentMethod: doc.paymentMethod,
+              cancelledInvoiceId: parent.id ?? 0,
+              cancelledInvoiceNumber: parent.documentNumber,
+            ),
+          );
+        }
+      }
+
+      final receiptsByInvoice = <int, List<Document>>{};
+      for (final r in activeLinkedReceipts) {
+        receiptsByInvoice.putIfAbsent(r.relatedDocumentId!, () => []).add(r);
+      }
+
+      for (final inv in eligibleInvoices) {
+        final linkedReceipts = receiptsByInvoice[inv.id] ?? const <Document>[];
+        final linkedTotal =
+            linkedReceipts.fold<double>(0.0, (s, r) => s + r.total);
+        final initialPaid = inv.paid - linkedTotal;
+
+        rawEntries.add(
+          StatementEntry(
+            date: inv.date,
+            documentNumber: inv.documentNumber,
+            description: inv.documentNumber,
+            type: StatementEntryType.invoice,
+            debit: inv.total,
+            credit: 0.0,
+            runningBalance: 0.0,
+            documentId: inv.id,
+          ),
+        );
+
+        if (initialPaid >= -_eps) {
+          if (initialPaid > _eps) {
+            rawEntries.add(
+              StatementEntry(
+                date: inv.date,
+                documentNumber: inv.documentNumber,
+                description: inv.documentNumber,
+                type: StatementEntryType.initialPayment,
+                debit: 0.0,
+                credit: initialPaid,
+                runningBalance: 0.0,
+                documentId: inv.id,
+              ),
+            );
+          }
+        } else {
+          final discrepancy = initialPaid.abs();
+          warnings.add(
+            StatementWarning(
+              invoiceNumber: inv.documentNumber,
+              invoiceId: inv.id ?? 0,
+              storedPaid: inv.paid,
+              receiptsTotal: linkedTotal,
+              discrepancy: discrepancy,
+            ),
+          );
+          rawEntries.add(
+            StatementEntry(
+              date: inv.date,
+              documentNumber: inv.documentNumber,
+              description: inv.documentNumber,
+              type: StatementEntryType.reconciliationAdjustment,
+              debit: discrepancy,
+              credit: 0.0,
+              runningBalance: 0.0,
+              documentId: inv.id,
+              isAdjustment: true,
+            ),
+          );
+        }
+      }
+
+      for (final r in activeLinkedReceipts) {
+        final parent = byId[r.relatedDocumentId];
+        final parentNum = parent?.documentNumber ?? '';
+        rawEntries.add(
+          StatementEntry(
+            date: r.date,
+            documentNumber: r.documentNumber,
+            description: parentNum.isNotEmpty ? parentNum : r.documentNumber,
+            type: StatementEntryType.receipt,
+            debit: 0.0,
+            credit: r.total,
+            runningBalance: 0.0,
+            documentId: r.id,
+            relatedDocumentId: r.relatedDocumentId,
           ),
         );
       }
-    }
-
-    // Active linked receipts (credits)
-    for (final r in activeLinkedReceipts) {
-      final parent = byId[r.relatedDocumentId];
-      final parentNum = parent?.documentNumber ?? '';
-      rawEntries.add(
-        StatementEntry(
-          date: r.date,
-          documentNumber: r.documentNumber,
-          description: parentNum.isNotEmpty ? parentNum : r.documentNumber,
-          type: StatementEntryType.receipt,
-          debit: 0.0,
-          credit: r.total,
-          runningBalance: 0.0,
-          documentId: r.id,
-          relatedDocumentId: r.relatedDocumentId,
-        ),
-      );
     }
 
     // 4. Deterministic sorting: date ASC, then debit before credit, then type, then docId

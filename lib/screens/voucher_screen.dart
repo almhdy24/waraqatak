@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../services/document_service.dart';
+import '../models/currency.dart';
 import '../models/payment_method.dart';
+import '../utils/money_utils.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_snackbar.dart';
@@ -35,6 +38,11 @@ class _VoucherScreenState extends State<VoucherScreen> {
   String? _contactName;
   bool _saving = false;
 
+  int _balanceQuerySeq = 0;
+  bool _isLoadingBalance = false;
+  double? _outstandingBalance;
+  String? _balanceError;
+
   bool get isReceipt => widget.type == VoucherType.paymentReceipt;
 
   bool get _isDirty =>
@@ -57,6 +65,9 @@ class _VoucherScreenState extends State<VoucherScreen> {
   @override
   void initState() {
     super.initState();
+    _amountController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _loadBusiness();
   }
 
@@ -78,20 +89,106 @@ class _VoucherScreenState extends State<VoucherScreen> {
         _paymentMethod = methods.isNotEmpty ? methods.first.key : 'cash';
       }
     });
+    if (_selectedContact != null) {
+      _fetchContactBalance(_selectedContact);
+    }
+  }
+
+  String _formatAmount(double val, int decimals) {
+    return NumberFormat.currency(symbol: '', decimalDigits: decimals)
+        .format(val)
+        .trim();
+  }
+
+  void _fetchContactBalance(Contact? contact) {
+    if (contact == null || contact.id == null) {
+      setState(() {
+        _outstandingBalance = null;
+        _isLoadingBalance = false;
+        _balanceError = null;
+      });
+      return;
+    }
+
+    final queryId = ++_balanceQuerySeq;
+    setState(() {
+      _isLoadingBalance = true;
+      _outstandingBalance = null;
+      _balanceError = null;
+    });
+
+    final targetType = isReceipt ? 'invoice' : 'purchase';
+    final currency = _business?.currencyCode ?? 'SDG';
+
+    DatabaseHelper.instance
+        .getContactOutstanding(contact.id!, targetType, currencyCode: currency)
+        .then((balance) {
+      if (!mounted || queryId != _balanceQuerySeq) return;
+      setState(() {
+        _outstandingBalance = balance;
+        _isLoadingBalance = false;
+      });
+    }).catchError((err) {
+      if (!mounted || queryId != _balanceQuerySeq) return;
+      setState(() {
+        _balanceError = err.toString();
+        _isLoadingBalance = false;
+      });
+    });
   }
 
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_business == null) return;
-    setState(() => _saving = true);
 
+    final l10n = AppLocalizations.of(context);
     final amount = NumberInput.parse(_amountController.text) ?? 0;
+    if (amount <= 0) {
+      AppSnackBar.show(
+        context,
+        l10n.invalidAmount,
+        severity: AppSnackBarSeverity.error,
+      );
+      return;
+    }
+
     Contact? contact;
     if (_selectedContact != null) {
       contact = _selectedContact;
     } else if (_contactName != null && _contactName!.trim().isNotEmpty) {
       contact = Contact(name: _contactName!.trim(), type: isReceipt ? 'customer' : 'supplier');
     }
+
+    // UI validation for contact balance
+    if (contact != null) {
+      final currency = _business?.currencyCode ?? 'SDG';
+      final decimalDigits = Currency.decimalDigitsForCode(currency);
+      final balance = _outstandingBalance;
+      if (balance != null) {
+        if (balance <= 0) {
+          AppSnackBar.show(
+            context,
+            l10n.isArabic
+                ? 'لا توجد فواتير أو مشتريات مستحقة لهذا الطرف.'
+                : 'No outstanding balance for this contact.',
+            severity: AppSnackBarSeverity.error,
+          );
+          return;
+        }
+        if (MoneyUtils.isOverpayment(amount, balance, decimalDigits)) {
+          AppSnackBar.show(
+            context,
+            l10n.isArabic
+                ? 'المبلغ المدخل يتجاوز إجمالي الرصيد المستحق (${_formatAmount(balance, decimalDigits)}).'
+                : 'Entered amount exceeds total outstanding balance.',
+            severity: AppSnackBarSeverity.error,
+          );
+          return;
+        }
+      }
+    }
+
+    setState(() => _saving = true);
 
     if (!_enabledMethods.any((m) => m.key == _paymentMethod)) {
       _paymentMethod = _enabledMethods.isNotEmpty ? _enabledMethods.first.key : 'cash';
@@ -123,6 +220,109 @@ class _VoucherScreenState extends State<VoucherScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Widget _buildBalancePreview(AppLocalizations l10n) {
+    if (_selectedContact == null) return const SizedBox.shrink();
+
+    final currency = _business?.currencyCode ?? 'SDG';
+    final sym = Currency.symbolForCode(currency);
+    final enteredAmount = NumberInput.parse(_amountController.text) ?? 0.0;
+    final decimalDigits = Currency.decimalDigitsForCode(currency);
+
+    Widget content;
+    if (_isLoadingBalance) {
+      content = Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            l10n.isArabic
+                ? 'جاري تحميل الرصيد المستحق...'
+                : 'Loading outstanding balance...',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      );
+    } else if (_balanceError != null) {
+      content = Text(
+        l10n.isArabic ? 'تعذر جلب الرصيد المستحق' : 'Failed to load balance',
+        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.error),
+      );
+    } else {
+      final balance = _outstandingBalance ?? 0.0;
+      final isOver = MoneyUtils.isOverpayment(enteredAmount, balance, decimalDigits);
+      final isZero = balance <= 0.0;
+
+      final color = isOver
+          ? Theme.of(context).colorScheme.error
+          : (isZero
+              ? Theme.of(context).colorScheme.outline
+              : Theme.of(context).colorScheme.primary);
+
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                l10n.isArabic ? 'إجمالي الرصيد المستحق:' : 'Total Outstanding:',
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '${_formatAmount(balance, decimalDigits)} $sym',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          if (enteredAmount > 0 && isOver) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.isArabic
+                  ? 'المبلغ المدخل يتجاوز الرصيد المستحق ($currency)'
+                  : 'Entered amount exceeds outstanding ($currency)',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ] else if (isZero) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.isArabic
+                  ? 'لا توجد فواتير أو مشتريات مستحقة لهذا الطرف ($currency)'
+                  : 'No outstanding documents for this contact ($currency)',
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: content,
+    );
   }
 
   @override
@@ -174,14 +374,20 @@ class _VoucherScreenState extends State<VoucherScreen> {
                           _selectedContact = contact;
                           _contactName = contact?.name;
                         });
+                        _fetchContactBalance(contact);
                       },
                       onTextChanged: (value) {
                         setState(() {
                           _contactName = value;
-                          if (_selectedContact?.name != value) _selectedContact = null;
+                          if (_selectedContact?.name != value) {
+                            _selectedContact = null;
+                            _outstandingBalance = null;
+                            _isLoadingBalance = false;
+                          }
                         });
                       },
                     ),
+                    _buildBalancePreview(l10n),
                   ],
                 ),
               ),

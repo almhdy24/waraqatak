@@ -15,7 +15,7 @@ import 'backup_encryption_service.dart';
 
 class BackupService {
   static const String backupExtension = 'waraq';
-  static const int currentBackupVersion = 4;
+  static const int currentBackupVersion = 5;
   static const String appId = 'warqatek';
 
   @visibleForTesting
@@ -671,8 +671,13 @@ class BackupService {
     }
 
     final backupVersion = jsonMap['backup_version'];
-    if (backupVersion is! int || backupVersion > currentBackupVersion) {
+    if (backupVersion is! int || backupVersion < 1) {
       throw Exception('Unsupported backup version: $backupVersion');
+    }
+    if (backupVersion > currentBackupVersion) {
+      throw Exception(
+        'Backup version $backupVersion requires a newer version of the application. Please update the app.',
+      );
     }
 
     final data = jsonMap['data'];

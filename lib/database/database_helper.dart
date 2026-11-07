@@ -3305,6 +3305,11 @@ class DatabaseHelper {
       final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
 
       final insertedDoc = newDoc.copyWith(id: docId);
+      if (newDoc.type == 'payment_receipt' || newDoc.type == 'expense_voucher') {
+        if (contactId != null) {
+          await _allocateVoucherFifoTxn(txn, insertedDoc);
+        }
+      }
       await JournalWriter.postDocumentIssued(
         txn,
         insertedDoc,
@@ -3655,6 +3660,13 @@ class DatabaseHelper {
       await assertPeriodOpen(doc.date, txn: txn);
       final oldType = oldDoc.type;
       final oldStatus = oldDoc.status;
+
+      if (oldType == 'payment_receipt' || oldType == 'expense_voucher') {
+        final hasAlloc = await hasActiveAllocations(oldDoc.id!, txn: txn);
+        if (hasAlloc) {
+          throw StateError('Allocated vouchers cannot be edited. Cancel and re-issue.');
+        }
+      }
 
       if (oldStatus == DocumentStatus.cancelled) {
         throw StateError('Cannot edit a cancelled document');
@@ -4387,13 +4399,27 @@ class DatabaseHelper {
 
       // Guard against deleting an invoice or purchase with active payment receipts/vouchers or payment history
       if (doc.type == 'invoice' || doc.type == 'purchase') {
-        final activeReceipts = await txn.query(
-          'documents',
-          columns: ['id', 'document_number'],
-          where:
-              "related_document_id = ? AND type IN ('payment_receipt', 'expense_voucher') AND status != '${DocumentStatus.cancelled}'",
-          whereArgs: [id],
-        );
+        final activeReceipts = await txn.rawQuery('''
+          SELECT DISTINCT d.document_number
+          FROM document_payments dp
+          JOIN documents d ON dp.receipt_document_id = d.id
+          WHERE dp.document_id = ?
+            AND (dp.payment_origin IS NULL OR dp.payment_origin != ?)
+            AND dp.amount > 0
+            AND d.status != ?
+          UNION
+          SELECT document_number
+          FROM documents
+          WHERE related_document_id = ?
+            AND type IN ('payment_receipt', 'expense_voucher')
+            AND status != ?
+        ''', [
+          id,
+          PaymentOrigin.reversal,
+          DocumentStatus.cancelled,
+          id,
+          DocumentStatus.cancelled,
+        ]);
         if (activeReceipts.isNotEmpty) {
           final receiptNums = activeReceipts
               .map((r) => r['document_number'] as String)
@@ -4657,22 +4683,35 @@ class DatabaseHelper {
         throw StateError('Document is already cancelled');
       }
 
-      // Payment receipts & expense vouchers: also reverse the linked invoice/purchase payment
-      if ((doc.type == 'payment_receipt' || doc.type == 'expense_voucher') &&
-          doc.relatedDocumentId != null) {
-        await _reverseReceiptPayment(txn, id, doc.relatedDocumentId!);
+      // Payment receipts & expense vouchers: reverse allocations and cancel
+      if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
+        await _reverseReceiptPayment(txn, id);
         return;
       }
 
       // Guard against cancelling an invoice or purchase with active payment receipts/vouchers
       if (doc.type == 'invoice' || doc.type == 'purchase') {
-        final activeReceipts = await txn.query(
-          'documents',
-          columns: ['id', 'document_number'],
-          where:
-              "related_document_id = ? AND type IN ('payment_receipt', 'expense_voucher') AND status != '${DocumentStatus.cancelled}'",
-          whereArgs: [id],
-        );
+        final activeReceipts = await txn.rawQuery('''
+          SELECT DISTINCT d.document_number
+          FROM document_payments dp
+          JOIN documents d ON dp.receipt_document_id = d.id
+          WHERE dp.document_id = ?
+            AND (dp.payment_origin IS NULL OR dp.payment_origin != ?)
+            AND dp.amount > 0
+            AND d.status != ?
+          UNION
+          SELECT document_number
+          FROM documents
+          WHERE related_document_id = ?
+            AND type IN ('payment_receipt', 'expense_voucher')
+            AND status != ?
+        ''', [
+          id,
+          PaymentOrigin.reversal,
+          DocumentStatus.cancelled,
+          id,
+          DocumentStatus.cancelled,
+        ]);
         if (activeReceipts.isNotEmpty) {
           final receiptNums = activeReceipts
               .map((r) => r['document_number'] as String)
@@ -5005,18 +5044,185 @@ class DatabaseHelper {
     }
   }
 
+  /// Checks whether an issued voucher has active allocations recorded in document_payments.
+  Future<bool> hasActiveAllocations(
+    int voucherId, {
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? await database;
+    final rows = await exec.rawQuery('''
+      SELECT 1 FROM document_payments
+      WHERE receipt_document_id = ?
+        AND (payment_origin IS NULL OR payment_origin != ?)
+        AND amount > 0
+      LIMIT 1
+    ''', [voucherId, PaymentOrigin.reversal]);
+    return rows.isNotEmpty;
+  }
+
+  /// Authoritative automatic FIFO allocation for customer receipts and supplier payments.
+  /// Allocates [voucher.total] across eligible open invoices (for payment_receipt) or
+  /// purchases (for expense_voucher) in deterministic FIFO order (date ASC, id ASC).
+  Future<void> _allocateVoucherFifoTxn(
+    DatabaseExecutor txn,
+    Document voucher,
+  ) async {
+    if (voucher.id == null) {
+      throw StateError('Cannot allocate a voucher without an ID');
+    }
+    if (voucher.contactId == null) {
+      // Standalone / no-contact voucher: independent behavior preserved
+      return;
+    }
+
+    final targetType = voucher.type == 'payment_receipt'
+        ? 'invoice'
+        : (voucher.type == 'expense_voucher' ? 'purchase' : null);
+    if (targetType == null) return;
+
+    // Contact verification
+    final contactRows = await txn.query(
+      'contacts',
+      where: 'id = ?',
+      whereArgs: [voucher.contactId],
+    );
+    if (contactRows.isEmpty) {
+      throw StateError('Contact with ID ${voucher.contactId} not found.');
+    }
+    final contactType = contactRows.first['type'] as String? ?? 'customer';
+    if (voucher.type == 'payment_receipt' && contactType != 'customer') {
+      throw ArgumentError('Payment receipts can only be allocated to customer contacts.');
+    }
+    if (voucher.type == 'expense_voucher' && contactType != 'supplier') {
+      throw ArgumentError('Expense vouchers can only be allocated to supplier contacts.');
+    }
+
+    final decimalDigits = Currency.decimalDigitsForCode(voucher.currencyCode);
+    final voucherTotal = MoneyUtils.round(voucher.total, decimalDigits);
+    if (voucherTotal <= 0) {
+      throw ArgumentError('Voucher amount must be greater than zero.');
+    }
+
+    // 1. Fetch all non-draft, non-cancelled open documents for this contact and targetType
+    final allOpenRows = await txn.query(
+      'documents',
+      where:
+          "contact_id = ? AND type = ? AND status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}', '${DocumentStatus.paid}') AND remaining > 0",
+      whereArgs: [voucher.contactId, targetType],
+      orderBy: 'date ASC, id ASC',
+    );
+
+    if (allOpenRows.isEmpty) {
+      throw StateError(
+        'No eligible outstanding $targetType documents found for contact.',
+      );
+    }
+
+    // 2. Currency segregation check
+    final foreignCurrencyRows = allOpenRows.where(
+      (r) => (r['currency_code'] as String? ?? 'SDG') != voucher.currencyCode,
+    ).toList();
+    if (foreignCurrencyRows.isNotEmpty &&
+        !allOpenRows.any((r) => (r['currency_code'] as String? ?? 'SDG') == voucher.currencyCode)) {
+      throw ArgumentError(
+        'Voucher currency (${voucher.currencyCode}) does not match outstanding currency.',
+      );
+    }
+
+    final eligibleRows = allOpenRows.where(
+      (r) => (r['currency_code'] as String? ?? 'SDG') == voucher.currencyCode,
+    ).toList();
+    if (eligibleRows.isEmpty) {
+      throw StateError(
+        'No eligible outstanding $targetType documents found in currency ${voucher.currencyCode}.',
+      );
+    }
+
+    // 3. Overpayment calculation & strict rejection
+    double totalOutstanding = 0.0;
+    for (final r in eligibleRows) {
+      totalOutstanding += (r['remaining'] as num).toDouble();
+    }
+    totalOutstanding = MoneyUtils.round(totalOutstanding, decimalDigits);
+
+    if (MoneyUtils.isOverpayment(voucherTotal, totalOutstanding, decimalDigits)) {
+      throw ArgumentError(
+        'Voucher amount ($voucherTotal) exceeds total outstanding balance ($totalOutstanding). Overpayment is not allowed.',
+      );
+    }
+
+    // 4. FIFO Allocation loop
+    double unallocated = voucherTotal;
+    for (final target in eligibleRows) {
+      if (unallocated <= 0) break;
+      final targetId = target['id'] as int;
+      final targetTotal = (target['total'] as num).toDouble();
+      final targetPaid = (target['paid'] as num).toDouble();
+      final targetRemaining = (target['remaining'] as num).toDouble();
+
+      final allocAmount = MoneyUtils.round(
+        math.min(unallocated, targetRemaining),
+        decimalDigits,
+      );
+      if (allocAmount <= 0) continue;
+
+      // Insert document_payments row
+      await _insertDocumentPaymentTxn(txn, {
+        'document_id': targetId,
+        'amount': allocAmount,
+        'payment_method': voucher.paymentMethod,
+        'date': voucher.date.toIso8601String(),
+        'notes': voucher.notes,
+        'receipt_document_id': voucher.id,
+        'payment_origin': PaymentOrigin.receipt,
+      });
+
+      // Update target document paid, remaining, and status
+      final newPaid = MoneyUtils.round(targetPaid + allocAmount, decimalDigits);
+      final newRemaining = MoneyUtils.calculateRemaining(
+        targetTotal,
+        newPaid,
+        decimalDigits,
+      );
+      final newStatus = DocumentStatus.fromPayment(
+        newPaid,
+        targetTotal,
+        decimalDigits: decimalDigits,
+      );
+
+      await txn.update(
+        'documents',
+        {
+          'paid': newPaid,
+          'remaining': newRemaining,
+          'status': newStatus,
+        },
+        where: 'id = ?',
+        whereArgs: [targetId],
+      );
+
+      unallocated = MoneyUtils.round(unallocated - allocAmount, decimalDigits);
+    }
+
+    if (unallocated > 0) {
+      throw StateError(
+        'Failed to fully allocate voucher. Unallocated remainder: $unallocated',
+      );
+    }
+  }
+
   Future<void> _reverseReceiptPayment(
     DatabaseExecutor txn,
     int receiptId,
-    int invoiceId,
   ) async {
     final receiptRows = await txn.query(
       'documents',
       where: 'id = ?',
       whereArgs: [receiptId],
     );
-    final receipt =
-        receiptRows.isNotEmpty ? Document.fromMap(receiptRows.first) : null;
+    if (receiptRows.isEmpty) return;
+    final receipt = Document.fromMap(receiptRows.first);
+    await assertPeriodOpen(receipt.date, txn: txn);
 
     final paymentRows = await txn.query(
       'document_payments',
@@ -5024,63 +5230,74 @@ class DatabaseHelper {
       whereArgs: [receiptId],
       orderBy: 'id ASC',
     );
-    final pTotal = paymentRows.fold<double>(
-      0.0,
-      (sum, r) => sum + ((r['amount'] as num?)?.toDouble() ?? 0.0),
-    );
 
-    // Recalculate parent invoice/purchase without destroying upfront payments
-    final invoiceRows = await txn.query(
-      'documents',
-      where: 'id = ?',
-      whereArgs: [invoiceId],
-    );
-    if (invoiceRows.isNotEmpty) {
-      final invoice = Document.fromMap(invoiceRows.first);
-      final decimalDigits = Currency.decimalDigitsForCode(invoice.currencyCode);
-      final receiptTotal = receipt?.total ?? 0.0;
-      final amountToReverse = pTotal > 0 ? pTotal : receiptTotal;
-      final canonicalReverse = MoneyUtils.round(amountToReverse, decimalDigits);
+    // Group active positive allocations by document_id
+    final activeAllocations = paymentRows.where((r) {
+      final origin = r['payment_origin'] as String?;
+      final amount = (r['amount'] as num?)?.toDouble() ?? 0.0;
+      return origin != PaymentOrigin.reversal && amount > 0;
+    }).toList();
+
+    final allocationsByDocId = <int, double>{};
+    for (final r in activeAllocations) {
+      final docId = r['document_id'] as int;
+      final amt = (r['amount'] as num).toDouble();
+      allocationsByDocId[docId] = (allocationsByDocId[docId] ?? 0.0) + amt;
+    }
+
+    // Support legacy vouchers where allocations were not in document_payments but relatedDocumentId was set
+    if (allocationsByDocId.isEmpty && receipt.relatedDocumentId != null) {
+      allocationsByDocId[receipt.relatedDocumentId!] = receipt.total;
+    }
+
+    final now = DateTime.now();
+    final docNum = receipt.documentNumber.isNotEmpty ? receipt.documentNumber : receiptId.toString();
+    final docType = receipt.type;
+
+    for (final entry in allocationsByDocId.entries) {
+      final targetId = entry.key;
+      final targetRows = await txn.query(
+        'documents',
+        where: 'id = ?',
+        whereArgs: [targetId],
+      );
+      if (targetRows.isEmpty) continue;
+      final target = Document.fromMap(targetRows.first);
+      final decimalDigits = Currency.decimalDigitsForCode(target.currencyCode);
+      final canonicalReverse = MoneyUtils.round(entry.value, decimalDigits);
 
       if (canonicalReverse > 0) {
-        final now = DateTime.now();
-        final method = paymentRows.isNotEmpty
-            ? paymentRows.first['payment_method'] as String?
-            : receipt?.paymentMethod;
-        final docNum = receipt?.documentNumber ?? receiptId.toString();
-        final docType = receipt?.type ?? 'receipt';
-
         // Auditable reversal entry in document_payments linked to original receipt
         await _insertDocumentPaymentTxn(txn, {
-          'document_id': invoiceId,
+          'document_id': targetId,
           'amount': -canonicalReverse,
-          'payment_method': method,
+          'payment_method': receipt.paymentMethod,
           'date': now.toIso8601String(),
           'notes': 'Reversal: cancelled $docType $docNum',
           'receipt_document_id': receiptId,
           'payment_origin': PaymentOrigin.reversal,
         });
 
-        if (invoice.status != DocumentStatus.cancelled) {
+        if (target.status != DocumentStatus.cancelled) {
           final newPaid = math.max(
             0.0,
-            MoneyUtils.round(invoice.paid - canonicalReverse, decimalDigits),
+            MoneyUtils.round(target.paid - canonicalReverse, decimalDigits),
           );
           final newRemaining = MoneyUtils.calculateRemaining(
-            invoice.total,
+            target.total,
             newPaid,
             decimalDigits,
           );
           final newStatus = DocumentStatus.fromPayment(
             newPaid,
-            invoice.total,
+            target.total,
             decimalDigits: decimalDigits,
           );
           await txn.update(
             'documents',
             {'paid': newPaid, 'remaining': newRemaining, 'status': newStatus},
             where: 'id = ?',
-            whereArgs: [invoiceId],
+            whereArgs: [targetId],
           );
         }
       }

@@ -169,25 +169,57 @@ class LedgerBuilder {
         if (d.id != null) d.id!: d,
     };
 
+    // Active vouchers set
+    final activeVoucherIds = docs
+        .where(
+          (d) =>
+              (d.type == 'payment_receipt' || d.type == 'expense_voucher') &&
+              d.id != null,
+        )
+        .map((d) => d.id!)
+        .toSet();
+
     // Payments posted by active linked receipts/vouchers, per parent doc.
     final linkedPaid = <int, double>{};
     final activeLinkIds = <int>{};
+
+    for (final p in input.payments) {
+      if (p.receiptDocumentId != null &&
+          activeVoucherIds.contains(p.receiptDocumentId) &&
+          p.paymentOrigin != PaymentOrigin.reversal &&
+          p.amount > _eps) {
+        activeLinkIds.add(p.receiptDocumentId!);
+        linkedPaid.update(
+          p.documentId,
+          (v) => v + p.amount,
+          ifAbsent: () => p.amount,
+        );
+      }
+    }
+
+    // Historical linked vouchers that might not have document_payments rows
     for (final d in docs) {
       if ((d.type == 'payment_receipt' || d.type == 'expense_voucher') &&
           d.relatedDocumentId != null) {
-        linkedPaid.update(
-          d.relatedDocumentId!,
-          (v) => v + d.total,
-          ifAbsent: () => d.total,
-        );
-        if (d.id != null) activeLinkIds.add(d.id!);
+        if (!activeLinkIds.contains(d.id)) {
+          linkedPaid.update(
+            d.relatedDocumentId!,
+            (v) => v + d.total,
+            ifAbsent: () => d.total,
+          );
+          if (d.id != null) activeLinkIds.add(d.id!);
+        }
       }
     }
+
     // Payment rows not covered by an active receipt/voucher, per parent doc.
     final ownPayments = <int, List<DocumentPayment>>{};
     for (final p in input.payments) {
       if (p.receiptDocumentId != null &&
           activeLinkIds.contains(p.receiptDocumentId)) {
+        continue;
+      }
+      if (p.paymentOrigin == PaymentOrigin.reversal || p.amount <= _eps) {
         continue;
       }
       ownPayments.putIfAbsent(p.documentId, () => []).add(p);
@@ -202,9 +234,9 @@ class LedgerBuilder {
           _purchase(d, input, entries);
           _payments(d, linkedPaid[d.id] ?? 0, ownPayments[d.id], entries);
         case 'payment_receipt':
-          _receipt(d, byId, entries);
+          _receipt(d, byId, activeLinkIds, entries);
         case 'expense_voucher':
-          _voucher(d, byId, entries);
+          _voucher(d, byId, activeLinkIds, entries);
       }
     }
 
@@ -317,27 +349,26 @@ class LedgerBuilder {
   static void _receipt(
     Document d,
     Map<int, Document> byId,
+    Set<int> activeLinkIds,
     List<JournalEntry> out,
   ) {
     if (d.total.abs() <= _eps) return;
     final parent = d.relatedDocumentId == null
         ? null
         : byId[d.relatedDocumentId];
-    final isParentActiveInvoice =
-        parent?.type == 'invoice' &&
-        parent!.status != DocumentStatus.cancelled &&
-        parent.status != DocumentStatus.draft;
     final isParentCancelledOrDraftInvoice =
         parent?.type == 'invoice' &&
         (parent!.status == DocumentStatus.cancelled ||
             parent.status == DocumentStatus.draft);
 
     final Account creditAccount;
-    if (isParentActiveInvoice) {
-      creditAccount = Accounts.receivables;
-    } else if (isParentCancelledOrDraftInvoice) {
+    if (isParentCancelledOrDraftInvoice) {
       // Customer advance / credit balance owed back to customer
       creditAccount = Accounts.payables;
+    } else if (d.id != null && activeLinkIds.contains(d.id!)) {
+      creditAccount = Accounts.receivables;
+    } else if (d.relatedDocumentId != null && parent?.type == 'invoice') {
+      creditAccount = Accounts.receivables;
     } else {
       creditAccount = Accounts.otherIncome;
     }
@@ -365,27 +396,26 @@ class LedgerBuilder {
   static void _voucher(
     Document d,
     Map<int, Document> byId,
+    Set<int> activeLinkIds,
     List<JournalEntry> out,
   ) {
     if (d.total.abs() <= _eps) return;
     final parent = d.relatedDocumentId == null
         ? null
         : byId[d.relatedDocumentId];
-    final isParentActivePurchase =
-        parent?.type == 'purchase' &&
-        parent!.status != DocumentStatus.cancelled &&
-        parent.status != DocumentStatus.draft;
     final isParentCancelledOrDraftPurchase =
         parent?.type == 'purchase' &&
         (parent!.status == DocumentStatus.cancelled ||
             parent.status == DocumentStatus.draft);
 
     final Account debitAccount;
-    if (isParentActivePurchase) {
-      debitAccount = Accounts.payables;
-    } else if (isParentCancelledOrDraftPurchase) {
+    if (isParentCancelledOrDraftPurchase) {
       // Supplier advance / refund receivable owed back by supplier
       debitAccount = Accounts.receivables;
+    } else if (d.id != null && activeLinkIds.contains(d.id!)) {
+      debitAccount = Accounts.payables;
+    } else if (d.relatedDocumentId != null && parent?.type == 'purchase') {
+      debitAccount = Accounts.payables;
     } else {
       debitAccount = Accounts.operatingExpenses;
     }
