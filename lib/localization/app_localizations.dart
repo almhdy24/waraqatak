@@ -536,8 +536,8 @@ class AppLocalizations {
   String get deactivateProduct => _t('تعطيل المنتج', 'Deactivate Product');
   String get activateProduct => _t('تفعيل المنتج', 'Activate Product');
   String get deactivateProductMessage => _t(
-    'هذا المنتج مستخدم في مستندات سابقة. هل تريد تعطيله بدلاً من حذفه؟',
-    'This product is used in existing documents. Deactivate it instead of deleting?',
+    'هذا المنتج له مستندات أو حركات مخزون سابقة. هل تريد تعطيله بدلاً من حذفه؟',
+    'This product has documents or stock history. Deactivate it instead of deleting it?',
   );
   String get productDeactivated => _t('تم تعطيل المنتج', 'Product deactivated');
   String get productActivated => _t('تم تفعيل المنتج', 'Product activated');
