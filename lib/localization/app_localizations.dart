@@ -2213,6 +2213,26 @@ class AppLocalizations {
     'يرجى التأكد من كتابة الأرقام والمبالغ بشكل صحيح',
     'Please enter valid numbers',
   );
+  String get errorDeleteProductHasHistory => _t(
+    'لا يمكن حذف منتج مرتبط بفواتير أو حركات شراء سابقة',
+    'Cannot delete a product with existing invoice or purchase history',
+  );
+  String get errorDiscountExceedsSubtotal => _t(
+    'قيمة الخصم لا يمكن أن تتجاوز المجموع الفرعي',
+    'Discount cannot exceed subtotal',
+  );
+  String get errorPaidExceedsTotal => _t(
+    'المبلغ المدفوع لا يمكن أن يتجاوز الإجمالي',
+    'Paid amount cannot exceed total',
+  );
+  String get errorNegativeAmount => _t(
+    'لا يمكن إدخال مبلغ أو سعر سالب',
+    'Amount or price cannot be negative',
+  );
+  String get errorValidUntilBeforeDate => _t(
+    'تاريخ انتهاء العرض يجب أن يكون بعد تاريخ الإصدار',
+    'Valid-until date must be on or after issue date',
+  );
 
   String get pdfTaxIdLabel => _t('الرقم الضريبي:', 'Tax ID:');
   String get pdfTaxRegLabel => _t('رقم التسجيل الضريبي:', 'Tax Reg:');

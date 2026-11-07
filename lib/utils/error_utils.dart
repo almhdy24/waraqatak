@@ -51,6 +51,26 @@ class ErrorUtils {
       return l10n.stockCannotBeNegative;
     }
 
+    final msg = error.toString();
+    if (msg.contains('Cannot delete product with existing invoice or purchase history')) {
+      return l10n.errorDeleteProductHasHistory;
+    }
+    if (msg.contains('Discount cannot exceed subtotal')) {
+      return l10n.errorDiscountExceedsSubtotal;
+    }
+    if (msg.contains('Paid amount cannot exceed total')) {
+      return l10n.errorPaidExceedsTotal;
+    }
+    if (msg.contains('Amount cannot be negative') ||
+        msg.contains('Unit price cannot be negative') ||
+        msg.contains('cannot be negative')) {
+      return l10n.errorNegativeAmount;
+    }
+    if (msg.contains('validUntil must be on or after date') ||
+        msg.contains('Valid-until date cannot be before')) {
+      return l10n.errorValidUntilBeforeDate;
+    }
+
     // Network / connectivity
     if (lower.contains('socketexception') ||
         lower.contains('clientexception') ||
