@@ -1125,6 +1125,10 @@ class AppLocalizations {
   String get removeKeyConfirmAction => _t('إزالة', 'Remove');
   String get keyRemovedSnack =>
       _t('تمت إزالة المفتاح من هذا الجهاز.', 'Key removed from this device.');
+  String get keyRemovedServerNotReleased => _t(
+    'أُزيل المفتاح من هذا الجهاز، لكن تعذّر تحرير الجهاز على الخادم. أعد إدخال المفتاح وأزله مجدداً عند توفر الإنترنت، أو تواصل مع الدعم.',
+    'The key was removed from this device, but the device could not be released on the server. Re-enter the key and remove it again when you are online, or contact support.',
+  );
 
   // ── Transparency screen (free vs Pro) ─────────────────────────────────────
   String get transparencyTitle => _t(

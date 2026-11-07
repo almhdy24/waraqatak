@@ -116,16 +116,21 @@ class _LicenseScreenState extends State<LicenseScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _busy = true);
+    var released = true;
     final key = await LicenseService.instance.licenseKey;
     if (key != null && key.isNotEmpty) {
       final deviceId = await LicenseService.instance.getOrCreateDeviceId();
-      await ActivationService.deactivate(key, deviceId);
+      released = await ActivationService.deactivate(key, deviceId)
+          .timeout(const Duration(seconds: 15), onTimeout: () => false);
     }
     await LicenseService.instance.clearLicense();
     await _reload();
     if (!mounted) return;
     setState(() => _busy = false);
-    AppSnackBar.show(context, l10n.keyRemovedSnack);
+    AppSnackBar.show(
+      context,
+      released ? l10n.keyRemovedSnack : l10n.keyRemovedServerNotReleased,
+    );
   }
 
   @override
