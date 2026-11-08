@@ -13,6 +13,7 @@ class FakeAnalyticsSink implements AnalyticsSink {
     required String projectKey,
     String? appVersion,
     String? storagePath,
+    int? maxQueueSize,
     bool debug = false,
   }) async {
     isInitialized = true;
