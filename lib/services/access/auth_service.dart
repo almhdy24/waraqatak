@@ -41,10 +41,90 @@ class AuthService {
   AuthService._();
   static final AuthService instance = AuthService._();
 
+  static const int minIterations = 20000;
+  static const int maxIterations = 200000;
   static const int defaultIterations = 100000;
+  static const int benchmarkIterations = 10000;
+  static const int targetDurationMs = 300;
   static const int minPinLength = 4;
   static const int maxPinLength = 6;
   static const int minPasswordLength = 6;
+
+  int? _calibratedIterations;
+
+  @visibleForTesting
+  void setCalibratedIterationsForTesting(int? val) {
+    _calibratedIterations = val;
+  }
+
+  /// Calibrates PBKDF2 iterations to target ~300ms on the current hardware,
+  /// clamped strictly between 20,000 and 200,000 iterations (F5).
+  Future<int> calibrateIterations() async {
+    final sw = Stopwatch()..start();
+    final testReq = _HashRequest(
+      secret: 'calibration_benchmark_secret',
+      salt: 'calibration_benchmark_salt',
+      iterations: benchmarkIterations,
+    );
+    if (kIsWeb || !useCompute) {
+      await _derivePbkdf2(testReq);
+    } else {
+      await compute(_derivePbkdf2, testReq);
+    }
+    sw.stop();
+    final elapsedMs = sw.elapsedMilliseconds;
+    if (elapsedMs <= 0) {
+      return minIterations;
+    }
+
+    final targetIters = (benchmarkIterations * targetDurationMs / elapsedMs).round();
+    final clamped = targetIters.clamp(minIterations, maxIterations);
+    _calibratedIterations = clamped;
+    return clamped;
+  }
+
+  /// Gets cached calibrated iterations, reads from `app_settings`, or benchmarks and persists.
+  Future<int> getOrCalibrateIterations([DatabaseExecutor? executor]) async {
+    if (testingIterations != null) return testingIterations!;
+    final db = executor ?? await DatabaseHelper.instance.database;
+
+    if (_calibratedIterations != null) {
+      try {
+        await db.rawInsert('''
+          INSERT INTO app_settings (key, value) VALUES ('kdf_calibrated_iterations', ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        ''', [_calibratedIterations!.toString()]);
+      } catch (_) {}
+      return _calibratedIterations!;
+    }
+
+    try {
+      final rows = await db.query(
+        'app_settings',
+        where: "key = 'kdf_calibrated_iterations'",
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        final val = int.tryParse(rows.first['value']?.toString() ?? '');
+        if (val != null && val >= minIterations && val <= maxIterations) {
+          _calibratedIterations = val;
+          return val;
+        }
+      }
+    } catch (_) {}
+
+    final calibrated = await calibrateIterations();
+    _calibratedIterations = calibrated;
+
+    try {
+      await db.rawInsert('''
+        INSERT INTO app_settings (key, value) VALUES ('kdf_calibrated_iterations', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      ''', [calibrated.toString()]);
+    } catch (_) {}
+
+    return calibrated;
+  }
 
   // Device-level throttle to prevent brute-force and lockout DoS (E7)
   static int _deviceFailedAttempts = 0;
@@ -331,6 +411,17 @@ class AuthService {
     }
     final db = executor ?? await DatabaseHelper.instance.database;
 
+    AppUser? targetUser;
+    final targetRows = await db.query(
+      'users',
+      where: 'id = ?',
+      whereArgs: [userId],
+      limit: 1,
+    );
+    if (targetRows.isNotEmpty) {
+      targetUser = AppUser.fromMap(targetRows.first);
+    }
+
     final enforcePolicy =
         !AccessGuard.isSystemContext && SessionManager.instance.isMultiUserEnabled;
     if (enforcePolicy) {
@@ -342,16 +433,9 @@ class AuthService {
         );
       }
 
-      final targetRows = await db.query(
-        'users',
-        where: 'id = ?',
-        whereArgs: [userId],
-        limit: 1,
-      );
-      if (targetRows.isEmpty) {
+      if (targetUser == null) {
         throw const AuthException('المستخدم غير موجود', 'User not found');
       }
-      final targetUser = AppUser.fromMap(targetRows.first);
 
       if (effectiveActor.id == targetUser.id) {
         if (targetUser.hasPassword) {
@@ -406,8 +490,11 @@ class AuthService {
       }
     }
 
+    final iterations = targetUser != null && targetUser.kdfIterations > 0 && targetUser.kdfIterations != defaultIterations
+        ? targetUser.kdfIterations
+        : await getOrCalibrateIterations(db);
     final salt = generateSalt();
-    final hash = await hashSecret(newPassword, salt);
+    final hash = await hashSecret(newPassword, salt, iterations: iterations);
     final now = DateTime.now().toIso8601String();
 
     await db.update(
@@ -415,6 +502,7 @@ class AuthService {
       {
         'password_hash': hash,
         'password_salt': salt,
+        'kdf_iterations': iterations,
         'setup_complete': 1,
         'updated_at': now,
       },
@@ -439,6 +527,17 @@ class AuthService {
     }
     final db = executor ?? await DatabaseHelper.instance.database;
 
+    AppUser? targetUser;
+    final targetRows = await db.query(
+      'users',
+      where: 'id = ?',
+      whereArgs: [userId],
+      limit: 1,
+    );
+    if (targetRows.isNotEmpty) {
+      targetUser = AppUser.fromMap(targetRows.first);
+    }
+
     final enforcePolicy =
         !AccessGuard.isSystemContext && SessionManager.instance.isMultiUserEnabled;
     if (enforcePolicy) {
@@ -450,16 +549,9 @@ class AuthService {
         );
       }
 
-      final targetRows = await db.query(
-        'users',
-        where: 'id = ?',
-        whereArgs: [userId],
-        limit: 1,
-      );
-      if (targetRows.isEmpty) {
+      if (targetUser == null) {
         throw const AuthException('المستخدم غير موجود', 'User not found');
       }
-      final targetUser = AppUser.fromMap(targetRows.first);
 
       if (effectiveActor.id == targetUser.id) {
         if (targetUser.hasPin) {
@@ -525,8 +617,11 @@ class AuthService {
       }
     }
 
+    final iterations = targetUser != null && targetUser.kdfIterations > 0 && targetUser.kdfIterations != defaultIterations
+        ? targetUser.kdfIterations
+        : await getOrCalibrateIterations(db);
     final salt = generateSalt();
-    final hash = await hashSecret(newPin, salt);
+    final hash = await hashSecret(newPin, salt, iterations: iterations);
     final now = DateTime.now().toIso8601String();
 
     await db.update(
@@ -534,6 +629,7 @@ class AuthService {
       {
         'pin_hash': hash,
         'pin_salt': salt,
+        'kdf_iterations': iterations,
         'updated_at': now,
       },
       where: 'id = ?',

@@ -263,14 +263,23 @@ class AccessAdminService {
     }
 
     // 4. Crypto derivation
+    final iterations = await AuthService.instance.getOrCalibrateIterations(database);
     final passwordSalt = AuthService.instance.generateSalt();
-    final passwordHash = await AuthService.instance.hashSecret(password, passwordSalt);
+    final passwordHash = await AuthService.instance.hashSecret(
+      password,
+      passwordSalt,
+      iterations: iterations,
+    );
 
     String? pinSalt;
     String? pinHash;
     if (pin != null && pin.trim().isNotEmpty) {
       pinSalt = AuthService.instance.generateSalt();
-      pinHash = await AuthService.instance.hashSecret(pin.trim(), pinSalt);
+      pinHash = await AuthService.instance.hashSecret(
+        pin.trim(),
+        pinSalt,
+        iterations: iterations,
+      );
     }
 
     final now = DateTime.now().toIso8601String();
@@ -303,6 +312,7 @@ class AccessAdminService {
         'password_salt': passwordSalt,
         'pin_hash': pinHash,
         'pin_salt': pinSalt,
+        'kdf_iterations': iterations,
         'is_owner': 0,
         'is_active': isActive ? 1 : 0,
         'setup_complete': 1,

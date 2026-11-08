@@ -25,8 +25,8 @@ Branch: fix/multiuser-stabilization
 | D4 | Fixed | Batch 4 | access_admin_service_test | Atomic transactions for role/user writes, friendly AdminException instead of raw SQLite errors, role delete blocked if assigned |
 | D5 | Fixed | Batch 4 | access_admin_service_test | Admin screens and service log audit events for all user/role creates, updates, and deletes |
 | D6 | Fixed | Batch 6 | login_pin_recovery_test | Password dialog disposes controller and shows localized AuthException messages |
-| D7 | Confirmed | Batch 8 | Pending | `AuditService.logEvent` concurrency chain fork, unpaged `verifyChain` |
-| D8 | Confirmed | Batch 8 | Pending | Fixed 100k PBKDF2 iterations, no stored recovery iterations |
+| D7 | Fixed | Batch 8 | crypto_audit_safety_test | `AuditService.logEvent` mutex serialization prevents hash chain forks; keyset cursor pagination in `verifyChain` |
+| D8 | Fixed | Batch 8 | crypto_audit_safety_test | Device-calibrated PBKDF2 iterations (clamped 20k-200k) stored in `app_settings` and per-secret in `users.kdf_iterations` |
 | D9 | Fixed | Batch 6 | login_pin_recovery_test | Owner PIN optional in wizard and user form (F6), progress indicator during credential hashing |
 | N1 | Fixed | Batch 2 | session_hardening_test | `SessionManager.init()` fails closed, setting isSecurityUnverified on error |
 | N2 | Fixed | Batch 2 | session_hardening_test | `setMultiUserEnabled` writes DB first, loads real Owner and updates login |
@@ -52,11 +52,11 @@ Branch: fix/multiuser-stabilization
 | N-NEW3 | Fixed | Batch 2, 5 | session_hardening_test | Routes popped to root on lock via SessionManager.navigatorKey |
 | N-NEW4 | Fixed | Batch 2 | session_hardening_test | Foreground auto-lock periodic timer wired |
 | N-NEW5 | Fixed | Batch 5 | screen_policy_guard_test | All 50 screen classes mapped in ScreenAccessPolicy with Deny-By-Default H5 and ScreenAccessGate |
-| N-NEW6 | Confirmed | Batch 6, 8 | Pending | Recovery code iteration count not persisted in `app_settings` |
+| N-NEW6 | Fixed | Batch 8 | crypto_audit_safety_test | `owner_recovery_code_iterations` stored in `app_settings` and used on verify |
 
 ## ENTRY-POINT MATRIX STATUS
 Total entry points cataloged: 40 surfaces & methods (see `docs/multiuser/FIX_AUDIT.md` Section 3).
-Current status: Audited; hardening plan assigned to Batches 2–7.
+Current status: Hardened across Batches 2–8.
 
 ## DECISIONS
 - **F1:** All access-table writes go through `AccessAdminService` (guarded, policy-checked, transactional, audited, cache-invalidating).
@@ -81,4 +81,4 @@ Current status: Audited; hardening plan assigned to Batches 2–7.
 (None)
 
 ## RESUME NOTE
-Batch 7 complete (Sensitive-Action Re-Authentication: SensitiveActionGate created with password prompt, device-wide throttle check, single-user bypass, and audit logging for success/failure; wired into backup restore, period lock set/clear, single/batch database repair, license removal, and disabling multi-user mode. SessionManager.setMultiUserEnabled(false) strictly guards against non-owners). Resume with Batch 8 (Crypto Performance & Audit Chain Safety).
+Batch 8 complete (Crypto Performance & Audit Chain Safety: serialized `logEvent` mutex queue prevents hash chain fork; keyset cursor pagination in `verifyChain` bounds memory; device-calibrated PBKDF2 iterations clamped 20k-200k persisted in `app_settings` and `users.kdf_iterations`; recovery iterations persisted). Resume with Batch 9 (Red-Team & E2E Flow Tests).

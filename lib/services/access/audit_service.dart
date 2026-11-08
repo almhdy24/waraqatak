@@ -170,8 +170,29 @@ class AuditService {
     return hash;
   }
 
+  Future<void> _chainLock = Future.value();
+
   /// Logs an event into the tamper-evident audit chain.
+  /// Execution is serialized to prevent hash chain forks from concurrent calls (D7).
   Future<void> logEvent(
+    DatabaseExecutor db,
+    String action, {
+    String? entityType,
+    int? entityId,
+    String? details,
+  }) {
+    final next = _chainLock.then((_) => _logEventInternal(
+      db,
+      action,
+      entityType: entityType,
+      entityId: entityId,
+      details: details,
+    ));
+    _chainLock = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _logEventInternal(
     DatabaseExecutor db,
     String action, {
     String? entityType,
@@ -258,72 +279,87 @@ class AuditService {
   }
 
   /// Verifies the entire cryptographic hash chain of [audit_log].
-  Future<AuditVerificationResult> verifyChain({DatabaseExecutor? db}) async {
+  /// Uses cursor pagination with [pageSize] so memory remains bounded on large logs (D7).
+  Future<AuditVerificationResult> verifyChain({
+    DatabaseExecutor? db,
+    int pageSize = 100,
+  }) async {
     final executor = db ?? await DatabaseHelper.instance.database;
-    final rows = await executor.rawQuery('''
-      SELECT id, action, entity_type, entity_id, details, timestamp,
-             user_id, device_id, prev_hash, hash
-      FROM audit_log
-      WHERE hash IS NOT NULL
-      ORDER BY id ASC
-    ''');
-
-    if (rows.isEmpty) {
+    final countRow = await executor.rawQuery(
+      'SELECT COUNT(*) as cnt FROM audit_log WHERE hash IS NOT NULL',
+    );
+    final totalCount = (countRow.first['cnt'] as num?)?.toInt() ?? 0;
+    if (totalCount == 0) {
       return const AuditVerificationResult(isValid: true, verifiedCount: 0);
     }
 
     String expectedPrevHash = genesisHash;
     int verifiedCount = 0;
+    int lastId = 0;
 
-    for (final row in rows) {
-      final id = row['id'] as int;
-      final action = (row['action'] as String?) ?? '';
-      final entityType = row['entity_type'] as String?;
-      final entityId = row['entity_id'] as int?;
-      final details = row['details'] as String?;
-      final timestamp = (row['timestamp'] as String?) ?? '';
-      final userId = (row['user_id'] as String?) ?? '';
-      final deviceId = (row['device_id'] as String?) ?? '';
-      final prevHash = (row['prev_hash'] as String?) ?? '';
-      final storedHash = (row['hash'] as String?) ?? '';
+    while (true) {
+      final rows = await executor.rawQuery('''
+        SELECT id, action, entity_type, entity_id, details, timestamp,
+               user_id, device_id, prev_hash, hash
+        FROM audit_log
+        WHERE hash IS NOT NULL AND id > ?
+        ORDER BY id ASC
+        LIMIT ?
+      ''', [lastId, pageSize]);
 
-      if (action == 'audit_chain_genesis') {
-        expectedPrevHash = prevHash;
-      }
+      if (rows.isEmpty) break;
 
-      if (prevHash != expectedPrevHash) {
-        return AuditVerificationResult(
-          isValid: false,
-          verifiedCount: verifiedCount,
-          brokenAtId: id,
-          error:
-              'prev_hash mismatch: expected $expectedPrevHash but got $prevHash',
+      for (final row in rows) {
+        final id = (row['id'] as num).toInt();
+        lastId = id;
+        final action = (row['action'] as String?) ?? '';
+        final entityType = row['entity_type'] as String?;
+        final entityId = (row['entity_id'] as num?)?.toInt();
+        final details = row['details'] as String?;
+        final timestamp = (row['timestamp'] as String?) ?? '';
+        final userId = (row['user_id'] as String?) ?? '';
+        final deviceId = (row['device_id'] as String?) ?? '';
+        final prevHash = (row['prev_hash'] as String?) ?? '';
+        final storedHash = (row['hash'] as String?) ?? '';
+
+        if (action == 'audit_chain_genesis') {
+          expectedPrevHash = prevHash;
+        }
+
+        if (prevHash != expectedPrevHash) {
+          return AuditVerificationResult(
+            isValid: false,
+            verifiedCount: verifiedCount,
+            brokenAtId: id,
+            error:
+                'prev_hash mismatch: expected $expectedPrevHash but got $prevHash',
+          );
+        }
+
+        final computed = await computeHash(
+          action: action,
+          entityType: entityType,
+          entityId: entityId,
+          details: details,
+          timestamp: timestamp,
+          userId: userId,
+          deviceId: deviceId,
+          prevHash: prevHash,
         );
+
+        if (storedHash != computed) {
+          return AuditVerificationResult(
+            isValid: false,
+            verifiedCount: verifiedCount,
+            brokenAtId: id,
+            error:
+                'hash mismatch: expected computed $computed but stored was $storedHash',
+          );
+        }
+
+        expectedPrevHash = storedHash;
+        verifiedCount++;
       }
-
-      final computed = await computeHash(
-        action: action,
-        entityType: entityType,
-        entityId: entityId,
-        details: details,
-        timestamp: timestamp,
-        userId: userId,
-        deviceId: deviceId,
-        prevHash: prevHash,
-      );
-
-      if (storedHash != computed) {
-        return AuditVerificationResult(
-          isValid: false,
-          verifiedCount: verifiedCount,
-          brokenAtId: id,
-          error:
-              'hash mismatch: expected computed $computed but stored was $storedHash',
-        );
-      }
-
-      expectedPrevHash = storedHash;
-      verifiedCount++;
     }
 
     return AuditVerificationResult(

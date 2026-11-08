@@ -40,15 +40,17 @@ class RecoveryService {
         .replaceFirst(RegExp(r'^RC'), '');
   }
 
-  /// Saves a newly generated recovery code hash and salt into [app_settings].
+  /// Saves a newly generated recovery code hash, salt, and iterations into [app_settings] (N-NEW6).
   Future<void> saveRecoveryCode(
     String code, {
     DatabaseExecutor? executor,
+    int? iterations,
   }) async {
     final db = executor ?? await DatabaseHelper.instance.database;
+    final iter = iterations ?? await AuthService.instance.getOrCalibrateIterations(db);
     final normalized = normalizeCode(code);
     final salt = AuthService.instance.generateSalt();
-    final hash = await AuthService.instance.hashSecret(normalized, salt);
+    final hash = await AuthService.instance.hashSecret(normalized, salt, iterations: iter);
 
     await db.rawInsert('''
       INSERT INTO app_settings (key, value) VALUES ('owner_recovery_code_hash', ?)
@@ -59,37 +61,37 @@ class RecoveryService {
       INSERT INTO app_settings (key, value) VALUES ('owner_recovery_code_salt', ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
     ''', [salt]);
+
+    await db.rawInsert('''
+      INSERT INTO app_settings (key, value) VALUES ('owner_recovery_code_iterations', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    ''', [iter.toString()]);
   }
 
-  /// Verifies if [inputCode] matches the stored Owner Recovery Code hash.
+  /// Verifies if [inputCode] matches the stored Owner Recovery Code hash using stored iterations.
   Future<bool> verifyRecoveryCode(
     String inputCode, {
     DatabaseExecutor? executor,
   }) async {
     final db = executor ?? await DatabaseHelper.instance.database;
-    final hashRows = await db.query(
+    final rows = await db.query(
       'app_settings',
-      where: 'key = ?',
-      whereArgs: ['owner_recovery_code_hash'],
-      limit: 1,
+      where: "key IN ('owner_recovery_code_hash', 'owner_recovery_code_salt', 'owner_recovery_code_iterations')",
     );
-    final saltRows = await db.query(
-      'app_settings',
-      where: 'key = ?',
-      whereArgs: ['owner_recovery_code_salt'],
-      limit: 1,
-    );
+    final map = {for (final r in rows) r['key'] as String: r['value'] as String?};
 
-    if (hashRows.isEmpty || saltRows.isEmpty) return false;
-
-    final storedHash = hashRows.first['value'] as String?;
-    final storedSalt = saltRows.first['value'] as String?;
+    final storedHash = map['owner_recovery_code_hash'];
+    final storedSalt = map['owner_recovery_code_salt'];
     if (storedHash == null || storedSalt == null) return false;
+
+    final storedIters =
+        int.tryParse(map['owner_recovery_code_iterations'] ?? '') ?? AuthService.defaultIterations;
 
     final normalized = normalizeCode(inputCode);
     final computed = await AuthService.instance.hashSecret(
       normalized,
       storedSalt,
+      iterations: storedIters,
     );
 
     return AuthService.constantTimeEquals(computed, storedHash);
@@ -190,6 +192,7 @@ class RecoveryService {
       }
 
       // Optional PIN validation
+      final iter = await AuthService.instance.getOrCalibrateIterations(txn);
       String? pinHash;
       String? pinSalt;
       if (newPin != null && newPin.trim().isNotEmpty) {
@@ -201,17 +204,26 @@ class RecoveryService {
           );
         }
         pinSalt = AuthService.instance.generateSalt();
-        pinHash = await AuthService.instance.hashSecret(trimmedPin, pinSalt);
+        pinHash = await AuthService.instance.hashSecret(
+          trimmedPin,
+          pinSalt,
+          iterations: iter,
+        );
       }
 
       // Hash new password
       final passSalt = AuthService.instance.generateSalt();
-      final passHash = await AuthService.instance.hashSecret(newPassword, passSalt);
+      final passHash = await AuthService.instance.hashSecret(
+        newPassword,
+        passSalt,
+        iterations: iter,
+      );
       final now = DateTime.now().toIso8601String();
 
       final updateMap = <String, dynamic>{
         'password_hash': passHash,
         'password_salt': passSalt,
+        'kdf_iterations': iter,
         'failed_attempts': 0,
         'locked_until': null,
         'setup_complete': 1,
@@ -231,7 +243,7 @@ class RecoveryService {
 
       // Atomic rotation of recovery code
       final newRecoveryCode = generateRecoveryCode();
-      await saveRecoveryCode(newRecoveryCode, executor: txn);
+      await saveRecoveryCode(newRecoveryCode, executor: txn, iterations: iter);
 
       // Log audit event
       try {
