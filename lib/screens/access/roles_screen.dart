@@ -7,6 +7,7 @@ import '../../services/access/access_guard.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
 import '../../widgets/app_confirm_dialog.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 
@@ -286,7 +287,9 @@ class _RolesScreenState extends State<RolesScreen> {
     final cs = Theme.of(context).colorScheme;
     final canManageRoles = AccessGuard.can(PermissionRegistry.rolesManage);
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: RolesScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.rolesAndPermissions),
         centerTitle: true,
@@ -363,6 +366,7 @@ class _RolesScreenState extends State<RolesScreen> {
               onPressed: () => _openRoleEditor(),
             )
           : null,
+    ),
     );
   }
 }

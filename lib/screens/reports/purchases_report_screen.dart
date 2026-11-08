@@ -15,6 +15,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/responsive.dart';
 import '../document_detail_screen.dart';
 import 'report_date_filter.dart';
@@ -176,7 +177,9 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
     final cancelledCount = summary?.cancelledCount ?? 0;
     final finalizedCount = (summary?.items.length ?? 0) - cancelledCount;
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: PurchasesReportScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.purchasesReport),
         centerTitle: true,
@@ -443,6 +446,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

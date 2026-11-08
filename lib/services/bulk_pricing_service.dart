@@ -1,6 +1,8 @@
 import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../database/reference_pricing_dao.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import '../models/product.dart';
 import '../models/reference_pricing_types.dart';
 
@@ -217,6 +219,7 @@ class BulkPricingService {
     required double opValue,
     required BulkPriceTarget target,
   }) async {
+    AccessGuard.require(PermissionRegistry.pricingManage);
     final validItems = items.where((it) => it.isValid).toList();
     if (validItems.isEmpty) {
       throw ArgumentError('No valid items to update');

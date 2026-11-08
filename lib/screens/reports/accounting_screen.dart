@@ -5,6 +5,7 @@ import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../services/accounting/ledger.dart';
 import '../../services/accounting/ledger_service.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
@@ -70,9 +71,11 @@ class _AccountingScreenState extends State<AccountingScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
+    return ScreenAccessGate(
+      screenType: AccountingScreen,
+      child: DefaultTabController(
+        length: 4,
+        child: Scaffold(
         appBar: AppBar(
           title: Text(l10n.accounting),
           centerTitle: true,
@@ -89,6 +92,7 @@ class _AccountingScreenState extends State<AccountingScreen> {
         ),
         body: ResponsiveCenter(child: _body(context, l10n)),
       ),
+    ),
     );
   }
 
@@ -731,7 +735,9 @@ class AccountLedgerScreen extends StatelessWidget {
       from: range.from,
       to: range.to,
     );
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: AccountLedgerScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.accountName(account.code)),
         centerTitle: true,
@@ -798,6 +804,7 @@ class AccountLedgerScreen extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 

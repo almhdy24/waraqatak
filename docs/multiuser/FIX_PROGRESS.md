@@ -9,7 +9,7 @@ Branch: fix/multiuser-stabilization
 | 2 | Session layer hardening | DONE | 614c1c1 | test/services/session_hardening_test.dart (20 passed), test/guards/access_guards_test.dart, architecture_guards_test.dart | Fail-closed init, DB-first enable, locked can() check, attribution fix, UserSessionScope assert, AppUser sentinel copyWith, auto-lock periodic check. |
 | 3 | AccessPolicy, Owner protection & OWNER_ONLY keys | DONE | 743611b | test/services/access_policy_test.dart (15 passed), session_hardening_test.dart, access_guards_test.dart, architecture_guards_test.dart | access_policy.dart (H1-H4), OWNER_ONLY stripping in PermissionService, Schema v30 SQLite security triggers (H6), escalation audit (H7), AuthService guards (E3). |
 | 4 | AccessAdminService | DONE | d176183 | test/services/access_admin_service_test.dart (5 passed), regression 50 passed | Move all writes out of screens into transactional AccessAdminService. Disable instead of delete. D2-D5, E1-E2 fixed. |
-| 5 | Screen, route & Settings lockdown | TODO | | | ScreenAccessPolicy manifest, PermissionGate push & build checks, service guards on settings/repair/backup. |
+| 5 | Screen, route & Settings lockdown | DONE |  | test/guards/screen_policy_guard_test.dart (4 passed), access_guards_test.dart, architecture_guards_test.dart, access_policy_test.dart, access_admin_service_test.dart | ScreenAccessPolicy manifest covers all 50 screens (Deny-By-Default H5). ScreenAccessGate wraps screens, Settings tiles gated, service-level guards on adjustStock, licensing, backup, repair, pricing, csv. E5, E6, E9, N-NEW1, N-NEW5 fixed. |
 | 6 | Login, PIN, wizard, recovery & lockout-DoS | TODO | | | Explicit PIN confirm, device throttle, atomic recovery with pre-unlock code display, optional Owner PIN. |
 | 7 | Sensitive-action re-authentication | TODO | | | SensitiveActionGate with current user password prompt, applied to restore, period lock, repair, disable multi-user. |
 | 8 | Crypto performance & audit chain safety | TODO | | | KDF calibration, isolate hashing, async mutex on logEvent, paged verifyChain. |
@@ -41,17 +41,17 @@ Branch: fix/multiuser-stabilization
 | E2 | Fixed | Batch 4 | access_admin_service_test | Tapping user row in users_list_screen gated by users.manage and Owner immunity check |
 | E3 | Fixed | Batch 3 | access_policy_test | `AuthService.setPassword` and `setPin` guard with AccessPolicy, audit privilege escalation |
 | E4 | Fixed | Batch 3 | access_policy_test | Strict privilege hierarchy in `AccessPolicy`: delegates cannot touch peers/superiors or unheld permissions |
-| E5 | Confirmed | Batch 5 | Pending | Auto-lock menu item ungated; any user can disable auto-lock |
-| E6 | Confirmed | Batch 5 | Pending | Regular users can reach Settings, licensing, business info, diagnostics, restore |
+| E5 | Fixed | Batch 5 | screen_policy_guard_test | Auto-lock policy (menu and SessionManager.setAutoLockMinutes) gated strictly to Owner only |
+| E6 | Fixed | Batch 5 | screen_policy_guard_test | Settings tiles gated with PermissionGate & owner-only constraints |
 | E7 | Confirmed | Batch 6 | Pending | Owner lockout DoS: failed attempts on lock screen lock Owner out for 15 min |
 | E8 | Fixed | Batch 3 | access_policy_test | Schema v30 SQLite triggers defend Owner row from delete, demote, rename, and system role tampering |
-| E9 | Confirmed | Batch 5 | Pending | Mutating services (`LicenseService`, `BackupService`, `DatabaseRepairService`) lack guards |
+| E9 | Fixed | Batch 5 | screen_policy_guard_test | Mutating services (LicenseService, ActivationService, BackupService, DatabaseRepairService, BulkPricingService) gated |
 | E10 | Fixed | Batch 3 | access_policy_test | OWNER_ONLY keys strictly stripped in `PermissionService` and blocked in `AccessPolicy` |
-| N-NEW1 | Confirmed | Batch 5 | Pending | `DatabaseHelper.adjustStock` lacks `AccessGuard.require(stockAdjust)` |
+| N-NEW1 | Fixed | Batch 5 | access_guards_test | `DatabaseHelper.adjustStock` protected with `AccessGuard.require(stockAdjust)` |
 | N-NEW2 | Confirmed | Batch 4 | Pending | `user_form_screen` inserts non-existent `'created_at'` into overrides table |
-| N-NEW3 | Confirmed | Batch 2, 5 | Pending | Pushed routes remain active above `MainShell` during lock screen display |
-| N-NEW4 | Confirmed | Batch 2 | Pending | Foreground auto-lock periodic timer missing |
-| N-NEW5 | Confirmed | Batch 5 | Pending | 26 sensitive screens lack entry guards |
+| N-NEW3 | Fixed | Batch 2, 5 | session_hardening_test | Routes popped to root on lock via SessionManager.navigatorKey |
+| N-NEW4 | Fixed | Batch 2 | session_hardening_test | Foreground auto-lock periodic timer wired |
+| N-NEW5 | Fixed | Batch 5 | screen_policy_guard_test | All 50 screen classes mapped in ScreenAccessPolicy with Deny-By-Default H5 and ScreenAccessGate |
 | N-NEW6 | Confirmed | Batch 6, 8 | Pending | Recovery code iteration count not persisted in `app_settings` |
 
 ## ENTRY-POINT MATRIX STATUS
@@ -81,4 +81,4 @@ Current status: Audited; hardening plan assigned to Batches 2–7.
 (None)
 
 ## RESUME NOTE
-Batch 4 complete (AccessAdminService: created transactional, audited, cache-invalidating service for all user/role mutations; soft deactivation; D2-D5 and E1-E2 fixed; user_form_screen, users_list_screen, roles_screen refactored to eliminate raw SQL). Resume with Batch 5 (Screen, route & Settings lockdown: ScreenAccessPolicy manifest, PermissionGate push & build checks, service guards on settings/repair/backup).
+Batch 5 complete (Screen, route & Settings lockdown: ScreenAccessPolicy manifest with Deny-By-Default H5, ScreenAccessGate wrapping sensitive screens, Settings tiles gated with PermissionGate, mutating services guarded, auto-lock policy restricted to Owner only, screen policy guard test passed, flutter analyze clean). Resume with Batch 6 (Login, PIN, wizard, recovery & lockout-DoS: fix D1 auto-submit tautology, explicit confirm 4-6 digits, device throttle + Owner lockout capped at 5m, optional Owner PIN, atomic RecoveryService).

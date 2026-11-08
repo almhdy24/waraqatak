@@ -10,6 +10,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../database/database_helper.dart';
 import '../widgets/backup_password_dialog.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'accounting/journal_backfill_service.dart';
 import 'analytics/analytics_service.dart';
 import 'backup_encryption_service.dart';
@@ -70,6 +72,7 @@ class BackupService {
   // ============================================================
 
   static Future<void> createBackup({String? password}) async {
+    AccessGuard.require(PermissionRegistry.backupCreate);
     final jsonStr = await _buildBackupJson();
     final dir = await getTemporaryDirectory();
     // clean old share files
@@ -370,6 +373,7 @@ class BackupService {
     String? password,
     bool Function()? isCancelled,
   }) async {
+    AccessGuard.require(PermissionRegistry.backupCreate);
     final jsonStr = await _buildBackupJson();
     if (isCancelled != null && isCancelled()) return false;
     final fileName =
@@ -415,6 +419,7 @@ class BackupService {
     String? password,
     Future<String?> Function(List<int> bytes)? passwordPrompt,
   }) async {
+    AccessGuard.require(PermissionRegistry.backupRestore);
     final file = await FilePicker.pickFile(type: FileType.any);
 
     if (file == null) return false;
@@ -480,6 +485,7 @@ class BackupService {
     Map<String, dynamic> jsonMap, {
     bool createSafetyBackup = true,
   }) async {
+    AccessGuard.require(PermissionRegistry.backupRestore);
     _validateBackup(jsonMap);
 
     // Create and validate an automatic safety backup of the current database

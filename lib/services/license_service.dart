@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/entitlement.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'activation_service.dart';
 import 'license_key.dart';
 import 'license_notification_service.dart';
@@ -405,6 +407,7 @@ class LicenseService {
     String? licenseType,
     String? activationToken,
   }) async {
+    AccessGuard.require(PermissionRegistry.licenseManage);
     // Seed trial start if not already set, binding trial lifetime from
     // the installation / activation time.
     await _getOrInitTrialStart(_clock());
@@ -555,6 +558,7 @@ class LicenseService {
   /// last-seen time is kept too, so removing a key cannot be used to rewind
   /// the clock guard.
   Future<void> clearLicense() async {
+    AccessGuard.require(PermissionRegistry.licenseManage);
     await _store.delete(key: _kLicenseKey);
     await _store.delete(key: _kLicenseExpiry);
     await _store.delete(key: _kLicenseStatus);

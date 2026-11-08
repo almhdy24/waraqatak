@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../services/access/audit_service.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
@@ -104,8 +105,10 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
       return action.contains(q) || user.contains(q) || details.contains(q);
     }).toList();
 
-    return Scaffold(
-      appBar: AppBar(
+    return ScreenAccessGate(
+      screenType: AuditTrailScreen,
+      child: Scaffold(
+        appBar: AppBar(
         title: Text(l10n.auditTrail),
         centerTitle: true,
         actions: [
@@ -224,6 +227,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

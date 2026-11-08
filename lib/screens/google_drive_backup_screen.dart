@@ -9,6 +9,7 @@ import '../localization/app_localizations.dart';
 import '../services/backup_encryption_service.dart';
 import '../services/google_drive_backup_service.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/access/screen_access_gate.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
 
@@ -374,7 +375,9 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: GoogleDriveBackupScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.googleDriveTitle),
         centerTitle: true,
@@ -713,6 +716,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

@@ -3544,6 +3544,7 @@ class DatabaseHelper {
     String? reason,
     DateTime? date,
   }) async {
+    AccessGuard.require(PermissionRegistry.stockAdjust);
     final adjDate = date ?? DateTime.now();
     final db = await database;
     await db.transaction((txn) async {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../database/access_dao.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
+import 'access_guard.dart';
 import 'audit_service.dart';
 import 'permission_registry.dart';
 
@@ -53,8 +54,12 @@ class SessionManager extends ChangeNotifier {
     return _currentUser;
   }
 
+  /// Whether the current session belongs to the Owner.
+  bool get isOwnerSession => currentUser?.isOwner == true;
+
   /// Cached permissions set.
   Set<String> get permissions => _cachedPermissions;
+  Set<String> get cachedPermissions => _cachedPermissions;
 
   /// Checks if current user has permission for [key].
   /// In multi-user mode, returns false when locked or when no user is logged in.
@@ -223,6 +228,9 @@ class SessionManager extends ChangeNotifier {
 
   /// Sets auto-lock duration in minutes (0 = disabled).
   Future<void> setAutoLockMinutes(int minutes) async {
+    if (isMultiUserEnabled && !isOwnerSession) {
+      throw const PermissionDeniedException('owner_only: auto_lock_minutes');
+    }
     final db = await DatabaseHelper.instance.database;
     await db.rawInsert('''
       INSERT INTO app_settings (key, value) VALUES ('auto_lock_minutes', ?)

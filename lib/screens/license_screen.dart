@@ -9,6 +9,7 @@ import '../services/activation_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/activation_key_input_widget.dart';
+import '../widgets/access/screen_access_gate.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
@@ -253,7 +254,9 @@ class _LicenseScreenState extends State<LicenseScreen> {
     final cs = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: LicenseScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.licenseScreenRedesignTitle),
         centerTitle: true,
@@ -283,6 +286,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
                 ),
         ),
       ),
+    ),
     );
   }
 

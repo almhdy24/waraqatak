@@ -6,6 +6,8 @@ import '../localization/app_localizations.dart';
 import '../models/database_diagnostic.dart';
 import '../models/document_status.dart';
 import '../models/stock_movement.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'accounting/journal_backfill_service.dart';
 import 'accounting/stock_ledger.dart';
 import 'backup_service.dart';
@@ -859,6 +861,7 @@ class DatabaseRepairService {
     bool createSafetyBackup = true,
     AppLocalizations? l10n,
   }) async {
+    AccessGuard.require(PermissionRegistry.systemRepair);
     final isAr = l10n?.isArabic ?? false;
     if (!issue.isSafeAutoRepair) {
       return RepairResult(

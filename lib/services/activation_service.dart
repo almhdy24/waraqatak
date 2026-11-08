@@ -2,6 +2,8 @@ import 'package:elmahdi_pay_flutter/elmahdi_pay.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/constants/app_constants.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'license_key.dart';
 import 'license_notification_service.dart';
 import 'license_service.dart';
@@ -163,6 +165,7 @@ class ActivationService {
     String rawKey,
     String deviceId,
   ) async {
+    AccessGuard.require(PermissionRegistry.licenseManage);
     final key = normalizeKey(rawKey);
     if (key.isEmpty) {
       return const DetailedActivationResult(outcome: ActivationOutcome.invalid);
@@ -296,6 +299,7 @@ class ActivationService {
   /// activated on another device. Offline removal still completes locally
   /// even if this call fails.
   static Future<bool> deactivate(String rawKey, String deviceId) async {
+    AccessGuard.require(PermissionRegistry.licenseManage);
     final key = normalizeKey(rawKey);
     if (key.isEmpty) return false;
     final serverKey =

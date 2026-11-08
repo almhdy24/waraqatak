@@ -7,6 +7,7 @@ import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 import 'audit_trail_screen.dart';
@@ -55,6 +56,10 @@ class _UsersListScreenState extends State<UsersListScreen> {
   }
 
   Future<void> _showAutoLockDialog() async {
+    if (SessionManager.instance.isMultiUserEnabled &&
+        !SessionManager.instance.isOwnerSession) {
+      return;
+    }
     final l10n = AppLocalizations.of(context);
     final current = SessionManager.instance.autoLockMinutes;
     final options = [0, 1, 2, 5, 10, 15, 30];
@@ -120,7 +125,9 @@ class _UsersListScreenState extends State<UsersListScreen> {
     final canManageRoles = AccessGuard.can(PermissionRegistry.rolesManage);
     final canViewAudit = AccessGuard.can(PermissionRegistry.auditView);
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: UsersListScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.usersAndPermissions),
         centerTitle: true,
@@ -176,16 +183,17 @@ class _UsersListScreenState extends State<UsersListScreen> {
                   ),
                 ),
               if (isMultiUser) ...[
-                PopupMenuItem(
-                  value: 'autolock',
-                  child: Row(
-                    children: [
-                      const Icon(Icons.timer_outlined, size: 20),
-                      const SizedBox(width: 8),
-                      Text(l10n.autoLockSetting),
-                    ],
+                if (SessionManager.instance.isOwnerSession)
+                  PopupMenuItem(
+                    value: 'autolock',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.timer_outlined, size: 20),
+                        const SizedBox(width: 8),
+                        Text(l10n.autoLockSetting),
+                      ],
+                    ),
                   ),
-                ),
                 PopupMenuItem(
                   value: 'lock',
                   child: Row(
@@ -382,6 +390,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
               },
             )
           : null,
+    ),
     );
   }
 

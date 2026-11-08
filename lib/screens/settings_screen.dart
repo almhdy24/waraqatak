@@ -198,104 +198,155 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 child: Column(
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.business_outlined),
-                      title: Text(l10n.businessData),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const BusinessSetupScreen(),
-                        ),
+                    PermissionGate(
+                      permission: PermissionRegistry.settingsManage,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.business_outlined),
+                            title: Text(l10n.businessData),
+                            trailing: Icon(chevronIcon),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const BusinessSetupScreen(),
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.account_balance_outlined),
-                      title: Text(l10n.financialSettings),
-                      subtitle: Text(l10n.financialSettingsDesc),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const FinancialSettingsScreen(),
-                        ),
+                    PermissionGate(
+                      permission: PermissionRegistry.settingsManage,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.account_balance_outlined),
+                            title: Text(l10n.financialSettings),
+                            subtitle: Text(l10n.financialSettingsDesc),
+                            trailing: Icon(chevronIcon),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const FinancialSettingsScreen(),
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.currency_exchange_outlined),
-                      title: Text(l10n.exchangeRates),
-                      subtitle: Text(l10n.exchangeRatesDesc),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ExchangeRatesScreen(),
-                        ),
+                    PermissionGate(
+                      permission: PermissionRegistry.pricingRates,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.currency_exchange_outlined),
+                            title: Text(l10n.exchangeRates),
+                            subtitle: Text(l10n.exchangeRatesDesc),
+                            trailing: Icon(chevronIcon),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ExchangeRatesScreen(),
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.payment_outlined),
-                      title: Text(l10n.paymentMethods),
-                      subtitle: Text(l10n.configurePaymentMethods),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PaymentMethodsScreen(),
-                        ),
+                    PermissionGate(
+                      permission: PermissionRegistry.paymentMethodsManage,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.payment_outlined),
+                            title: Text(l10n.paymentMethods),
+                            subtitle: Text(l10n.configurePaymentMethods),
+                            trailing: Icon(chevronIcon),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PaymentMethodsScreen(),
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.picture_as_pdf_outlined),
-                      title: Text(l10n.pdfCustomize),
-                      subtitle: Text(l10n.pdfCustomizeDesc),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PdfCustomizeScreen(),
-                        ),
+                    PermissionGate(
+                      permission: PermissionRegistry.settingsManage,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.picture_as_pdf_outlined),
+                            title: Text(l10n.pdfCustomize),
+                            subtitle: Text(l10n.pdfCustomizeDesc),
+                            trailing: Icon(chevronIcon),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PdfCustomizeScreen(),
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    SwitchListTile(
-                      secondary: const Icon(Icons.storefront_outlined),
-                      title: Text(l10n.wholesalePricing),
-                      subtitle: Text(l10n.wholesalePricingDesc),
-                      value: _wholesalePricingEnabled,
-                      onChanged: (v) async {
-                        if (!v && _wholesalePricingEnabled) {
-                          final proceed = await AppConfirmDialog.show(
-                            context,
-                            title: l10n.wholesalePricing,
-                            message: l10n.wholesalePricingDisableWarning,
-                            confirmLabel: l10n.disableAction,
-                            isDestructive: false,
-                          );
-                          if (!proceed) return;
-                        }
-                        if (!mounted) return;
-                        setState(() => _wholesalePricingEnabled = v);
-                        final b = await DatabaseHelper.instance
-                            .getFirstBusiness();
-                        if (b != null) {
-                          await DatabaseHelper.instance.updateBusiness(
-                            b.copyWith(wholesalePricingEnabled: v),
-                          );
-                        }
-                      },
+                    PermissionGate(
+                      permission: PermissionRegistry.settingsManage,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SwitchListTile(
+                            secondary: const Icon(Icons.storefront_outlined),
+                            title: Text(l10n.wholesalePricing),
+                            subtitle: Text(l10n.wholesalePricingDesc),
+                            value: _wholesalePricingEnabled,
+                            onChanged: (v) async {
+                              if (!v && _wholesalePricingEnabled) {
+                                final proceed = await AppConfirmDialog.show(
+                                  context,
+                                  title: l10n.wholesalePricing,
+                                  message: l10n.wholesalePricingDisableWarning,
+                                  confirmLabel: l10n.disableAction,
+                                  isDestructive: false,
+                                );
+                                if (!proceed) return;
+                              }
+                              if (!mounted) return;
+                              setState(() => _wholesalePricingEnabled = v);
+                              final b = await DatabaseHelper.instance
+                                  .getFirstBusiness();
+                              if (b != null) {
+                                await DatabaseHelper.instance.updateBusiness(
+                                  b.copyWith(wholesalePricingEnabled: v),
+                                );
+                              }
+                            },
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
+                      ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.manage_accounts_outlined),
-                      title: Text(l10n.usersAndPermissions),
-                      subtitle: Text(l10n.usersAndPermissionsDesc),
-                      trailing: Icon(chevronIcon),
-                      onTap: _openUsersAndPermissions,
+                    PermissionGate(
+                      permission: PermissionRegistry.usersManage,
+                      child: ListTile(
+                        leading: const Icon(Icons.manage_accounts_outlined),
+                        title: Text(l10n.usersAndPermissions),
+                        subtitle: Text(l10n.usersAndPermissionsDesc),
+                        trailing: Icon(chevronIcon),
+                        onTap: _openUsersAndPermissions,
+                      ),
                     ),
                   ],
                 ),
@@ -383,138 +434,165 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 child: Column(
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.save_outlined),
-                      title: Text(l10n.saveBackupTo),
-                      onTap: () async {
-                        final password = await BackupPasswordCreateDialog.show(
-                          context,
-                        );
-                        if (password == null) return;
-                        if (!context.mounted) return;
+                    PermissionGate(
+                      permission: PermissionRegistry.backupCreate,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.save_outlined),
+                            title: Text(l10n.saveBackupTo),
+                            onTap: () async {
+                              final password = await BackupPasswordCreateDialog.show(
+                                context,
+                              );
+                              if (password == null) return;
+                              if (!context.mounted) return;
 
-                        if (password.isNotEmpty) {
-                          final saved = await BackupProgressDialog.show(
-                            context,
-                            title: l10n.saveBackupTo,
-                            message: l10n.backupEncrypting,
-                            operation: (isCancelled) =>
-                                BackupService.createBackupUserChosen(
-                                  password: password,
-                                  isCancelled: isCancelled,
-                                ),
-                          );
-                          if (context.mounted && saved) {
-                            AppSnackBar.show(
-                              context,
-                              l10n.backupSavedTo,
-                              severity: AppSnackBarSeverity.success,
-                            );
-                          }
-                        } else {
-                          try {
-                            final saved =
-                                await BackupService.createBackupUserChosen();
-                            if (context.mounted && saved) {
-                              AppSnackBar.show(
-                                context,
-                                l10n.backupSavedTo,
-                                severity: AppSnackBarSeverity.success,
-                              );
-                            }
-                          } catch (_) {
-                            if (context.mounted) {
-                              AppSnackBar.show(
-                                context,
-                                l10n.backupSaveFailed,
-                                severity: AppSnackBarSeverity.error,
-                              );
-                            }
-                          }
-                        }
-                      },
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.restore),
-                      title: Text(l10n.restore),
-                      onTap: () async {
-                        final confirmed = await AppConfirmDialog.show(
-                          context,
-                          title: l10n.confirmRestore,
-                          message: l10n.restoreWarning,
-                          confirmLabel: l10n.restore,
-                          cancelLabel: l10n.cancel,
-                          isDestructive: true,
-                        );
-                        if (confirmed == true) {
-                          if (!context.mounted) return;
-                          try {
-                            final success = await BackupService.restoreBackup(
-                              context: context,
-                            );
-                            if (context.mounted && success) {
-                              AppSnackBar.show(
-                                context,
-                                l10n.operationSuccessful,
-                                severity: AppSnackBarSeverity.success,
-                              );
-                              // Return to home and reload data
-                              Navigator.of(
-                                context,
-                              ).popUntil((route) => route.isFirst);
-                            }
-                          } on BackupUnsupportedVersionException {
-                            if (context.mounted) {
-                              AppSnackBar.show(
-                                context,
-                                l10n.backupUpdateRequired,
-                                severity: AppSnackBarSeverity.error,
-                              );
-                            }
-                          } on BackupDecryptionException {
-                            if (context.mounted) {
-                              AppSnackBar.show(
-                                context,
-                                l10n.backupIncorrectPassword,
-                                severity: AppSnackBarSeverity.error,
-                              );
-                            }
-                          } catch (_) {
-                            if (context.mounted) {
-                              AppSnackBar.show(
-                                context,
-                                l10n.operationFailed,
-                                severity: AppSnackBarSeverity.error,
-                              );
-                            }
-                          }
-                        }
-                      },
-                    ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.cloud_sync_outlined),
-                      title: Text(l10n.googleDriveTitle),
-                      subtitle: Text(l10n.googleDriveSubtitle),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const GoogleDriveBackupScreen(),
-                        ),
+                              if (password.isNotEmpty) {
+                                final saved = await BackupProgressDialog.show(
+                                  context,
+                                  title: l10n.saveBackupTo,
+                                  message: l10n.backupEncrypting,
+                                  operation: (isCancelled) =>
+                                      BackupService.createBackupUserChosen(
+                                        password: password,
+                                        isCancelled: isCancelled,
+                                      ),
+                                );
+                                if (context.mounted && saved) {
+                                  AppSnackBar.show(
+                                    context,
+                                    l10n.backupSavedTo,
+                                    severity: AppSnackBarSeverity.success,
+                                  );
+                                }
+                              } else {
+                                try {
+                                  final saved =
+                                      await BackupService.createBackupUserChosen();
+                                  if (context.mounted && saved) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.backupSavedTo,
+                                      severity: AppSnackBarSeverity.success,
+                                    );
+                                  }
+                                } catch (_) {
+                                  if (context.mounted) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.backupSaveFailed,
+                                      severity: AppSnackBarSeverity.error,
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.health_and_safety_outlined),
-                      title: Text(l10n.databaseDiagnosticsTitle),
-                      subtitle: Text(l10n.databaseDiagnosticsSubtitle),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const DatabaseDiagnosticScreen(),
+                    PermissionGate(
+                      isOwnerOnly: true,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.restore),
+                            title: Text(l10n.restore),
+                            onTap: () async {
+                              final confirmed = await AppConfirmDialog.show(
+                                context,
+                                title: l10n.confirmRestore,
+                                message: l10n.restoreWarning,
+                                confirmLabel: l10n.restore,
+                                cancelLabel: l10n.cancel,
+                                isDestructive: true,
+                              );
+                              if (confirmed == true) {
+                                if (!context.mounted) return;
+                                try {
+                                  final success = await BackupService.restoreBackup(
+                                    context: context,
+                                  );
+                                  if (context.mounted && success) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.operationSuccessful,
+                                      severity: AppSnackBarSeverity.success,
+                                    );
+                                    // Return to home and reload data
+                                    Navigator.of(
+                                      context,
+                                    ).popUntil((route) => route.isFirst);
+                                  }
+                                } on BackupUnsupportedVersionException {
+                                  if (context.mounted) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.backupUpdateRequired,
+                                      severity: AppSnackBarSeverity.error,
+                                    );
+                                  }
+                                } on BackupDecryptionException {
+                                  if (context.mounted) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.backupIncorrectPassword,
+                                      severity: AppSnackBarSeverity.error,
+                                    );
+                                  }
+                                } catch (_) {
+                                  if (context.mounted) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.operationFailed,
+                                      severity: AppSnackBarSeverity.error,
+                                    );
+                                  }
+                                }
+                              }
+                            },
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
+                      ),
+                    ),
+                    PermissionGate(
+                      isOwnerOnly: true,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.cloud_sync_outlined),
+                            title: Text(l10n.googleDriveTitle),
+                            subtitle: Text(l10n.googleDriveSubtitle),
+                            trailing: Icon(chevronIcon),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const GoogleDriveBackupScreen(),
+                              ),
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
+                      ),
+                    ),
+                    PermissionGate(
+                      isOwnerOnly: true,
+                      child: ListTile(
+                        leading: const Icon(Icons.health_and_safety_outlined),
+                        title: Text(l10n.databaseDiagnosticsTitle),
+                        subtitle: Text(l10n.databaseDiagnosticsSubtitle),
+                        trailing: Icon(chevronIcon),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const DatabaseDiagnosticScreen(),
+                          ),
                         ),
                       ),
                     ),
