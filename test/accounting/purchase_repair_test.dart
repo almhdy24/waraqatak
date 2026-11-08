@@ -60,7 +60,6 @@ void main() {
     await rawDb.delete('documents');
     await rawDb.delete('products');
     await rawDb.delete('contacts');
-    await rawDb.delete('audit_log');
   });
 
   test('Diagnostic detection accurately flags document movement mismatch and ledger inventory difference', () async {

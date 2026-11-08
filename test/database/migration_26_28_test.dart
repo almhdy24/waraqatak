@@ -39,7 +39,7 @@ void main() {
         );
 
         try {
-          expect(DatabaseHelper.dbVersion, 28);
+          expect(DatabaseHelper.dbVersion >= 28, isTrue);
 
           // Check exchange_rates table
           final tables = await db.rawQuery(

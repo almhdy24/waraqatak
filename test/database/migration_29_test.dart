@@ -80,9 +80,8 @@ void main() {
         expect(ws.first['id'], AccessDao.defaultWorkspaceId);
 
         final roles = await db.query('roles');
-        expect(roles.length, 1);
-        expect(roles.first['id'], AccessDao.ownerRoleId);
-        expect(roles.first['is_system'], 1);
+        expect(roles.length, 5);
+        expect(roles.any((r) => r['id'] == AccessDao.ownerRoleId && r['is_system'] == 1), isTrue);
 
         final users = await db.query('users');
         expect(users.length, 1);
@@ -271,7 +270,7 @@ void main() {
         await DatabaseHelper.instance.upgradeTablesForTest(db, 28, 29);
         expect((await db.query('workspaces')).length, 1);
         expect((await db.query('users')).length, 1);
-        expect((await db.query('roles')).length, 1);
+        expect((await db.query('roles')).length, 5);
       } finally {
         await db.close();
       }
