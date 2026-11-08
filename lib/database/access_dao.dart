@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import '../services/access/access_seeder.dart';
 
 /// Data Access Object for Multi-User Access Control and Permissions.
 ///
@@ -244,6 +245,8 @@ abstract final class AccessDao {
     await db.rawInsert('''
       INSERT OR IGNORE INTO app_settings (key, value) VALUES ('auto_lock_minutes', '5')
     ''');
+    // 5. Seed template roles and permissions
+    await AccessSeeder.ensureDefaults(db);
   }
 
   /// Full Schema v29 upgrade routine.
