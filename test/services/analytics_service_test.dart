@@ -133,6 +133,45 @@ void main() {
       },
     );
 
+    test(
+      'turning usage off stops usage immediately, error toggle is independent',
+      () async {
+        AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');
+        await AnalyticsService.instance.initialize(forceEnable: true);
+
+        expect(AnalyticsService.instance.isUsageEnabled, isTrue);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
+
+        // Turn off usage
+        await AnalyticsService.instance.setUsageEnabled(false);
+        expect(AnalyticsService.instance.isUsageEnabled, isFalse);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
+        expect(fakeSink.isOptedOut, isFalse); // error reports still active
+
+        // Usage track is dropped immediately
+        AnalyticsService.instance.track(AnalyticsEvent.screenViewed, {
+          'screen': 'home',
+        });
+        expect(fakeSink.trackedEvents, isEmpty);
+
+        // Turn off error reporting
+        await AnalyticsService.instance.setErrorReportingEnabled(false);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
+        expect(fakeSink.isOptedOut, isTrue); // both are now off
+
+        // Re-enable usage only
+        await AnalyticsService.instance.setUsageEnabled(true);
+        expect(AnalyticsService.instance.isUsageEnabled, isTrue);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
+        expect(fakeSink.isOptedOut, isFalse);
+
+        AnalyticsService.instance.track(AnalyticsEvent.screenViewed, {
+          'screen': 'home',
+        });
+        expect(fakeSink.trackedEvents.length, equals(1));
+      },
+    );
+
     test('opt-out stops tracking immediately and notifies sink', () async {
       AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');
       await AnalyticsService.instance.initialize(

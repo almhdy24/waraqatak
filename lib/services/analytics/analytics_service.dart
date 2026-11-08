@@ -393,8 +393,27 @@ class AnalyticsService {
     }
   }
 
-  /// Backward-compatible alias for [setUsageEnabled].
-  Future<void> setEnabled(bool enabled) => setUsageEnabled(enabled);
+  /// Sets master consent for both usage statistics and error reporting.
+  Future<void> setEnabled(bool enabled) async {
+    try {
+      _isUsageEnabled = enabled;
+      _isErrorReportingEnabled = enabled;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kConsentKey, enabled);
+      await prefs.setBool(_kErrorReportingKey, enabled);
+
+      if (!enabled) {
+        await prefs.remove(_kPendingMigrationFromKey);
+        await prefs.remove(_kPendingMigrationToKey);
+        await prefs.remove(_kPendingMigrationOkKey);
+        await _sink.optOut();
+      } else {
+        await _sink.optIn();
+      }
+    } catch (_) {
+      // Silent error boundary
+    }
+  }
 
   /// Records database migration result to SharedPreferences for dispatch on next init.
   /// (Called from startup without touching database or in-flight transactions).
