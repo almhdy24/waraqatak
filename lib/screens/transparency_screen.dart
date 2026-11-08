@@ -30,6 +30,8 @@ class TransparencyScreen extends StatelessWidget {
     Feature.bulkPriceUpdate: Icons.price_change_outlined,
     Feature.csvImportExport: Icons.import_export_outlined,
     Feature.inventoryAudit: Icons.history_edu_outlined,
+    Feature.referenceCurrency: Icons.currency_exchange_outlined,
+    Feature.wholesalePricing: Icons.storefront_outlined,
   };
 
   String _label(Feature f, AppLocalizations l10n) => switch (f) {
@@ -49,6 +51,8 @@ class TransparencyScreen extends StatelessWidget {
         Feature.bulkPriceUpdate => l10n.featureBulkPriceUpdate,
         Feature.csvImportExport => l10n.featureCsvImportExport,
         Feature.inventoryAudit  => l10n.featureInventoryAudit,
+        Feature.referenceCurrency => l10n.featureReferenceCurrency,
+        Feature.wholesalePricing  => l10n.featureWholesalePricing,
       };
 
   @override

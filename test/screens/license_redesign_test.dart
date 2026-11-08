@@ -129,7 +129,7 @@ void main() {
 
     test('4. Real entitlements match FeatureAccess single source of truth', () {
       expect(FeatureAccess.freeFeatures.length, 9);
-      expect(FeatureAccess.proFeatures.length, 7);
+      expect(FeatureAccess.proFeatures.length, 9);
 
       expect(FeatureAccess.freeFeatures.contains(Feature.invoices), isTrue);
       expect(FeatureAccess.freeFeatures.contains(Feature.quotations), isTrue);
@@ -164,6 +164,14 @@ void main() {
       );
       expect(
         FeatureAccess.proFeatures.contains(Feature.inventoryAudit),
+        isTrue,
+      );
+      expect(
+        FeatureAccess.proFeatures.contains(Feature.referenceCurrency),
+        isTrue,
+      );
+      expect(
+        FeatureAccess.proFeatures.contains(Feature.wholesalePricing),
         isTrue,
       );
     });

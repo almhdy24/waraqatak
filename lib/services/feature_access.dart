@@ -19,6 +19,8 @@ enum Feature {
   bulkPriceUpdate,
   csvImportExport,
   inventoryAudit,
+  referenceCurrency,
+  wholesalePricing,
 }
 
 class FeatureAccess {
@@ -36,6 +38,8 @@ class FeatureAccess {
     Feature.bulkPriceUpdate,
     Feature.csvImportExport,
     Feature.inventoryAudit,
+    Feature.referenceCurrency,
+    Feature.wholesalePricing,
   };
 
   /// Complement of [proFeatures]: features that are always available,
