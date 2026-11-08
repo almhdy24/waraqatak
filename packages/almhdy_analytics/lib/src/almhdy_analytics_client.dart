@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'event_payload.dart';
 import 'session_manager.dart';
 
@@ -27,6 +29,7 @@ class AlmHdyAnalytics {
   String _installationId = '';
   String? _userPseudoId;
   int _batchSize = 10;
+  int _maxQueueSize = 500;
   Duration _flushInterval = const Duration(seconds: 5);
   bool _debug = false;
 
@@ -65,6 +68,7 @@ class AlmHdyAnalytics {
     String? platform,
     String? platformVersion,
     int? batchSize,
+    int? maxQueueSize,
     Duration? flushInterval,
     String? storagePath,
     bool debug = false,
@@ -81,11 +85,14 @@ class AlmHdyAnalytics {
     }
     _platformVersion = platformVersion;
     if (batchSize != null) _batchSize = batchSize.clamp(1, 50);
+    if (maxQueueSize != null && maxQueueSize > 0) _maxQueueSize = maxQueueSize;
     if (flushInterval != null) _flushInterval = flushInterval;
     _debug = debug;
 
     await _initStorage(storagePath);
-    _startTimer();
+    if (_queue.isNotEmpty) {
+      _startTimer();
+    }
     _log('AlmHdyAnalytics initialized for platform: $_platform');
   }
 
@@ -100,9 +107,44 @@ class AlmHdyAnalytics {
     return 'unknown';
   }
 
+  /// Pluggable directory resolver for application support directory (customizable in tests).
+  @visibleForTesting
+  static Future<Directory> Function() pathProviderResolver =
+      getApplicationSupportDirectory;
+
+  /// Optional HTTP client override for testing.
+  @visibleForTesting
+  static http.Client? httpClient;
+
+  bool _isMobilePlatform() {
+    if (_platform == 'android' || _platform == 'ios') return true;
+    try {
+      if (Platform.isAndroid || Platform.isIOS) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  Future<String> _resolveStoragePath(String? customPath) async {
+    if (customPath != null && customPath.isNotEmpty) {
+      return customPath;
+    }
+
+    if (_isMobilePlatform()) {
+      try {
+        final dir = await pathProviderResolver();
+        return '${dir.path}/almhdy_analytics_buffer.json';
+      } catch (e) {
+        _log(
+            'Automatic storagePath resolution failed ($e), falling back to relative file');
+      }
+    }
+
+    return 'almhdy_analytics_buffer.json';
+  }
+
   Future<void> _initStorage(String? customPath) async {
     try {
-      final path = customPath ?? 'almhdy_analytics_buffer.json';
+      final path = await _resolveStoragePath(customPath);
       _bufferFile = File(path);
       if (await _bufferFile!.exists()) {
         final content = await _bufferFile!.readAsString();
@@ -118,6 +160,12 @@ class AlmHdyAnalytics {
               if (item is Map<String, dynamic>) {
                 _queue.add(AlmHdyEvent.fromJson(item));
               }
+            }
+            if (_queue.length > _maxQueueSize) {
+              final excess = _queue.length - _maxQueueSize;
+              _queue.removeRange(0, excess);
+              _log(
+                  'Offline buffer exceeded maxQueueSize ($_maxQueueSize). Evicted $excess oldest events on load.');
             }
           }
         }
@@ -150,25 +198,63 @@ class AlmHdyAnalytics {
   /// Checks if tracking is disabled.
   bool get isOptedOut => _isOptedOut;
 
+  /// Maximum permitted events in the offline buffer.
+  int get maxQueueSize => _maxQueueSize;
+
+  /// Current number of queued events in memory awaiting flush.
+  int get queueLength => _queue.length;
+
+  /// Read-only snapshot of queued events (for inspection/testing).
+  List<AlmHdyEvent> get queue => List.unmodifiable(_queue);
+
+  /// Resolved path to the underlying offline buffer file on disk.
+  String? get bufferFilePath => _bufferFile?.path;
+
+  /// Whether the periodic background flush timer is currently running.
+  bool get isTimerActive => _flushTimer != null && _flushTimer!.isActive;
+
+  /// Resets internal singleton instance for testing purposes.
+  @visibleForTesting
+  static void resetForTesting() {
+    _instance?._stopTimer();
+    _instance = null;
+    pathProviderResolver = getApplicationSupportDirectory;
+    httpClient = null;
+  }
+
   /// User opt-out from telemetry tracking.
   Future<void> optOut() async {
     _isOptedOut = true;
     _queue.clear();
+    _stopTimer();
     await _persistState();
     _log('User opted out of telemetry');
 
     try {
-      final res = await http.post(
-        Uri.parse(_optOutEndpoint),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Project-Key': _projectKey,
-        },
-        body: jsonEncode({
-          'installation_id': _installationId,
-          if (_userPseudoId != null) 'user_pseudo_id': _userPseudoId,
-        }),
-      );
+      final client = httpClient;
+      final res = client != null
+          ? await client.post(
+              Uri.parse(_optOutEndpoint),
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Project-Key': _projectKey,
+              },
+              body: jsonEncode({
+                'installation_id': _installationId,
+                if (_userPseudoId != null) 'user_pseudo_id': _userPseudoId,
+              }),
+            )
+          : await http.post(
+              Uri.parse(_optOutEndpoint),
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Project-Key': _projectKey,
+              },
+              body: jsonEncode({
+                'installation_id': _installationId,
+                if (_userPseudoId != null) 'user_pseudo_id': _userPseudoId,
+              }),
+            );
       _log('Opt-out notified to backend (HTTP ${res.statusCode})');
     } catch (e) {
       _log('Failed to notify backend of opt-out: $e');
@@ -221,13 +307,22 @@ class AlmHdyAnalytics {
       properties: sanitizedProps,
     );
 
+    if (_queue.length >= _maxQueueSize) {
+      final excess = (_queue.length - _maxQueueSize) + 1;
+      _queue.removeRange(0, excess);
+      _log(
+          'Queue reached cap ($_maxQueueSize). Evicted $excess oldest event(s).');
+    }
+
     _queue.add(ev);
     _log('Enqueued event: ${ev.event} (Queue size: ${_queue.length})');
+
+    _persistState();
 
     if (_queue.length >= _batchSize) {
       flush();
     } else {
-      _persistState();
+      _startTimer();
     }
   }
 
@@ -242,22 +337,36 @@ class AlmHdyAnalytics {
 
   /// Flushes queued events immediately to the ingestion endpoint.
   Future<void> flush() async {
-    if (_isFlushing || _isOptedOut || _queue.isEmpty) return;
+    if (_isFlushing || _isOptedOut || _queue.isEmpty) {
+      if (_queue.isEmpty) _stopTimer();
+      return;
+    }
     _isFlushing = true;
 
     final batch = _queue.take(_batchSize).toList();
     final payload = {'events': batch.map((e) => e.toJson()).toList()};
 
     try {
-      final res = await http.post(
-        Uri.parse(_endpoint),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Project-Key': _projectKey,
-          'X-Client-Version': _appVersion,
-        },
-        body: jsonEncode(payload),
-      );
+      final client = httpClient;
+      final res = client != null
+          ? await client.post(
+              Uri.parse(_endpoint),
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Project-Key': _projectKey,
+                'X-Client-Version': _appVersion,
+              },
+              body: jsonEncode(payload),
+            )
+          : await http.post(
+              Uri.parse(_endpoint),
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Project-Key': _projectKey,
+                'X-Client-Version': _appVersion,
+              },
+              body: jsonEncode(payload),
+            );
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
         _queue.removeRange(0, batch.length);
@@ -278,6 +387,11 @@ class AlmHdyAnalytics {
       _handleFailure(null);
     } finally {
       _isFlushing = false;
+      if (_queue.isEmpty) {
+        _stopTimer();
+      } else {
+        _startTimer();
+      }
     }
   }
 
@@ -306,8 +420,18 @@ class AlmHdyAnalytics {
   }
 
   void _startTimer() {
+    if (_flushTimer != null && _flushTimer!.isActive) return;
     _flushTimer?.cancel();
     _flushTimer = Timer.periodic(_flushInterval, (_) => flush());
+    _log('Flush timer started');
+  }
+
+  void _stopTimer() {
+    if (_flushTimer != null) {
+      _flushTimer?.cancel();
+      _flushTimer = null;
+      _log('Flush timer paused');
+    }
   }
 
   static String _generateUuid(String prefix) {
@@ -328,6 +452,6 @@ class AlmHdyAnalytics {
 
   /// Disposes timers and resources.
   void dispose() {
-    _flushTimer?.cancel();
+    _stopTimer();
   }
 }

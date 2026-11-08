@@ -22,10 +22,9 @@ class AlmHdyEvent {
     this.userPseudoId,
     Map<String, dynamic>? properties,
     String? timestamp,
-  }) : properties = properties != null
-           ? Map<String, dynamic>.from(properties)
-           : {},
-       timestamp = timestamp ?? DateTime.now().toUtc().toIso8601String();
+  })  : properties =
+            properties != null ? Map<String, dynamic>.from(properties) : {},
+        timestamp = timestamp ?? DateTime.now().toUtc().toIso8601String();
 
   Map<String, dynamic> toJson() {
     return {

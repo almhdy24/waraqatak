@@ -4,7 +4,9 @@ Cross-platform telemetry SDK for Flutter apps across Android, iOS, and Windows D
 
 ## Features
 - **Cross-Platform**: Android, iOS, Windows, macOS, Linux.
-- **Offline Resilient**: Local disk persistence during network disconnects.
+- **Offline Resilient**: Local disk persistence with FIFO eviction cap (`maxQueueSize`, default 500).
+- **Automatic Storage Resolution**: Resolves app support directory automatically on mobile targets using `path_provider`.
+- **Battery-Friendly Lifecycle**: Pauses periodic flush timer when queue is empty; resumes on new events.
 - **Automatic Batching**: Collects events and flushes periodically or when batch size is reached.
 - **Session Management**: Automatically rotates sessions on 30 minutes of inactivity.
 - **Privacy First**: Zero plaintext PII. Automatically filters sensitive keys.
@@ -17,6 +19,7 @@ Add to your `pubspec.yaml`:
 dependencies:
   almhdy_analytics:
     path: path/to/sdk/flutter
+  path_provider: ^2.1.0 # Required for automatic storage path resolution on mobile
 ```
 
 ## Quick Start
@@ -31,6 +34,8 @@ void main() async {
   await AlmHdyAnalytics.instance.initialize(
     projectKey: 'ak_live_your_project_key',
     appVersion: '1.2.0',
+    maxQueueSize: 500, // Optional cap (default: 500 events)
+    // storagePath is optional on mobile (auto-resolves via path_provider)
     debug: false,
   );
 
@@ -64,6 +69,21 @@ class MyApp extends StatelessWidget {
   }
 }
 ```
+
+## Configuration Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `projectKey` | `String` | *(Required)* | Project ingestion key issued by AlmHdy API panel (`ak_live_...`). |
+| `endpoint` | `String?` | Production URL | Custom ingestion endpoint URL. |
+| `optOutEndpoint`| `String?` | Production URL | Custom opt-out endpoint URL. |
+| `appVersion` | `String?` | `'1.0.0'` | Host application version tag. |
+| `platform` | `String?` | Auto-detected | Target OS identifier (`android`, `ios`, `windows`, `macos`, `linux`). |
+| `batchSize` | `int?` | `10` | Maximum events flushed per network batch (clamped 1..50). |
+| `maxQueueSize` | `int?` | `500` | Maximum offline events retained on disk (FIFO eviction drops oldest). |
+| `flushInterval`| `Duration?` | `5s` | Periodic interval between background flush attempts. |
+| `storagePath` | `String?` | Auto-resolved | Path to local JSON buffer file. Auto-resolves on Android/iOS via `path_provider`. |
+| `debug` | `bool` | `false` | Enables verbose diagnostic logging in debug console. |
 
 ## Development & Verification
 

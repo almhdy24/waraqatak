@@ -8,8 +8,8 @@ class SessionManager {
   DateTime _lastActivity;
 
   SessionManager()
-    : _currentSessionId = _generateSessionId(),
-      _lastActivity = DateTime.now();
+      : _currentSessionId = _generateSessionId(),
+        _lastActivity = DateTime.now();
 
   String get sessionId {
     refreshSession();
