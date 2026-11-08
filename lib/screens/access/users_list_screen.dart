@@ -5,9 +5,9 @@ import '../../services/access/access_admin_service.dart';
 import '../../services/access/access_guard.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
-import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/access/screen_access_gate.dart';
+import '../../widgets/access/sensitive_action_gate.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 import 'audit_trail_screen.dart';
@@ -92,19 +92,29 @@ class _UsersListScreenState extends State<UsersListScreen> {
     final isEnabled = SessionManager.instance.isMultiUserEnabled;
 
     if (isEnabled) {
-      final confirmed = await AppConfirmDialog.show(
+      if (!SessionManager.instance.isOwnerSession) {
+        AppSnackBar.show(
+          context,
+          l10n.isArabic
+              ? 'فقط المالك يمكنه تعطيل وضع تعدد المستخدمين'
+              : 'Only the Owner can disable multi-user mode',
+          severity: AppSnackBarSeverity.error,
+        );
+        return;
+      }
+
+      final authed = await SensitiveActionGate.reauthenticate(
         context,
         title: l10n.disableMultiUserButton,
         message: l10n.disableMultiUserConfirm,
-        confirmLabel: l10n.disableMultiUserButton,
-        isDestructive: true,
+        requireOwner: true,
       );
-      if (confirmed) {
-        await SessionManager.instance.setMultiUserEnabled(false);
-        if (!mounted) return;
-        AppSnackBar.show(context, l10n.disableMultiUserButton);
-        Navigator.pop(context);
-      }
+      if (!authed || !mounted) return;
+
+      await SessionManager.instance.setMultiUserEnabled(false);
+      if (!mounted) return;
+      AppSnackBar.show(context, l10n.disableMultiUserButton);
+      Navigator.pop(context);
     } else {
       final res = await Navigator.push<bool>(
         context,

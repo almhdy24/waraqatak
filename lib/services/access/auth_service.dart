@@ -82,19 +82,26 @@ class AuthService {
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
+  @visibleForTesting
+  static bool useCompute = true;
+
+  @visibleForTesting
+  static int? testingIterations;
+
   /// Hashes a password or PIN with PBKDF2-HMAC-SHA256 (computed in an isolate).
   Future<String> hashSecret(
     String secret,
     String salt, {
-    int iterations = defaultIterations,
+    int? iterations,
   }) async {
+    final effectiveIterations = testingIterations ?? iterations ?? defaultIterations;
     final req = _HashRequest(
       secret: secret,
       salt: salt,
-      iterations: iterations,
+      iterations: effectiveIterations,
     );
     // Use compute on release/VM so crypto never causes UI jank
-    if (kIsWeb) {
+    if (kIsWeb || !useCompute) {
       return _derivePbkdf2(req);
     }
     return compute(_derivePbkdf2, req);

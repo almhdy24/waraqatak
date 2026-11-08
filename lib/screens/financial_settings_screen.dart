@@ -8,6 +8,7 @@ import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import 'tax_profiles_screen.dart';
 import '../widgets/app_confirm_dialog.dart';
+import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
@@ -563,6 +564,13 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
     );
     if (!confirmed || !mounted) return;
 
+    final authed = await SensitiveActionGate.reauthenticate(
+      context,
+      title: l10n.confirmSetPeriodLockTitle,
+      message: l10n.confirmSetPeriodLockMessage,
+    );
+    if (!authed || !mounted) return;
+
     await DatabaseHelper.instance.setBooksClosedThrough(picked);
     await _load();
     if (!mounted) return;
@@ -583,6 +591,13 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
       isDestructive: true,
     );
     if (!confirmed || !mounted) return;
+
+    final authed = await SensitiveActionGate.reauthenticate(
+      context,
+      title: l10n.confirmClearPeriodLockTitle,
+      message: l10n.confirmClearPeriodLockMessage,
+    );
+    if (!authed || !mounted) return;
 
     await DatabaseHelper.instance.setBooksClosedThrough(null);
     await _load();

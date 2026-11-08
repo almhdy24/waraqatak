@@ -29,6 +29,7 @@ import '../services/analytics/analytics_service.dart';
 import '../services/backup_encryption_service.dart';
 import '../services/feature_access.dart';
 import '../widgets/access/permission_gate.dart';
+import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'access/users_list_screen.dart';
 import 'activation_screen.dart';
@@ -511,12 +512,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 cancelLabel: l10n.cancel,
                                 isDestructive: true,
                               );
-                              if (confirmed == true) {
-                                if (!context.mounted) return;
-                                try {
-                                  final success = await BackupService.restoreBackup(
-                                    context: context,
-                                  );
+                              if (confirmed != true || !context.mounted) return;
+
+                              final authed = await SensitiveActionGate.reauthenticate(
+                                context,
+                                title: l10n.confirmRestore,
+                                message: l10n.restoreWarning,
+                                requireOwner: true,
+                              );
+                              if (!authed || !context.mounted) return;
+
+                              try {
+                                final success = await BackupService.restoreBackup(
+                                  context: context,
+                                );
                                   if (context.mounted && success) {
                                     AppSnackBar.show(
                                       context,
@@ -553,7 +562,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     );
                                   }
                                 }
-                              }
                             },
                           ),
                           const Divider(height: 1, indent: 16, endIndent: 16),

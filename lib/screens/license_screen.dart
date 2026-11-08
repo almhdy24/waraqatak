@@ -10,6 +10,7 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/activation_key_input_widget.dart';
 import '../widgets/access/screen_access_gate.dart';
+import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
@@ -213,6 +214,13 @@ class _LicenseScreenState extends State<LicenseScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+
+    final authed = await SensitiveActionGate.reauthenticate(
+      context,
+      title: l10n.isArabic ? 'إزالة ترخيص الجهاز' : 'Remove device license',
+      requireOwner: true,
+    );
+    if (!authed || !mounted) return;
 
     setState(() => _busy = true);
     var released = true;

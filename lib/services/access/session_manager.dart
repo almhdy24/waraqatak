@@ -138,6 +138,9 @@ class SessionManager extends ChangeNotifier {
   /// Writes to database FIRST inside a transaction with its audit event.
   /// On enable, loads the real Owner user and establishes session without lock bounce.
   Future<void> setMultiUserEnabled(bool enabled) async {
+    if (!enabled && _isMultiUserEnabled && !isOwnerSession) {
+      throw const PermissionDeniedException('owner_only: disable_multi_user');
+    }
     final db = await DatabaseHelper.instance.database;
 
     AppUser? realOwner;
@@ -294,9 +297,12 @@ class SessionManager extends ChangeNotifier {
     _lastActivity = DateTime.now();
   }
 
+  @visibleForTesting
+  static bool enableInactivityTimer = true;
+
   void _startInactivityTimer() {
     _inactivityTimer?.cancel();
-    if (!_isMultiUserEnabled || _autoLockMinutes <= 0) return;
+    if (!enableInactivityTimer || !_isMultiUserEnabled || _autoLockMinutes <= 0) return;
     _inactivityTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       checkInactivityLock();
     });

@@ -32,7 +32,7 @@ Branch: fix/multiuser-stabilization
 | N2 | Fixed | Batch 2 | session_hardening_test | `setMultiUserEnabled` writes DB first, loads real Owner and updates login |
 | N3 | Fixed | Batch 2 | session_hardening_test | `SessionManager.can()` returns false when locked or unverified |
 | N4 | Fixed | Batch 2 | session_hardening_test | `AccessContext` and `AuditService` attribute to unauthenticated when locked |
-| N5 | Confirmed | Batch 7 | Pending | Disabling multi-user mode is unauthenticated confirm dialog |
+| N5 | Fixed | Batch 7 | sensitive_action_gate_test | Disabling multi-user mode requires Owner session and password re-authentication with audit |
 | N6 | Fixed | Batch 2 | session_hardening_test | Inactivity periodic timer wired, pops to root on lock, unlock verifies status |
 | N7 | Fixed | Batch 6 | login_pin_recovery_test | Atomic recovery flow inside transaction; code displayed with mandatory confirmation before session unlock; 15m lockout on 5 fails |
 | N8 | Fixed | Batch 2 | session_hardening_test | `UserSessionScope.of()` asserts in debug, installed in MaterialApp.builder |
@@ -81,4 +81,4 @@ Current status: Audited; hardening plan assigned to Batches 2–7.
 (None)
 
 ## RESUME NOTE
-Batch 6 complete (Login, PIN, wizard, recovery & lockout-DoS: explicit PIN confirm with 4-6 digit support, controller leak fixed & error visibility improved in password dialog, optional Owner PIN with progress feedback, device-level throttle & 5m Owner lockout cap, atomic RecoveryService with pre-unlock mandatory code confirmation and 15m lockout on 5 failed attempts). Resume with Batch 7 (Sensitive-action re-authentication: SensitiveActionGate with current user password prompt, applied to restore, period lock, repair, disable multi-user).
+Batch 7 complete (Sensitive-Action Re-Authentication: SensitiveActionGate created with password prompt, device-wide throttle check, single-user bypass, and audit logging for success/failure; wired into backup restore, period lock set/clear, single/batch database repair, license removal, and disabling multi-user mode. SessionManager.setMultiUserEnabled(false) strictly guards against non-owners). Resume with Batch 8 (Crypto Performance & Audit Chain Safety).
