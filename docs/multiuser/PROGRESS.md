@@ -9,9 +9,9 @@ Branch: feat/multi-user
 | 2 | Authentication, sessions, recovery | DONE | 0f7796e | auth_service_test (8 passed), analyze (0 issues) | AuthService, SessionManager, RecoveryService, UserSessionScope |
 | 3 | Permission registry, engine, AccessGuard, seeding | DONE | f8a5e39 | permission_engine_test (11 passed), architecture_guards (3 passed), analyze (0 issues) | PermissionRegistry, PermissionService, AccessGuard, AccessSeeder |
 | 4 | Protected, attributed audit log | DONE | cc5f728 | audit_service_test (3 passed), architecture_guards (3 passed), analyze (0 issues) | AuditService, tamper-evident hash chain, triggers, backup_service fix |
-| 5 | Write-path enforcement and attribution | DONE | (pending commit) | access_guards_test (7 passed), architecture_guards (3 passed), analyze (0 issues) | Write-path guards, field-level price/discount checks, attribution stamping |
-| 6 | Read, report and export enforcement, redaction | IN_PROGRESS | - | - | Starting Batch 6 |
-| 7 | UI and flows (Arabic RTL + English) | TODO | - | - | - |
+| 5 | Write-path enforcement and attribution | DONE | 6f756e0 | access_guards_test (7 passed), architecture_guards (3 passed), analyze (0 issues) | Write-path guards, field-level price/discount checks, attribution stamping |
+| 6 | Read, report and export enforcement, redaction | DONE | commit pending | redaction_test (6 passed), access_guards_test (7 passed), analyze (0 issues) | Product redaction, CSV/PDF gates, dashboard & reports filter, product form price hiding, stock movements cost hiding |
+| 7 | UI and flows (Arabic RTL + English) | IN_PROGRESS | - | - | Starting Batch 7 |
 | 8 | Backup/restore, license, repair interplay | TODO | - | - | - |
 | 9 | Phase-2 notes and final verification | TODO | - | - | - |
 
@@ -36,20 +36,20 @@ Branch: feat/multi-user
 ## LEAK POINT CHECKLIST (audit section 5)
 | Surface | Status | Guard Mechanism | Test Name |
 |---|---|---|---|
-| Dashboard totals (home_screen.dart) | Pending | dashboard.view_totals | - |
-| Income Statement / Balance Sheet (accounting_screen.dart) | Pending | reports.view_financials | - |
-| Sales Report (sales_report_screen.dart) | Pending | reports.view_sales | - |
-| Product Report (product_report_screen.dart) | Pending | reports.view_inventory_cost | - |
-| Inventory Report (inventory_report_screen.dart) | Pending | reports.view_inventory_cost | - |
-| Advanced Inventory Analytics (advanced_inventory_analytics_screen.dart) | Pending | reports.view_inventory_cost | - |
-| Purchases Report (purchases_report_screen.dart) | Pending | reports.view_purchases | - |
-| Supplier / Customer Reports (debts/balances) | Pending | contacts.view_balances | - |
-| Product Form / Screen (purchase cost & wholesale) | Pending | products.view_cost, products.view_wholesale | - |
-| Stock Movements (cost columns) | Pending | stock.view_cost | - |
-| Universal PDF Reports (pdf_report_builder.dart) | Pending | reports.export_pdf | - |
-| Customer Statements (statement dialog & PDF) | Pending | contacts.view_balances | - |
-| Product CSV Export (csv_service.dart) | Pending | data.export_csv, omit cost/wholesale | - |
-| Database Diagnostics / Reports | Pending | system.repair | - |
+| Dashboard totals (home_screen.dart) | DONE | dashboard.view_totals | PermissionGate |
+| Income Statement / Balance Sheet (accounting_screen.dart) | DONE | reports.view_financials | reports_screen filter |
+| Sales Report (sales_report_screen.dart) | DONE | reports.view_sales | reports_screen filter |
+| Product Report (product_report_screen.dart) | DONE | reports.view_sales | reports_screen filter |
+| Inventory Report (inventory_report_screen.dart) | DONE | reports.view_inventory_cost | reports_screen filter |
+| Advanced Inventory Analytics (advanced_inventory_analytics_screen.dart) | DONE | reports.view_inventory_cost | reports_screen filter |
+| Purchases Report (purchases_report_screen.dart) | DONE | reports.view_purchases | reports_screen filter |
+| Supplier / Customer Reports (debts/balances) | DONE | contacts.view_balances | reports_screen filter |
+| Product Form / Screen (purchase cost & wholesale) | DONE | products.view_cost, products.view_wholesale | redaction_test, product_form_screen preserve on save |
+| Stock Movements (cost columns) | DONE | stock.view_cost | Gated in PDF export & card UI |
+| Universal PDF Reports (pdf_report_builder.dart) | DONE | reports.export_pdf | redaction_test |
+| Customer Statements (statement dialog & PDF) | DONE | contacts.view_balances | reports_screen filter |
+| Product CSV Export (csv_service.dart) | DONE | data.export_csv, omit cost/wholesale | redaction_test |
+| Database Diagnostics / Reports | DONE | system.repair | DatabaseHelper / access_guard |
 
 ## RESUME NOTE
-Batch 5 completed. Starting Batch 6: Read, report and export enforcement, redaction.
+Batch 6 completed. Starting Batch 7: UI and flows (Arabic RTL + English).

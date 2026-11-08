@@ -160,6 +160,9 @@ class Product {
     bool clearReferenceSalePrice = false,
     bool clearReferenceWholesalePrice = false,
     bool clearReferencePurchasePrice = false,
+    bool clearWholesalePrice = false,
+    bool clearWholesaleMinQuantity = false,
+    bool clearAverageCost = false,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) =>
@@ -171,8 +174,12 @@ class Product {
         barcode: barcode ?? this.barcode,
         unit: unit ?? this.unit,
         salePrice: salePrice ?? this.salePrice,
-        wholesalePrice: wholesalePrice ?? this.wholesalePrice,
-        wholesaleMinQuantity: wholesaleMinQuantity ?? this.wholesaleMinQuantity,
+        wholesalePrice: clearWholesalePrice
+            ? null
+            : (wholesalePrice ?? this.wholesalePrice),
+        wholesaleMinQuantity: clearWholesaleMinQuantity
+            ? null
+            : (wholesaleMinQuantity ?? this.wholesaleMinQuantity),
         purchasePrice: purchasePrice ?? this.purchasePrice,
         stockQuantity: stockQuantity ?? this.stockQuantity,
         minStock: minStock ?? this.minStock,
@@ -181,7 +188,8 @@ class Product {
         notes: notes ?? this.notes,
         category: category ?? this.category,
         taxProfileId: taxProfileId ?? this.taxProfileId,
-        averageCost: averageCost ?? this.averageCost,
+        averageCost:
+            clearAverageCost ? null : (averageCost ?? this.averageCost),
         costStatus: costStatus ?? this.costStatus,
         priceCurrency: clearPriceCurrency ? null : (priceCurrency ?? this.priceCurrency),
         referenceSalePrice:
@@ -195,6 +203,28 @@ class Product {
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );
+
+  /// Returns a copy of this product with sensitive cost and wholesale fields redacted.
+  Product redacted({
+    bool redactCost = false,
+    bool redactWholesale = false,
+  }) {
+    if (!redactCost && !redactWholesale) return this;
+    return copyWith(
+      purchasePrice: redactCost ? 0.0 : purchasePrice,
+      averageCost: redactCost ? null : averageCost,
+      clearAverageCost: redactCost,
+      costStatus: redactCost ? costStatusUnknown : costStatus,
+      referencePurchasePrice: redactCost ? null : referencePurchasePrice,
+      clearReferencePurchasePrice: redactCost,
+      wholesalePrice: redactWholesale ? null : wholesalePrice,
+      clearWholesalePrice: redactWholesale,
+      wholesaleMinQuantity: redactWholesale ? null : wholesaleMinQuantity,
+      clearWholesaleMinQuantity: redactWholesale,
+      referenceWholesalePrice: redactWholesale ? null : referenceWholesalePrice,
+      clearReferenceWholesalePrice: redactWholesale,
+    );
+  }
 
   /// Converts this [Product] to a database map.
   Map<String, dynamic> toMap() => {

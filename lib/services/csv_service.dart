@@ -8,6 +8,8 @@ import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../models/reference_pricing_types.dart';
 import '../utils/reference_pricing_math.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 
 enum CsvDuplicateStrategy {
   skip,
@@ -154,6 +156,9 @@ class CsvService {
 
   /// Exports product catalog to UTF-8 CSV bytes with BOM (\uFEFF) for Arabic Excel compatibility.
   Future<Uint8List> exportProducts({bool templateOnly = false}) async {
+    if (!templateOnly) {
+      AccessGuard.require(PermissionRegistry.dataExportCsv);
+    }
     final buffer = StringBuffer();
     // UTF-8 BOM
     buffer.write('\uFEFF');
@@ -190,6 +195,10 @@ class CsvService {
     final products = await db.query('products', orderBy: 'name ASC');
     final allUnits = await DatabaseHelper.instance.getAllProductUnits();
 
+    final canViewCost = AccessGuard.can(PermissionRegistry.productsViewCost);
+    final canViewWholesale =
+        AccessGuard.can(PermissionRegistry.productsViewWholesale);
+
     String formatRefPrice(double? v) =>
         v != null ? double.parse(v.toStringAsFixed(4)).toString() : '';
 
@@ -199,7 +208,7 @@ class CsvService {
       final unitsStr = units.map((u) {
         final buf = StringBuffer('${u.unitName}:${u.conversionFactor}');
         if (u.salePrice != null) buf.write(':${u.salePrice}');
-        if (u.wholesalePrice != null) {
+        if (canViewWholesale && u.wholesalePrice != null) {
           if (u.salePrice == null) buf.write(':');
           buf.write(':${u.wholesalePrice}');
         }
@@ -219,11 +228,13 @@ class CsvService {
         sanitizeCell(row['type'] as String? ?? 'product'),
         sanitizeCell(row['unit'] as String? ?? ''),
         ((row['sale_price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
-        ((row['purchase_price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2),
-        (row['wholesale_price'] as num?) != null
+        canViewCost
+            ? ((row['purchase_price'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)
+            : '',
+        canViewWholesale && (row['wholesale_price'] as num?) != null
             ? ((row['wholesale_price'] as num).toDouble()).toStringAsFixed(2)
             : '',
-        (row['wholesale_min_quantity'] as num?) != null
+        canViewWholesale && (row['wholesale_min_quantity'] as num?) != null
             ? ((row['wholesale_min_quantity'] as num).toDouble()).toStringAsFixed(2)
             : '',
         sanitizeCell(unitsStr),
@@ -232,8 +243,8 @@ class CsvService {
         (row['is_active'] as int? ?? 1).toString(),
         sanitizeCell(priceCurr),
         formatRefPrice(refSale),
-        formatRefPrice(refWs),
-        formatRefPrice(refPur),
+        canViewWholesale ? formatRefPrice(refWs) : '',
+        canViewCost ? formatRefPrice(refPur) : '',
       ].join(','));
     }
 
@@ -816,6 +827,7 @@ class CsvService {
     required List<CsvParsedRow> rows,
     required CsvDuplicateStrategy strategy,
   }) async {
+    AccessGuard.require(PermissionRegistry.dataImportCsv);
     final validRows = rows.where((r) => r.isValid).toList();
     if (validRows.isEmpty) {
       throw ArgumentError('No valid rows to import');

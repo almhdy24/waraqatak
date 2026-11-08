@@ -10,6 +10,8 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../services/product_service.dart';
 import '../services/reference_pricing_service.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/number_input.dart';
@@ -470,16 +472,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         referenceSalePrice: ReferencePricingMath.parseReferencePrice(
           _salePriceController.text.trim(),
         ),
-        referenceWholesalePrice: _wholesalePricingEnabled
+        referenceWholesalePrice: AccessGuard.can(PermissionRegistry.productsViewWholesale)
+            ? (_wholesalePricingEnabled
+                ? ReferencePricingMath.parseReferencePrice(
+                    _wholesalePriceController.text.trim(),
+                  )
+                : (widget.product?.priceCurrency == _priceCurrency
+                    ? widget.product?.referenceWholesalePrice
+                    : null))
+            : widget.product?.referenceWholesalePrice,
+        referencePurchasePrice: AccessGuard.can(PermissionRegistry.productsViewCost)
             ? ReferencePricingMath.parseReferencePrice(
-                _wholesalePriceController.text.trim(),
+                _purchasePriceController.text.trim(),
               )
-            : (widget.product?.priceCurrency == _priceCurrency
-                  ? widget.product?.referenceWholesalePrice
-                  : null),
-        referencePurchasePrice: ReferencePricingMath.parseReferencePrice(
-          _purchasePriceController.text.trim(),
-        ),
+            : widget.product?.referencePurchasePrice,
       );
     } else {
       product = Product(
@@ -494,13 +500,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             ? null
             : _unitController.text.trim(),
         salePrice: NumberInput.parse(_salePriceController.text) ?? 0,
-        wholesalePrice: _wholesalePricingEnabled
-            ? NumberInput.parse(_wholesalePriceController.text.trim())
+        wholesalePrice: AccessGuard.can(PermissionRegistry.productsViewWholesale)
+            ? (_wholesalePricingEnabled
+                ? NumberInput.parse(_wholesalePriceController.text.trim())
+                : widget.product?.wholesalePrice)
             : widget.product?.wholesalePrice,
-        wholesaleMinQuantity: _wholesalePricingEnabled
-            ? NumberInput.parse(_wholesaleMinQuantityController.text.trim())
+        wholesaleMinQuantity: AccessGuard.can(PermissionRegistry.productsViewWholesale)
+            ? (_wholesalePricingEnabled
+                ? NumberInput.parse(_wholesaleMinQuantityController.text.trim())
+                : widget.product?.wholesaleMinQuantity)
             : widget.product?.wholesaleMinQuantity,
-        purchasePrice: NumberInput.parse(_purchasePriceController.text) ?? 0,
+        purchasePrice: AccessGuard.can(PermissionRegistry.productsViewCost)
+            ? (NumberInput.parse(_purchasePriceController.text) ?? 0)
+            : (widget.product?.purchasePrice ?? 0),
         stockQuantity: isNew
             ? (_type == Product.typeService
                   ? 0
@@ -686,7 +698,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       ),
                     ),
                   ],
-                  if (_wholesalePricingEnabled) ...[
+                  if (_wholesalePricingEnabled &&
+                      AccessGuard.can(
+                        PermissionRegistry.productsViewWholesale,
+                      )) ...[
                     const SizedBox(height: 12),
                     if (_priceCurrency != null) ...[
                       ReferencePriceField(
@@ -745,15 +760,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   double? unitRefWholesalePrice;
                   String? unitRefCurrency;
 
+                  final canWholesale = AccessGuard.can(
+                    PermissionRegistry.productsViewWholesale,
+                  );
                   if (_priceCurrency != null) {
                     unitRefSalePrice = ReferencePricingMath.parseReferencePrice(
                       saleCtrl.text.trim(),
                     );
-                    unitRefWholesalePrice = _wholesalePricingEnabled
-                        ? ReferencePricingMath.parseReferencePrice(
-                            wholesaleCtrl.text.trim(),
-                          )
-                        : null;
+                    unitRefWholesalePrice = canWholesale
+                        ? (_wholesalePricingEnabled
+                            ? ReferencePricingMath.parseReferencePrice(
+                                wholesaleCtrl.text.trim(),
+                              )
+                            : null)
+                        : existing?.referenceWholesalePrice;
                     if (unitRefSalePrice != null ||
                         unitRefWholesalePrice != null) {
                       unitRefCurrency = _priceCurrency;
@@ -761,16 +781,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     unitSalePrice = unitRefSalePrice != null
                         ? null
                         : existing?.salePrice;
-                    unitWholesalePrice = _wholesalePricingEnabled
-                        ? (unitRefWholesalePrice != null
-                              ? null
-                              : existing?.wholesalePrice)
-                        : null;
+                    unitWholesalePrice = canWholesale
+                        ? (_wholesalePricingEnabled
+                            ? (unitRefWholesalePrice != null
+                                ? null
+                                : existing?.wholesalePrice)
+                            : null)
+                        : existing?.wholesalePrice;
                   } else {
                     unitSalePrice = NumberInput.parse(saleCtrl.text.trim());
-                    unitWholesalePrice = _wholesalePricingEnabled
-                        ? NumberInput.parse(wholesaleCtrl.text.trim())
-                        : null;
+                    unitWholesalePrice = canWholesale
+                        ? (_wholesalePricingEnabled
+                            ? NumberInput.parse(wholesaleCtrl.text.trim())
+                            : null)
+                        : existing?.wholesalePrice;
                   }
 
                   final unit = ProductUnit(
@@ -1313,7 +1337,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                   )
                                 : null,
                           ),
-                          if (_wholesalePricingEnabled) ...[
+                          if (_wholesalePricingEnabled &&
+                      AccessGuard.can(
+                        PermissionRegistry.productsViewWholesale,
+                      )) ...[
                             const SizedBox(height: 12),
                             ReferencePriceField(
                               controller: _wholesalePriceController,
@@ -1361,29 +1388,33 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                               },
                             ),
                           ],
-                          const SizedBox(height: 12),
-                          ReferencePriceField(
-                            controller: _purchasePriceController,
-                            currencyCode: _priceCurrency!,
-                            rate: _rates
-                                .where((r) => r.code == _priceCurrency)
-                                .firstOrNull
-                                ?.rate,
-                            rounding: _rounding,
-                            baseDecimals: _baseDecimals,
-                            baseSymbol: _baseSymbol,
-                            label: l10n.purchasePrice,
-                            requiredField: false,
-                            helperWhenEmpty:
-                                widget.product != null &&
-                                    widget.product!.purchasePrice > 0
-                                ? l10n.keepsCurrentBasePrice(
-                                    FormatUtils.formatQuantity(
-                                      widget.product!.purchasePrice,
-                                    ),
-                                  )
-                                : null,
-                          ),
+                          if (AccessGuard.can(
+                            PermissionRegistry.productsViewCost,
+                          )) ...[
+                            const SizedBox(height: 12),
+                            ReferencePriceField(
+                              controller: _purchasePriceController,
+                              currencyCode: _priceCurrency!,
+                              rate: _rates
+                                  .where((r) => r.code == _priceCurrency)
+                                  .firstOrNull
+                                  ?.rate,
+                              rounding: _rounding,
+                              baseDecimals: _baseDecimals,
+                              baseSymbol: _baseSymbol,
+                              label: l10n.purchasePrice,
+                              requiredField: false,
+                              helperWhenEmpty:
+                                  widget.product != null &&
+                                      widget.product!.purchasePrice > 0
+                                  ? l10n.keepsCurrentBasePrice(
+                                      FormatUtils.formatQuantity(
+                                        widget.product!.purchasePrice,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ],
                         ] else ...[
                           AmountField(
                             controller: _salePriceController,
@@ -1404,7 +1435,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                               return null;
                             },
                           ),
-                          if (_wholesalePricingEnabled) ...[
+                          if (_wholesalePricingEnabled &&
+                      AccessGuard.can(
+                        PermissionRegistry.productsViewWholesale,
+                      )) ...[
                             const SizedBox(height: 12),
                             AmountField(
                               controller: _wholesalePriceController,
@@ -1453,21 +1487,25 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                               },
                             ),
                           ],
-                          const SizedBox(height: 12),
-                          AmountField(
-                            controller: _purchasePriceController,
-                            maxDecimals: 4,
-                            showMultipliers: true,
-                            decoration: InputDecoration(
-                              labelText: l10n.purchasePrice,
-                              prefixIcon: const Icon(Icons.money),
-                              helperText: l10n.purchasePriceCostHelp,
-                              helperMaxLines: 2,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          if (AccessGuard.can(
+                            PermissionRegistry.productsViewCost,
+                          )) ...[
+                            const SizedBox(height: 12),
+                            AmountField(
+                              controller: _purchasePriceController,
+                              maxDecimals: 4,
+                              showMultipliers: true,
+                              decoration: InputDecoration(
+                                labelText: l10n.purchasePrice,
+                                prefixIcon: const Icon(Icons.money),
+                                helperText: l10n.purchasePriceCostHelp,
+                                helperMaxLines: 2,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
                       ],
                     ),

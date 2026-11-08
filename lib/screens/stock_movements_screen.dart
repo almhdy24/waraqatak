@@ -6,6 +6,8 @@ import '../localization/app_localizations.dart';
 import '../models/date_range_filter.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 import '../services/business_reporting_service.dart';
 import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
@@ -83,6 +85,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
     final business = await DatabaseHelper.instance.getFirstBusiness();
     if (business == null || _reportSummary == null) return;
 
+    final canViewCost = AccessGuard.can(PermissionRegistry.stockViewCost);
     final columns = [
       PdfReportColumn(title: l10n.date, flex: 1.4),
       PdfReportColumn(title: l10n.product, flex: 2.2),
@@ -90,7 +93,8 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       PdfReportColumn(title: l10n.quantity, flex: 1.2, align: pw.TextAlign.right),
       if (_selectedProduct != null)
         PdfReportColumn(title: l10n.balanceAfter, flex: 1.2, align: pw.TextAlign.right),
-      PdfReportColumn(title: l10n.averageCost, flex: 1.2, align: pw.TextAlign.right),
+      if (canViewCost)
+        PdfReportColumn(title: l10n.averageCost, flex: 1.2, align: pw.TextAlign.right),
     ];
 
     final rows = _reportSummary!.items.map((item) {
@@ -107,7 +111,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
         '$sign${FormatUtils.formatQuantity(m.quantity.abs())}',
         if (_selectedProduct != null)
           item.balanceAfter != null ? FormatUtils.formatQuantity(item.balanceAfter!) : '—',
-        costStr,
+        if (canViewCost) costStr,
       ];
     }).toList();
 
@@ -546,26 +550,28 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                             ),
                           ],
                           // Cost info
-                          if (m.unitCost != null &&
-                              m.costStatus == StockMovement.costStatusKnown) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              '${l10n.averageCost}: ${_numFmt.format(m.unitCost)} | ${l10n.totalCost}: ${_numFmt.format(m.totalCost)}',
-                              style: TextStyle(fontSize: 11, color: Colors.teal.shade700),
-                            ),
-                          ] else if (m.costStatus == StockMovement.costStatusReconstructed) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              l10n.costReconstructed,
-                              style: const TextStyle(fontSize: 10, color: Colors.blue),
-                            ),
-                          ] else if (m.costStatus == StockMovement.costStatusUnknown &&
-                              m.type != StockMovement.typeOpening) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              l10n.costUnknown,
-                              style: const TextStyle(fontSize: 10, color: Colors.orange),
-                            ),
+                          if (AccessGuard.can(PermissionRegistry.stockViewCost)) ...[
+                            if (m.unitCost != null &&
+                                m.costStatus == StockMovement.costStatusKnown) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${l10n.averageCost}: ${_numFmt.format(m.unitCost)} | ${l10n.totalCost}: ${_numFmt.format(m.totalCost)}',
+                                style: TextStyle(fontSize: 11, color: Colors.teal.shade700),
+                              ),
+                            ] else if (m.costStatus == StockMovement.costStatusReconstructed) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.costReconstructed,
+                                style: const TextStyle(fontSize: 10, color: Colors.blue),
+                              ),
+                            ] else if (m.costStatus == StockMovement.costStatusUnknown &&
+                                m.type != StockMovement.typeOpening) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.costUnknown,
+                                style: const TextStyle(fontSize: 10, color: Colors.orange),
+                              ),
+                            ],
                           ],
                         ],
                       ),

@@ -3,6 +3,8 @@ import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'reports/accounting_screen.dart';
 import 'reports/customer_report_screen.dart';
@@ -82,6 +84,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleAccounting,
             screen: const AccountingScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewFinancials,
           ),
         ],
       ),
@@ -94,6 +97,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.salesReport,
             subtitle: l10n.reportSubtitleSales,
             screen: const SalesReportScreen(),
+            permission: PermissionRegistry.reportsViewSales,
           ),
           _ReportEntry(
             icon: Icons.shopping_cart_outlined,
@@ -102,6 +106,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitlePurchases,
             screen: const PurchasesReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewPurchases,
           ),
           _ReportEntry(
             icon: Icons.payments_outlined,
@@ -109,6 +114,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.paymentsReport,
             subtitle: l10n.reportSubtitlePayments,
             screen: const PaymentsReportScreen(),
+            permission: PermissionRegistry.paymentsRecord,
           ),
           _ReportEntry(
             icon: Icons.people_outlined,
@@ -116,6 +122,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.customerReport,
             subtitle: l10n.reportSubtitleCustomers,
             screen: const CustomerReportScreen(),
+            permission: PermissionRegistry.contactsViewBalances,
           ),
           _ReportEntry(
             icon: Icons.store_outlined,
@@ -124,6 +131,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleSuppliers,
             screen: const SupplierReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.contactsViewBalances,
           ),
         ],
       ),
@@ -137,6 +145,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleInventory,
             screen: const InventoryReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewInventoryCost,
           ),
           _ReportEntry(
             icon: Icons.notification_important_outlined,
@@ -145,6 +154,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleLowStock,
             screen: const InventoryReportScreen(initialFilter: 'low_stock'),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.stockAdjust,
           ),
           _ReportEntry(
             icon: Icons.history_outlined,
@@ -153,6 +163,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleMovements,
             screen: const StockMovementsScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.stockViewCost,
           ),
           _ReportEntry(
             icon: Icons.inventory_2_outlined,
@@ -161,6 +172,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleProducts,
             screen: const ProductReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewInventoryCost,
           ),
           _ReportEntry(
             icon: Icons.analytics_outlined,
@@ -169,6 +181,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleAdvancedAnalytics,
             screen: const AdvancedInventoryAnalyticsScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewInventoryCost,
           ),
         ],
       ),
@@ -182,6 +195,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleAudit,
             screen: const AuditHistoryScreen(),
             proFeature: Feature.inventoryAudit,
+            permission: PermissionRegistry.auditView,
           ),
         ],
       ),
@@ -197,6 +211,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
           itemCount: categories.length,
           itemBuilder: (context, catIndex) {
             final cat = categories[catIndex];
+            final availableReports = cat.reports
+                .where((r) =>
+                    r.permission == null || AccessGuard.can(r.permission!))
+                .toList();
+            if (availableReports.isEmpty) return const SizedBox.shrink();
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -207,10 +227,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                   child: AppSectionHeader(
                     title: cat.title,
-                    count: cat.reports.length,
+                    count: availableReports.length,
                   ),
                 ),
-                ...cat.reports.map((entry) {
+                ...availableReports.map((entry) {
                   final locked = entry.proFeature != null &&
                       !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
                   return Padding(
@@ -292,6 +312,7 @@ class _ReportEntry {
   final String subtitle;
   final Widget screen;
   final Feature? proFeature;
+  final String? permission;
 
   const _ReportEntry({
     required this.icon,
@@ -300,5 +321,6 @@ class _ReportEntry {
     required this.subtitle,
     required this.screen,
     this.proFeature,
+    this.permission,
   });
 }

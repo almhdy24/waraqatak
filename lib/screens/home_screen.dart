@@ -8,6 +8,8 @@ import '../models/document.dart';
 import '../models/entitlement.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../services/access/permission_registry.dart';
+import '../widgets/access/permission_gate.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
@@ -479,80 +481,85 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                 const SizedBox(height: 16),
 
-                // Financial cards 2x2
-                Row(
-                  children: [
-                    Expanded(
-                      child: _statCard(
-                        l10n.salesPeriod,
-                        '${_numFmt.format(sales)} $currencySymbol',
-                        icon: Icons.trending_up_rounded,
-                        color: Colors.green,
+                PermissionGate(
+                  permission: PermissionRegistry.dashboardViewTotals,
+                  child: Column(
+                    children: [
+                      // Financial cards 2x2
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _statCard(
+                              l10n.salesPeriod,
+                              '${_numFmt.format(sales)} $currencySymbol',
+                              icon: Icons.trending_up_rounded,
+                              color: Colors.green,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _statCard(
+                              l10n.purchasesPeriod,
+                              '${_numFmt.format(purchases)} $currencySymbol',
+                              icon: Icons.shopping_cart_outlined,
+                              color: Colors.orange,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _statCard(
-                        l10n.purchasesPeriod,
-                        '${_numFmt.format(purchases)} $currencySymbol',
-                        icon: Icons.shopping_cart_outlined,
-                        color: Colors.orange,
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _statCard(
+                              l10n.paymentsIn,
+                              '${_numFmt.format(paymentsIn)} $currencySymbol',
+                              icon: Icons.call_received_rounded,
+                              color: Colors.teal,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _statCard(
+                              l10n.paymentsOut,
+                              '${_numFmt.format(paymentsOut)} $currencySymbol',
+                              icon: Icons.call_made_rounded,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _statCard(
-                        l10n.paymentsIn,
-                        '${_numFmt.format(paymentsIn)} $currencySymbol',
-                        icon: Icons.call_received_rounded,
-                        color: Colors.teal,
+                      const SizedBox(height: 12),
+                      // Balance cards (all-time)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _statCard(
+                              l10n.receivable,
+                              '${_numFmt.format(customerOutstanding)} $currencySymbol',
+                              icon: Icons.person_outlined,
+                              color: customerOutstanding > 0
+                                  ? Theme.of(context).colorScheme.error
+                                  : Colors.grey,
+                              subtitle: l10n.allTimeBalance,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _statCard(
+                              l10n.payable,
+                              '${_numFmt.format(supplierPayable)} $currencySymbol',
+                              icon: Icons.store_outlined,
+                              color: supplierPayable > 0
+                                  ? Colors.deepOrange
+                                  : Colors.grey,
+                              subtitle: l10n.allTimeBalance,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _statCard(
-                        l10n.paymentsOut,
-                        '${_numFmt.format(paymentsOut)} $currencySymbol',
-                        icon: Icons.call_made_rounded,
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                // Balance cards (all-time)
-                Row(
-                  children: [
-                    Expanded(
-                      child: _statCard(
-                        l10n.receivable,
-                        '${_numFmt.format(customerOutstanding)} $currencySymbol',
-                        icon: Icons.person_outlined,
-                        color: customerOutstanding > 0
-                            ? Theme.of(context).colorScheme.error
-                            : Colors.grey,
-                        subtitle: l10n.allTimeBalance,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _statCard(
-                        l10n.payable,
-                        '${_numFmt.format(supplierPayable)} $currencySymbol',
-                        icon: Icons.store_outlined,
-                        color: supplierPayable > 0
-                            ? Colors.deepOrange
-                            : Colors.grey,
-                        subtitle: l10n.allTimeBalance,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 // Inventory status (only when there are tracked products)

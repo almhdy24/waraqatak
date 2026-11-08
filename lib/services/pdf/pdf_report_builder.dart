@@ -7,6 +7,8 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../localization/app_localizations.dart';
 import '../../models/business.dart';
 import '../../utils/pdf_settings.dart';
+import '../access/access_guard.dart';
+import '../access/permission_registry.dart';
 import 'pdf_fonts.dart';
 import 'pdf_text_utils.dart';
 import 'pdf_theme.dart';
@@ -70,6 +72,7 @@ class PdfReportBuilder {
     required PdfReportData data,
     PdfStyleSettings style = const PdfStyleSettings(),
   }) async {
+    AccessGuard.require(PermissionRegistry.reportsExportPdf);
     final theme = PdfTheme.fromSettings(style);
     final regularFontData =
         await rootBundle.load('assets/fonts/Tajawal-Regular.ttf');
