@@ -106,6 +106,8 @@ class AnalyticsService {
   static const String _kErrorReportingKey = 'error_reporting_enabled';
   static const String _kLegacyDiagnosticConsentKey =
       'ops_diagnostic_consent_granted';
+  static const String _kFirstRunNoticeShownKey =
+      'analytics_first_run_notice_shown';
   static const String _kPendingMigrationFromKey = 'analytics_pending_mig_from';
   static const String _kPendingMigrationToKey = 'analytics_pending_mig_to';
   static const String _kPendingMigrationOkKey = 'analytics_pending_mig_ok';
@@ -422,6 +424,24 @@ class AnalyticsService {
     } catch (_) {
       // Silent error boundary
     }
+  }
+
+  /// Checks if the one-time first-run privacy notice was already shown.
+  Future<bool> isFirstRunNoticeShown() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_kFirstRunNoticeShownKey) ?? false;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Persists that the one-time first-run privacy notice has been shown.
+  Future<void> markFirstRunNoticeShown() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kFirstRunNoticeShownKey, true);
+    } catch (_) {}
   }
 
   /// Records database migration result to SharedPreferences for dispatch on next init.

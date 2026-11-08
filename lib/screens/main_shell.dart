@@ -4,6 +4,7 @@ import '../services/access/session_manager.dart';
 import '../services/access/user_session_scope.dart';
 import '../services/analytics/analytics_service.dart';
 import '../services/app_update_service.dart';
+import '../widgets/analytics_notice_dialog.dart';
 import '../widgets/responsive.dart';
 import 'access/pin_lock_screen.dart';
 import 'customers_screen.dart';
@@ -26,6 +27,20 @@ class _MainShellState extends State<MainShell> {
   int _customersRefreshToken = 0;
   int _productsRefreshToken = 0;
   late final GlobalKey<HomeScreenState> _homeKey;
+  bool _noticeChecked = false;
+
+  void _triggerNoticeCheck() {
+    if (_noticeChecked) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (SessionManager.instance.isLocked) return;
+      _noticeChecked = true;
+      AnalyticsNoticeDialog.checkAndShow(
+        context,
+        onOpenSettings: () => _select(4),
+      );
+    });
+  }
 
   @override
   void initState() {
@@ -82,6 +97,8 @@ class _MainShellState extends State<MainShell> {
     if (session.isLocked) {
       return const PinLockScreen();
     }
+
+    _triggerNoticeCheck();
 
     return PopScope(
       canPop: _index == 0,
