@@ -56,6 +56,11 @@ dependencies:
   # Elmahdi Pay — subscription & license SDK
   elmahdi_pay_flutter:
     path: packages/elmahdi_pay_flutter
+
+  # AlmHdy Analytics — offline-resilient telemetry SDK
+  almhdy_analytics:
+    path: packages/almhdy_analytics
+
   google_sign_in: ^7.2.0
   googleapis: ^17.0.0
   http: ^1.2.0

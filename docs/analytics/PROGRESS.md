@@ -5,8 +5,8 @@ Branch: feat/analytics
 ## Batches
 | # | Title | Status (TODO/IN_PROGRESS/DONE/BLOCKED) | Commit | Tests run | Notes |
 |---|-------|---|---|---|---|
-| 1 | SDK review (read-only) and compatibility | DONE | 77be9ff | Static inspection, git inspection | Comprehensive review in docs/analytics/SDK_REVIEW.md. Verdict: SAFE TO VENDOR AS-IS. Zero new packages. |
-| 2 | Vendoring and plumbing | TODO | - | - | - |
+| 1 | SDK review (read-only) and compatibility | DONE | d1dee9e | Static inspection, git inspection | Comprehensive review in docs/analytics/SDK_REVIEW.md. Verdict: SAFE TO VENDOR AS-IS. Zero new packages. |
+| 2 | Vendoring and plumbing | DONE | 7826732 | analytics_service_test (10 passed), analyze (0 issues) | Vendored packages/almhdy_analytics, AnalyticsService singleton, allowlist validation, unawaited post-frame init in splash |
 | 3 | Instrumentation | TODO | - | - | - |
 | 4 | Settings toggle, disclosure, privacy | TODO | - | - | - |
 | 5 | Guards, docs, final verification | TODO | - | - | - |
@@ -34,5 +34,14 @@ Branch: feat/analytics
 - docs/analytics/SDK_REVIEW.md
 - docs/analytics/PROGRESS.md
 
+### Batch 2:
+- packages/almhdy_analytics/ (vendored from ~/projects/api.almhdy24.com/sdk/flutter)
+- packages/almhdy_analytics/VENDORED_FROM.txt
+- pubspec.yaml
+- pubspec.lock
+- lib/services/analytics/analytics_service.dart
+- lib/screens/splash_screen.dart
+- test/services/analytics_service_test.dart
+
 ## RESUME NOTE
-Batch 1 completed. AlmHdy Analytics SDK v1.0.0 reviewed across public API, anonymous identifier generation, offline disk buffering, payload bounds, and PII filtering. Confirmed 0 added dependencies, zero import-time side effects, and safe to vendor. Proceeding to Batch 2: Vendoring and plumbing.
+Batch 2 completed. SDK vendored into packages/almhdy_analytics/ with relative path dependency. AnalyticsService singleton created with strict allowlist and fake sink capability for testing. Splash screen wired to initialize analytics unawaited after the first frame. 10 tests passed and 0 analyze issues. Proceeding to Batch 3: Instrumentation.

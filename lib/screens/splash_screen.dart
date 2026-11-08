@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../localization/app_localizations.dart';
 import '../services/access/session_manager.dart';
+import '../services/analytics/analytics_service.dart';
 import '../services/license_service.dart';
 import 'main_shell.dart';
 
@@ -17,6 +19,9 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
     _init();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(AnalyticsService.instance.initialize());
+    });
   }
 
   Future<void> _init() async {
@@ -52,11 +57,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SvgPicture.asset(
-              'assets/logo.svg',
-              width: 110,
-              height: 110,
-            ),
+            SvgPicture.asset('assets/logo.svg', width: 110, height: 110),
             const SizedBox(height: 24),
             Text(
               l10n.appTitle,
