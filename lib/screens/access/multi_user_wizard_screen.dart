@@ -53,9 +53,11 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
       final password = _passwordCtrl.text;
       final pin = _pinCtrl.text.trim();
 
-      // 1. Set Owner password and PIN
+      // 1. Set Owner password and optional PIN
       await AuthService.instance.setPassword(AccessDao.ownerUserId, password);
-      await AuthService.instance.setPin(AccessDao.ownerUserId, pin);
+      if (pin.isNotEmpty) {
+        await AuthService.instance.setPin(AccessDao.ownerUserId, pin);
+      }
 
       // 2. Save Recovery Code
       await RecoveryService.instance.saveRecoveryCode(_recoveryCode);
@@ -193,7 +195,11 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
               helperText: l10n.pinCode,
             ),
             validator: (v) {
-              if (v == null || v.length < 4 || v.length > 6) {
+              if (v == null || v.trim().isEmpty) {
+                return null; // PIN is optional for Owner (F6)
+              }
+              final trimmed = v.trim();
+              if (trimmed.length < 4 || trimmed.length > 6) {
                 return l10n.invalidPin;
               }
               return null;
@@ -301,16 +307,28 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
         FilledButton(
           onPressed: _savedCodeConfirmed && !_loading ? _handleComplete : null,
           child: _loading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(l10n.isArabic
+                        ? 'جاري تأمين الحساب...'
+                        : 'Securing account...'),
+                  ],
                 )
               : Text(l10n.enableMultiUserButton),
         ),
         const SizedBox(height: 8),
         TextButton(
-          onPressed: () => setState(() => _currentStep = 0),
+          onPressed: _loading ? null : () => setState(() => _currentStep = 0),
           child: Text(l10n.cancel),
         ),
       ],

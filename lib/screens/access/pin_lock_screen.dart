@@ -64,10 +64,6 @@ class _PinLockScreenState extends State<PinLockScreen> {
     setState(() {
       _enteredPin += digit;
     });
-    if (_enteredPin.length >= 4 && _enteredPin.length == (_selectedUser?.isOwner == true ? 4 : _enteredPin.length)) {
-      // If 4 digits entered, attempt auto-check if user PIN is 4 digits
-      _tryUnlock();
-    }
   }
 
   void _onBackspace() {
@@ -192,6 +188,13 @@ class _PinLockScreenState extends State<PinLockScreen> {
 
         if (!mounted) return;
         SessionManager.instance.unlock(authenticatedUser, permissions);
+      } on AuthException catch (e) {
+        if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          e.message(l10n.isArabic),
+          severity: AppSnackBarSeverity.error,
+        );
       } catch (e) {
         if (!mounted) return;
         AppSnackBar.show(
@@ -199,7 +202,11 @@ class _PinLockScreenState extends State<PinLockScreen> {
           l10n.invalidCredentials,
           severity: AppSnackBarSeverity.error,
         );
+      } finally {
+        passwordCtrl.dispose();
       }
+    } else {
+      passwordCtrl.dispose();
     }
   }
 
@@ -372,16 +379,25 @@ class _PinLockScreenState extends State<PinLockScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _KeypadIconButton(
-                        icon: Icons.clear_rounded,
-                        onTap: _onClear,
+                        icon: Icons.backspace_outlined,
+                        onTap: _onBackspace,
+                        onLongPress: _onClear,
                       ),
                       _KeypadButton(
                         label: '0',
                         onTap: () => _onDigitPress('0'),
                       ),
                       _KeypadIconButton(
-                        icon: Icons.backspace_outlined,
-                        onTap: _onBackspace,
+                        icon: Icons.check_circle_rounded,
+                        color: _enteredPin.length >= 4
+                            ? cs.onPrimary
+                            : cs.outlineVariant,
+                        backgroundColor: _enteredPin.length >= 4
+                            ? cs.primary
+                            : cs.surfaceContainerHighest.withValues(alpha: 0.2),
+                        onTap: (_enteredPin.length >= 4 && !_submitting)
+                            ? _tryUnlock
+                            : null,
                       ),
                     ],
                   ),
@@ -454,9 +470,18 @@ class _KeypadButton extends StatelessWidget {
 
 class _KeypadIconButton extends StatelessWidget {
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final Color? color;
+  final Color? backgroundColor;
 
-  const _KeypadIconButton({required this.icon, required this.onTap});
+  const _KeypadIconButton({
+    required this.icon,
+    required this.onTap,
+    this.onLongPress,
+    this.color,
+    this.backgroundColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -464,13 +489,14 @@ class _KeypadIconButton extends StatelessWidget {
       width: 72,
       height: 72,
       child: Material(
-        color: Colors.transparent,
+        color: backgroundColor ?? Colors.transparent,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
+          onLongPress: onLongPress,
           child: Center(
-            child: Icon(icon, size: 24),
+            child: Icon(icon, size: 26, color: color),
           ),
         ),
       ),

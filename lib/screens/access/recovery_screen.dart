@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../database/access_dao.dart';
-import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
-import '../../models/app_user.dart';
 import '../../services/access/auth_service.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/recovery_service.dart';
@@ -25,7 +22,9 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
   final _newPinCtrl = TextEditingController();
   bool _obscurePassword = true;
   bool _loading = false;
+  bool _savedCodeConfirmed = false;
   String? _newRecoveryCode;
+  RecoveryResult? _recoveryResult;
 
   @override
   void dispose() {
@@ -46,35 +45,19 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       final newPass = _newPasswordCtrl.text;
       final newPin = _newPinCtrl.text.trim();
 
-      // 1. Reset password via recovery code and obtain new recovery code
-      final freshRecoveryCode =
-          await RecoveryService.instance.resetOwnerPasswordWithRecoveryCode(
-        code,
-        newPass,
+      // Atomically reset password, rotate recovery code, and obtain updated owner
+      final result =
+          await RecoveryService.instance.recoverOwnerCredentials(
+        recoveryCode: code,
+        newPassword: newPass,
+        newPin: newPin.isNotEmpty ? newPin : null,
       );
-
-      // 2. Set new PIN if provided
-      if (newPin.isNotEmpty) {
-        await AuthService.instance.setPin(AccessDao.ownerUserId, newPin);
-      }
-
-      // 3. Unlock session as Owner
-      final db = await DatabaseHelper.instance.database;
-      final ownerRows = await db.query(
-        'users',
-        where: 'id = ?',
-        whereArgs: [AccessDao.ownerUserId],
-        limit: 1,
-      );
-      if (ownerRows.isNotEmpty) {
-        final ownerUser = AppUser.fromMap(ownerRows.first);
-        SessionManager.instance.unlock(ownerUser, PermissionRegistry.allKeys);
-      }
 
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _newRecoveryCode = freshRecoveryCode;
+        _recoveryResult = result;
+        _newRecoveryCode = result.newRecoveryCode;
       });
     } on AuthException catch (e) {
       if (!mounted) return;
@@ -160,10 +143,32 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(color: cs.error, fontSize: 13),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                CheckboxListTile(
+                  value: _savedCodeConfirmed,
+                  title: Text(
+                    l10n.recoveryCodeSavedConfirm,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (v) =>
+                      setState(() => _savedCodeConfirmed = v ?? false),
+                ),
+                const SizedBox(height: 24),
                 FilledButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(l10n.continueAction),
+                  onPressed: _savedCodeConfirmed && _recoveryResult != null
+                      ? () {
+                          SessionManager.instance.unlock(
+                            _recoveryResult!.ownerUser,
+                            PermissionRegistry.allKeys,
+                          );
+                          Navigator.pop(context, true);
+                        }
+                      : null,
+                  child: Text(l10n.unlock),
                 ),
               ],
             ),
@@ -250,7 +255,9 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
                     helperText: l10n.pinCode,
                   ),
                   validator: (v) {
-                    if (v == null || v.length < 4) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final trimmed = v.trim();
+                    if (trimmed.length < 4 || trimmed.length > 6) {
                       return l10n.invalidPin;
                     }
                     return null;

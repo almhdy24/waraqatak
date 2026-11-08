@@ -46,6 +46,35 @@ class AuthService {
   static const int maxPinLength = 6;
   static const int minPasswordLength = 6;
 
+  // Device-level throttle to prevent brute-force and lockout DoS (E7)
+  static int _deviceFailedAttempts = 0;
+  static DateTime? _deviceThrottledUntil;
+
+  static int get deviceFailedAttempts => _deviceFailedAttempts;
+  static DateTime? get deviceThrottledUntil => _deviceThrottledUntil;
+  static bool get isDeviceThrottled =>
+      _deviceThrottledUntil != null && _deviceThrottledUntil!.isAfter(DateTime.now());
+
+  static void recordDeviceFailure() {
+    _deviceFailedAttempts++;
+    if (_deviceFailedAttempts >= 10) {
+      _deviceThrottledUntil = DateTime.now().add(const Duration(seconds: 120));
+    } else if (_deviceFailedAttempts >= 5) {
+      _deviceThrottledUntil = DateTime.now().add(const Duration(seconds: 30));
+    }
+  }
+
+  static void recordDeviceSuccess() {
+    _deviceFailedAttempts = 0;
+    _deviceThrottledUntil = null;
+  }
+
+  @visibleForTesting
+  static void resetDeviceThrottle() {
+    _deviceFailedAttempts = 0;
+    _deviceThrottledUntil = null;
+  }
+
   /// Generates a cryptographically secure random hex salt (16 bytes = 32 hex chars).
   String generateSalt([int byteLength = 16]) {
     final rand = Random.secure();
@@ -97,12 +126,13 @@ class AuthService {
   /// 7 failures: 120s
   /// 8 failures: 240s
   /// 9 failures: 480s
-  /// 10+ failures: 900s (15 min)
-  static Duration getLockoutDuration(int failedAttempts) {
+  /// 10+ failures: 900s (15 min) — capped at 300s (5 min) for Owner (E7)
+  static Duration getLockoutDuration(int failedAttempts, {bool isOwner = false}) {
     if (failedAttempts < 5) return Duration.zero;
     final exp = failedAttempts - 5;
     final seconds = 30 * (1 << exp);
-    return Duration(seconds: min(seconds, 900));
+    final maxSec = isOwner ? 300 : 900;
+    return Duration(seconds: min(seconds, maxSec));
   }
 
   /// Authenticates user with username and password.
@@ -112,6 +142,13 @@ class AuthService {
     String password, {
     DatabaseExecutor? executor,
   }) async {
+    if (isDeviceThrottled) {
+      final rem = _deviceThrottledUntil!.difference(DateTime.now());
+      throw AuthException(
+        'تم تجاوز محاولات الدخول على هذا الجهاز. حاول بعد ${rem.inSeconds + 1} ثانية',
+        'Too many failed attempts on this device. Try again in ${rem.inSeconds + 1}s',
+      );
+    }
     final db = executor ?? await DatabaseHelper.instance.database;
     final rows = await db.query(
       'users',
@@ -155,6 +192,7 @@ class AuthService {
     );
 
     if (!constantTimeEquals(computedHash, user.passwordHash!)) {
+      recordDeviceFailure();
       await _recordFailedAttempt(user, db);
       throw const AuthException(
         'كلمة المرور غير صحيحة',
@@ -163,6 +201,7 @@ class AuthService {
     }
 
     // Success: reset failed attempts & update last login
+    recordDeviceSuccess();
     await _recordSuccessfulLogin(user, db);
     return user.copyWith(
       failedAttempts: 0,
@@ -177,6 +216,13 @@ class AuthService {
     String pin, {
     DatabaseExecutor? executor,
   }) async {
+    if (isDeviceThrottled) {
+      final rem = _deviceThrottledUntil!.difference(DateTime.now());
+      throw AuthException(
+        'تم تجاوز محاولات الدخول على هذا الجهاز. حاول بعد ${rem.inSeconds + 1} ثانية',
+        'Too many failed attempts on this device. Try again in ${rem.inSeconds + 1}s',
+      );
+    }
     final db = executor ?? await DatabaseHelper.instance.database;
     final rows = await db.query(
       'users',
@@ -220,6 +266,7 @@ class AuthService {
     );
 
     if (!constantTimeEquals(computedHash, user.pinHash!)) {
+      recordDeviceFailure();
       await _recordFailedAttempt(user, db);
       throw const AuthException(
         'رمز PIN غير صحيح',
@@ -227,6 +274,7 @@ class AuthService {
       );
     }
 
+    recordDeviceSuccess();
     await _recordSuccessfulLogin(user, db);
     return user.copyWith(
       failedAttempts: 0,
@@ -490,7 +538,7 @@ class AuthService {
     final newAttempts = user.failedAttempts + 1;
     DateTime? lockedUntil;
     if (newAttempts >= 5) {
-      final lockDuration = getLockoutDuration(newAttempts);
+      final lockDuration = getLockoutDuration(newAttempts, isOwner: user.isOwner);
       lockedUntil = DateTime.now().add(lockDuration);
     }
 
