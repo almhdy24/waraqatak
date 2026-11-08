@@ -29,13 +29,14 @@ import '../core/catalog_events.dart';
 import '../models/reference_pricing_types.dart';
 import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
+import 'access_dao.dart';
 import 'reference_pricing_dao.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 28;
+  static const int dbVersion = 29;
 
   static Database? _database;
 
@@ -677,6 +678,12 @@ class DatabaseHelper {
       )
     ''');
     await seedDefaultSettings(db);
+
+    if (version >= 29) {
+      await AccessDao.createAccessControlTables(db);
+      await AccessDao.ensureAttributionColumns(db);
+      await AccessDao.seedAccessControlDefaults(db);
+    }
   }
 
   @visibleForTesting
@@ -1512,6 +1519,10 @@ class DatabaseHelper {
 
     if (oldVersion < 28 && newVersion >= 28) {
       await _upgradeToReferenceCurrencySchema(db);
+    }
+
+    if (oldVersion < 29 && newVersion >= 29) {
+      await AccessDao.upgradeToSchemaV29(db);
     }
   }
 
