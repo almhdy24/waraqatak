@@ -12,8 +12,8 @@ Branch: feat/multi-user
 | 5 | Write-path enforcement and attribution | DONE | 6f756e0 | access_guards_test (7 passed), architecture_guards (3 passed), analyze (0 issues) | Write-path guards, field-level price/discount checks, attribution stamping |
 | 6 | Read, report and export enforcement, redaction | DONE | 819782e | redaction_test (6 passed), access_guards_test (7 passed), analyze (0 issues) | Product redaction, CSV/PDF gates, dashboard & reports filter, product form price hiding, stock movements cost hiding |
 | 7 | UI and flows (Arabic RTL + English) | DONE | f40a89a | 39 tests passed, analyze (0 issues) | PinLockScreen, RecoveryScreen, MultiUserWizardScreen, UsersListScreen, UserFormScreen, RolesScreen, AuditTrailScreen, MainShell lock |
-| 8 | Backup/restore, license, repair interplay | DONE | commit pending | backup_access_interplay_test (3 passed), analyze (0 issues) | Decision D7, D8, license expiry fail-closed, backup preservation |
-| 9 | Phase-2 notes and final verification | IN_PROGRESS | - | - | Starting Batch 9 |
+| 8 | Backup/restore, license, repair interplay | DONE | 9abe593 | backup_access_interplay_test (3 passed), analyze (0 issues) | Decision D7, D8, license expiry fail-closed, backup preservation |
+| 9 | Phase-2 notes and final verification | DONE | 783009c | 42 unit/guard tests passed, analyze (0 issues) | PHASE2_NOTES.md, README.md, final verification |
 
 ## DECISIONS
 - D1: Schema v29, single migration block.
@@ -28,10 +28,60 @@ Branch: feat/multi-user
 - D10: Developer reset challenge deferred.
 
 ## OPEN ISSUES
-(None yet)
+(None)
 
 ## FILES CHANGED
-(Will be tracked per batch)
+- lib/database/access_dao.dart
+- lib/database/database_helper.dart
+- lib/models/access/app_user.dart
+- lib/models/access/role.dart
+- lib/models/product.dart
+- lib/services/access/auth_service.dart
+- lib/services/access/session_manager.dart
+- lib/services/access/recovery_service.dart
+- lib/services/access/permission_registry.dart
+- lib/services/access/permission_service.dart
+- lib/services/access/access_guard.dart
+- lib/services/access/access_seeder.dart
+- lib/services/access/audit_service.dart
+- lib/services/access/access_context.dart
+- lib/services/document_service.dart
+- lib/services/stock_ledger.dart
+- lib/services/backup_service.dart
+- lib/services/license_service.dart
+- lib/services/csv_service.dart
+- lib/services/pdf/pdf_report_builder.dart
+- lib/widgets/access/user_session_scope.dart
+- lib/widgets/access/permission_gate.dart
+- lib/screens/access/pin_lock_screen.dart
+- lib/screens/access/recovery_screen.dart
+- lib/screens/access/multi_user_wizard_screen.dart
+- lib/screens/access/users_list_screen.dart
+- lib/screens/access/user_form_screen.dart
+- lib/screens/access/roles_screen.dart
+- lib/screens/access/audit_trail_screen.dart
+- lib/screens/main_shell.dart
+- lib/screens/splash_screen.dart
+- lib/screens/settings_screen.dart
+- lib/screens/home_screen.dart
+- lib/screens/reports_screen.dart
+- lib/screens/product_form_screen.dart
+- lib/screens/stock_movements_screen.dart
+- lib/screens/license_screen.dart
+- lib/screens/transparency_screen.dart
+- lib/localization/app_localizations.dart
+- test/database/migration_29_test.dart
+- test/services/auth_service_test.dart
+- test/services/permission_engine_test.dart
+- test/services/audit_service_test.dart
+- test/guards/access_guards_test.dart
+- test/services/redaction_test.dart
+- test/services/backup_access_interplay_test.dart
+- docs/multiuser/AUDIT.md
+- docs/multiuser/AUDIT_SUMMARY.md
+- docs/multiuser/PROGRESS.md
+- docs/multiuser/PHASE2_NOTES.md
+- docs/multiuser/README.md
 
 ## LEAK POINT CHECKLIST (audit section 5)
 | Surface | Status | Guard Mechanism | Test Name |
@@ -52,4 +102,4 @@ Branch: feat/multi-user
 | Database Diagnostics / Reports | DONE | system.repair | DatabaseHelper / access_guard |
 
 ## RESUME NOTE
-Batch 8 completed. Starting Batch 9: Phase-2 notes, final verification & documentation.
+All 9 Batches completed successfully. 0 flutter analyze issues. Targeted and guard test suites passing.
