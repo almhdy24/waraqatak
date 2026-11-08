@@ -498,7 +498,12 @@ class BackupService {
       if (await tableExists('accounts')) {
         await txn.delete('accounts');
       }
+      List<Map<String, dynamic>> savedAccessSettings = [];
       if (await tableExists('app_settings')) {
+        savedAccessSettings = await txn.query(
+          'app_settings',
+          where: "key IN ('multi_user_enabled', 'auto_lock_minutes', 'workspace_id', 'owner_recovery_hash', 'owner_recovery_salt')",
+        );
         await txn.delete('app_settings');
       }
       if (await tableExists('exchange_rates')) {
@@ -619,14 +624,8 @@ class BackupService {
           await txn.insert('stocktake_items', sanitizeRow(row, siCols));
         }
       }
-      // audit_log is optional (absent in older backups)
-      if (data.containsKey('audit_log') && data['audit_log'] is List) {
-        await txn.delete('audit_log');
-        final alCols = await getTableCols('audit_log');
-        for (final row in _convertRows(data['audit_log'])) {
-          await txn.insert('audit_log', sanitizeRow(row, alCols));
-        }
-      }
+      // audit_log is protected by SQLite triggers, is tamper-evident and append-only.
+      // It is preserved locally and never wiped during restore (INV-15 / D7).
 
       // Accounts: restore or re-seed
       if (await tableExists('accounts')) {
@@ -668,6 +667,14 @@ class BackupService {
           'key': 'journal_reports_enabled',
           'value': 'false',
         }, conflictAlgorithm: ConflictAlgorithm.replace);
+        // Restore preserved multi-user and access settings
+        for (final s in savedAccessSettings) {
+          await txn.insert(
+            'app_settings',
+            s,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
       }
 
       // Journal entries & lines (Phase 1)
@@ -690,6 +697,12 @@ class BackupService {
       }
 
       await DatabaseHelper.backfillCurrencyLockIfNeeded(txn);
+
+      await DatabaseHelper.instance.logAuditEvent(
+        'backup_restored',
+        details: 'schema_version=${jsonMap['schema_version'] ?? 'unknown'}',
+        txn: txn,
+      );
     });
 
     // Verify database integrity post-restore

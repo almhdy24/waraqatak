@@ -31,6 +31,7 @@ import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
 import 'access_dao.dart';
 import 'reference_pricing_dao.dart';
+import '../services/access/audit_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -7382,13 +7383,13 @@ class DatabaseHelper {
   }) async {
     final db = txn ?? await database;
     try {
-      await db.insert('audit_log', {
-        'action': action,
-        'entity_type': entityType,
-        'entity_id': entityId,
-        'details': details,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
+      await AuditService.instance.logEvent(
+        db,
+        action,
+        entityType: entityType,
+        entityId: entityId,
+        details: details,
+      );
     } catch (e) {
       if (txn != null) {
         // Inside a business transaction: failure MUST roll back the transaction

@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../services/access/access_seeder.dart';
+import '../services/access/audit_service.dart';
 
 /// Data Access Object for Multi-User Access Control and Permissions.
 ///
@@ -247,6 +248,31 @@ abstract final class AccessDao {
     ''');
     // 5. Seed template roles and permissions
     await AccessSeeder.ensureDefaults(db);
+
+    // 6. Ensure audit log triggers and genesis anchor
+    await createAuditLogTriggers(db);
+    await AuditService.instance.ensureGenesis(db);
+  }
+
+  /// Creates SQLite triggers preventing UPDATE and DELETE on audit_log.
+  static Future<void> createAuditLogTriggers(DatabaseExecutor db) async {
+    if (await tableExists(db, 'audit_log')) {
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_update
+        BEFORE UPDATE ON audit_log
+        BEGIN
+          SELECT RAISE(ABORT, 'audit_log is append-only and cannot be updated');
+        END;
+      ''');
+
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_audit_log_no_delete
+        BEFORE DELETE ON audit_log
+        BEGIN
+          SELECT RAISE(ABORT, 'audit_log is append-only and cannot be deleted');
+        END;
+      ''');
+    }
   }
 
   /// Full Schema v29 upgrade routine.
