@@ -2789,6 +2789,20 @@ class AppLocalizations {
     'مساعدة في تحسين التطبيق عبر بيانات تشغيلية مجهولة، بدون مبالغ أو أسماء أو فواتير',
     'Help improve the app via anonymous telemetry, excluding amounts, names, and invoices',
   );
+  String get errorReportsConsentTitle =>
+      _t('تقارير الأخطاء والأعطال', 'Error reports');
+  String get errorReportsConsentDesc => _t(
+    'إرسال تقارير تشخيصية مجهولة ومجردة من أي بيانات عند حدوث أخطاء للمساعدة في إصلاحها',
+    'Send anonymous, sanitized crash and error diagnostics to help fix bugs',
+  );
+  String get analyticsNoticeTitle =>
+      _t('بيانات الاستخدام وتقارير الأخطاء', 'Usage Statistics & Error Reports');
+  String get analyticsNoticeBody => _t(
+    'يساعد جمع إحصائيات الاستخدام المجهولة وتقارير الأعطال في تحسين موثوقية وأداء ورقتك. لا يتم جمع أي بيانات شخصية أو تجارية على الإطلاق، ويمكنك إيقاف أي منهما في أي وقت من الإعدادات.',
+    'Anonymous usage statistics and error reports help improve the app\'s stability. No personal or business data is ever collected. You can turn them off anytime from Settings.',
+  );
+  String get analyticsNoticeSettings => _t('الإعدادات', 'Settings');
+  String get analyticsNoticeOk => _t('حسناً', 'OK');
   String get anonymousAnalyticsTitle =>
       _t('إحصائيات الاستخدام المجهولة', 'Anonymous Telemetry');
   String get anonymousAnalyticsSubtitle => _t(

@@ -62,28 +62,38 @@ void main() {
     );
   });
 
-  group('Batch 4: Settings toggle, consent persistence & role gating', () {
+  group('Settings dual toggles, consent persistence & role gating', () {
     test(
-      'toggle persists choice to SharedPreferences and syncs opt-out',
+      'separate toggles persist choices and sync opt-out when both disabled',
       () async {
         final prefs = await SharedPreferences.getInstance();
 
-        // Default is enabled
-        expect(AnalyticsService.instance.isEnabled, isTrue);
+        // Defaults are both enabled
+        expect(AnalyticsService.instance.isUsageEnabled, isTrue);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
 
-        // User opts out in settings
-        await AnalyticsService.instance.setEnabled(false);
-        expect(AnalyticsService.instance.isEnabled, isFalse);
+        // Turn off usage only
+        await AnalyticsService.instance.setUsageEnabled(false);
+        expect(AnalyticsService.instance.isUsageEnabled, isFalse);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
         expect(prefs.getBool('analytics_enabled'), isFalse);
-        expect(mockSink.isOptedOut, isTrue);
+        // Error reporting is still on, so sink is NOT opted out
+        expect(mockSink.isOptedOut, isFalse);
 
-        // Subsequent tracking attempts are silently dropped
+        // Usage tracking attempts are silently dropped
         AnalyticsService.instance.track(AnalyticsEvent.stocktakeFinalized);
         expect(mockSink.dispatched, isEmpty);
 
-        // User opts back in
-        await AnalyticsService.instance.setEnabled(true);
-        expect(AnalyticsService.instance.isEnabled, isTrue);
+        // Turn off error reports as well
+        await AnalyticsService.instance.setErrorReportingEnabled(false);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
+        expect(prefs.getBool('error_reporting_enabled'), isFalse);
+        // Now both are off, sink is opted out
+        expect(mockSink.isOptedOut, isTrue);
+
+        // Turn usage back on
+        await AnalyticsService.instance.setUsageEnabled(true);
+        expect(AnalyticsService.instance.isUsageEnabled, isTrue);
         expect(prefs.getBool('analytics_enabled'), isTrue);
         expect(mockSink.isOptedOut, isFalse);
 
@@ -91,6 +101,22 @@ void main() {
         expect(mockSink.dispatched, equals(['stocktake_finalized']));
       },
     );
+
+    test('migrates legacy opt-out so existing opted-out user keeps both off', () async {
+      SharedPreferences.setMockInitialValues({
+        'analytics_enabled': false,
+      });
+      AnalyticsService.instance.resetForTesting();
+      AnalyticsService.instance.setSinkForTesting(mockSink);
+      AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');
+
+      await AnalyticsService.instance.initialize(forceEnable: true);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(AnalyticsService.instance.isUsageEnabled, isFalse);
+      expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
+      expect(prefs.getBool('error_reporting_enabled'), isFalse);
+    });
 
     testWidgets('PermissionGate renders settings toggle when authorized', (
       tester,

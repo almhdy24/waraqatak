@@ -42,7 +42,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   EntitlementState? _entitlement;
-  bool _diagnosticConsent = false;
+  bool _errorReportingConsent = true;
   bool _analyticsConsent = true;
   bool _wholesalePricingEnabled = false;
 
@@ -64,11 +64,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadConsent() async {
-    final granted = await AppDiagnosticsService.instance.isConsentGranted();
-    final analyticsGranted = AnalyticsService.instance.isEnabled;
+    final analyticsGranted = AnalyticsService.instance.isUsageEnabled;
+    final errorReportingGranted =
+        AnalyticsService.instance.isErrorReportingEnabled;
     if (mounted) {
       setState(() {
-        _diagnosticConsent = granted;
+        _errorReportingConsent = errorReportingGranted;
         _analyticsConsent = analyticsGranted;
       });
     }
@@ -537,67 +538,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 child: Column(
                   children: [
-                    SwitchListTile(
-                      secondary: const Icon(Icons.bug_report_outlined),
-                      title: Row(
-                        children: [
-                          Expanded(child: Text(l10n.diagnosticSharingTitle)),
-                          IconButton(
-                            icon: const Icon(Icons.help_outline, size: 20),
-                            tooltip: l10n.diagnosticSharingModalTitle,
-                            onPressed: () {
-                              showDialog<void>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: Text(l10n.diagnosticSharingModalTitle),
-                                  content: SingleChildScrollView(
-                                    child: Text(
-                                      l10n.diagnosticSharingModalBody,
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: Text(
-                                        MaterialLocalizations.of(
-                                          ctx,
-                                        ).closeButtonLabel,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                      subtitle: Text(l10n.diagnosticSharingDesc),
-                      value: _diagnosticConsent,
-                      onChanged: (val) async {
-                        await AppDiagnosticsService.instance.setConsent(val);
-                        if (mounted) {
-                          setState(() => _diagnosticConsent = val);
-                        }
-                      },
-                    ),
                     PermissionGate(
                       permission: PermissionRegistry.settingsManage,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Divider(height: 1, indent: 16, endIndent: 16),
                           SwitchListTile(
                             secondary: const Icon(Icons.analytics_outlined),
                             title: Text(l10n.analyticsConsentTitle),
                             subtitle: Text(l10n.analyticsConsentDesc),
                             value: _analyticsConsent,
                             onChanged: (val) async {
-                              await AnalyticsService.instance.setEnabled(val);
+                              await AnalyticsService.instance.setUsageEnabled(val);
                               if (mounted) {
                                 setState(() => _analyticsConsent = val);
                               }
                             },
                           ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                          SwitchListTile(
+                            secondary: const Icon(Icons.bug_report_outlined),
+                            title: Text(l10n.errorReportsConsentTitle),
+                            subtitle: Text(l10n.errorReportsConsentDesc),
+                            value: _errorReportingConsent,
+                            onChanged: (val) async {
+                              await AnalyticsService.instance
+                                  .setErrorReportingEnabled(val);
+                              await AppDiagnosticsService.instance.setConsent(val);
+                              if (mounted) {
+                                setState(() => _errorReportingConsent = val);
+                              }
+                            },
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
                         ],
                       ),
                     ),

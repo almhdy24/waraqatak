@@ -100,16 +100,24 @@ class AnalyticsService {
   AnalyticsService._internal();
 
   static const String _kConsentKey = 'analytics_enabled';
+  static const String _kErrorReportingKey = 'error_reporting_enabled';
+  static const String _kLegacyDiagnosticConsentKey =
+      'ops_diagnostic_consent_granted';
   static const String _kPendingMigrationFromKey = 'analytics_pending_mig_from';
   static const String _kPendingMigrationToKey = 'analytics_pending_mig_to';
   static const String _kPendingMigrationOkKey = 'analytics_pending_mig_ok';
 
   AnalyticsSink _sink = AlmHdyAnalyticsSink();
-  bool _isEnabled = true;
+  bool _isUsageEnabled = true;
+  bool _isErrorReportingEnabled = true;
   bool _isInitialized = false;
   String? _testProjectKey;
 
-  bool get isEnabled => _isEnabled;
+  bool get isUsageEnabled => _isUsageEnabled;
+  bool get isErrorReportingEnabled => _isErrorReportingEnabled;
+
+  /// Backward-compatible alias for [isUsageEnabled].
+  bool get isEnabled => _isUsageEnabled;
   bool get isInitialized => _isInitialized;
 
   // --- Allowed property values sets ---
@@ -273,7 +281,8 @@ class AnalyticsService {
   /// Resets internal state for unit tests.
   @visibleForTesting
   void resetForTesting() {
-    _isEnabled = true;
+    _isUsageEnabled = true;
+    _isErrorReportingEnabled = true;
     _isInitialized = false;
     _testProjectKey = null;
     AnalyticsConfig.reset();
@@ -287,11 +296,29 @@ class AnalyticsService {
     bool forceEnable = false,
   }) async {
     try {
-      // 1. Load persisted consent
+      // 1. Load persisted consent and perform legacy migration
       final prefs = await SharedPreferences.getInstance();
-      _isEnabled = prefs.getBool(_kConsentKey) ?? true;
 
-      if (!_isEnabled) {
+      if (prefs.containsKey(_kConsentKey)) {
+        final legacyUsage = prefs.getBool(_kConsentKey) ?? true;
+        if (!legacyUsage && !prefs.containsKey(_kErrorReportingKey)) {
+          await prefs.setBool(_kErrorReportingKey, false);
+        }
+      }
+      if (prefs.containsKey(_kLegacyDiagnosticConsentKey) &&
+          !prefs.containsKey(_kErrorReportingKey)) {
+        final legacyDiag =
+            prefs.getBool(_kLegacyDiagnosticConsentKey) ?? true;
+        if (!legacyDiag) {
+          await prefs.setBool(_kErrorReportingKey, false);
+        }
+      }
+
+      _isUsageEnabled = prefs.getBool(_kConsentKey) ?? true;
+      _isErrorReportingEnabled =
+          prefs.getBool(_kErrorReportingKey) ?? true;
+
+      if (!_isUsageEnabled && !_isErrorReportingEnabled) {
         _isInitialized = false;
         return;
       }
@@ -316,22 +343,30 @@ class AnalyticsService {
 
       _isInitialized = true;
 
-      // 4. Check and dispatch pending migration event if any exists
-      await _dispatchPendingMigrationIfAny(prefs);
+      // 4. Check and dispatch pending migration event if any exists and usage is enabled
+      if (_isUsageEnabled) {
+        await _dispatchPendingMigrationIfAny(prefs);
+      }
     } catch (_) {
       // Silent error boundary: failure must never impact app startup
       _isInitialized = false;
     }
   }
 
-  /// Sets user consent. If opting out, synchronizes with backend opt-out.
-  Future<void> setEnabled(bool enabled) async {
+  /// Sets user consent for anonymous usage statistics.
+  Future<void> setUsageEnabled(bool enabled) async {
     try {
-      _isEnabled = enabled;
+      _isUsageEnabled = enabled;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kConsentKey, enabled);
 
       if (!enabled) {
+        await prefs.remove(_kPendingMigrationFromKey);
+        await prefs.remove(_kPendingMigrationToKey);
+        await prefs.remove(_kPendingMigrationOkKey);
+      }
+
+      if (!_isUsageEnabled && !_isErrorReportingEnabled) {
         await _sink.optOut();
       } else {
         await _sink.optIn();
@@ -340,6 +375,26 @@ class AnalyticsService {
       // Silent error boundary
     }
   }
+
+  /// Sets user consent for error reports.
+  Future<void> setErrorReportingEnabled(bool enabled) async {
+    try {
+      _isErrorReportingEnabled = enabled;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kErrorReportingKey, enabled);
+
+      if (!_isUsageEnabled && !_isErrorReportingEnabled) {
+        await _sink.optOut();
+      } else {
+        await _sink.optIn();
+      }
+    } catch (_) {
+      // Silent error boundary
+    }
+  }
+
+  /// Backward-compatible alias for [setUsageEnabled].
+  Future<void> setEnabled(bool enabled) => setUsageEnabled(enabled);
 
   /// Records database migration result to SharedPreferences for dispatch on next init.
   /// (Called from startup without touching database or in-flight transactions).
@@ -381,7 +436,7 @@ class AnalyticsService {
   /// Tracks an allowlisted event with strict validation.
   /// Fire-and-forget; never awaited by callers.
   void track(AnalyticsEvent event, [Map<String, dynamic>? properties]) {
-    if (!_isEnabled || !_isInitialized) return;
+    if (!_isUsageEnabled || !_isInitialized) return;
 
     // Drop all events if multi-user session is currently locked
     if (SessionManager.instance.isLocked) return;
