@@ -201,13 +201,24 @@ class AuditService {
       userId = 'system';
       userName = 'النظام';
     } else {
-      final user = SessionManager.instance.currentUser;
-      if (user != null) {
-        userId = user.id;
-        userName = user.displayName;
+      final session = SessionManager.instance;
+      if (session.isMultiUserEnabled) {
+        if (session.isLocked || session.currentUser == null) {
+          userId = 'unauthenticated';
+          userName = 'غير مسجل';
+        } else {
+          userId = session.currentUser!.id;
+          userName = session.currentUser!.displayName;
+        }
       } else {
-        userId = AccessDao.ownerUserId;
-        userName = 'المالك';
+        final user = session.currentUser;
+        if (user != null) {
+          userId = user.id;
+          userName = user.displayName;
+        } else {
+          userId = AccessDao.ownerUserId;
+          userName = 'المالك';
+        }
       }
     }
 

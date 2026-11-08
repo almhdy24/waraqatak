@@ -179,6 +179,7 @@ class _WarqatekAppState extends State<WarqatekApp> with WidgetsBindingObserver {
           themeMode: _themeMode,
           onChangeThemeMode: changeThemeMode,
           child: MaterialApp(
+            navigatorKey: SessionManager.navigatorKey,
             scaffoldMessengerKey: AppUpdateService.scaffoldMessengerKey,
             debugShowCheckedModeBanner: false,
             onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
@@ -192,10 +193,13 @@ class _WarqatekAppState extends State<WarqatekApp> with WidgetsBindingObserver {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            builder: (context, child) => Listener(
-              onPointerDown: (_) => SessionManager.instance.recordActivity(),
-              behavior: HitTestBehavior.translucent,
-              child: _SystemInsets(child: child!),
+            builder: (context, child) => UserSessionScope(
+              notifier: SessionManager.instance,
+              child: Listener(
+                onPointerDown: (_) => SessionManager.instance.recordActivity(),
+                behavior: HitTestBehavior.translucent,
+                child: _SystemInsets(child: child!),
+              ),
             ),
             home: const SplashScreen(),
           ),

@@ -214,6 +214,53 @@ class _PinLockScreenState extends State<PinLockScreen> {
       );
     }
 
+    if (SessionManager.instance.isSecurityUnverified) {
+      return PopScope(
+        canPop: false,
+        child: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.gpp_maybe_rounded, size: 64, color: cs.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.isArabic
+                        ? 'تعذر التحقق من إعدادات الأمان'
+                        : 'Cannot verify security settings',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.isArabic
+                        ? 'فشلت قراءة إعدادات الأمان. تم إبقاء التطبيق مقفلاً لحماية البيانات.'
+                        : 'Failed to read security configuration. Kept locked to protect data.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: Text(l10n.isArabic ? 'إعادة المحاولة' : 'Retry'),
+                    onPressed: () async {
+                      await SessionManager.instance.retryInit();
+                      if (mounted) _loadUsers();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return PopScope(
       canPop: false,
       child: Scaffold(

@@ -100,26 +100,28 @@ class AppUser {
     };
   }
 
+  static const Object _sentinel = Object();
+
   AppUser copyWith({
     String? id,
     String? workspaceId,
     String? username,
     String? displayName,
     String? roleId,
-    String? passwordHash,
-    String? passwordSalt,
-    String? pinHash,
-    String? pinSalt,
+    Object? passwordHash = _sentinel,
+    Object? passwordSalt = _sentinel,
+    Object? pinHash = _sentinel,
+    Object? pinSalt = _sentinel,
     int? kdfIterations,
     int? kdfVersion,
     bool? isOwner,
     bool? isActive,
     bool? setupComplete,
     int? failedAttempts,
-    DateTime? lockedUntil,
+    Object? lockedUntil = _sentinel,
     DateTime? createdAt,
     DateTime? updatedAt,
-    DateTime? lastLoginAt,
+    Object? lastLoginAt = _sentinel,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -127,20 +129,30 @@ class AppUser {
       username: username ?? this.username,
       displayName: displayName ?? this.displayName,
       roleId: roleId ?? this.roleId,
-      passwordHash: passwordHash ?? this.passwordHash,
-      passwordSalt: passwordSalt ?? this.passwordSalt,
-      pinHash: pinHash ?? this.pinHash,
-      pinSalt: pinSalt ?? this.pinSalt,
+      passwordHash: identical(passwordHash, _sentinel)
+          ? this.passwordHash
+          : passwordHash as String?,
+      passwordSalt: identical(passwordSalt, _sentinel)
+          ? this.passwordSalt
+          : passwordSalt as String?,
+      pinHash:
+          identical(pinHash, _sentinel) ? this.pinHash : pinHash as String?,
+      pinSalt:
+          identical(pinSalt, _sentinel) ? this.pinSalt : pinSalt as String?,
       kdfIterations: kdfIterations ?? this.kdfIterations,
       kdfVersion: kdfVersion ?? this.kdfVersion,
       isOwner: isOwner ?? this.isOwner,
       isActive: isActive ?? this.isActive,
       setupComplete: setupComplete ?? this.setupComplete,
       failedAttempts: failedAttempts ?? this.failedAttempts,
-      lockedUntil: lockedUntil ?? this.lockedUntil,
+      lockedUntil: identical(lockedUntil, _sentinel)
+          ? this.lockedUntil
+          : lockedUntil as DateTime?,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      lastLoginAt: lastLoginAt ?? this.lastLoginAt,
+      lastLoginAt: identical(lastLoginAt, _sentinel)
+          ? this.lastLoginAt
+          : lastLoginAt as DateTime?,
     );
   }
 }

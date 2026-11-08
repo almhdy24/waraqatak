@@ -5,8 +5,8 @@ Branch: fix/multiuser-stabilization
 ## Batches
 | # | Title | Status (TODO/IN_PROGRESS/DONE/BLOCKED) | Commit | Tests run | Notes |
 |---|-------|---|---|---|---|
-| 1 | Audit & entry-point matrix | DONE | Pending | flutter analyze, test/guards/access_guards_test.dart | Deep inspection completed; FIX_AUDIT.md and FIX_PROGRESS.md generated; all D/N/E defects confirmed with file/line evidence. |
-| 2 | Session layer hardening | TODO | | | Fail-closed init, DB-first enable, locked can() check, attribution fix, UserSessionScope, copyWith fix. |
+| 1 | Audit & entry-point matrix | DONE | cde497f | flutter analyze, test/guards/access_guards_test.dart | Deep inspection completed; FIX_AUDIT.md and FIX_PROGRESS.md generated; all D/N/E defects confirmed with file/line evidence. |
+| 2 | Session layer hardening | DONE | Pending | test/services/session_hardening_test.dart (20 passed), test/guards/access_guards_test.dart, architecture_guards_test.dart | Fail-closed init, DB-first enable, locked can() check, attribution fix, UserSessionScope assert, AppUser sentinel copyWith, auto-lock periodic check. |
 | 3 | AccessPolicy, Owner protection & OWNER_ONLY keys | TODO | | | access_policy.dart, OWNER_ONLY stripping, Owner triggers, escalation audit. |
 | 4 | AccessAdminService | TODO | | | Move all writes out of screens into transactional AccessAdminService. Disable instead of delete. |
 | 5 | Screen, route & Settings lockdown | TODO | | | ScreenAccessPolicy manifest, PermissionGate push & build checks, service guards on settings/repair/backup. |
@@ -28,15 +28,15 @@ Branch: fix/multiuser-stabilization
 | D7 | Confirmed | Batch 8 | Pending | `AuditService.logEvent` concurrency chain fork, unpaged `verifyChain` |
 | D8 | Confirmed | Batch 8 | Pending | Fixed 100k PBKDF2 iterations, no stored recovery iterations |
 | D9 | Confirmed | Batch 6 | Pending | Owner PIN mandatory in wizard, sequential hashing |
-| N1 | Confirmed | Batch 2 | Pending | `SessionManager.init()` catch falls back to single-user mode (fail-open) |
-| N2 | Confirmed | Batch 2 | Pending | `setMultiUserEnabled` in-memory set before DB write; keeps synthetic Owner |
-| N3 | Confirmed | Batch 2 | Pending | `SessionManager.can()` returns true while locked |
-| N4 | Confirmed | Batch 2 | Pending | `AccessContext` and `AuditService` attribute to Owner when unauthenticated/locked |
+| N1 | Fixed | Batch 2 | session_hardening_test | `SessionManager.init()` fails closed, setting isSecurityUnverified on error |
+| N2 | Fixed | Batch 2 | session_hardening_test | `setMultiUserEnabled` writes DB first, loads real Owner and updates login |
+| N3 | Fixed | Batch 2 | session_hardening_test | `SessionManager.can()` returns false when locked or unverified |
+| N4 | Fixed | Batch 2 | session_hardening_test | `AccessContext` and `AuditService` attribute to unauthenticated when locked |
 | N5 | Confirmed | Batch 7 | Pending | Disabling multi-user mode is unauthenticated confirm dialog |
-| N6 | Confirmed | Batch 2 | Pending | `verifyPassword`, `checkInactivityLock`, `setSession` uncalled; timer unwired |
+| N6 | Fixed | Batch 2 | session_hardening_test | Inactivity periodic timer wired, pops to root on lock, unlock verifies status |
 | N7 | Confirmed | Batch 6 | Pending | Non-atomic recovery, session unlocked before code shown, no rate limit |
-| N8 | Confirmed | Batch 2 | Pending | `UserSessionScope.of()` silent fallback without InheritedWidget dependency |
-| N9 | Confirmed | Batch 2 | Pending | `AppUser.copyWith` unable to clear nullable `lockedUntil` |
+| N8 | Fixed | Batch 2 | session_hardening_test | `UserSessionScope.of()` asserts in debug, installed in MaterialApp.builder |
+| N9 | Fixed | Batch 2 | session_hardening_test | `AppUser.copyWith` uses sentinel pattern to allow clearing nullable fields |
 | E1 | Confirmed | Batch 3, 4 | Pending | Owner edit path in `user_form_screen` skips all permission checks |
 | E2 | Confirmed | Batch 4, 5 | Pending | Tapping any user row in `users_list_screen` opens edit form without guard |
 | E3 | Confirmed | Batch 3, 4 | Pending | `AuthService.setPassword` and `setPin` have no actor or permission guards |
@@ -81,4 +81,4 @@ Current status: Audited; hardening plan assigned to Batches 2–7.
 (None)
 
 ## RESUME NOTE
-Batch 1 complete (audit and entry-point matrix recorded in `FIX_AUDIT.md` and `FIX_PROGRESS.md`). Resume with Batch 2 (Session layer hardening: `SessionManager`, `AccessContext`, `AuditService` attribution, `UserSessionScope`, `AppUser.copyWith`).
+Batch 2 complete (Session layer hardened: fail-closed init, DB-first enable, locked can() checks, attribution never falling back to Owner in multi-user mode, sentinel copyWith, UserSessionScope in MaterialApp.builder, auto-lock periodic timer). Resume with Batch 3 (AccessPolicy, Owner protection and OWNER_ONLY keys: pure policy class, strip OWNER_ONLY keys, SQLite triggers on users/roles, escalation audit).

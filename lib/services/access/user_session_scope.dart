@@ -13,6 +13,16 @@ class UserSessionScope extends InheritedNotifier<SessionManager> {
   static SessionManager of(BuildContext context) {
     final scope =
         context.dependOnInheritedWidgetOfExactType<UserSessionScope>();
+    assert(() {
+      if (scope == null) {
+        throw FlutterError(
+          'UserSessionScope.of() called with a context that does not contain a UserSessionScope.\n'
+          'No UserSessionScope ancestor could be found starting from the context that was passed to UserSessionScope.of().\n'
+          'Make sure UserSessionScope is installed above the Navigator (e.g. in MaterialApp.builder).',
+        );
+      }
+      return true;
+    }());
     return scope?.notifier ?? SessionManager.instance;
   }
 
