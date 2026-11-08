@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:warqatek/core/analytics/analytics_config.dart';
+import 'package:warqatek/services/access/session_manager.dart';
 import 'package:warqatek/services/analytics/analytics_service.dart';
 
 class FakeAnalyticsSink implements AnalyticsSink {
@@ -274,6 +275,32 @@ void main() {
 
       expect(fakeSink.trackedEvents, isEmpty);
     });
+
+    test('drops error reports when multi-user session is locked', () {
+      SessionManager.instance.setMultiUserEnabledForTesting(true);
+      SessionManager.instance.lock();
+      expect(SessionManager.instance.isLocked, isTrue);
+
+      AnalyticsService.instance.recordError(Exception('Locked session error'));
+      expect(fakeSink.trackedEvents, isEmpty);
+
+      SessionManager.instance.setMultiUserEnabledForTesting(false);
+    });
+
+    test(
+      'error reporting remains uninitialized and silent when project key is empty',
+      () async {
+        AnalyticsService.instance.resetForTesting();
+        AnalyticsService.instance.setSinkForTesting(fakeSink);
+        AnalyticsService.instance.setProjectKeyForTesting('');
+        await AnalyticsService.instance.initialize();
+
+        expect(AnalyticsService.instance.isInitialized, isFalse);
+
+        AnalyticsService.instance.recordError(Exception('Empty key error'));
+        expect(fakeSink.trackedEvents, isEmpty);
+      },
+    );
   });
 
   group('AnalyticsService allowlist enforcement', () {
