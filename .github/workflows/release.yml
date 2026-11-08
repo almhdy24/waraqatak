@@ -113,6 +113,8 @@ jobs:
           NOTES_FILE=""
           if [ -f "docs/release-notes-${VERSION_NUM}.md" ]; then
             NOTES_FILE="docs/release-notes-${VERSION_NUM}.md"
+          elif [ -f "CHANGELOG.md" ]; then
+            NOTES_FILE="CHANGELOG.md"
           fi
           PRERELEASE_FLAG=""
           case "$TAG" in
