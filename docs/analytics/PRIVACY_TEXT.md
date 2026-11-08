@@ -1,4 +1,4 @@
-# AlmHdy Analytics: Privacy Policy Disclosure Text
+# AlmHdy Analytics & Error Reporting: Privacy Policy Disclosure Text
 
 **For use on:** `https://almhdy24.com/privacy` and app store disclosures.  
 **Applications:** Waraqatak (ورقتك) & Cashirak (كاشيرك)  
@@ -8,38 +8,70 @@
 
 ## 1. Arabic Disclosure (النص العربي المقترح لصفحة الخصوصية)
 
-### إحصائيات الاستخدام والتحسين التشغيلي (AlmHdy Analytics)
+### إحصائيات الاستخدام وتشخيص الأعطال (AlmHdy Analytics)
 
-يلتزم تطبيق **ورقتك (Waraqatak)** بحماية خصوصية بياناتك التجارية والتزام مبدأ العمل دون اتصال بالإنترنت أولاً (Offline-First). للمساعدة في تحسين أداء واستقرار التطبيق وفهم الميزات الأكثر استخداماً، يتضمن التطبيق نظام قياس تشغيلي مجهول الهوية بالكامل يتبع المعايير الصارمة التالية:
+يلتزم تطبيق **ورقتك (Waraqatak)** بحماية خصوصية بياناتك التجارية والتزام مبدأ العمل دون اتصال بالإنترنت أولاً (Offline-First). للمساعدة في تحسين أداء واستقرار التطبيق وسرعة معالجة الأخطاء البرمجية، يتضمن التطبيق قناتين تشغيليتين منفصلتين ومجهولتي الهوية بالكامل:
 
-1. **حظر البيانات المالية والشخصية تماماً:**
-   لا يجمع نظام التحليلات إطلاقاً أي أسعار، تكاليف شراء، هوامش ربح، مبالغ إجمالية، أسماء عملاء أو موردين، أرقام هواتف، أسماء منتجات، أو محتويات المستندات والفواتير. جميع هذه البيانات تخزن محلياً فقط على جهاز المستخدم ولا تغادره.
+#### أولاً: قناتا جمع البيانات (مفعلتان افتراضياً وقابلتان للإيقاف المستقل):
+1. **قناة إحصائيات الاستخدام (Usage Analytics):**
+   - **ما يتم جمعه:** أحداث تشغيلية عامة ومجردة (مثل: فتح التطبيق، التنقل بين الشاشات الرئيسية، فئة نوع المستند المنشأ، تصنيف تقريبي لعدد البنود كفئات مثل "1" أو "2-5" أو "6-20"، نجاح النسخ الاحتياطي، وإصدار الترقية).
+   - **ما لا يتم جمعه إطلاقاً:** لا يجمع النظام أي مبالغ مالية، أسعار، تكاليف، أرباح، أسماء عملاء أو موردين، أرقام هواتف، أسماء منتجات، أو محتويات الفواتير.
+2. **قناة تقارير الأعطال وتشخيص الأخطاء (Error & Crash Reporting):**
+   - **ما يتم جمعه:** نوع الاستثناء البرمجي (Exception Type)، رسالة الخطأ بعد تجريدها وتطهيرها بالكامل، تتبع المكدس البرمجي (Stack Trace) بعد إزالة مسارات ملفات المستخدم، إصدار التطبيق، ونظام التشغيل.
+   - **تطهير البيانات الصارم (Deep Sanitization):** تخضع جميع رسائل الأعطال لنظام تنقية آلي صارم يزيل فوراً:
+     - أرقام الهواتف (المحلية والدولية وأي سلاسل رقمية من 6 أرقام فأكثر).
+     - عناوين البريد الإلكتروني.
+     - المبالغ المالية ورموز العملات (SDG, USD, EUR, SAR, ج.س، إلخ).
+     - مسارات الملفات والمجلدات الشخصية للجهاز.
+     - الرموز السرية ومفاتيح التراخيص وكلمات المرور.
+   - **حدود الاستهلاك:** يتم إرسال حد أقصى لا يتجاوز 20 تقريراً لكل جلسة تشغيل، مع منع تكرار الأخطاء المتطابقة تلقائياً لتوفير طاقة البطارية والبيانات.
 
-2. **بيانات مجهولة ومجمعة (Bucketed Telemetry):**
-   تقتصر البيانات المجمعة على أحداث تشغيلية عامة (مثل: إنشاء مستند مع تصنيف حجم البنود تقريبياً كفئات، فتح شاشة تقرير، إتمام عملية نسخ احتياطي، أو نجاح تفعيل الترخيص). يتم إنشاء معرّف عشوائي مجهول للهوية عند تثبيت التطبيق (`installation_id`) دون ربطه بأي معرّفات للجهاز أو أرقام تسلسلية (Hardware IDs) أو عناوين بريد إلكتروني.
-
-3. **حماية عنوان البروتوكول (IP Protection):**
-   لا تُخزّن عناوين الإنترنت (IP Addresses) في خوادمنا بصيغتها الصريحة مطلقاً؛ حيث يتم تشفيرها فوراً عبر تجزئة أمنية متغيرة يومياً (Rotating HMAC-SHA256) لمنع أي تتبع زمني أو مكاني.
-
-4. **حق إلغاء الاشتراك الكامل (Opt-Out):**
-   تفعيل إحصائيات الاستخدام اختياري ومتاح لراحة المستخدم؛ حيث يمكنك في أي وقت إيقاف جمع هذه الإحصائيات بالكامل من داخل التطبيق عبر: **الإعدادات > الدعم والمعلومات > إحصائيات الاستخدام المجهولة**. عند إيقاف هذا الخيار، يتم مسح سجل الأحداث المؤقت فوراً ويتوقف التطبيق عن إرسال أي بيانات مستقبلية.
+#### ثانياً: الضمانات والتحكم:
+- **حظر جمع المعرفات الشخصية:** يتم إنشاء معرّف عشوائي مجهول للهوية عند تثبيت التطبيق (`installation_id`) دون ربطه بالجهاز أو رقم الهوية أو أي حساب مستخدم.
+- **حظر تسجيل عناوين الإنترنت (IP Hashing):** لا تسجل عناوين IP بصيغة صريحة؛ بل تُشفر فوراً عبر تجزئة متغيرة يومياً (HMAC-SHA256).
+- **التحكم وحرية الإيقاف المستقل (Opt-Out):** كِلا الخيارين مفعلان افتراضياً لتسهيل الدعم، ويمكن للمستخدم إيقاف أي منهما أو كليهما بشكل مستقل في أي وقت عبر:
+  **الإعدادات > الدعم والمعلومات > إحصائيات الاستخدام المجهولة** أو **تقارير الأخطاء والأعطال**.
+  إيقاف أي خيار يوقف إرسال بيانات تلك القناة فوراً ويمسح سجلاتها المؤقتة.
 
 ---
 
 ## 2. English Disclosure (Proposed Website Privacy Policy Text)
 
-### Operational Telemetry & Anonymous Analytics (AlmHdy Analytics)
+### Operational Telemetry & Error Reporting (AlmHdy Analytics)
 
-**Waraqatak** is engineered with an offline-first architecture prioritizing complete privacy and sovereign control over business financial data. To continuously enhance application stability, verify upgrade migrations, and understand general feature adoption, the application integrates an anonymous telemetry subsystem governed by the following strict guarantees:
+**Waraqatak** is engineered with an offline-first architecture prioritizing complete privacy and sovereign control over business financial data. To continuously enhance application stability and promptly resolve software bugs, the application provides two distinct, independent anonymous channels:
 
-1. **Strict Exclusion of Financial & Personal Data:**
-   The analytics system strictly never collects monetary amounts, product purchase costs, profit margins, selling prices, invoice totals, contact names, customer/supplier telephone numbers, barcodes, or document notes. All business accounting records remain strictly confidential and stored exclusively within the local SQLite database on your device.
+#### 1. Data Collection Channels (Default ON, Independently Managed):
+1. **Anonymous Usage Statistics Channel:**
+   - **What is collected:** Coarse operational lifecycle events (e.g., app opened, screen views, document type created, item count brackets such as "1", "2–5", "6–20", "21+", successful backup, database migration status).
+   - **Strictly Excluded:** Monetary amounts, prices, costs, invoice contents, customer names, supplier names, contact phone numbers, product names, or notes. All business accounting records remain strictly on your device.
+2. **Crash & Diagnostic Error Reports Channel:**
+   - **What is collected:** Exception type, deeply sanitized short error message, package-level stack trace, app version, platform, and OS version.
+   - **Deep Sanitization Guarantees:** All error reports pass through an automated privacy sanitizer that irreversibly redacts:
+     - Telephone numbers (international and local, and numeric runs of 6+ digits).
+     - Email addresses.
+     - Monetary amounts and currency symbols (SDG, USD, EUR, SAR, $, €, etc.).
+     - User filesystem paths and absolute storage directories.
+     - Bearer tokens, secrets, passwords, and license keys.
+   - **Session Limits:** Error reporting is capped at a maximum of 20 reports per session and automatically deduplicates identical repeated errors to preserve device battery and data.
 
-2. **Categorized & Bucketed Telemetry:**
-   Collected metrics are limited to coarse operational lifecycle events (e.g., document creation with generalized item count brackets such as "2–5 items", screen views, successful backup creation, or software upgrade outcomes). An anonymous UUIDv4 installation identifier is randomly generated locally; hardware serials, Android IDs, IMEI, and user identities are never accessed or transmitted.
+#### 2. Guarantees & User Control:
+- **Zero Personal Identifiers:** Metrics rely strictly on an ephemeral random UUIDv4 installation identifier. Hardware serial numbers, Android IDs, IMEI, and user profiles are never gathered.
+- **Zero Plaintext IP Logging:** Client IP addresses are hashed using a daily rotating HMAC-SHA256 salt at the gateway level.
+- **Independent Opt-Out Controls:** Both channels are enabled by default and can be turned off independently at any time in:
+  **Settings > Support & Info > Anonymous usage statistics** or **Error reports**.
+  Disabling either channel terminates transmission for that channel immediately.
 
-3. **Zero Plaintext IP Address Logging:**
-   Client IP addresses are never persisted in plaintext. Incoming requests are hashed using a daily rotating HMAC-SHA256 salt at the gateway level, preventing persistent cross-session network tracking.
+---
 
-4. **Unconditional Opt-Out Right:**
-   You maintain full control over telemetry. You can completely disable usage statistics at any time within the application via: **Settings > Support & Info > Anonymous Usage Statistics**. Disabling this toggle immediately flushes local queued events, informs the ingestion servers of your opt-out preference, and terminates all telemetry transmissions.
+## 3. Google Play Data Safety Guidance
+
+When filling out the Google Play Console Data Safety form for Waraqatak:
+
+| Category | Data Type | Purpose | Collected? | Shared? | Ephemeral / Opt-Out? |
+|---|---|---|---|---|---|
+| **App info and performance** | **Crash logs** | App functionality, Analytics | Yes (Anonymous, sanitized) | No | Optional / Default-on with in-app toggle |
+| **App info and performance** | **Diagnostics** | App functionality, Performance | Yes (Anonymous, sanitized) | No | Optional / Default-on with in-app toggle |
+| **App activity** | **App interactions** | Analytics | Yes (Anonymous coarse events) | No | Optional / Default-on with in-app toggle |
+| **Personal info** | Name, Email, Phone | N/A | **NO** | No | Never collected |
+| **Financial info** | Purchase history, Amounts | N/A | **NO** | No | Never collected |

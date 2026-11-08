@@ -93,18 +93,27 @@ flutter build appbundle --release
 
 ---
 
-## 6. Privacy & Opt-Out Guarantees
+## 6. Privacy, Error Reporting & Opt-Out Guarantees
 
-- **Default-On with In-App Opt-Out:** In accordance with standard productivity applications, anonymous operational telemetry is enabled by default. Users can disable tracking anytime in **Settings > Support & Info > Anonymous usage statistics**.
-- **Role-Based Control:** The settings toggle is protected by `PermissionGate(permission: PermissionRegistry.settingsManage)` to prevent unauthorized employees from disabling operational metrics.
-- **Immediate Purge:** Toggling opt-out immediately clears the local memory queue, updates the disk buffer, and invokes the backend opt-out API (`POST /api/v1/analytics/opt-out`).
+- **Separate Dual Channels:** The app provides two independent channels, both **default ON**:
+  1. **Anonymous Usage Statistics:** Coarse operational metrics (`app_opened`, `screen_viewed`, `document_created`, etc.). Gated by `PermissionGate(permission: PermissionRegistry.settingsManage)`.
+  2. **Error & Crash Reports:** Deeply sanitized unhandled exceptions and crash diagnostics (`error_report`). Strips phone numbers, emails, amounts, file paths, license keys, and secrets. Capped at 20 reports per session and automatically deduplicated.
+- **One-Time First-Run Notice:** On the first launch after multi-user unlock, a non-blocking dialog informs the user that anonymous statistics and error reports help improve the app and can be adjusted anytime in Settings. It includes a direct button to open the Settings support section.
+- **Independent In-App Toggles:** Users can toggle either channel on or off independently under **Settings > Support & Info**. Turning off usage statistics halts usage events immediately and clears pending items. Turning off error reports halts error reporting immediately.
+- **Multi-User Lock Screen Suppression:** Both channels strictly drop all event recording and notice display while the multi-user PIN lock screen is active.
+- **Role-Based Control:** Settings toggles are protected by `PermissionGate(permission: PermissionRegistry.settingsManage)` to prevent unauthorized employees from altering telemetry settings.
 
 ---
 
 ## 7. Release Checklist
 
-Before releasing a build with analytics enabled:
-- [ ] Project created in `api.almhdy24.com` dashboard and ingestion key verified in `AnalyticsConfig`.
-- [ ] Privacy policy paragraph updated on `https://almhdy24.com/privacy` (using [PRIVACY_TEXT.md](file:///data/data/com.termux/files/home/projects/waraqatak/docs/analytics/PRIVACY_TEXT.md)).
-- [ ] Release build compiled and tested with default-on telemetry and settings opt-out.
-- [ ] Test release APK on test device to verify zero network errors and smooth offline buffering.
+Before releasing a build to production or publishing on Google Play:
+- [ ] Ingestion key configured in `AnalyticsConfig` (`lib/core/analytics/analytics_config.dart`).
+- [ ] Public privacy policy updated on `https://almhdy24.com/privacy` using the updated text in [PRIVACY_TEXT.md](file:///data/data/com.termux/files/home/projects/waraqatak/docs/analytics/PRIVACY_TEXT.md).
+- [ ] **Google Play Data Safety Form updated:** In the Google Play Console under App Content > Data safety:
+  - Declare **Crash logs** and **Diagnostics** under *App info and performance* (Analytics, App functionality; optional with in-app toggle).
+  - Declare **App interactions** under *App activity* (Analytics; optional with in-app toggle).
+  - Confirm **No Personal info** and **No Financial info** collected.
+- [ ] One-time first-run notice tested on a clean install (renders correctly in Arabic RTL and English).
+- [ ] Settings toggles tested: both default ON, can be toggled independently, and legacy opt-out is migrated.
+- [ ] Test release APK to verify zero network crashes and smooth offline buffering.
