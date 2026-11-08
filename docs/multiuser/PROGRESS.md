@@ -5,9 +5,9 @@ Branch: feat/multi-user
 ## Batches
 | # | Title | Status (TODO/IN_PROGRESS/DONE/BLOCKED) | Commit | Tests run | Notes |
 |---|-------|---|---|---|---|
-| 1 | Schema v29, migration, fresh-install parity | DONE | pending | guard tests (12 passed), analyze (0 issues) | Schema v29, access_dao.dart, migration_29_test.dart |
-| 2 | Authentication, sessions, recovery | IN_PROGRESS | - | - | Starting Batch 2 |
-| 3 | Permission registry, engine, AccessGuard, seeding | TODO | - | - | - |
+| 1 | Schema v29, migration, fresh-install parity | DONE | 8ed9ba1 | guard tests (12 passed), analyze (0 issues) | Schema v29, access_dao.dart, migration_29_test.dart |
+| 2 | Authentication, sessions, recovery | DONE | pending | auth_service_test (8 passed), analyze (0 issues) | AuthService, SessionManager, RecoveryService, UserSessionScope |
+| 3 | Permission registry, engine, AccessGuard, seeding | IN_PROGRESS | - | - | Starting Batch 3 |
 | 4 | Protected, attributed audit log | TODO | - | - | - |
 | 5 | Write-path enforcement and attribution | TODO | - | - | - |
 | 6 | Read, report and export enforcement, redaction | TODO | - | - | - |
