@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:almhdy_analytics/almhdy_analytics.dart' hide SessionManager;
+import '../../core/analytics/analytics_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../access/session_manager.dart';
 
@@ -273,6 +274,7 @@ class AnalyticsService {
     _isEnabled = true;
     _isInitialized = false;
     _testProjectKey = null;
+    AnalyticsConfig.reset();
     _sink = AlmHdyAnalyticsSink();
   }
 
@@ -291,22 +293,11 @@ class AnalyticsService {
         return;
       }
 
-      // 2. Read project key from dart-define (or testing override)
-      final key =
-          _testProjectKey ??
-          const String.fromEnvironment('ALMHDY_ANALYTICS_KEY');
+      // 2. Read project key from AnalyticsConfig (or testing override)
+      final key = _testProjectKey ?? AnalyticsConfig.projectKey;
 
       // If empty, analytics is disabled (no network, no tracking)
       if (key.isEmpty) {
-        _isInitialized = false;
-        return;
-      }
-
-      // In debug mode, require explicit define/key
-      if (kDebugMode &&
-          !forceEnable &&
-          _testProjectKey == null &&
-          key.isEmpty) {
         _isInitialized = false;
         return;
       }

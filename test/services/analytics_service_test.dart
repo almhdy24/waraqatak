@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:warqatek/core/analytics/analytics_config.dart';
 import 'package:warqatek/services/analytics/analytics_service.dart';
 
 class FakeAnalyticsSink implements AnalyticsSink {
@@ -67,6 +68,30 @@ void main() {
   });
 
   group('AnalyticsService initialization & plumbing', () {
+    test('AnalyticsConfig returns empty key in unit tests by default', () {
+      AnalyticsConfig.reset();
+      expect(AnalyticsConfig.projectKey, isEmpty);
+    });
+
+    test(
+      'AnalyticsConfig supports key injection and empty-key override',
+      () async {
+        AnalyticsConfig.injectKey('ak_live_custom_injection');
+        expect(AnalyticsConfig.projectKey, equals('ak_live_custom_injection'));
+
+        AnalyticsConfig.injectKey('');
+        expect(AnalyticsConfig.projectKey, isEmpty);
+
+        // Initializing with injected empty key keeps analytics disabled
+        await AnalyticsService.instance.initialize();
+        expect(AnalyticsService.instance.isInitialized, isFalse);
+        expect(fakeSink.isInitialized, isFalse);
+
+        AnalyticsConfig.reset();
+        expect(AnalyticsConfig.projectKey, isEmpty);
+      },
+    );
+
     test('init disabled when project key is empty', () async {
       AnalyticsService.instance.setProjectKeyForTesting('');
       await AnalyticsService.instance.initialize();
