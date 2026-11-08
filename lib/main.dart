@@ -23,17 +23,33 @@ Future<void> main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
 
+      final previousFlutterOnError = FlutterError.onError;
       FlutterError.onError = (FlutterErrorDetails details) {
+        previousFlutterOnError?.call(details);
         FlutterError.presentError(details);
         developer.log(
           'FlutterError',
           error: details.exception,
           stackTrace: details.stack,
         );
+        AnalyticsService.instance.recordError(
+          details.exception,
+          details.stack,
+          'flutter_error',
+        );
       };
 
+      final previousPlatformOnError = PlatformDispatcher.instance.onError;
       PlatformDispatcher.instance.onError = (error, stack) {
         developer.log('PlatformDispatcher', error: error, stackTrace: stack);
+        AnalyticsService.instance.recordError(
+          error,
+          stack,
+          'platform_dispatcher',
+        );
+        if (previousPlatformOnError != null) {
+          return previousPlatformOnError(error, stack);
+        }
         return true;
       };
 
@@ -71,6 +87,11 @@ Future<void> main() async {
         error,
         stack,
         operation: 'unhandled_exception',
+      );
+      AnalyticsService.instance.recordError(
+        error,
+        stack,
+        'zoned_guarded',
       );
     },
   );
