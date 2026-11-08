@@ -8,6 +8,7 @@ class FakeAnalyticsSink implements AnalyticsSink {
   String? projectKey;
   String? appVersion;
   String? storagePath;
+  int? maxQueueSize;
   bool isOptedOut = false;
   bool shouldThrowOnInit = false;
 
@@ -18,6 +19,7 @@ class FakeAnalyticsSink implements AnalyticsSink {
     required String projectKey,
     String? appVersion,
     String? storagePath,
+    int? maxQueueSize,
     bool debug = false,
   }) async {
     if (shouldThrowOnInit) {
@@ -27,6 +29,7 @@ class FakeAnalyticsSink implements AnalyticsSink {
     this.projectKey = projectKey;
     this.appVersion = appVersion;
     this.storagePath = storagePath;
+    this.maxQueueSize = maxQueueSize;
   }
 
   @override
@@ -91,6 +94,16 @@ void main() {
         expect(AnalyticsConfig.projectKey, isEmpty);
       },
     );
+
+    test('initializes sink with default maxQueueSize of 500', () async {
+      AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');
+      await AnalyticsService.instance.initialize();
+
+      expect(AnalyticsService.instance.isInitialized, isTrue);
+      expect(fakeSink.isInitialized, isTrue);
+      expect(fakeSink.maxQueueSize, equals(500));
+      expect(fakeSink.storagePath, isNull);
+    });
 
     test('init disabled when project key is empty', () async {
       AnalyticsService.instance.setProjectKeyForTesting('');

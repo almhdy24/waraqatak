@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:almhdy_analytics/almhdy_analytics.dart' hide SessionManager;
 import '../../core/analytics/analytics_config.dart';
@@ -40,6 +39,7 @@ abstract class AnalyticsSink {
     required String projectKey,
     String? appVersion,
     String? storagePath,
+    int? maxQueueSize,
     bool debug = false,
   });
 
@@ -59,12 +59,14 @@ class AlmHdyAnalyticsSink implements AnalyticsSink {
     required String projectKey,
     String? appVersion,
     String? storagePath,
+    int? maxQueueSize,
     bool debug = false,
   }) async {
     await AlmHdyAnalytics.instance.initialize(
       projectKey: projectKey,
       appVersion: appVersion,
       storagePath: storagePath,
+      maxQueueSize: maxQueueSize,
       debug: debug,
     );
   }
@@ -281,6 +283,7 @@ class AnalyticsService {
   /// Initializes analytics in a safe, unawaited, non-blocking manner.
   Future<void> initialize({
     String? storagePath,
+    int? maxQueueSize,
     bool forceEnable = false,
   }) async {
     try {
@@ -302,28 +305,18 @@ class AnalyticsService {
         return;
       }
 
-      // 3. Resolve persistent storage path if not provided
-      String? resolvedStoragePath = storagePath;
-      if (resolvedStoragePath == null) {
-        try {
-          final dir = await getApplicationSupportDirectory();
-          resolvedStoragePath = '${dir.path}/almhdy_analytics_buffer.json';
-        } catch (_) {
-          // Fallback to local default if path_provider fails
-        }
-      }
-
-      // 4. Initialize sink
+      // 3. Initialize sink (SDK auto-resolves mobile storagePath if null)
       await _sink.initialize(
         projectKey: key,
         appVersion: AppConstants.appVersion,
-        storagePath: resolvedStoragePath,
+        storagePath: storagePath,
+        maxQueueSize: maxQueueSize ?? AnalyticsConfig.defaultMaxQueueSize,
         debug: kDebugMode,
       );
 
       _isInitialized = true;
 
-      // 5. Check and dispatch pending migration event if any exists
+      // 4. Check and dispatch pending migration event if any exists
       await _dispatchPendingMigrationIfAny(prefs);
     } catch (_) {
       // Silent error boundary: failure must never impact app startup

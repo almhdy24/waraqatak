@@ -12,6 +12,9 @@ class AnalyticsConfig {
   static const String defaultProjectKey =
       'ak_live_ad67e998e5cbed8e9ec242fe0792f291';
 
+  /// Maximum number of offline events retained on disk (FIFO eviction).
+  static const int defaultMaxQueueSize = 500;
+
   static String? _injectedKey;
 
   /// Returns the active project key.
