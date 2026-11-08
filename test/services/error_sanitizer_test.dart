@@ -80,7 +80,7 @@ void main() {
     });
 
     test('truncates strings longer than 255 characters', () {
-      final longMsg = 'DatabaseException: ' + ('A' * 600);
+      final longMsg = 'DatabaseException: ${'A' * 600}';
       final sanitized = ErrorSanitizer.sanitizeMessage(longMsg);
       expect(sanitized.length, lessThanOrEqualTo(255));
     });
