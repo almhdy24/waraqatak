@@ -56,7 +56,7 @@ Branch: fix/multiuser-stabilization
 
 ## ENTRY-POINT MATRIX STATUS
 Total entry points cataloged: 40 surfaces & methods (see `docs/multiuser/FIX_AUDIT.md` Section 3).
-Current status: Hardened across Batches 2–8.
+Current status: 100% Gated & Hardened across Batches 2–10.
 
 ## DECISIONS
 - **F1:** All access-table writes go through `AccessAdminService` (guarded, policy-checked, transactional, audited, cache-invalidating).
@@ -81,4 +81,4 @@ Current status: Hardened across Batches 2–8.
 (None)
 
 ## RESUME NOTE
-Batch 9 complete (Red-Team & E2E Flow Tests: all 9 threat model attacks covered and verified in `test/access/privilege_escalation_test.dart`; end-to-end multi-user lifecycle, POS operation, lock barrier, re-auth, disaster recovery, and audit chain integrity verified in `test/access/flows_test.dart`). Resume with Batch 10 (Final Verification & Device QA).
+Batch 10 complete (Final Verification & Device QA: all 10 batches complete; 50 screens gated; 40 entry points hardened; 0 analyze issues; all guard and invariant tests passing; comprehensive on-device manual QA runbook created in `docs/multiuser/DEVICE_QA.md`). All multi-user stabilization work is finished.
