@@ -8,7 +8,7 @@ Branch: fix/multiuser-stabilization
 | 1 | Audit & entry-point matrix | DONE | cde497f | flutter analyze, test/guards/access_guards_test.dart | Deep inspection completed; FIX_AUDIT.md and FIX_PROGRESS.md generated; all D/N/E defects confirmed with file/line evidence. |
 | 2 | Session layer hardening | DONE | 614c1c1 | test/services/session_hardening_test.dart (20 passed), test/guards/access_guards_test.dart, architecture_guards_test.dart | Fail-closed init, DB-first enable, locked can() check, attribution fix, UserSessionScope assert, AppUser sentinel copyWith, auto-lock periodic check. |
 | 3 | AccessPolicy, Owner protection & OWNER_ONLY keys | DONE | 743611b | test/services/access_policy_test.dart (15 passed), session_hardening_test.dart, access_guards_test.dart, architecture_guards_test.dart | access_policy.dart (H1-H4), OWNER_ONLY stripping in PermissionService, Schema v30 SQLite security triggers (H6), escalation audit (H7), AuthService guards (E3). |
-| 4 | AccessAdminService | TODO | | | Move all writes out of screens into transactional AccessAdminService. Disable instead of delete. |
+| 4 | AccessAdminService | DONE | d176183 | test/services/access_admin_service_test.dart (5 passed), regression 50 passed | Move all writes out of screens into transactional AccessAdminService. Disable instead of delete. D2-D5, E1-E2 fixed. |
 | 5 | Screen, route & Settings lockdown | TODO | | | ScreenAccessPolicy manifest, PermissionGate push & build checks, service guards on settings/repair/backup. |
 | 6 | Login, PIN, wizard, recovery & lockout-DoS | TODO | | | Explicit PIN confirm, device throttle, atomic recovery with pre-unlock code display, optional Owner PIN. |
 | 7 | Sensitive-action re-authentication | TODO | | | SensitiveActionGate with current user password prompt, applied to restore, period lock, repair, disable multi-user. |
@@ -20,10 +20,10 @@ Branch: fix/multiuser-stabilization
 | Defect | Status | Fixing Commit | Test Name | Notes |
 |---|---|---|---|---|
 | D1 | Confirmed | Batch 6 | Pending | `PinLockScreen` tautology `_enteredPin.length == ...` auto-submits at 4 digits |
-| D2 | Confirmed | Batch 4 | Pending | `user_form_screen` effect 1/0 vs `PermissionService` String 'allow'/'deny' |
-| D3 | Confirmed | Batch 4 | Pending | `invalidateCache` never called on user/role edit |
-| D4 | Confirmed | Batch 4 | Pending | Non-transactional role/user writes, orphaned role delete, raw SQLite error strings |
-| D5 | Confirmed | Batch 4 | Pending | Zero audit events from admin screens |
+| D2 | Fixed | Batch 4 | access_admin_service_test | Standardized override effect to TEXT 'allow'/'deny', tolerant reader in PermissionService |
+| D3 | Fixed | Batch 4 | access_admin_service_test | `PermissionService.invalidateCache` called on every user/role mutation in AccessAdminService |
+| D4 | Fixed | Batch 4 | access_admin_service_test | Atomic transactions for role/user writes, friendly AdminException instead of raw SQLite errors, role delete blocked if assigned |
+| D5 | Fixed | Batch 4 | access_admin_service_test | Admin screens and service log audit events for all user/role creates, updates, and deletes |
 | D6 | Confirmed | Batch 6 | Pending | Password dialog masks errors as `invalidCredentials`, leaks controller |
 | D7 | Confirmed | Batch 8 | Pending | `AuditService.logEvent` concurrency chain fork, unpaged `verifyChain` |
 | D8 | Confirmed | Batch 8 | Pending | Fixed 100k PBKDF2 iterations, no stored recovery iterations |
@@ -37,8 +37,8 @@ Branch: fix/multiuser-stabilization
 | N7 | Confirmed | Batch 6 | Pending | Non-atomic recovery, session unlocked before code shown, no rate limit |
 | N8 | Fixed | Batch 2 | session_hardening_test | `UserSessionScope.of()` asserts in debug, installed in MaterialApp.builder |
 | N9 | Fixed | Batch 2 | session_hardening_test | `AppUser.copyWith` uses sentinel pattern to allow clearing nullable fields |
-| E1 | Confirmed | Batch 3, 4 | Pending | Owner edit path in `user_form_screen` skips all permission checks |
-| E2 | Confirmed | Batch 4, 5 | Pending | Tapping any user row in `users_list_screen` opens edit form without guard |
+| E1 | Fixed | Batch 4 | access_admin_service_test | Owner edit path in user_form_screen and service guarded; delegates cannot touch Owner |
+| E2 | Fixed | Batch 4 | access_admin_service_test | Tapping user row in users_list_screen gated by users.manage and Owner immunity check |
 | E3 | Fixed | Batch 3 | access_policy_test | `AuthService.setPassword` and `setPin` guard with AccessPolicy, audit privilege escalation |
 | E4 | Fixed | Batch 3 | access_policy_test | Strict privilege hierarchy in `AccessPolicy`: delegates cannot touch peers/superiors or unheld permissions |
 | E5 | Confirmed | Batch 5 | Pending | Auto-lock menu item ungated; any user can disable auto-lock |
@@ -81,4 +81,4 @@ Current status: Audited; hardening plan assigned to Batches 2–7.
 (None)
 
 ## RESUME NOTE
-Batch 3 complete (AccessPolicy, Owner protection & OWNER_ONLY keys: pure AccessPolicy class, OWNER_ONLY stripping in PermissionService, tolerant override effect parsing, Schema v30 SQLite security triggers on users/roles/permissions, escalation audit logging, AuthService credential guards). Resume with Batch 4 (AccessAdminService: move all user/role writes out of screens into transactional AccessAdminService, soft disable instead of delete, D2-D5 fixes, refactor user_form_screen, users_list_screen, roles_screen).
+Batch 4 complete (AccessAdminService: created transactional, audited, cache-invalidating service for all user/role mutations; soft deactivation; D2-D5 and E1-E2 fixed; user_form_screen, users_list_screen, roles_screen refactored to eliminate raw SQL). Resume with Batch 5 (Screen, route & Settings lockdown: ScreenAccessPolicy manifest, PermissionGate push & build checks, service guards on settings/repair/backup).

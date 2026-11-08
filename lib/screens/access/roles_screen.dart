@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../database/access_dao.dart';
-import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/role.dart';
+import '../../services/access/access_admin_service.dart';
 import '../../services/access/access_guard.dart';
 import '../../services/access/permission_registry.dart';
+import '../../services/access/session_manager.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
@@ -30,19 +31,11 @@ class _RolesScreenState extends State<RolesScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final db = await DatabaseHelper.instance.database;
-      final rows = await db.query(
-        'roles',
-        orderBy: 'is_system DESC, name ASC',
-      );
-      final roles = rows.map((r) => Role.fromMap(r)).toList();
-
-      final permRows = await db.query('role_permissions');
+      final roles = await AccessAdminService.instance.getRoles();
       final permsMap = <String, Set<String>>{};
-      for (final pr in permRows) {
-        final rId = pr['role_id'] as String;
-        final pKey = pr['permission_key'] as String;
-        permsMap.putIfAbsent(rId, () => {}).add(pKey);
+      for (final role in roles) {
+        permsMap[role.id] =
+            await AccessAdminService.instance.getRolePermissions(role.id);
       }
 
       if (!mounted) return;
@@ -63,6 +56,8 @@ class _RolesScreenState extends State<RolesScreen> {
     final isNew = role == null;
     final isOwnerRole = role?.id == AccessDao.ownerRoleId;
     final isSystem = role?.isSystem == true;
+    final isOwnerSession =
+        SessionManager.instance.currentUser?.isOwner == true;
 
     final nameCtrl = TextEditingController(text: role?.name ?? '');
     final descCtrl = TextEditingController(text: role?.description ?? '');
@@ -100,55 +95,36 @@ class _RolesScreenState extends State<RolesScreen> {
                             return;
                           }
                           try {
-                            final db = await DatabaseHelper.instance.database;
-                            final now = DateTime.now().toIso8601String();
-                            final roleId = role?.id ??
-                                'role-custom-${DateTime.now().millisecondsSinceEpoch}';
-
                             if (isNew) {
-                              AccessGuard.require(PermissionRegistry.rolesManage);
-                              await db.insert('roles', {
-                                'id': roleId,
-                                'workspace_id': AccessDao.defaultWorkspaceId,
-                                'name': nameCtrl.text.trim(),
-                                'description': descCtrl.text.trim(),
-                                'is_system': 0,
-                                'is_template': 0,
-                                'created_at': now,
-                                'updated_at': now,
-                              });
+                              await AccessAdminService.instance.createRole(
+                                name: nameCtrl.text.trim(),
+                                description: descCtrl.text.trim(),
+                                permissions: selectedPerms,
+                              );
                             } else {
-                              AccessGuard.require(PermissionRegistry.rolesManage);
-                              await db.update(
-                                'roles',
-                                {
-                                  'name': nameCtrl.text.trim(),
-                                  'description': descCtrl.text.trim(),
-                                  'updated_at': now,
-                                },
-                                where: 'id = ?',
-                                whereArgs: [roleId],
+                              await AccessAdminService.instance.updateRole(
+                                roleId: role.id,
+                                name: nameCtrl.text.trim(),
+                                description: descCtrl.text.trim(),
+                                permissions: selectedPerms,
                               );
                             }
 
-                            // Update role_permissions
-                            await db.delete(
-                              'role_permissions',
-                              where: 'role_id = ?',
-                              whereArgs: [roleId],
-                            );
-                            for (final pKey in selectedPerms) {
-                              await db.insert('role_permissions', {
-                                'role_id': roleId,
-                                'permission_key': pKey,
-                              });
-                            }
-
                             if (ctx.mounted) Navigator.pop(ctx, true);
-                          } catch (e) {
+                          } on AdminException catch (e) {
                             if (ctx.mounted) {
-                              AppSnackBar.show(ctx, e.toString(),
+                              AppSnackBar.show(ctx, e.message(l10n.isArabic),
                                   severity: AppSnackBarSeverity.error);
+                            }
+                          } catch (_) {
+                            if (ctx.mounted) {
+                              AppSnackBar.show(
+                                ctx,
+                                l10n.isArabic
+                                    ? 'فشل حفظ الدور'
+                                    : 'Failed to save role',
+                                severity: AppSnackBarSeverity.error,
+                              );
                             }
                           }
                         },
@@ -188,12 +164,25 @@ class _RolesScreenState extends State<RolesScreen> {
                     Text(
                       l10n.rolesAndPermissions,
                       style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
+                    ...byGroup.entries.map((g) {
+                      // Filter out OWNER_ONLY keys for non-owners
+                      final perms = g.value.where((p) {
+                        if (!isOwnerSession && p.isOwnerOnly) return false;
+                        return true;
+                      }).toList();
 
-                    for (final groupEntry in byGroup.entries)
-                      Card(
+                      if (perms.isEmpty) return const SizedBox.shrink();
+
+                      final groupGranted = perms
+                          .where((p) => selectedPerms.contains(p.key))
+                          .length;
+
+                      return Card(
                         elevation: 0,
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         shape: RoundedRectangleBorder(
@@ -203,36 +192,49 @@ class _RolesScreenState extends State<RolesScreen> {
                         ),
                         child: ExpansionTile(
                           title: Text(
-                            groupEntry.key.label(l10n.isArabic),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                            g.key.label(l10n.isArabic),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          children: groupEntry.value.map((item) {
-                            final checked = isOwnerRole || selectedPerms.contains(item.key);
+                          subtitle: Text(
+                            '$groupGranted / ${perms.length}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          children: perms.map((perm) {
+                            final isGranted =
+                                selectedPerms.contains(perm.key);
+
                             return CheckboxListTile(
                               title: Text(
-                                item.name(l10n.isArabic),
+                                perm.name(l10n.isArabic),
                                 style: const TextStyle(fontSize: 14),
                               ),
-                              subtitle: Text(item.key,
-                                  style: TextStyle(
-                                      fontSize: 11, color: cs.outline)),
-                              value: checked,
-                              enabled: !isSystem && !isOwnerRole,
-                              onChanged: (isSystem || isOwnerRole)
+                              subtitle: Text(
+                                perm.key,
+                                style: TextStyle(
+                                    fontSize: 11, color: cs.outline),
+                              ),
+                              value: isGranted,
+                              enabled: !isSystem,
+                              onChanged: isSystem
                                   ? null
-                                  : (v) {
+                                  : (checked) {
                                       setSheetState(() {
-                                        if (v == true) {
-                                          selectedPerms.add(item.key);
+                                        if (checked == true) {
+                                          selectedPerms.add(perm.key);
                                         } else {
-                                          selectedPerms.remove(item.key);
+                                          selectedPerms.remove(perm.key);
                                         }
                                       });
                                     },
                             );
                           }).toList(),
                         ),
-                      ),
+                      );
+                    }),
                   ],
                 ),
               );
@@ -258,10 +260,23 @@ class _RolesScreenState extends State<RolesScreen> {
     );
 
     if (confirmed && mounted) {
-      final db = await DatabaseHelper.instance.database;
-      await db.delete('roles', where: 'id = ?', whereArgs: [role.id]);
-      await db.delete('role_permissions', where: 'role_id = ?', whereArgs: [role.id]);
-      _load();
+      try {
+        await AccessAdminService.instance.deleteRole(roleId: role.id);
+        _load();
+      } on AdminException catch (e) {
+        if (mounted) {
+          AppSnackBar.show(context, e.message(l10n.isArabic),
+              severity: AppSnackBarSeverity.error);
+        }
+      } catch (_) {
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            l10n.isArabic ? 'فشل حذف الدور' : 'Failed to delete role',
+            severity: AppSnackBarSeverity.error,
+          );
+        }
+      }
     }
   }
 

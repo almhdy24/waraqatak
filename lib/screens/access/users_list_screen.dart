@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
+import '../../services/access/access_admin_service.dart';
 import '../../services/access/access_guard.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
@@ -35,19 +35,12 @@ class _UsersListScreenState extends State<UsersListScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final db = await DatabaseHelper.instance.database;
-
-      final roleRows = await db.query('roles');
+      final rolesList = await AccessAdminService.instance.getRoles();
       final roles = {
-        for (final r in roleRows)
-          r['id'] as String: r['name'] as String,
+        for (final r in rolesList) r.id: r.name,
       };
 
-      final userRows = await db.query(
-        'users',
-        orderBy: 'is_owner DESC, is_active DESC, display_name ASC',
-      );
-      final users = userRows.map((r) => AppUser.fromMap(r)).toList();
+      final users = await AccessAdminService.instance.getUsers();
 
       if (!mounted) return;
       setState(() {
@@ -333,6 +326,35 @@ class _UsersListScreenState extends State<UsersListScreen> {
                                 ),
                                 trailing: const Icon(Icons.chevron_right),
                                 onTap: () async {
+                                  final currentUser = SessionManager.instance.currentUser;
+                                  final isOwnerSession = currentUser?.isOwner == true;
+
+                                  // E1/E2 protection: non-owners cannot inspect or edit Owner account
+                                  if (user.isOwner && !isOwnerSession) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.isArabic
+                                          ? 'حساب المالك محمي ولا يمكن تعديله إلا بواسطة المالك'
+                                          : 'The Owner account is protected and can only be modified by the Owner',
+                                      severity: AppSnackBarSeverity.error,
+                                    );
+                                    return;
+                                  }
+
+                                  // Non-owners need users.manage unless viewing their own profile
+                                  final canManage = AccessGuard.can(PermissionRegistry.usersManage);
+                                  final isSelf = currentUser?.id == user.id;
+                                  if (!isOwnerSession && !isSelf && !canManage) {
+                                    AppSnackBar.show(
+                                      context,
+                                      l10n.isArabic
+                                          ? 'لا تملك صلاحية إدارة المستخدمين'
+                                          : 'Missing users.manage permission',
+                                      severity: AppSnackBarSeverity.error,
+                                    );
+                                    return;
+                                  }
+
                                   final changed = await Navigator.push<bool>(
                                     context,
                                     MaterialPageRoute(
