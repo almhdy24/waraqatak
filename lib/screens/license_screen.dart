@@ -14,14 +14,12 @@ import '../widgets/responsive.dart';
 
 /// License & Subscription screen (Settings → License).
 ///
-/// Designed for non-technical users to understand:
-/// 1. What the license key is.
-/// 2. Current trial or subscription status.
-/// 3. Clear steps to obtain a key via WhatsApp (the official channel).
-/// 4. Prominent WhatsApp contact action.
-/// 5. Authoritative Free vs Pro breakdown derived from [FeatureAccess].
-/// 6. Activation input section with inline guidance.
-/// 7. Preserved device diagnostics, transfer notes, expiry notes, and removal action.
+/// Designed for non-technical users to instantly know their status and what to do:
+/// - Key action is presented first; details are collapsed by default.
+/// - Licensed state: status card + collapsed details + remove key. No key input shown.
+/// - Active trial: trial banner + key input card + help & support + collapsed free-vs-pro + collapsed details.
+/// - Expired/Revoked: state banner + key input card FIRST + help & support + collapsed details.
+/// - Pull-to-refresh supported; network failures handled with Retry states.
 class LicenseScreen extends StatefulWidget {
   const LicenseScreen({super.key});
 
@@ -34,6 +32,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
   String? _deviceModel;
   bool _busy = false;
   bool _storageFault = false;
+  bool _reloadError = false;
 
   @override
   void initState() {
@@ -42,14 +41,25 @@ class _LicenseScreenState extends State<LicenseScreen> {
   }
 
   Future<void> _reload() async {
-    final s = await LicenseService.instance.checkEntitlement(force: true);
-    final model = await LicenseService.instance.getDeviceModel();
-    if (!mounted) return;
     setState(() {
-      _state = s;
-      _deviceModel = model;
-      _storageFault = LicenseService.instance.hasStorageFault;
+      _reloadError = false;
     });
+    try {
+      final s = await LicenseService.instance.checkEntitlement(force: true);
+      final model = await LicenseService.instance.getDeviceModel();
+      if (!mounted) return;
+      setState(() {
+        _state = s;
+        _deviceModel = model;
+        _storageFault = LicenseService.instance.hasStorageFault;
+        _reloadError = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _reloadError = true;
+      });
+    }
   }
 
   bool get _hasStoredKey {
@@ -64,8 +74,9 @@ class _LicenseScreenState extends State<LicenseScreen> {
     final s = _state;
     if (s == null) return '';
     return switch (s.status) {
-      EntitlementStatus.trialActive =>
-        '${l10n.trialActiveStatus} — ${s.trialDaysRemaining} ${l10n.daysLeftInTrial}',
+      EntitlementStatus.trialActive => l10n.trialActiveStatusWithDays(
+        s.trialDaysRemaining,
+      ),
       EntitlementStatus.trialExpired => l10n.trialExpiredStatus,
       EntitlementStatus.licensed => l10n.activatedStatus,
       EntitlementStatus.licenseExpired => l10n.licenseExpiredStatus,
@@ -115,15 +126,49 @@ class _LicenseScreenState extends State<LicenseScreen> {
     Feature.inventoryAudit => l10n.featureInventoryAudit,
   };
 
+  Future<void> _launchEmail(BuildContext context, AppLocalizations l10n) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: AppConstants.supportEmail,
+      queryParameters: {'subject': l10n.supportEmailSubject},
+    );
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
+        if (context.mounted) _showEmailFallback(context, l10n);
+      }
+    } catch (_) {
+      if (context.mounted) _showEmailFallback(context, l10n);
+    }
+  }
+
+  void _showEmailFallback(BuildContext context, AppLocalizations l10n) {
+    AppSnackBar.show(
+      context,
+      l10n.emailLaunchFailedWithAddress(AppConstants.supportEmail),
+      actionLabel: l10n.copyEmailAddress,
+      onAction: () {
+        Clipboard.setData(const ClipboardData(text: AppConstants.supportEmail));
+        AppSnackBar.show(context, l10n.emailAddressCopied);
+      },
+      severity: AppSnackBarSeverity.warning,
+    );
+  }
+
   Future<void> _launchWhatsApp(
     BuildContext context,
     AppLocalizations l10n,
   ) async {
     final uri = Uri.parse(AppConstants.whatsappUrl);
     try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched) {
         if (context.mounted) {
           AppSnackBar.show(
             context,
@@ -169,28 +214,43 @@ class _LicenseScreenState extends State<LicenseScreen> {
 
     setState(() => _busy = true);
     var released = true;
-    final key = await LicenseService.instance.licenseKey;
-    if (key != null && key.isNotEmpty) {
-      final deviceId = await LicenseService.instance.getOrCreateDeviceId();
-      released = await ActivationService.deactivate(
-        key,
-        deviceId,
-      ).timeout(const Duration(seconds: 15), onTimeout: () => false);
+    try {
+      final key = await LicenseService.instance.licenseKey;
+      if (key != null && key.isNotEmpty) {
+        final deviceId = await LicenseService.instance.getOrCreateDeviceId();
+        released = await ActivationService.deactivate(
+          key,
+          deviceId,
+        ).timeout(const Duration(seconds: 15), onTimeout: () => false);
+      }
+      await LicenseService.instance.clearLicense();
+      await _reload();
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        released ? l10n.keyRemovedSnack : l10n.keyRemovedServerNotReleased,
+      );
+    } catch (_) {
+      try {
+        await LicenseService.instance.clearLicense();
+        await _reload();
+      } catch (_) {}
+      if (mounted) {
+        AppSnackBar.show(context, l10n.keyRemovedServerNotReleased);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
-    await LicenseService.instance.clearLicense();
-    await _reload();
-    if (!mounted) return;
-    setState(() => _busy = false);
-    AppSnackBar.show(
-      context,
-      released ? l10n.keyRemovedSnack : l10n.keyRemovedServerNotReleased,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -198,182 +258,232 @@ class _LicenseScreenState extends State<LicenseScreen> {
         centerTitle: true,
       ),
       body: ResponsiveCenter(
-        child: _state == null
-            ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 20.0,
+        child: RefreshIndicator(
+          onRefresh: _reload,
+          child: _state == null
+              ? _buildLoadingOrError(l10n, cs, textTheme)
+              : ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 20.0,
+                  ),
+                  children: [
+                    if (_storageFault) ...[
+                      _buildStorageFaultBanner(l10n, cs, textTheme),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_reloadError) ...[
+                      _buildReloadErrorCard(l10n, cs, textTheme),
+                      const SizedBox(height: 16),
+                    ],
+                    ..._buildStateSpecificLayout(context, l10n, cs, textTheme),
+                  ],
                 ),
-                children: [
-                  // 1. What is a license key (2 short lines)
-                  _buildSectionWhatIsKey(l10n, cs),
-                  const SizedBox(height: 18),
-
-                  // 2. Trial status line
-                  _buildTrialStatusLine(l10n, cs),
-                  const SizedBox(height: 24),
-
-                  // 3. How to get it (numbered steps + official notice)
-                  _buildSectionHowToGet(l10n, cs),
-                  const SizedBox(height: 20),
-
-                  // 4. Primary WhatsApp button
-                  _buildWhatsAppButton(context, l10n),
-                  const SizedBox(height: 28),
-
-                  // 5. Free vs Pro explanation
-                  _buildSectionFreeVsPro(l10n, cs),
-                  const SizedBox(height: 28),
-
-                  // 6. "Already have a key?" activation section
-                  ActivationKeyInputWidget(onActivated: _reload),
-                  const SizedBox(height: 28),
-
-                  const Divider(height: 32),
-
-                  // 7. Preserved content moved to bottom
-                  _buildPreservedBottomContent(context, l10n, cs),
-                ],
-              ),
+        ),
       ),
     );
   }
 
-  Widget _buildSectionWhatIsKey(AppLocalizations l10n, ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+  Widget _buildStorageFaultBanner(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    return Card(
+      elevation: 0,
+      color: cs.errorContainer,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
           children: [
-            Icon(Icons.vpn_key_outlined, size: 22, color: cs.primary),
+            Icon(Icons.warning_amber_rounded, color: cs.onErrorContainer),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                l10n.whatIsLicenseKeyTitle,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
+                l10n.licenseStorageFault,
+                style: textTheme.bodySmall?.copyWith(
+                  color: cs.onErrorContainer,
+                  height: 1.4,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          l10n.whatIsLicenseKeyBody,
-          style: TextStyle(
-            fontSize: 14,
-            color: cs.onSurfaceVariant,
-            height: 1.5,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildTrialStatusLine(AppLocalizations l10n, ColorScheme cs) {
-    final s = _state;
-    if (s == null) return const SizedBox.shrink();
-
-    // If activated with key: show existing status UI (license type + expiry)
-    if (s.status == EntitlementStatus.licensed) {
-      return Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: cs.outlineVariant),
-        ),
+  Widget _buildLoadingOrError(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    if (_reloadError) {
+      return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.all(24),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _row(l10n.licenseStatusLabel, _statusLabel(l10n)),
-              const Divider(height: 1),
-              _row(l10n.licenseTypeLabel, _typeLabel(l10n)),
-              const Divider(height: 1),
-              _row(l10n.licenseExpiryLabel, _expiryLabel(l10n)),
+              Icon(Icons.cloud_off_rounded, size: 48, color: cs.error),
+              const SizedBox(height: 12),
+              Text(
+                l10n.licenseLoadError,
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _reload,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(l10n.retry),
+              ),
             ],
           ),
         ),
       );
     }
+    return const Center(child: CircularProgressIndicator());
+  }
 
-    if (s.status == EntitlementStatus.trialActive) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: cs.primaryContainer.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.access_time_rounded, size: 18, color: cs.primary),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                l10n.trialActiveStatusWithDays(s.trialDaysRemaining),
-                style: TextStyle(
-                  fontSize: 13,
-                  color: cs.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (s.status == EntitlementStatus.trialExpired) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: cs.errorContainer.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: cs.error.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.timer_off_outlined, size: 18, color: cs.error),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                l10n.trialExpiredStatusMessage,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: cs.onErrorContainer,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // licenseExpired or licenseRevoked
+  Widget _buildReloadErrorCard(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
+        color: cs.errorContainer.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cs.outlineVariant),
+        border: Border.all(color: cs.error.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
+          Icon(Icons.info_outline, size: 20, color: cs.error),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _statusLabel(l10n),
-              style: TextStyle(
-                fontSize: 13,
-                color: cs.onSurface,
+              l10n.licenseLoadError,
+              style: textTheme.bodySmall?.copyWith(
+                color: cs.onErrorContainer,
+                height: 1.35,
+              ),
+            ),
+          ),
+          TextButton(onPressed: _reload, child: Text(l10n.retry)),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildStateSpecificLayout(
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    final status = _state?.status;
+
+    // 1. LICENSED STATE: Status card first, collapsed Details, Remove key.
+    // Key input is NOT shown.
+    if (status == EntitlementStatus.licensed) {
+      return [
+        _buildLicensedStatusCard(context, l10n, cs),
+        const SizedBox(height: 16),
+        _buildCollapsedDetails(context, l10n, cs, textTheme),
+        if (_hasStoredKey) ...[
+          const SizedBox(height: 24),
+          _buildRemoveKeyButton(l10n, cs, textTheme),
+        ],
+      ];
+    }
+
+    // 2. TRIAL ACTIVE STATE: Banner with days left, key input card, Help & support,
+    // collapsed Free-vs-Pro, collapsed Details.
+    if (status == EntitlementStatus.trialActive) {
+      return [
+        _buildTrialBanner(l10n, cs, textTheme),
+        const SizedBox(height: 16),
+        _buildKeyInputCard(),
+        const SizedBox(height: 16),
+        _buildHelpAndSupportCard(context, l10n, cs, textTheme),
+        const SizedBox(height: 16),
+        _buildCollapsedFreeVsPro(l10n, cs, textTheme),
+        const SizedBox(height: 16),
+        _buildCollapsedDetails(context, l10n, cs, textTheme),
+      ];
+    }
+
+    // 3. TRIAL EXPIRED / LICENSE EXPIRED / LICENSE REVOKED:
+    // State banner, key input card FIRST, Help & support, collapsed Details.
+    return [
+      _buildExpiredOrRevokedBanner(l10n, cs, textTheme),
+      const SizedBox(height: 16),
+      _buildKeyInputCard(),
+      const SizedBox(height: 16),
+      _buildHelpAndSupportCard(context, l10n, cs, textTheme),
+      const SizedBox(height: 16),
+      _buildCollapsedDetails(context, l10n, cs, textTheme),
+      if (_hasStoredKey) ...[
+        const SizedBox(height: 24),
+        _buildRemoveKeyButton(l10n, cs, textTheme),
+      ],
+    ];
+  }
+
+  Widget _buildLicensedStatusCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme cs,
+  ) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          children: [
+            _row(context, l10n.licenseStatusLabel, _statusLabel(l10n)),
+            const Divider(height: 1),
+            _row(context, l10n.licenseTypeLabel, _typeLabel(l10n)),
+            const Divider(height: 1),
+            _row(context, l10n.licenseExpiryLabel, _expiryLabel(l10n)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrialBanner(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    final days = _state?.trialDaysRemaining ?? 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.access_time_rounded, size: 20, color: cs.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              l10n.trialActiveStatusWithDays(days),
+              style: textTheme.bodyMedium?.copyWith(
+                color: cs.onPrimaryContainer,
                 fontWeight: FontWeight.w600,
+                height: 1.4,
               ),
             ),
           ),
@@ -382,114 +492,167 @@ class _LicenseScreenState extends State<LicenseScreen> {
     );
   }
 
-  Widget _buildSectionHowToGet(AppLocalizations l10n, ColorScheme cs) {
-    final contactName = l10n.isArabic
-        ? 'المهدي عبدالله'
-        : AppConstants.developerName;
+  Widget _buildExpiredOrRevokedBanner(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    final status = _state?.status;
+    final message = status == EntitlementStatus.trialExpired
+        ? l10n.trialExpiredStatusMessage
+        : _statusLabel(l10n);
 
-    final steps = [
-      l10n.howToGetKeyStep1,
-      l10n.howToGetKeyStep2(contactName),
-      l10n.howToGetKeyStep3,
-      l10n.howToGetKeyStep4,
-      l10n.howToGetKeyStep5,
-    ];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: cs.errorContainer.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.error.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.timer_off_outlined, size: 20, color: cs.error),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: textTheme.bodyMedium?.copyWith(
+                color: cs.onErrorContainer,
+                fontWeight: FontWeight.w600,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.howToGetKeyTitle,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        for (var i = 0; i < steps.length; i++) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildKeyInputCard() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ActivationKeyInputWidget(showHeader: true, onActivated: _reload),
+      ),
+    );
+  }
+
+  Widget _buildHelpAndSupportCard(
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Container(
-                  width: 22,
-                  height: 22,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    '${i + 1}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: cs.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
+                Icon(Icons.support_agent_rounded, size: 22, color: cs.primary),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    steps[i],
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      color: cs.onSurface,
-                      height: 1.45,
+                    l10n.supportCardTitle,
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ],
             ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: cs.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.verified_user_outlined, size: 18, color: cs.primary),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  l10n.whatsappOfficialNotice,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: cs.onSurfaceVariant,
-                    height: 1.4,
+            const SizedBox(height: 6),
+            Text(
+              l10n.supportCardSubtitle,
+              style: textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _launchEmail(context, l10n),
+                    icon: const Icon(Icons.email_outlined, size: 18),
+                    label: Text(l10n.contactEmailAction),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildWhatsAppButton(BuildContext context, AppLocalizations l10n) {
-    return SizedBox(
-      height: 52,
-      child: FilledButton.icon(
-        onPressed: () => _launchWhatsApp(context, l10n),
-        icon: const Icon(Icons.chat_outlined),
-        label: Text(
-          l10n.contactWhatsAppForActivationButton,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-        ),
-        style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _launchWhatsApp(context, l10n),
+                    icon: const Icon(Icons.chat_outlined, size: 18),
+                    label: Text(l10n.whatsappSupportAction),
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionFreeVsPro(AppLocalizations l10n, ColorScheme cs) {
+  Widget _buildCollapsedFreeVsPro(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          leading: Icon(Icons.compare_arrows_rounded, color: cs.primary),
+          title: Text(
+            l10n.freeVsProComparisonTitle,
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text(
+            l10n.seeFreeVsPro,
+            style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [_buildSectionFreeVsPro(l10n, cs, textTheme)],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionFreeVsPro(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
     final free = Feature.values
         .where(FeatureAccess.freeFeatures.contains)
         .toList(growable: false);
@@ -502,21 +665,19 @@ class _LicenseScreenState extends State<LicenseScreen> {
       children: [
         Text(
           l10n.freeVsProIntroText,
-          style: TextStyle(
-            fontSize: 13.5,
+          style: textTheme.bodyMedium?.copyWith(
             color: cs.onSurfaceVariant,
-            height: 1.5,
+            height: 1.45,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
         // 1. Free list
         Text(
           l10n.freeTierHeader,
-          style: const TextStyle(
-            fontSize: 15,
+          style: textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.bold,
-            color: Colors.green,
+            color: cs.secondary,
           ),
         ),
         const SizedBox(height: 6),
@@ -525,29 +686,24 @@ class _LicenseScreenState extends State<LicenseScreen> {
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Row(
               children: [
-                const Icon(
-                  Icons.check_circle_outline,
-                  size: 16,
-                  color: Colors.green,
-                ),
+                Icon(Icons.check_circle_outline, size: 16, color: cs.secondary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _featureLabel(f, l10n),
-                    style: const TextStyle(fontSize: 13.5),
+                    style: textTheme.bodyMedium,
                   ),
                 ),
               ],
             ),
           ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
         // 2. Pro list
         Text(
           l10n.proTierHeader,
-          style: TextStyle(
-            fontSize: 15,
+          style: textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.bold,
             color: cs.primary,
           ),
@@ -563,7 +719,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
                 Expanded(
                   child: Text(
                     _featureLabel(f, l10n),
-                    style: const TextStyle(fontSize: 13.5),
+                    style: textTheme.bodyMedium,
                   ),
                 ),
               ],
@@ -573,166 +729,169 @@ class _LicenseScreenState extends State<LicenseScreen> {
     );
   }
 
-  Widget _buildPreservedBottomContent(
+  Widget _buildCollapsedDetails(
     BuildContext context,
     AppLocalizations l10n,
     ColorScheme cs,
+    TextTheme textTheme,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (_storageFault) ...[
-          Card(
-            elevation: 0,
-            color: cs.errorContainer,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: cs.onErrorContainer),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.licenseStorageFault,
-                      style: TextStyle(
-                        color: cs.onErrorContainer,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          leading: Icon(Icons.info_outline_rounded, color: cs.primary),
+          title: Text(
+            l10n.licenseDetailsTitle,
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 16),
-        ],
-
-        // Device identifiers
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: cs.outlineVariant),
+          subtitle: Text(
+            l10n.licenseDetailsSubtitle,
+            style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              children: [
-                if (_deviceModel != null && _deviceModel!.isNotEmpty) ...[
-                  _row(l10n.deviceModelLabel, _deviceModel!),
-                ],
-                if (_state?.deviceId != null &&
-                    _state!.deviceId.isNotEmpty) ...[
-                  if (_deviceModel != null && _deviceModel!.isNotEmpty)
-                    const Divider(height: 1),
-                  _rowWithCopy(
-                    context,
-                    l10n.deviceIdLabel,
-                    _state!.deviceId,
-                    l10n,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Transfer notice
-        Card(
-          elevation: 0,
-          color: cs.surfaceContainerLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: cs.outlineVariant),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.transferNoticeTitle,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.transferNoticeBody,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: cs.onSurfaceVariant,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Expiry notes
-        Text(
-          l10n.licenseOnExpiryTitle,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          l10n.licenseOnExpiryBody,
-          style: TextStyle(
-            fontSize: 14,
-            color: cs.onSurfaceVariant,
-            height: 1.5,
-          ),
-        ),
-
-        // Remove key button (if has stored key)
-        if (_hasStoredKey) ...[
-          const SizedBox(height: 20),
-          SizedBox(
-            height: 48,
-            child: OutlinedButton.icon(
-              onPressed: _busy ? null : _removeKey,
-              icon: Icon(Icons.delete_outline, color: cs.error),
-              label: Text(
-                l10n.removeKeyFromDevice,
-                style: TextStyle(color: cs.error),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: cs.error),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            if (_storageFault) ...[
+              Card(
+                elevation: 0,
+                color: cs.errorContainer,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: cs.onErrorContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.licenseStorageFault,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: cs.onErrorContainer,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(height: 12),
+            ],
+
+            // Device model & ID
+            if (_deviceModel != null && _deviceModel!.isNotEmpty) ...[
+              _row(context, l10n.deviceModelLabel, _deviceModel!),
+              const Divider(height: 1),
+            ],
+            if (_state?.deviceId != null && _state!.deviceId.isNotEmpty) ...[
+              _rowWithCopy(context, l10n.deviceIdLabel, _state!.deviceId, l10n),
+              const Divider(height: 1),
+            ],
+            const SizedBox(height: 10),
+
+            // Transfer notice
+            Text(
+              l10n.transferNoticeTitle,
+              style: textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-        ],
-      ],
+            const SizedBox(height: 4),
+            Text(
+              l10n.transferNoticeBody,
+              style: textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Expiry notes
+            Text(
+              l10n.licenseOnExpiryTitle,
+              style: textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.licenseOnExpiryBody,
+              style: textTheme.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _row(String label, String value) {
+  Widget _buildRemoveKeyButton(
+    AppLocalizations l10n,
+    ColorScheme cs,
+    TextTheme textTheme,
+  ) {
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton.icon(
+        onPressed: _busy ? null : _removeKey,
+        icon: _busy
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.error,
+                ),
+              )
+            : Icon(Icons.delete_outline, color: cs.error),
+        label: Text(
+          l10n.removeKeyFromDevice,
+          style: textTheme.labelLarge?.copyWith(
+            color: cs.error,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: cs.error),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, String label, String value) {
+    final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              style: textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.end,
-              style: const TextStyle(fontSize: 14),
+              style: textTheme.bodyMedium,
             ),
           ),
         ],
@@ -746,14 +905,17 @@ class _LicenseScreenState extends State<LicenseScreen> {
     String value,
     AppLocalizations l10n,
   ) {
+    final textTheme = Theme.of(context).textTheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              style: textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           Directionality(
@@ -762,7 +924,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
               value.length > 14
                   ? '${value.substring(0, 8)}…${value.substring(value.length - 4)}'
                   : value,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              style: textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
             ),
           ),
           const SizedBox(width: 4),

@@ -1052,6 +1052,14 @@ class AppLocalizations {
   );
   String get updateFailed =>
       _t('تعذر إكمال التحديث', 'Unable to complete update');
+  String get updateNonPlayInstall => _t(
+    'التحديثات التلقائية متوفرة فقط للتطبيقات المثبتة عبر متجر Google Play',
+    'In-app updates are only available for apps installed from Google Play',
+  );
+  String get updateNotAllowed => _t(
+    'يتوفر تحديث ولكن لا يمكن تثبيته حالياً من داخل التطبيق',
+    'An update is available but cannot be installed from within the app',
+  );
 
   // ========== ACTIVATION & ENTITLEMENT ==========
   // Pro features are unlocked only by an activation key obtained outside the
@@ -1174,47 +1182,13 @@ class AppLocalizations {
   // ── License screen (Settings → License) ───────────────────────────────────
   String get licenseScreenRedesignTitle =>
       _t('تفعيل ورقتك Pro', 'Activate Waraqatak Pro');
-  String get whatIsLicenseKeyTitle =>
-      _t('ما هو مفتاح التفعيل؟', 'What is an activation key?');
-  String get whatIsLicenseKeyBody => _t(
-    'مفتاح التفعيل رمز خاص بك تحصل عليه بعد الاشتراك، تدخله في التطبيق لتفتح مميزات ورقتك Pro على جهازك.',
-    'An activation key is your unique code obtained after subscribing, which you enter in the app to unlock Waraqatak Pro features on your device.',
-  );
   String trialActiveStatusWithDays(int days) => _t(
     'عندك تجربة مجانية لمدة 14 يوماً لكامل مميزات ورقتك Pro. متبقي $days يوم.',
     'You have a 14-day free trial for all Waraqatak Pro features. $days day(s) remaining.',
   );
   String get trialExpiredStatusMessage => _t(
-    'انتهت التجربة المجانية. للاستمرار في استخدام مميزات Pro، احصل على مفتاح التفعيل عبر واتساب.',
-    'The free trial has expired. To continue using Pro features, get an activation key via WhatsApp.',
-  );
-  String get howToGetKeyTitle =>
-      _t('كيف أحصل على المفتاح؟', 'How do I get the key?');
-  String get howToGetKeyStep1 => _t(
-    'اضغط على زر "تواصل عبر واتساب" بالأسفل.',
-    'Tap the "Contact via WhatsApp" button below.',
-  );
-  String howToGetKeyStep2(String name) =>
-      _t('ستفتح محادثة مع $name.', 'A chat with $name will open.');
-  String get howToGetKeyStep3 => _t(
-    'اكتب له واسأله عن الاشتراك والباقات المتاحة.',
-    'Write to him and ask about subscription and available packages.',
-  );
-  String get howToGetKeyStep4 => _t(
-    'بعد إتمام الاشتراك يرسل لك مفتاح التفعيل.',
-    'After completing subscription, he will send you the activation key.',
-  );
-  String get howToGetKeyStep5 => _t(
-    'ارجع للتطبيق وأدخل المفتاح في الخانة أدناه.',
-    'Return to the app and enter the key in the field below.',
-  );
-  String get whatsappOfficialNotice => _t(
-    'واتساب هو الطريقة الرسمية الوحيدة للاشتراك والحصول على المفتاح. لا تدفع لأي جهة أخرى.',
-    'WhatsApp is the only official method to subscribe and obtain the key. Do not pay any other entity.',
-  );
-  String get contactWhatsAppForActivationButton => _t(
-    'تواصل عبر واتساب للحصول على المفتاح',
-    'Contact via WhatsApp to get key',
+    'انتهت التجربة المجانية. يمكنك إدخال مفتاح التفعيل للاستمرار في استخدام مميزات Pro.',
+    'The free trial has expired. You can enter an activation key to continue using Pro features.',
   );
   String get whatsappNotInstalled => _t(
     'واتساب غير مثبت على جهازك',
@@ -1231,13 +1205,72 @@ class AppLocalizations {
     'الصق المفتاح هنا ثم اضغط "تفعيل".',
     'Paste the key here and tap "Activate".',
   );
+  String get activationKeyHelperText => _t(
+    'هذه الصفحة مخصصة لمن يملك مفتاح تفعيل مسبقاً. الصق المفتاح واضغط تفعيل، والتطبيق يعمل بشكل كامل بدون مفتاح.',
+    'This screen is for users who already have an activation key. Paste the key and tap Activate; the app functions fully without one.',
+  );
+  String get supportCardTitle => _t('الدعم والمساعدة', 'Help & Support');
+  String get supportCardSubtitle => _t(
+    'هل تحتاج لمساعدة في التطبيق أو التفعيل؟ فريق الدعم متاح لمساعدتك.',
+    'Need help with the app or activation? Our support team is here to assist you.',
+  );
+  String get contactEmailAction => _t('البريد الإلكتروني', 'Email');
+  String get whatsappSupportAction => _t('واتساب', 'WhatsApp');
+  String get supportEmailSubject =>
+      _t('طلب دعم فني — تطبيق ورقتك', 'Support Request — Waraqatak App');
+  String emailLaunchFailedWithAddress(String email) => _t(
+    'تعذر فتح تطبيق البريد. يمكنك مراسلتنا على: $email',
+    'Could not open email app. You can reach us at: $email',
+  );
+  String get copyEmailAddress => _t('نسخ البريد', 'Copy Email');
+  String get emailAddressCopied =>
+      _t('تم نسخ عنوان البريد الإلكتروني', 'Email address copied to clipboard');
+  String get licenseLoadError => _t(
+    'تعذر تحميل بيانات الترخيص. يرجى إعادة المحاولة.',
+    'Could not load license data. Please try again.',
+  );
+  String get licenseDetailsTitle =>
+      _t('تفاصيل الترخيص والجهاز', 'License & Device Details');
+  String get licenseDetailsSubtitle => _t(
+    'معرّف الجهاز، شروط النقل، وملاحظات الصلاحية',
+    'Device ID, transfer terms, and expiry notes',
+  );
+  String get freeVsProComparisonTitle =>
+      _t('مقارنة مميزات المجاني و Pro', 'Free vs Pro Features Comparison');
+  String get activationTipStorage => _t(
+    'تلميح: تأكد من توفر مساحة تخزين كافية وصلاحيات التخزين الآمن بالجهاز.',
+    'Tip: Ensure device storage and secure storage are accessible.',
+  );
+  String get activationUnexpectedError => _t(
+    'حدث خطأ غير متوقع أثناء التفعيل. يرجى المحاولة لاحقاً.',
+    'An unexpected error occurred during activation. Please try again later.',
+  );
+  String activateCooldown(int seconds) =>
+      _t('تفعيل ($seconds ث)', 'Activate (${seconds}s)');
+  String get verifyingKey => _t('جارٍ التحقق من المفتاح…', 'Verifying key…');
+  String get keyPastedFeedback => _t('تم لصق المفتاح', 'Key pasted');
+  String get clearKeyTooltip => _t('مسح', 'Clear');
+  String get validKeyFormat => _t('صيغة المفتاح صحيحة', 'Valid key format');
+  String get proUnlockedPurchases =>
+      _t('إدارة المشتريات وفواتير الموردين', 'Purchases & supplier invoices');
+  String get proUnlockedInventory =>
+      _t('المخزون وحركات الجرد المتعدد', 'Inventory & stocktake operations');
+  String get proUnlockedReports => _t(
+    'التقارير المالية المتقدمة والأرباح',
+    'Advanced financial reports & profit',
+  );
+  String get proUnlockedWholesale =>
+      _t('أسعار الجملة والوحدات المتعددة', 'Wholesale pricing & multi-units');
+  String get whatProUnlockedTitle =>
+      _t('المميزات المتاحة مع Pro:', 'Features available with Pro:');
+  String get helpAndSupport => _t('المساعدة والدعم', 'Help & Support');
   String get activationSuccessDone => _t(
     'تم التفعيل بنجاح، مميزات Pro صارت متاحة لك.',
     'Activated successfully! Pro features are now available to you.',
   );
   String get activationFailureGuidance => _t(
-    'تعذّر التفعيل. تأكد أن المفتاح منسوخ كاملاً بدون مسافات وأن الإنترنت شغال. إذا استمرت المشكلة، تواصل معنا عبر واتساب.',
-    'Activation failed. Ensure the key is copied in full without spaces and that internet is working. If the problem persists, contact us via WhatsApp.',
+    'تعذّر التفعيل. تأكد أن المفتاح منسوخ كاملاً بدون مسافات وأن الإنترنت شغال. إذا استمرت المشكلة، يمكنك طلب الدعم الفني.',
+    'Activation failed. Ensure the key is copied in full without spaces and that internet is working. If the problem persists, request technical support.',
   );
 
   String get licenseScreenTitle => _t('التفعيل والترخيص', 'License');

@@ -10,6 +10,7 @@ import 'database/database_helper.dart';
 import 'localization/app_localizations.dart';
 import 'services/accounting/journal_backfill_service.dart';
 import 'services/app_diagnostics_service.dart';
+import 'services/app_update_service.dart';
 import 'services/license_service.dart';
 import 'screens/splash_screen.dart';
 import 'theme.dart';
@@ -95,7 +96,10 @@ class _WarqatekAppState extends State<WarqatekApp> with WidgetsBindingObserver {
   /// an expiry that passed while it was in the background takes effect.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _recheckLicense();
+    if (state == AppLifecycleState.resumed) {
+      _recheckLicense();
+      unawaited(AppUpdateService.instance.checkForUpdate());
+    }
   }
 
   Future<void> _recheckLicense() async {
@@ -125,6 +129,7 @@ class _WarqatekAppState extends State<WarqatekApp> with WidgetsBindingObserver {
         themeMode: _themeMode,
         onChangeThemeMode: changeThemeMode,
         child: MaterialApp(
+          scaffoldMessengerKey: AppUpdateService.scaffoldMessengerKey,
           debugShowCheckedModeBanner: false,
           onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
           theme: AppTheme.lightTheme,
