@@ -8,8 +8,8 @@ Branch: feat/analytics
 | 1 | SDK review (read-only) and compatibility | DONE | d1dee9e | Static inspection, git inspection | Comprehensive review in docs/analytics/SDK_REVIEW.md. Verdict: SAFE TO VENDOR AS-IS. Zero new packages. |
 | 2 | Vendoring and plumbing | DONE | d6fc840 | analytics_service_test (10 passed), analyze (0 issues) | Vendored packages/almhdy_analytics, AnalyticsService singleton, allowlist validation, unawaited post-frame init in splash |
 | 3 | Instrumentation | DONE | e0535b8 | 50 tests passed (analytics_instrumentation_test 17, analytics_service_test 10, guards 23), analyze (0 issues) | Instrumented DocumentService create/cancel/payments, product/contact saves, stocktake finalize, reports, PDF/CSV shares, backups, paywall/activation, multi-user wizard, startup migration |
-| 4 | Settings toggle, disclosure, privacy | DONE | ed33762 | analytics_settings_test (3 passed), analyze (0 issues) | Settings switch gated by settings.manage, About screen disclosure dialog, Arabic/English privacy text in docs/analytics/PRIVACY_TEXT.md |
-| 5 | Guards, docs, final verification | TODO | - | - | - |
+| 4 | Settings toggle, disclosure, privacy | DONE | e153857 | analytics_settings_test (3 passed), analyze (0 issues) | Settings switch gated by settings.manage, About screen disclosure dialog, Arabic/English privacy text in docs/analytics/PRIVACY_TEXT.md |
+| 5 | Guards, docs, final verification | DONE | 5a8d08b | 58 tests passed (analytics_guards 5, analytics_service 10, analytics_instrumentation 17, analytics_settings 3, architecture_guards 3, single_stock_writer 5, document_edit 2, access_guards 7, snackbar 2, single_currency static 4), analyze (0 issues) | Added test/guards/analytics_guards_test.dart, docs/analytics/README.md; full verification across guards and suites. |
 
 ## DECISIONS
 - A1: SDK is vendored (unchanged) into `packages/almhdy_analytics` with `VENDORED_FROM.txt`. (Batch 1/2)
@@ -20,6 +20,7 @@ Branch: feat/analytics
 - A6: No DB-layer or in-transaction calls; migration result recorded in SharedPreferences on startup and sent on next init. (Batch 3)
 - A7: No identifiers from the app (device id, license key, user credentials, business details) ever sent. (Batch 2/3)
 - A8: Branch `feat/analytics` created from `feat/multi-user` because `feat/multi-user` was not yet merged to `main`. (Batch 1)
+- A9: Multi-user lock overlay drops all event tracking when `SessionManager.instance.isLocked == true`. (Batch 3)
 
 ## SDK REQUESTS (changes needed in the SDK or server, not done here)
 1. Configurable `maxQueueSize` (e.g. 500 events) with FIFO eviction when offline buffer reaches cap.
@@ -68,5 +69,11 @@ Branch: feat/analytics
 - docs/analytics/PRIVACY_TEXT.md
 - test/services/analytics_settings_test.dart
 
+### Batch 5:
+- test/guards/analytics_guards_test.dart
+- docs/analytics/README.md
+- lib/screens/contact_form_screen.dart (lint fix)
+- docs/analytics/PROGRESS.md
+
 ## RESUME NOTE
-Batch 4 completed. Settings toggle added under Support card, gated with PermissionGate(settings.manage) to ensure locked-down roles cannot modify consent. Non-intrusive About screen link tile with explainer dialog. Comprehensive bilingual Arabic and English privacy policy text drafted in docs/analytics/PRIVACY_TEXT.md. 3 tests passing and 0 analyze issues. Proceeding to Batch 5: Guards, docs, final verification.
+All 5 batches of the AlmHdy Analytics integration are COMPLETE. All analytics unit, integration, and guard tests pass (35 analytics tests + existing architecture/access guards), and flutter analyze reports zero issues. Ready for review and deployment.

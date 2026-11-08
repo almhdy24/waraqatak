@@ -295,8 +295,9 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                               ),
                             ],
                             onChanged: (val) {
-                              if (val != null)
+                              if (val != null) {
                                 setState(() => _pricingCategory = val);
+                              }
                             },
                           ),
                         ],
