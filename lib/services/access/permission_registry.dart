@@ -587,4 +587,13 @@ abstract final class PermissionRegistry {
 
   /// Returns all permission keys registered in the system.
   static Set<String> get allKeys => _byKey.keys.toSet();
+
+  /// Groups registered permissions by their [PermissionGroup].
+  static Map<PermissionGroup, List<PermissionItem>> get byGroup {
+    final map = <PermissionGroup, List<PermissionItem>>{};
+    for (final item in all) {
+      map.putIfAbsent(item.group, () => []).add(item);
+    }
+    return map;
+  }
 }

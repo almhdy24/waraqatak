@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
+import '../services/access/user_session_scope.dart';
 import '../services/app_update_service.dart';
 import '../widgets/responsive.dart';
+import 'access/pin_lock_screen.dart';
 import 'customers_screen.dart';
 import 'documents_screen.dart';
 import 'home_screen.dart';
@@ -54,6 +56,11 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final session = UserSessionScope.of(context);
+    if (session.isLocked) {
+      return const PinLockScreen();
+    }
+
     return PopScope(
       canPop: _index == 0,
       onPopInvokedWithResult: (didPop, result) {

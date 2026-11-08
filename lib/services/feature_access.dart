@@ -19,10 +19,14 @@ enum Feature {
   bulkPriceUpdate,
   csvImportExport,
   inventoryAudit,
+  multiUser,
 }
 
 class FeatureAccess {
   FeatureAccess._();
+
+  /// Configuration flag: whether multi-user mode requires a Pro license.
+  static const bool multiUserRequiresPro = true;
 
   /// Single source of truth: features that require an active trial or a
   /// stored activation key. The transparency screen, the paywall, the
@@ -36,6 +40,7 @@ class FeatureAccess {
     Feature.bulkPriceUpdate,
     Feature.csvImportExport,
     Feature.inventoryAudit,
+    if (multiUserRequiresPro) Feature.multiUser,
   };
 
   /// Complement of [proFeatures]: features that are always available,

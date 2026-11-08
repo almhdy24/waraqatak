@@ -25,6 +25,10 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
 import '../services/backup_encryption_service.dart';
+import '../services/feature_access.dart';
+import '../widgets/pro_upgrade_sheet.dart';
+import 'access/users_list_screen.dart';
+import 'activation_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -78,6 +82,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       EntitlementStatus.licenseExpired => l10n.licenseExpiredStatus,
       EntitlementStatus.licenseRevoked => l10n.licenseRevokedStatus,
     };
+  }
+
+  Future<void> _openUsersAndPermissions() async {
+    if (FeatureAccess.multiUserRequiresPro) {
+      final entitlement = await LicenseService.instance.checkEntitlement();
+      if (!FeatureAccess.canAccess(Feature.multiUser, entitlement)) {
+        if (!mounted) return;
+        final res = await ProUpgradeSheet.show(
+          context,
+          feature: Feature.multiUser,
+        );
+        if (res == true && mounted) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ActivationScreen()),
+          );
+        }
+        return;
+      }
+    }
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const UsersListScreen()),
+    );
   }
 
   @override
@@ -245,6 +274,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           );
                         }
                       },
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    ListTile(
+                      leading: const Icon(Icons.manage_accounts_outlined),
+                      title: Text(l10n.usersAndPermissions),
+                      subtitle: Text(l10n.usersAndPermissionsDesc),
+                      trailing: Icon(chevronIcon),
+                      onTap: _openUsersAndPermissions,
                     ),
                   ],
                 ),

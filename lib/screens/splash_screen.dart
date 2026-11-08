@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../localization/app_localizations.dart';
+import '../services/access/session_manager.dart';
 import '../services/license_service.dart';
 import 'main_shell.dart';
 
@@ -26,6 +27,11 @@ class _SplashScreenState extends State<SplashScreen> {
       Future<void>(() async {
         try {
           await LicenseService.instance.checkEntitlement();
+        } catch (_) {}
+      }),
+      Future<void>(() async {
+        try {
+          await SessionManager.instance.init();
         } catch (_) {}
       }),
       Future<void>.delayed(const Duration(milliseconds: 1200)),
