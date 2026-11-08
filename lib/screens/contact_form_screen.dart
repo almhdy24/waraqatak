@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import '../utils/error_utils.dart';
@@ -81,7 +82,10 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
   Future<void> _loadWholesaleStatus() async {
     final b = await DatabaseHelper.instance.getFirstBusiness();
     if (mounted) {
-      setState(() => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false);
+      setState(
+        () =>
+            _wholesalePricingEnabled = WholesaleFeature.isEnabledForBusiness(b),
+      );
     }
   }
 
@@ -103,13 +107,24 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
     final contact = Contact(
       id: widget.contact?.id,
       name: _nameController.text.trim(),
-      phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-      address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      phone: _phoneController.text.trim().isEmpty
+          ? null
+          : _phoneController.text.trim(),
+      email: _emailController.text.trim().isEmpty
+          ? null
+          : _emailController.text.trim(),
+      address: _addressController.text.trim().isEmpty
+          ? null
+          : _addressController.text.trim(),
+      notes: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
       type: _type,
-      pricingCategory:
-          _type == 'customer' ? _pricingCategory : Contact.categoryRetail,
+      pricingCategory: _type == 'customer'
+          ? (_wholesalePricingEnabled
+                ? _pricingCategory
+                : (widget.contact?.pricingCategory ?? Contact.categoryRetail))
+          : Contact.categoryRetail,
       active: _active,
     );
 
@@ -126,7 +141,10 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
       if (!mounted) return;
       AppSnackBar.show(
         context,
-        ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+        ErrorUtils.getFriendlyErrorMessage(
+          e,
+          l10n: AppLocalizations.of(context),
+        ),
         severity: AppSnackBarSeverity.error,
       );
     } finally {
@@ -154,142 +172,175 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(title),
-          centerTitle: true,
-        ),
-        body: ResponsiveCenter(child: Form(
-          key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: InputDecoration(
-                        labelText: isSupplier ? l10n.supplier : l10n.customer,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      validator: (v) => v == null || v.trim().isEmpty ? l10n.required : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _phoneController,
-                      decoration: InputDecoration(
-                        labelText: l10n.phone,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: InputDecoration(
-                        labelText: l10n.email,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _addressController,
-                      decoration: InputDecoration(
-                        labelText: l10n.address,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _notesController,
-                      decoration: InputDecoration(
-                        labelText: l10n.notes,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: _type,
-                      items: [
-                        DropdownMenuItem(value: 'customer', child: Text(l10n.customer)),
-                        DropdownMenuItem(value: 'supplier', child: Text(l10n.supplier)),
-                      ],
-                      onChanged: (value) => setState(() => _type = value!),
-                      decoration: InputDecoration(
-                        labelText: l10n.type,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    if (_type == 'customer' && _wholesalePricingEnabled) ...[
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: _pricingCategory,
-                        decoration: InputDecoration(
-                          labelText: l10n.pricingCategory,
-                          helperText: l10n.pricingCategoryCustomerDesc,
-                          prefixIcon: const Icon(Icons.price_change_outlined),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                            value: Contact.categoryRetail,
-                            child: Text(l10n.retail),
+        appBar: AppBar(title: Text(title), centerTitle: true),
+        body: ResponsiveCenter(
+          child: Form(
+            key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: InputDecoration(
+                            labelText: isSupplier
+                                ? l10n.supplier
+                                : l10n.customer,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                          DropdownMenuItem(
-                            value: Contact.categoryWholesale,
-                            child: Text(l10n.wholesale),
+                          validator: (v) => v == null || v.trim().isEmpty
+                              ? l10n.required
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _phoneController,
+                          decoration: InputDecoration(
+                            labelText: l10n.phone,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: InputDecoration(
+                            labelText: l10n.email,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _addressController,
+                          decoration: InputDecoration(
+                            labelText: l10n.address,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _notesController,
+                          decoration: InputDecoration(
+                            labelText: l10n.notes,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          initialValue: _type,
+                          items: [
+                            DropdownMenuItem(
+                              value: 'customer',
+                              child: Text(l10n.customer),
+                            ),
+                            DropdownMenuItem(
+                              value: 'supplier',
+                              child: Text(l10n.supplier),
+                            ),
+                          ],
+                          onChanged: (value) => setState(() => _type = value!),
+                          decoration: InputDecoration(
+                            labelText: l10n.type,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        if (_type == 'customer' &&
+                            _wholesalePricingEnabled) ...[
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            initialValue: _pricingCategory,
+                            decoration: InputDecoration(
+                              labelText: l10n.pricingCategory,
+                              helperText: l10n.pricingCategoryCustomerDesc,
+                              prefixIcon: const Icon(
+                                Icons.price_change_outlined,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            items: [
+                              DropdownMenuItem(
+                                value: Contact.categoryRetail,
+                                child: Text(l10n.retail),
+                              ),
+                              DropdownMenuItem(
+                                value: Contact.categoryWholesale,
+                                child: Text(l10n.wholesale),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _pricingCategory = val);
+                              }
+                            },
                           ),
                         ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _pricingCategory = val);
-                        },
-                      ),
-                    ],
-                    if (isEdit) ...[
-                      const SizedBox(height: 12),
-                      SwitchListTile(
-                        title: Text(_active ? l10n.active : l10n.inactive),
-                        value: _active,
-                        onChanged: (v) => setState(() => _active = v),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                    ],
-                  ],
+                        if (isEdit) ...[
+                          const SizedBox(height: 12),
+                          SwitchListTile(
+                            title: Text(_active ? l10n.active : l10n.inactive),
+                            value: _active,
+                            onChanged: (v) => setState(() => _active = v),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: _saving ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: primaryColor,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _saving ? null : _save,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                    child: _saving
+                        ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          )
+                        : Text(
+                            isEdit
+                                ? l10n.saveChanges
+                                : (isSupplier
+                                      ? l10n.saveSupplier
+                                      : l10n.saveCustomer),
+                          ),
+                  ),
                 ),
-                child: _saving
-                    ? SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary),
-                      )
-                    : Text(
-                        isEdit
-                            ? l10n.saveChanges
-                            : (isSupplier ? l10n.saveSupplier : l10n.saveCustomer),
-                      ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
-      )),
       ),
     );
   }

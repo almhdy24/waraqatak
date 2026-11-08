@@ -33,6 +33,7 @@ class ErrorUtils {
         ReferencePricingError.baseCurrencyChangeBlocked =>
           l10n.currencyChangeBlockedByRates,
         ReferencePricingError.businessNotConfigured => l10n.setupBusinessFirst,
+        ReferencePricingError.proFeatureRequired => l10n.proFeatureTitle,
         ReferencePricingError.implicitClear ||
         ReferencePricingError.currencyNotFound => l10n.refErrGeneric,
       };

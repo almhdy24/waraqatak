@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
 import '../core/theme_mode_scope.dart';
 import '../database/database_helper.dart';
+import '../features/reference_currency/reference_currency_feature.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/backup_service.dart';
@@ -49,7 +51,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadWholesaleStatus() async {
     final b = await DatabaseHelper.instance.getFirstBusiness();
     if (mounted) {
-      setState(() => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false);
+      setState(
+        () =>
+            _wholesalePricingEnabled = WholesaleFeature.isEnabledForBusiness(b),
+      );
     }
   }
 
@@ -180,19 +185,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    ListTile(
-                      leading: const Icon(Icons.currency_exchange_outlined),
-                      title: Text(l10n.exchangeRates),
-                      subtitle: Text(l10n.exchangeRatesDesc),
-                      trailing: Icon(chevronIcon),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ExchangeRatesScreen(),
+                    if (ReferenceCurrencyFeature.isAvailable) ...[
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.currency_exchange_outlined),
+                        title: Text(l10n.exchangeRates),
+                        subtitle: Text(l10n.exchangeRatesDesc),
+                        trailing: Icon(chevronIcon),
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ExchangeRatesScreen(),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     ListTile(
                       leading: const Icon(Icons.payment_outlined),
@@ -219,33 +226,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
-                    SwitchListTile(
-                      secondary: const Icon(Icons.storefront_outlined),
-                      title: Text(l10n.wholesalePricing),
-                      subtitle: Text(l10n.wholesalePricingDesc),
-                      value: _wholesalePricingEnabled,
-                      onChanged: (v) async {
-                        if (!v && _wholesalePricingEnabled) {
-                          final proceed = await AppConfirmDialog.show(
-                            context,
-                            title: l10n.wholesalePricing,
-                            message: l10n.wholesalePricingDisableWarning,
-                            confirmLabel: l10n.disableAction,
-                            isDestructive: false,
-                          );
-                          if (!proceed) return;
-                        }
-                        if (!mounted) return;
-                        setState(() => _wholesalePricingEnabled = v);
-                        final b = await DatabaseHelper.instance.getFirstBusiness();
-                        if (b != null) {
-                          await DatabaseHelper.instance.updateBusiness(
-                            b.copyWith(wholesalePricingEnabled: v),
-                          );
-                        }
-                      },
-                    ),
+                    if (WholesaleFeature.isAvailable) ...[
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.storefront_outlined),
+                        title: Text(l10n.wholesalePricing),
+                        subtitle: Text(l10n.wholesalePricingDesc),
+                        value: _wholesalePricingEnabled,
+                        onChanged: (v) async {
+                          if (!v && _wholesalePricingEnabled) {
+                            final proceed = await AppConfirmDialog.show(
+                              context,
+                              title: l10n.wholesalePricing,
+                              message: l10n.wholesalePricingDisableWarning,
+                              confirmLabel: l10n.disableAction,
+                              isDestructive: false,
+                            );
+                            if (!proceed) return;
+                          }
+                          if (!mounted) return;
+                          setState(() => _wholesalePricingEnabled = v);
+                          final b = await DatabaseHelper.instance
+                              .getFirstBusiness();
+                          if (b != null) {
+                            await DatabaseHelper.instance.updateBusiness(
+                              b.copyWith(wholesalePricingEnabled: v),
+                            );
+                          }
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -336,8 +346,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: const Icon(Icons.save_outlined),
                       title: Text(l10n.saveBackupTo),
                       onTap: () async {
-                        final password =
-                            await BackupPasswordCreateDialog.show(context);
+                        final password = await BackupPasswordCreateDialog.show(
+                          context,
+                        );
                         if (password == null) return;
                         if (!context.mounted) return;
 
@@ -348,9 +359,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             message: l10n.backupEncrypting,
                             operation: (isCancelled) =>
                                 BackupService.createBackupUserChosen(
-                              password: password,
-                              isCancelled: isCancelled,
-                            ),
+                                  password: password,
+                                  isCancelled: isCancelled,
+                                ),
                           );
                           if (context.mounted && saved) {
                             AppSnackBar.show(

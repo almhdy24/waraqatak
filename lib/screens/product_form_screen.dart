@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
+import '../features/reference_currency/reference_currency_feature.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/currency.dart';
 import '../models/exchange_rate.dart';
@@ -9,7 +11,6 @@ import '../models/tax_profile.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../services/product_service.dart';
-import '../services/reference_pricing_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/number_input.dart';
@@ -106,7 +107,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   void _applyStoredPricingToControllers() {
     final p = widget.product;
-    _priceCurrency = p?.priceCurrency;
+    final refAvailable = ReferenceCurrencyFeature.isAvailable;
+    _priceCurrency = refAvailable ? p?.priceCurrency : null;
     if (_priceCurrency != null) {
       _salePriceController.text = p?.referenceSalePrice != null
           ? NumberInput.formatForInput(p!.referenceSalePrice!, maxDecimals: 4)
@@ -137,9 +139,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _loadReferencePricing() async {
+    if (!ReferenceCurrencyFeature.isAvailable) {
+      if (mounted) setState(() => _rates = []);
+      return;
+    }
     try {
-      final rates = await ReferencePricingService.getRates(activeOnly: false);
-      final rounding = await ReferencePricingService.getRounding();
+      final rates = await ReferenceCurrencyFeature.getRates(activeOnly: false);
+      final rounding = await ReferenceCurrencyFeature.getRounding();
       final business = await DatabaseHelper.instance.getFirstBusiness();
       final baseCode = business?.currencyCode ?? 'YER';
       final baseCurr = Currency.fromCode(baseCode);
@@ -201,7 +207,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       final b = await DatabaseHelper.instance.getFirstBusiness();
       if (mounted) {
         setState(
-          () => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false,
+          () => _wholesalePricingEnabled =
+              WholesaleFeature.isEnabledForBusiness(b),
         );
       }
     } catch (_) {}
@@ -520,16 +527,34 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         taxProfileId: _taxProfileId,
         createdAt: widget.product?.createdAt ?? DateTime.now(),
         updatedAt: DateTime.now(),
-        priceCurrency: null,
-        referenceSalePrice: null,
-        referenceWholesalePrice: null,
-        referencePurchasePrice: null,
+        priceCurrency:
+            (!ReferenceCurrencyFeature.isAvailable &&
+                widget.product?.priceCurrency != null)
+            ? widget.product!.priceCurrency
+            : null,
+        referenceSalePrice:
+            (!ReferenceCurrencyFeature.isAvailable &&
+                widget.product?.priceCurrency != null)
+            ? widget.product!.referenceSalePrice
+            : null,
+        referenceWholesalePrice:
+            (!ReferenceCurrencyFeature.isAvailable &&
+                widget.product?.priceCurrency != null)
+            ? widget.product!.referenceWholesalePrice
+            : null,
+        referencePurchasePrice:
+            (!ReferenceCurrencyFeature.isAvailable &&
+                widget.product?.priceCurrency != null)
+            ? widget.product!.referencePurchasePrice
+            : null,
       );
     }
 
     try {
       final allowClear =
-          widget.product?.priceCurrency != null && _priceCurrency == null;
+          ReferenceCurrencyFeature.isAvailable &&
+          widget.product?.priceCurrency != null &&
+          _priceCurrency == null;
       final id = await DatabaseHelper.instance.saveProductWithUnits(
         product,
         _productUnits,
@@ -1235,7 +1260,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        if (_rates.isNotEmpty || _priceCurrency != null) ...[
+                        if (ReferenceCurrencyFeature.isAvailable &&
+                            (_rates.isNotEmpty || _priceCurrency != null)) ...[
                           PricingCurrencySelector(
                             baseCurrencyCode: _baseCurrencyCode,
                             baseSymbol: _baseSymbol,

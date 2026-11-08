@@ -4,10 +4,12 @@ library;
 import 'package:flutter/material.dart';
 
 import '../database/database_helper.dart';
+import '../features/reference_currency/reference_currency_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/currency.dart';
 import '../models/exchange_rate.dart';
+import '../services/feature_access.dart';
 import '../services/reference_pricing_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
@@ -17,6 +19,7 @@ import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 
 /// Screen displaying reference-currency exchange rates and conversion settings.
@@ -44,6 +47,13 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
+      if (!ReferenceCurrencyFeature.isAvailable) {
+        if (!mounted) return;
+        Navigator.pop(context);
+        ProUpgradeSheet.show(context, feature: Feature.referenceCurrency);
+        return;
+      }
+
       final business = await DatabaseHelper.instance.getFirstBusiness();
       if (business == null) {
         if (!mounted) return;
@@ -69,7 +79,10 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
       setState(() => _loading = false);
       AppSnackBar.show(
         context,
-        ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+        ErrorUtils.getFriendlyErrorMessage(
+          e,
+          l10n: AppLocalizations.of(context),
+        ),
         severity: AppSnackBarSeverity.error,
       );
     }
@@ -179,7 +192,9 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
             TextFormField(
               controller: rateCtrl,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: l10n.exchangeRate,
                 prefixText: '1 ${entry.code} = ',
@@ -307,7 +322,10 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
             if (!mounted) return;
             AppSnackBar.show(
               context,
-              ErrorUtils.getFriendlyErrorMessage(e, l10n: AppLocalizations.of(context)),
+              ErrorUtils.getFriendlyErrorMessage(
+                e,
+                l10n: AppLocalizations.of(context),
+              ),
               severity: AppSnackBarSeverity.error,
             );
           }
@@ -319,7 +337,10 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
   Future<void> _toggleActive(ExchangeRate rate) async {
     final l10n = AppLocalizations.of(context);
     try {
-      await ReferencePricingService.setCurrencyActive(rate.code, !rate.isActive);
+      await ReferencePricingService.setCurrencyActive(
+        rate.code,
+        !rate.isActive,
+      );
       await _load();
     } catch (e) {
       if (!mounted) return;
@@ -334,7 +355,9 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
   Future<void> _deleteCustom(ExchangeRate rate) async {
     final l10n = AppLocalizations.of(context);
     try {
-      final deleted = await ReferencePricingService.deleteCustomCurrency(rate.code);
+      final deleted = await ReferencePricingService.deleteCustomCurrency(
+        rate.code,
+      );
       if (!deleted) {
         if (!mounted) return;
         AppSnackBar.show(
@@ -422,11 +445,26 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
                                 value: 0,
                                 child: Text(l10n.roundingNone),
                               ),
-                              const DropdownMenuItem(value: 1, child: Text('1')),
-                              const DropdownMenuItem(value: 5, child: Text('5')),
-                              const DropdownMenuItem(value: 10, child: Text('10')),
-                              const DropdownMenuItem(value: 50, child: Text('50')),
-                              const DropdownMenuItem(value: 100, child: Text('100')),
+                              const DropdownMenuItem(
+                                value: 1,
+                                child: Text('1'),
+                              ),
+                              const DropdownMenuItem(
+                                value: 5,
+                                child: Text('5'),
+                              ),
+                              const DropdownMenuItem(
+                                value: 10,
+                                child: Text('10'),
+                              ),
+                              const DropdownMenuItem(
+                                value: 50,
+                                child: Text('50'),
+                              ),
+                              const DropdownMenuItem(
+                                value: 100,
+                                child: Text('100'),
+                              ),
                             ],
                             onChanged: _onRoundingChanged,
                             decoration: const InputDecoration(
@@ -454,7 +492,9 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
                       ),
                     )
                   else
-                    ..._rates.map((rate) => _buildRateTile(context, rate, l10n)),
+                    ..._rates.map(
+                      (rate) => _buildRateTile(context, rate, l10n),
+                    ),
                 ],
               ),
             ),
@@ -471,9 +511,7 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
           Positioned.fill(
             child: Container(
               color: Colors.black45,
-              child: const Center(
-                child: AppLoadingView(),
-              ),
+              child: const Center(child: AppLoadingView()),
             ),
           ),
       ],
@@ -537,10 +575,7 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
             const SizedBox(height: 4),
             Text(
               '1 ${rate.code} = ${rate.rate} $_baseSymbol',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: cs.primary,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w600, color: cs.primary),
             ),
             const SizedBox(height: 2),
             Text(
@@ -568,10 +603,7 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
             if (rate.isCustom)
               PopupMenuItem(
                 value: 'delete',
-                child: Text(
-                  l10n.delete,
-                  style: TextStyle(color: cs.error),
-                ),
+                child: Text(l10n.delete, style: TextStyle(color: cs.error)),
               ),
           ],
         ),
@@ -702,7 +734,9 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
                 ),
                 TextButton(
                   onPressed: () => setState(() => _isCustom = !_isCustom),
-                  child: Text(_isCustom ? l10n.pricingCurrency : l10n.customCurrency),
+                  child: Text(
+                    _isCustom ? l10n.pricingCurrency : l10n.customCurrency,
+                  ),
                 ),
               ],
             ),
@@ -771,7 +805,9 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _rateCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: l10n.exchangeRate,
                 prefixText: _isCustom
@@ -785,10 +821,7 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: FilledButton(
-                onPressed: _submit,
-                child: Text(l10n.save),
-              ),
+              child: FilledButton(onPressed: _submit, child: Text(l10n.save)),
             ),
           ],
         ),
