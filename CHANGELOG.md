@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **AlmHdy Analytics Integration (v1.1.0 SDK):**
   - Offline-first telemetry using the upgraded AlmHdy Analytics Flutter SDK with configurable queue sizing (default: 500 events) and idle flush timer pause/resume.
-  - Hard-coded write-only project ingestion key (`ak_live_ad67e998e5cbed8e9ec242fe0792f291`), removing the `--dart-define` key requirement while keeping the key injectable and empty by default in unit tests.
+  - Hard-coded write-only project ingestion key in AnalyticsConfig, removing the `--dart-define` key requirement while keeping the key injectable and empty by default in unit tests.
 - **Dual Telemetry Channels & Independent Settings Toggles:**
   - Separated anonymous usage statistics and anonymous error reports into two distinct channels with independent toggles in Settings.
   - Legacy opt-out migration preserving prior opt-outs across both channels.
