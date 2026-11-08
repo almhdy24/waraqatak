@@ -12,6 +12,7 @@ class FakeAnalyticsSink implements AnalyticsSink {
   int? maxQueueSize;
   bool isOptedOut = false;
   bool shouldThrowOnInit = false;
+  bool shouldThrowOnTrack = false;
 
   final List<Map<String, dynamic>> trackedEvents = [];
 
@@ -35,6 +36,9 @@ class FakeAnalyticsSink implements AnalyticsSink {
 
   @override
   void track(String event, {Map<String, dynamic>? properties}) {
+    if (shouldThrowOnTrack) {
+      throw Exception('Server rejected key: HTTP 403 Forbidden / Key Revoked');
+    }
     if (isOptedOut) return;
     trackedEvents.add({
       'event': event,
@@ -299,6 +303,20 @@ void main() {
 
         AnalyticsService.instance.recordError(Exception('Empty key error'));
         expect(fakeSink.trackedEvents, isEmpty);
+      },
+    );
+
+    test(
+      'recordError does not crash when sink throws on server rejection',
+      () {
+        fakeSink.shouldThrowOnTrack = true;
+
+        expect(
+          () => AnalyticsService.instance.recordError(
+            Exception('Server error test'),
+          ),
+          returnsNormally,
+        );
       },
     );
   });
