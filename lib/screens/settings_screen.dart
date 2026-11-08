@@ -24,8 +24,11 @@ import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
+import '../services/access/permission_registry.dart';
+import '../services/analytics/analytics_service.dart';
 import '../services/backup_encryption_service.dart';
 import '../services/feature_access.dart';
+import '../widgets/access/permission_gate.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'access/users_list_screen.dart';
 import 'activation_screen.dart';
@@ -40,6 +43,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   EntitlementState? _entitlement;
   bool _diagnosticConsent = false;
+  bool _analyticsConsent = true;
   bool _wholesalePricingEnabled = false;
 
   @override
@@ -53,13 +57,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadWholesaleStatus() async {
     final b = await DatabaseHelper.instance.getFirstBusiness();
     if (mounted) {
-      setState(() => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false);
+      setState(
+        () => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false,
+      );
     }
   }
 
   Future<void> _loadConsent() async {
     final granted = await AppDiagnosticsService.instance.isConsentGranted();
-    if (mounted) setState(() => _diagnosticConsent = granted);
+    final analyticsGranted = AnalyticsService.instance.isEnabled;
+    if (mounted) {
+      setState(() {
+        _diagnosticConsent = granted;
+        _analyticsConsent = analyticsGranted;
+      });
+    }
   }
 
   Future<void> _loadEntitlement() async {
@@ -267,7 +279,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                         if (!mounted) return;
                         setState(() => _wholesalePricingEnabled = v);
-                        final b = await DatabaseHelper.instance.getFirstBusiness();
+                        final b = await DatabaseHelper.instance
+                            .getFirstBusiness();
                         if (b != null) {
                           await DatabaseHelper.instance.updateBusiness(
                             b.copyWith(wholesalePricingEnabled: v),
@@ -373,8 +386,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       leading: const Icon(Icons.save_outlined),
                       title: Text(l10n.saveBackupTo),
                       onTap: () async {
-                        final password =
-                            await BackupPasswordCreateDialog.show(context);
+                        final password = await BackupPasswordCreateDialog.show(
+                          context,
+                        );
                         if (password == null) return;
                         if (!context.mounted) return;
 
@@ -385,9 +399,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             message: l10n.backupEncrypting,
                             operation: (isCancelled) =>
                                 BackupService.createBackupUserChosen(
-                              password: password,
-                              isCancelled: isCancelled,
-                            ),
+                                  password: password,
+                                  isCancelled: isCancelled,
+                                ),
                           );
                           if (context.mounted && saved) {
                             AppSnackBar.show(
@@ -565,6 +579,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           setState(() => _diagnosticConsent = val);
                         }
                       },
+                    ),
+                    PermissionGate(
+                      permission: PermissionRegistry.settingsManage,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                          SwitchListTile(
+                            secondary: const Icon(Icons.analytics_outlined),
+                            title: Text(l10n.analyticsConsentTitle),
+                            subtitle: Text(l10n.analyticsConsentDesc),
+                            value: _analyticsConsent,
+                            onChanged: (val) async {
+                              await AnalyticsService.instance.setEnabled(val);
+                              if (mounted) {
+                                setState(() => _analyticsConsent = val);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
                     ListTile(

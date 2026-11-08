@@ -8,7 +8,7 @@ Branch: feat/analytics
 | 1 | SDK review (read-only) and compatibility | DONE | d1dee9e | Static inspection, git inspection | Comprehensive review in docs/analytics/SDK_REVIEW.md. Verdict: SAFE TO VENDOR AS-IS. Zero new packages. |
 | 2 | Vendoring and plumbing | DONE | d6fc840 | analytics_service_test (10 passed), analyze (0 issues) | Vendored packages/almhdy_analytics, AnalyticsService singleton, allowlist validation, unawaited post-frame init in splash |
 | 3 | Instrumentation | DONE | e0535b8 | 50 tests passed (analytics_instrumentation_test 17, analytics_service_test 10, guards 23), analyze (0 issues) | Instrumented DocumentService create/cancel/payments, product/contact saves, stocktake finalize, reports, PDF/CSV shares, backups, paywall/activation, multi-user wizard, startup migration |
-| 4 | Settings toggle, disclosure, privacy | TODO | - | - | - |
+| 4 | Settings toggle, disclosure, privacy | DONE | ed33762 | analytics_settings_test (3 passed), analyze (0 issues) | Settings switch gated by settings.manage, About screen disclosure dialog, Arabic/English privacy text in docs/analytics/PRIVACY_TEXT.md |
 | 5 | Guards, docs, final verification | TODO | - | - | - |
 
 ## DECISIONS
@@ -61,5 +61,12 @@ Branch: feat/analytics
 - lib/widgets/pro_upgrade_sheet.dart
 - test/services/analytics_instrumentation_test.dart
 
+### Batch 4:
+- lib/screens/settings_screen.dart
+- lib/screens/about_screen.dart
+- lib/localization/app_localizations.dart
+- docs/analytics/PRIVACY_TEXT.md
+- test/services/analytics_settings_test.dart
+
 ## RESUME NOTE
-Batch 3 completed. All 20 allowlisted taxonomy events instrumented exclusively across service and UI layers after successful transactions. Zero database-layer calls. Multi-user session lock overlay drops events when locked. 50 tests passing and 0 analyze issues. Proceeding to Batch 4: Settings toggle, disclosure, privacy.
+Batch 4 completed. Settings toggle added under Support card, gated with PermissionGate(settings.manage) to ensure locked-down roles cannot modify consent. Non-intrusive About screen link tile with explainer dialog. Comprehensive bilingual Arabic and English privacy policy text drafted in docs/analytics/PRIVACY_TEXT.md. 3 tests passing and 0 analyze issues. Proceeding to Batch 5: Guards, docs, final verification.

@@ -2657,35 +2657,68 @@ class AppLocalizations {
       _t('حدث خطأ في التسعير المرجعي.', 'A reference pricing error occurred.');
 
   // Multi-user & Permissions
-  String get usersAndPermissions => _t('المستخدمون والصلاحيات', 'Users & Permissions');
-  String get usersAndPermissionsDesc => _t('إدارة المستخدمين، الأدوار وسجل التدقيق', 'Manage users, roles and audit trail');
+  String get usersAndPermissions =>
+      _t('المستخدمون والصلاحيات', 'Users & Permissions');
+  String get usersAndPermissionsDesc => _t(
+    'إدارة المستخدمين، الأدوار وسجل التدقيق',
+    'Manage users, roles and audit trail',
+  );
   String get multiUserTitle => _t('تعدد المستخدمين', 'Multi-User');
-  String get multiUserEnabledLabel => _t('تفعيل نظام تعدد المستخدمين', 'Enable Multi-User System');
-  String get multiUserDisabledDesc => _t('عند التفعيل، سيتطلب الوصول إلى النظام إدخال رمز المرور (PIN) وتحديد صلاحيات لكل مستخدم.', 'When enabled, access requires a PIN and specific permissions per user.');
-  String get setupOwnerCredentials => _t('إعداد بيانات المالك', 'Setup Owner Credentials');
+  String get multiUserEnabledLabel =>
+      _t('تفعيل نظام تعدد المستخدمين', 'Enable Multi-User System');
+  String get multiUserDisabledDesc => _t(
+    'عند التفعيل، سيتطلب الوصول إلى النظام إدخال رمز المرور (PIN) وتحديد صلاحيات لكل مستخدم.',
+    'When enabled, access requires a PIN and specific permissions per user.',
+  );
+  String get setupOwnerCredentials =>
+      _t('إعداد بيانات المالك', 'Setup Owner Credentials');
   String get ownerPasswordLabel => _t('كلمة مرور المالك', 'Owner Password');
-  String get ownerPinLabel => _t('رمز PIN للمالك (4-6 أرقام)', 'Owner PIN (4-6 digits)');
-  String get confirmPasswordLabel => _t('تأكيد كلمة المرور', 'Confirm Password');
+  String get ownerPinLabel =>
+      _t('رمز PIN للمالك (4-6 أرقام)', 'Owner PIN (4-6 digits)');
+  String get confirmPasswordLabel =>
+      _t('تأكيد كلمة المرور', 'Confirm Password');
   String get recoveryCodeTitle => _t('رمز الاسترداد', 'Recovery Code');
-  String get recoveryCodeWarning => _t('احفظ هذا الرمز في مكان آمن وخارجي تماماً. هذا هو الرمز الوحيد الذي يمكنك استخدامه لإعادة تعيين كلمة مرور المالك في حال نسيانها.', 'Save this code securely. It is the only way to recover Owner access if forgotten.');
-  String get recoveryCodeSavedConfirm => _t('لقد قمت بحفظ رمز الاسترداد في مكان آمن', 'I have saved the recovery code in a safe place');
-  String get enableMultiUserButton => _t('تفعيل تعدد المستخدمين', 'Enable Multi-User');
-  String get disableMultiUserButton => _t('تعطيل تعدد المستخدمين', 'Disable Multi-User');
-  String get disableMultiUserConfirm => _t('هل أنت متأكد من تعطيل تعدد المستخدمين؟ سيعود النظام لوضع المستخدم الفردي المباشر.', 'Are you sure you want to disable multi-user mode? The system will revert to direct single-user mode.');
+  String get recoveryCodeWarning => _t(
+    'احفظ هذا الرمز في مكان آمن وخارجي تماماً. هذا هو الرمز الوحيد الذي يمكنك استخدامه لإعادة تعيين كلمة مرور المالك في حال نسيانها.',
+    'Save this code securely. It is the only way to recover Owner access if forgotten.',
+  );
+  String get recoveryCodeSavedConfirm => _t(
+    'لقد قمت بحفظ رمز الاسترداد في مكان آمن',
+    'I have saved the recovery code in a safe place',
+  );
+  String get enableMultiUserButton =>
+      _t('تفعيل تعدد المستخدمين', 'Enable Multi-User');
+  String get disableMultiUserButton =>
+      _t('تعطيل تعدد المستخدمين', 'Disable Multi-User');
+  String get disableMultiUserConfirm => _t(
+    'هل أنت متأكد من تعطيل تعدد المستخدمين؟ سيعود النظام لوضع المستخدم الفردي المباشر.',
+    'Are you sure you want to disable multi-user mode? The system will revert to direct single-user mode.',
+  );
   String get enterPin => _t('أدخل رمز PIN', 'Enter PIN');
   String get unlock => _t('فتح القفل', 'Unlock');
   String get invalidPin => _t('رمز PIN غير صحيح', 'Incorrect PIN');
   String get switchUser => _t('تبديل المستخدم', 'Switch User');
-  String get loginWithPassword => _t('تسجيل الدخول بكلمة المرور', 'Login with password');
+  String get loginWithPassword =>
+      _t('تسجيل الدخول بكلمة المرور', 'Login with password');
   String get password => _t('كلمة المرور', 'Password');
-  String get invalidCredentials => _t('اسم المستخدم أو كلمة المرور غير صحيحة', 'Invalid username or password');
+  String get invalidCredentials => _t(
+    'اسم المستخدم أو كلمة المرور غير صحيحة',
+    'Invalid username or password',
+  );
   String get forgotPassword => _t('نسيت كلمة المرور؟', 'Forgot password?');
-  String get recoverOwnerAccess => _t('استرداد حساب المالك', 'Recover Owner Access');
-  String get recoveryCodeInputLabel => _t('رمز الاسترداد المكون من 16 حرفاً', '16-character Recovery Code');
-  String get newOwnerPassword => _t('كلمة مرور المالك الجديدة', 'New Owner Password');
+  String get recoverOwnerAccess =>
+      _t('استرداد حساب المالك', 'Recover Owner Access');
+  String get recoveryCodeInputLabel =>
+      _t('رمز الاسترداد المكون من 16 حرفاً', '16-character Recovery Code');
+  String get newOwnerPassword =>
+      _t('كلمة مرور المالك الجديدة', 'New Owner Password');
   String get newOwnerPin => _t('رمز PIN الجديد', 'New PIN');
-  String get recoverySuccess => _t('تم استرداد الحساب بنجاح وتم إنشاء رمز استرداد جديد', 'Account recovered successfully. A new recovery code has been generated.');
-  String get invalidRecoveryCode => _t('رمز الاسترداد غير صحيح', 'Invalid recovery code');
+  String get recoverySuccess => _t(
+    'تم استرداد الحساب بنجاح وتم إنشاء رمز استرداد جديد',
+    'Account recovered successfully. A new recovery code has been generated.',
+  );
+  String get invalidRecoveryCode =>
+      _t('رمز الاسترداد غير صحيح', 'Invalid recovery code');
   String get users => _t('المستخدمون', 'Users');
   String get addUser => _t('إضافة مستخدم', 'Add User');
   String get editUser => _t('تعديل المستخدم', 'Edit User');
@@ -2695,48 +2728,69 @@ class AppLocalizations {
   String get userActive => _t('نشط', 'Active');
   String get userInactive => _t('معطل', 'Inactive');
   String get pinCode => _t('رمز PIN (4-6 أرقام)', 'PIN Code (4-6 digits)');
-  String get changePasswordOptional => _t('تغيير كلمة المرور (اختياري)', 'Change Password (Optional)');
-  String get cannotDeactivateOwner => _t('لا يمكن تعطيل أو تعديل دور حساب المالك', 'Cannot deactivate or change the role of the Owner account');
-  String get cannotDeleteOwner => _t('لا يمكن حذف حساب المالك', 'Cannot delete the Owner account');
-  String get rolesAndPermissions => _t('الأدوار والصلاحيات', 'Roles & Permissions');
+  String get changePasswordOptional =>
+      _t('تغيير كلمة المرور (اختياري)', 'Change Password (Optional)');
+  String get cannotDeactivateOwner => _t(
+    'لا يمكن تعطيل أو تعديل دور حساب المالك',
+    'Cannot deactivate or change the role of the Owner account',
+  );
+  String get cannotDeleteOwner =>
+      _t('لا يمكن حذف حساب المالك', 'Cannot delete the Owner account');
+  String get rolesAndPermissions =>
+      _t('الأدوار والصلاحيات', 'Roles & Permissions');
   String get addRole => _t('إضافة دور جديد', 'Add Role');
   String get editRole => _t('تعديل الدور', 'Edit Role');
   String get roleName => _t('اسم الدور', 'Role Name');
   String get roleDescription => _t('وصف الدور', 'Role Description');
-  String get isSystemRole => _t('دور نظام قياسي (غير قابل للتعديل)', 'Built-in system role (read-only)');
+  String get isSystemRole => _t(
+    'دور نظام قياسي (غير قابل للتعديل)',
+    'Built-in system role (read-only)',
+  );
   String get customRole => _t('دور مخصص', 'Custom Role');
-  String get permissionOverrides => _t('استثناءات الصلاحيات للمستخدم', 'User Permission Overrides');
+  String get permissionOverrides =>
+      _t('استثناءات الصلاحيات للمستخدم', 'User Permission Overrides');
   String get auditTrail => _t('سجل التدقيق والنشاطات', 'Audit Trail');
-  String get verifyAuditIntegrity => _t('التحقق من سلامة السجل', 'Verify Log Integrity');
-  String get auditIntegrityValid => _t('سجل التدقيق سليم وغير معدّل (سلسلة التجزئة صالحة)', 'Audit log is intact and tamper-free (hash chain is valid)');
-  String get auditIntegrityTampered => _t('تحذير: تم الكشف عن تلاعب أو انقطاع في سجل التدقيق!', 'Warning: Tampering or corruption detected in audit log!');
-  String get autoLockSetting => _t('القفل التلقائي عند عدم النشاط', 'Auto-Lock Inactivity Timeout');
+  String get verifyAuditIntegrity =>
+      _t('التحقق من سلامة السجل', 'Verify Log Integrity');
+  String get auditIntegrityValid => _t(
+    'سجل التدقيق سليم وغير معدّل (سلسلة التجزئة صالحة)',
+    'Audit log is intact and tamper-free (hash chain is valid)',
+  );
+  String get auditIntegrityTampered => _t(
+    'تحذير: تم الكشف عن تلاعب أو انقطاع في سجل التدقيق!',
+    'Warning: Tampering or corruption detected in audit log!',
+  );
+  String get autoLockSetting =>
+      _t('القفل التلقائي عند عدم النشاط', 'Auto-Lock Inactivity Timeout');
   String autoLockMinutesDesc(int m) => m == 0
       ? _t('معطل', 'Disabled')
       : _t('${_iso(m)} دقائق', '${_iso(m)} minutes');
   String get currentActiveUser => _t('المستخدم الحالي', 'Current User');
   String get lockNow => _t('قفل التطبيق الآن', 'Lock App Now');
   String get logout => _t('تسجيل الخروج', 'Logout');
-  String get reauthenticateRequired => _t('يرجى إدخال كلمة المرور للمتابعة', 'Please enter your password to proceed');
+  String get reauthenticateRequired => _t(
+    'يرجى إدخال كلمة المرور للمتابعة',
+    'Please enter your password to proceed',
+  );
   String get confirmAction => _t('تأكيد الإجراء', 'Confirm Action');
   String get savedSuccessfully => _t('تم الحفظ بنجاح', 'Saved successfully');
-  String get deletedSuccessfully => _t('تم الحذف بنجاح', 'Deleted successfully');
+  String get deletedSuccessfully =>
+      _t('تم الحذف بنجاح', 'Deleted successfully');
   String get copy => _t('نسخ', 'Copy');
-  String get invalidPasswordLength => _t('كلمة المرور يجب أن لا تقل عن 6 أحرف', 'Password must be at least 6 characters');
+  String get invalidPasswordLength => _t(
+    'كلمة المرور يجب أن لا تقل عن 6 أحرف',
+    'Password must be at least 6 characters',
+  );
 
   // ========== ANALYTICS & TELEMETRY ==========
-  String get analyticsConsentTitle => _t(
-    'إحصائيات الاستخدام المجهولة',
-    'Anonymous usage statistics',
-  );
+  String get analyticsConsentTitle =>
+      _t('إحصائيات الاستخدام المجهولة', 'Anonymous usage statistics');
   String get analyticsConsentDesc => _t(
     'مساعدة في تحسين التطبيق عبر بيانات تشغيلية مجهولة، بدون مبالغ أو أسماء أو فواتير',
     'Help improve the app via anonymous telemetry, excluding amounts, names, and invoices',
   );
-  String get anonymousAnalyticsTitle => _t(
-    'إحصائيات الاستخدام المجهولة',
-    'Anonymous Telemetry',
-  );
+  String get anonymousAnalyticsTitle =>
+      _t('إحصائيات الاستخدام المجهولة', 'Anonymous Telemetry');
   String get anonymousAnalyticsSubtitle => _t(
     'بيانات مجهولة لتحسين الأداء بدون مبالغ أو أسماء',
     'Anonymous metrics to improve performance, zero amounts or names',
