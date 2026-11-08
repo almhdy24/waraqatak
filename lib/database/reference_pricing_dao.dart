@@ -11,6 +11,8 @@ import '../models/exchange_rate.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../models/reference_pricing_types.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 import '../utils/reference_pricing_math.dart';
 
 /// Static, transaction-aware DAO for reference pricing and exchange rates.
@@ -96,6 +98,7 @@ abstract final class ReferencePricingDao {
   /// Validates [ExchangeRate.rate]. Throws [ReferencePricingException] if currency is the
   /// business base currency or already exists.
   static Future<void> insertRate(DatabaseExecutor txn, ExchangeRate e) async {
+    AccessGuard.require(PermissionRegistry.pricingRates);
     ReferencePricingMath.assertValidRate(e.rate);
     final baseCode = await businessCurrencyCode(txn);
     if (e.code == baseCode) {
@@ -124,6 +127,7 @@ abstract final class ReferencePricingDao {
     double rate,
     DateTime updatedAt,
   ) async {
+    AccessGuard.require(PermissionRegistry.pricingRates);
     ReferencePricingMath.assertValidRate(rate);
     final count = await txn.rawUpdate(
       'UPDATE exchange_rates SET rate = ?, updated_at = ? WHERE code = ?',
@@ -146,6 +150,7 @@ abstract final class ReferencePricingDao {
     String code,
     bool active,
   ) async {
+    AccessGuard.require(PermissionRegistry.pricingRates);
     final count = await txn.rawUpdate(
       'UPDATE exchange_rates SET is_active = ? WHERE code = ?',
       [active ? 1 : 0, code],
@@ -420,6 +425,7 @@ abstract final class ReferencePricingDao {
     DatabaseExecutor txn,
     String code,
   ) async {
+    AccessGuard.require(PermissionRegistry.pricingManage);
     final rateRow = await getRate(txn, code);
     if (rateRow == null || !ReferencePricingMath.isValidRate(rateRow.rate)) {
       throw const ReferencePricingException(

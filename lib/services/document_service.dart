@@ -8,6 +8,8 @@ import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../utils/money_utils.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'feature_access.dart';
 import 'license_service.dart';
 
@@ -85,6 +87,18 @@ class DocumentService {
     String? payNowMethod,
     bool? strictStock,
   }) async {
+    if (type == 'purchase') {
+      AccessGuard.require(PermissionRegistry.purchasesCreate);
+    } else if (type == 'payment_receipt' || type == 'expense_voucher') {
+      AccessGuard.require(PermissionRegistry.vouchersCreate);
+    } else {
+      AccessGuard.require(PermissionRegistry.salesCreate);
+    }
+
+    if (discount > 0) {
+      AccessGuard.require(PermissionRegistry.salesEditDiscount);
+    }
+
     _validateBusiness(business);
     if (payNowMethod != null) {
       // Quick sale: the invoice is settled in full, in the same transaction,
@@ -305,6 +319,16 @@ class DocumentService {
     String? payNowMethod,
     bool? strictStock,
   }) async {
+    if (type == 'purchase') {
+      AccessGuard.require(PermissionRegistry.purchasesEdit);
+    } else {
+      AccessGuard.require(PermissionRegistry.salesEdit);
+    }
+
+    if (discount > 0) {
+      AccessGuard.require(PermissionRegistry.salesEditDiscount);
+    }
+
     _validateBusiness(business);
     if (payNowMethod != null) {
       // Quick sale: the invoice is settled in full, in the same transaction,
@@ -967,6 +991,10 @@ class DocumentService {
     ProductUnit? unit,
   }) {
     if (isManualPrice && currentPrice != null) {
+      AccessGuard.require(
+        PermissionRegistry.salesEditPrice,
+        'Manual price override requires sales.edit_price permission',
+      );
       return currentPrice;
     }
     if (pricingCategory == null && currentPrice != null) {

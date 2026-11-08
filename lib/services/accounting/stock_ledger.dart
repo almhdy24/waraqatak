@@ -1,6 +1,9 @@
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/stock_movement.dart';
+import '../access/access_context.dart';
+import '../access/access_guard.dart';
+import '../access/permission_registry.dart';
 import 'journal_writer.dart';
 import 'posting_service.dart';
 
@@ -34,6 +37,11 @@ class StockLedger {
     bool updateAverageCost = false,
     bool strictStock = false,
   }) async {
+    if (referenceDocumentId == null &&
+        (type == StockMovement.typeAdjustment ||
+            type == StockMovement.typeOpening)) {
+      AccessGuard.require(PermissionRegistry.stockAdjust);
+    }
     final movementDate = date ?? DateTime.now();
 
     // 1. Fetch current product state
@@ -98,6 +106,8 @@ class StockLedger {
       'provenance': provenance,
       'reason': reason,
       'target_movement_id': targetMovementId,
+      'created_by': AccessContext.currentUserId,
+      'origin_device_id': AccessContext.currentDeviceId,
     });
 
     // 5. Lock base currency if movement quantity != 0

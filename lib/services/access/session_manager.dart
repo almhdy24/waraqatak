@@ -108,6 +108,18 @@ class SessionManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// In-memory setter for test suites.
+  @visibleForTesting
+  void setMultiUserEnabledForTesting(bool enabled) {
+    _isMultiUserEnabled = enabled;
+    if (!enabled) {
+      _currentUser = _defaultOwner;
+      _isLocked = false;
+      _cachedPermissions = {};
+    }
+    notifyListeners();
+  }
+
   /// Sets auto-lock duration in minutes (0 = disabled).
   Future<void> setAutoLockMinutes(int minutes) async {
     _autoLockMinutes = minutes;

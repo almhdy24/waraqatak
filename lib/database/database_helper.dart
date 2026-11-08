@@ -31,7 +31,10 @@ import '../utils/format_utils.dart';
 import '../utils/money_utils.dart';
 import 'access_dao.dart';
 import 'reference_pricing_dao.dart';
+import '../services/access/access_context.dart';
+import '../services/access/access_guard.dart';
 import '../services/access/audit_service.dart';
+import '../services/access/permission_registry.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -1810,6 +1813,7 @@ class DatabaseHelper {
     DateTime? date, {
     DatabaseExecutor? txn,
   }) async {
+    AccessGuard.require(PermissionRegistry.accountingPeriodLock);
     await setSetting(
       'books_closed_through',
       date?.toIso8601String().substring(0, 10),
@@ -1849,7 +1853,10 @@ class DatabaseHelper {
     DatabaseExecutor txn,
     Map<String, Object?> values,
   ) async {
-    final id = await txn.insert('document_payments', values);
+    final copy = Map<String, Object?>.from(values);
+    copy['created_by'] ??= AccessContext.currentUserId;
+    copy['origin_device_id'] ??= AccessContext.currentDeviceId;
+    final id = await txn.insert('document_payments', copy);
     final amount = (values['amount'] as num?)?.toDouble() ?? 0.0;
     if (amount > 0) {
       await _lockCurrencyTxn(txn);
@@ -2598,8 +2605,11 @@ class DatabaseHelper {
 
   // ========== Business ==========
   Future<int> insertBusiness(Business b) async {
+    AccessGuard.require(PermissionRegistry.settingsManage);
     final db = await database;
-    return db.insert('businesses', b.toMap());
+    final map = b.toMap();
+    map['updated_by'] = AccessContext.currentUserId;
+    return db.insert('businesses', map);
   }
 
   Future<Business?> getFirstBusiness({DatabaseExecutor? txn}) async {
@@ -2617,6 +2627,7 @@ class DatabaseHelper {
   }
 
   Future<int> updateBusiness(Business b) async {
+    AccessGuard.require(PermissionRegistry.settingsManage);
     final db = await database;
     return db.transaction((txn) async {
       final currentRows = await txn.query(
@@ -2644,9 +2655,11 @@ class DatabaseHelper {
         }
       }
 
+      final map = b.toMap();
+      map['updated_by'] = AccessContext.currentUserId;
       return txn.update(
         'businesses',
-        b.toMap(),
+        map,
         where: 'id = ?',
         whereArgs: [b.id],
       );
@@ -2655,18 +2668,24 @@ class DatabaseHelper {
 
   // ========== Contacts ==========
   Future<int> insertContact(Contact c) async {
+    AccessGuard.require(PermissionRegistry.contactsManage);
     final db = await database;
     final now = DateTime.now().toIso8601String();
     final map = c.toMap();
     map['created_at'] ??= now;
     map['updated_at'] ??= now;
+    map['created_by'] ??= AccessContext.currentUserId;
+    map['updated_by'] ??= AccessContext.currentUserId;
+    map['origin_device_id'] ??= AccessContext.currentDeviceId;
     return db.insert('contacts', map);
   }
 
   Future<int> updateContact(Contact c) async {
+    AccessGuard.require(PermissionRegistry.contactsManage);
     final db = await database;
     final map = c.toMap();
     map['updated_at'] = DateTime.now().toIso8601String();
+    map['updated_by'] = AccessContext.currentUserId;
     return db.update('contacts', map, where: 'id = ?', whereArgs: [c.id]);
   }
 
@@ -2680,6 +2699,7 @@ class DatabaseHelper {
   }
 
   Future<int> deleteContact(int id) async {
+    AccessGuard.require(PermissionRegistry.contactsDelete);
     final db = await database;
     return db.transaction((txn) async {
       final rows = await txn.rawQuery(
@@ -2695,12 +2715,14 @@ class DatabaseHelper {
   }
 
   Future<void> setContactActive(int id, {required bool active}) async {
+    AccessGuard.require(PermissionRegistry.contactsManage);
     final db = await database;
     await db.update(
       'contacts',
       {
         'active': active ? 1 : 0,
         'updated_at': DateTime.now().toIso8601String(),
+        'updated_by': AccessContext.currentUserId,
       },
       where: 'id = ?',
       whereArgs: [id],
@@ -2828,6 +2850,9 @@ class DatabaseHelper {
     final pMap = p.toMap();
     pMap['average_cost'] = avgCost;
     pMap['cost_status'] = costStatus;
+    pMap['created_by'] ??= AccessContext.currentUserId;
+    pMap['updated_by'] ??= AccessContext.currentUserId;
+    pMap['origin_device_id'] ??= AccessContext.currentDeviceId;
 
     final id = await txn.insert('products', pMap);
     if (p.isProduct && p.stockQuantity > 0) {
@@ -2898,6 +2923,7 @@ class DatabaseHelper {
     // purchase_price in the product form.
     map.remove('average_cost');
     map.remove('cost_status');
+    map['updated_by'] = AccessContext.currentUserId;
 
     final count = await txn.update(
       'products',
@@ -2914,6 +2940,7 @@ class DatabaseHelper {
   }
 
   Future<int> insertProduct(Product p) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
     final db = await database;
     final id = await db.transaction((txn) => _insertProductTxn(txn, p));
     CatalogEvents.notifyPricesChanged();
@@ -2924,6 +2951,7 @@ class DatabaseHelper {
     Product p, {
     bool allowClearReferencePricing = false,
   }) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
     final db = await database;
     final count = await db.transaction(
       (txn) => _updateProductTxn(
@@ -2944,6 +2972,7 @@ class DatabaseHelper {
     List<ProductUnit> units, {
     bool allowClearReferencePricing = false,
   }) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
     final db = await database;
     final productId = await db.transaction<int>((txn) async {
       final int id;
@@ -2971,6 +3000,7 @@ class DatabaseHelper {
   }
 
   Future<int> deleteProduct(int id) async {
+    AccessGuard.require(PermissionRegistry.productsDelete);
     final db = await database;
     return db.transaction((txn) async {
       final refRows = await txn.query(
@@ -3144,10 +3174,14 @@ class DatabaseHelper {
   }
 
   Future<void> setProductActive(int id, {required bool active}) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
     final db = await database;
     await db.update(
       'products',
-      {'is_active': active ? 1 : 0},
+      {
+        'is_active': active ? 1 : 0,
+        'updated_by': AccessContext.currentUserId,
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -3568,6 +3602,14 @@ class DatabaseHelper {
 
       await assertPeriodOpen(doc.date, txn: txn);
 
+      if (doc.type == 'purchase') {
+        AccessGuard.require(PermissionRegistry.purchasesCreate);
+      } else if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
+        AccessGuard.require(PermissionRegistry.vouchersCreate);
+      } else {
+        AccessGuard.require(PermissionRegistry.salesCreate);
+      }
+
       int? contactId = doc.contactId;
       if (contact != null) {
         contactId = contact.id ?? await txn.insert('contacts', contact.toMap());
@@ -3596,15 +3638,23 @@ class DatabaseHelper {
         currencyCode: doc.currencyCode,
       );
 
+      Map<String, dynamic> buildDocMap(Document d) {
+        final m = d.toMap();
+        m['created_by'] ??= AccessContext.currentUserId;
+        m['updated_by'] ??= AccessContext.currentUserId;
+        m['origin_device_id'] ??= AccessContext.currentDeviceId;
+        return m;
+      }
+
       int docId;
       try {
-        docId = await txn.insert('documents', newDoc.toMap());
+        docId = await txn.insert('documents', buildDocMap(newDoc));
       } on DatabaseException catch (e) {
         if (e.isUniqueConstraintError() ||
             e.toString().toLowerCase().contains('unique')) {
           final retryNumber = await getNextDocumentNumber(txn, doc.type);
           newDoc = newDoc.copyWith(documentNumber: retryNumber);
-          docId = await txn.insert('documents', newDoc.toMap());
+          docId = await txn.insert('documents', buildDocMap(newDoc));
         } else {
           rethrow;
         }
@@ -4175,6 +4225,12 @@ class DatabaseHelper {
   }) async {
     final db = await database;
     await db.transaction((txn) async {
+      if (doc.type == 'purchase') {
+        AccessGuard.require(PermissionRegistry.purchasesEdit);
+      } else {
+        AccessGuard.require(PermissionRegistry.salesEdit);
+      }
+
       int? contactId = doc.contactId;
       if (contact != null) {
         contactId = contact.id ?? await txn.insert('contacts', contact.toMap());
@@ -4606,6 +4662,7 @@ class DatabaseHelper {
           'related_document_id': doc.relatedDocumentId,
           'status': effectiveStatus,
           'currency_code': doc.currencyCode,
+          'updated_by': AccessContext.currentUserId,
         },
         where: 'id = ?',
         whereArgs: [doc.id],
@@ -4940,6 +4997,11 @@ class DatabaseHelper {
       );
       if (docRows.isEmpty) return 0;
       final doc = Document.fromMap(docRows.first);
+      if (doc.type == 'purchase') {
+        AccessGuard.require(PermissionRegistry.purchasesDelete);
+      } else {
+        AccessGuard.require(PermissionRegistry.salesDelete);
+      }
       await assertPeriodOpen(doc.date, txn: txn);
 
       // Payment receipts & expense vouchers: block hard deletion if financial ledger history exists.
@@ -5245,6 +5307,14 @@ class DatabaseHelper {
       );
       if (docRows.isEmpty) return;
       final doc = Document.fromMap(docRows.first);
+      if (doc.type == 'purchase') {
+        AccessGuard.require(PermissionRegistry.purchasesCancel);
+      } else {
+        AccessGuard.require(PermissionRegistry.salesCancel);
+      }
+      if (refundStatus != null) {
+        AccessGuard.require(PermissionRegistry.salesRefund);
+      }
       await assertPeriodOpen(doc.date, txn: txn);
 
       if (doc.status == DocumentStatus.cancelled) {
@@ -5531,7 +5601,10 @@ class DatabaseHelper {
 
       await txn.update(
         'documents',
-        {'status': DocumentStatus.cancelled},
+        {
+          'status': DocumentStatus.cancelled,
+          'updated_by': AccessContext.currentUserId,
+        },
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -5539,11 +5612,11 @@ class DatabaseHelper {
       await JournalWriter.reverseDocument(txn, id);
 
       if (refundStatus != null && doc.paid > 0) {
-        await txn.insert('audit_log', {
-          'action': 'document_refund_status',
-          'entity_type': 'document',
-          'entity_id': id,
-          'details': jsonEncode({
+        await logAuditEvent(
+          'document_refund_status',
+          entityType: 'document',
+          entityId: id,
+          details: jsonEncode({
             'status': refundStatus,
             'amount': doc.paid,
             'currency': doc.currencyCode,
@@ -5551,8 +5624,8 @@ class DatabaseHelper {
             if (refundNotes != null && refundNotes.isNotEmpty)
               'notes': refundNotes,
           }),
-          'timestamp': DateTime.now().toIso8601String(),
-        });
+          txn: txn,
+        );
       }
     });
   }
@@ -5563,6 +5636,7 @@ class DatabaseHelper {
     required String status,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.salesRefund);
     final db = await database;
     final docRows = await db.query(
       'documents',
@@ -5572,19 +5646,18 @@ class DatabaseHelper {
     );
     if (docRows.isEmpty) throw StateError('Document not found');
     final r = docRows.first;
-    await db.insert('audit_log', {
-      'action': 'document_refund_status',
-      'entity_type': 'document',
-      'entity_id': documentId,
-      'details': jsonEncode({
+    await logAuditEvent(
+      'document_refund_status',
+      entityType: 'document',
+      entityId: documentId,
+      details: jsonEncode({
         'status': status,
         'amount': (r['paid'] as num?)?.toDouble() ?? 0.0,
         'currency': (r['currency_code'] as String?) ?? 'SDG',
         'doc_type': r['type'] as String?,
         if (notes != null && notes.isNotEmpty) 'notes': notes,
       }),
-      'timestamp': DateTime.now().toIso8601String(),
-    });
+    );
   }
 
   /// Queries the latest refund status recorded for a document in audit_log.
@@ -7417,6 +7490,7 @@ class DatabaseHelper {
   // ========== Tax Profiles ==========
 
   Future<int> insertTaxProfile(TaxProfile p) async {
+    AccessGuard.require(PermissionRegistry.taxProfilesManage);
     final db = await database;
     return db.transaction((txn) async {
       if (p.isDefault) {
@@ -7427,6 +7501,7 @@ class DatabaseHelper {
   }
 
   Future<int> updateTaxProfile(TaxProfile p) async {
+    AccessGuard.require(PermissionRegistry.taxProfilesManage);
     final db = await database;
     return db.transaction((txn) async {
       if (p.isDefault) {
@@ -7447,6 +7522,7 @@ class DatabaseHelper {
   }
 
   Future<int> deleteTaxProfile(int id) async {
+    AccessGuard.require(PermissionRegistry.taxProfilesManage);
     final db = await database;
     return db.delete('tax_profiles', where: 'id = ?', whereArgs: [id]);
   }
@@ -7516,6 +7592,7 @@ class DatabaseHelper {
     String key, {
     required bool enabled,
   }) async {
+    AccessGuard.require(PermissionRegistry.paymentMethodsManage);
     final db = await database;
     await db.transaction((txn) async {
       await txn.update(
@@ -7559,6 +7636,7 @@ class DatabaseHelper {
   }
 
   Future<void> setPaymentMethodDefault(String key) async {
+    AccessGuard.require(PermissionRegistry.paymentMethodsManage);
     final db = await database;
     await db.transaction((txn) async {
       await txn.update('payment_methods', {'is_default': 0});
@@ -7576,6 +7654,7 @@ class DatabaseHelper {
     required String labelAr,
     required String labelEn,
   }) async {
+    AccessGuard.require(PermissionRegistry.paymentMethodsManage);
     final db = await database;
     final maxOrder =
         Sqflite.firstIntValue(
@@ -7598,6 +7677,7 @@ class DatabaseHelper {
     String labelAr,
     String labelEn,
   ) async {
+    AccessGuard.require(PermissionRegistry.paymentMethodsManage);
     final db = await database;
     await db.update(
       'payment_methods',
@@ -7628,6 +7708,7 @@ class DatabaseHelper {
   }
 
   Future<int> deletePaymentMethod(int id) async {
+    AccessGuard.require(PermissionRegistry.paymentMethodsManage);
     final db = await database;
     final rows = await db.query(
       'payment_methods',
@@ -7836,6 +7917,7 @@ class DatabaseHelper {
     String? categoryFilter,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.stocktakeManage);
     final db = await database;
     return db.transaction((txn) async {
       final now = DateTime.now();
@@ -7859,6 +7941,7 @@ class DatabaseHelper {
         'discrepant_items': 0,
         'created_at': now.toIso8601String(),
         'updated_at': now.toIso8601String(),
+        'created_by': AccessContext.currentUserId,
       });
 
       // 2. Query products for session
@@ -7974,6 +8057,7 @@ class DatabaseHelper {
     double? countedQuantity, {
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.stocktakeManage);
     final db = await database;
     return db.update(
       'stocktake_items',
@@ -7993,6 +8077,7 @@ class DatabaseHelper {
     int sessionId, {
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.stocktakeFinalize);
     final db = await database;
     return db.transaction((txn) async {
       await assertPeriodOpen(DateTime.now(), txn: txn);
@@ -8115,14 +8200,14 @@ class DatabaseHelper {
       );
 
       // Audit log
-      await txn.insert('audit_log', {
-        'action': 'stocktake_finalized',
-        'entity_type': 'stocktake_session',
-        'entity_id': sessionId,
-        'details':
+      await logAuditEvent(
+        'stocktake_finalized',
+        entityType: 'stocktake_session',
+        entityId: sessionId,
+        details:
             'session="${session.sessionNumber}" matched=$matchedCount discrepant=$discrepantCount adjusted=$adjustedCount',
-        'timestamp': now.toIso8601String(),
-      });
+        txn: txn,
+      );
 
       return {
         'matched': matchedCount,
@@ -8134,6 +8219,7 @@ class DatabaseHelper {
   }
 
   Future<void> cancelStocktakeSession(int sessionId) async {
+    AccessGuard.require(PermissionRegistry.stocktakeManage);
     final db = await database;
     await db.transaction((txn) async {
       final sessionRow = await txn.query(

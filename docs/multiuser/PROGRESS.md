@@ -8,9 +8,9 @@ Branch: feat/multi-user
 | 1 | Schema v29, migration, fresh-install parity | DONE | 8ed9ba1 | guard tests (12 passed), analyze (0 issues) | Schema v29, access_dao.dart, migration_29_test.dart |
 | 2 | Authentication, sessions, recovery | DONE | 0f7796e | auth_service_test (8 passed), analyze (0 issues) | AuthService, SessionManager, RecoveryService, UserSessionScope |
 | 3 | Permission registry, engine, AccessGuard, seeding | DONE | f8a5e39 | permission_engine_test (11 passed), architecture_guards (3 passed), analyze (0 issues) | PermissionRegistry, PermissionService, AccessGuard, AccessSeeder |
-| 4 | Protected, attributed audit log | DONE | (pending commit) | audit_service_test (3 passed), architecture_guards (3 passed), analyze (0 issues) | AuditService, tamper-evident hash chain, triggers, backup_service fix |
-| 5 | Write-path enforcement and attribution | IN_PROGRESS | - | - | Starting Batch 5 |
-| 6 | Read, report and export enforcement, redaction | TODO | - | - | - |
+| 4 | Protected, attributed audit log | DONE | cc5f728 | audit_service_test (3 passed), architecture_guards (3 passed), analyze (0 issues) | AuditService, tamper-evident hash chain, triggers, backup_service fix |
+| 5 | Write-path enforcement and attribution | DONE | (pending commit) | access_guards_test (7 passed), architecture_guards (3 passed), analyze (0 issues) | Write-path guards, field-level price/discount checks, attribution stamping |
+| 6 | Read, report and export enforcement, redaction | IN_PROGRESS | - | - | Starting Batch 6 |
 | 7 | UI and flows (Arabic RTL + English) | TODO | - | - | - |
 | 8 | Backup/restore, license, repair interplay | TODO | - | - | - |
 | 9 | Phase-2 notes and final verification | TODO | - | - | - |
@@ -52,4 +52,4 @@ Branch: feat/multi-user
 | Database Diagnostics / Reports | Pending | system.repair | - |
 
 ## RESUME NOTE
-Batch 4 completed. Starting Batch 5: Write-path enforcement and attribution.
+Batch 5 completed. Starting Batch 6: Read, report and export enforcement, redaction.

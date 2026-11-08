@@ -38,20 +38,29 @@ class AuditService {
 
   final Sha256 _sha256 = Sha256();
   String? _testingDeviceId;
+  String? _cachedDeviceId;
 
   @visibleForTesting
   void setTestingDeviceId(String? deviceId) {
     _testingDeviceId = deviceId;
   }
 
+  /// Cached device identifier string.
+  String get currentDeviceId =>
+      _testingDeviceId ??
+      _cachedDeviceId ??
+      '00000000-0000-0000-0000-000000000000';
+
   /// Resolves current device identifier safely.
   Future<String> resolveDeviceId() async {
     if (_testingDeviceId != null) return _testingDeviceId!;
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
     try {
-      return await LicenseService.instance.getOrCreateDeviceId();
+      _cachedDeviceId = await LicenseService.instance.getOrCreateDeviceId();
     } catch (_) {
-      return '00000000-0000-0000-0000-000000000000';
+      _cachedDeviceId = '00000000-0000-0000-0000-000000000000';
     }
+    return _cachedDeviceId!;
   }
 
   /// Formats the audit payload string for hashing.
