@@ -946,6 +946,7 @@ class DatabaseRepairService {
     bool createSafetyBackup = true,
     AppLocalizations? l10n,
   }) async {
+    AccessGuard.require(PermissionRegistry.systemRepair);
     final isAr = l10n?.isArabic ?? false;
     final safeIssues = issues.where((i) => i.isSafeAutoRepair).toList();
     if (safeIssues.isEmpty) {

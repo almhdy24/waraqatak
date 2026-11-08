@@ -81,4 +81,4 @@ Current status: Hardened across Batches 2–8.
 (None)
 
 ## RESUME NOTE
-Batch 8 complete (Crypto Performance & Audit Chain Safety: serialized `logEvent` mutex queue prevents hash chain fork; keyset cursor pagination in `verifyChain` bounds memory; device-calibrated PBKDF2 iterations clamped 20k-200k persisted in `app_settings` and `users.kdf_iterations`; recovery iterations persisted). Resume with Batch 9 (Red-Team & E2E Flow Tests).
+Batch 9 complete (Red-Team & E2E Flow Tests: all 9 threat model attacks covered and verified in `test/access/privilege_escalation_test.dart`; end-to-end multi-user lifecycle, POS operation, lock barrier, re-auth, disaster recovery, and audit chain integrity verified in `test/access/flows_test.dart`). Resume with Batch 10 (Final Verification & Device QA).
