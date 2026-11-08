@@ -11,9 +11,9 @@ Branch: feat/multi-user
 | 4 | Protected, attributed audit log | DONE | cc5f728 | audit_service_test (3 passed), architecture_guards (3 passed), analyze (0 issues) | AuditService, tamper-evident hash chain, triggers, backup_service fix |
 | 5 | Write-path enforcement and attribution | DONE | 6f756e0 | access_guards_test (7 passed), architecture_guards (3 passed), analyze (0 issues) | Write-path guards, field-level price/discount checks, attribution stamping |
 | 6 | Read, report and export enforcement, redaction | DONE | 819782e | redaction_test (6 passed), access_guards_test (7 passed), analyze (0 issues) | Product redaction, CSV/PDF gates, dashboard & reports filter, product form price hiding, stock movements cost hiding |
-| 7 | UI and flows (Arabic RTL + English) | DONE | commit pending | 39 tests passed, analyze (0 issues) | PinLockScreen, RecoveryScreen, MultiUserWizardScreen, UsersListScreen, UserFormScreen, RolesScreen, AuditTrailScreen, MainShell lock |
-| 8 | Backup/restore, license, repair interplay | IN_PROGRESS | - | - | Starting Batch 8 |
-| 9 | Phase-2 notes and final verification | TODO | - | - | - |
+| 7 | UI and flows (Arabic RTL + English) | DONE | f40a89a | 39 tests passed, analyze (0 issues) | PinLockScreen, RecoveryScreen, MultiUserWizardScreen, UsersListScreen, UserFormScreen, RolesScreen, AuditTrailScreen, MainShell lock |
+| 8 | Backup/restore, license, repair interplay | DONE | commit pending | backup_access_interplay_test (3 passed), analyze (0 issues) | Decision D7, D8, license expiry fail-closed, backup preservation |
+| 9 | Phase-2 notes and final verification | IN_PROGRESS | - | - | Starting Batch 9 |
 
 ## DECISIONS
 - D1: Schema v29, single migration block.
@@ -52,4 +52,4 @@ Branch: feat/multi-user
 | Database Diagnostics / Reports | DONE | system.repair | DatabaseHelper / access_guard |
 
 ## RESUME NOTE
-Batch 7 completed. Starting Batch 8: Backup/restore, license, repair interplay.
+Batch 8 completed. Starting Batch 9: Phase-2 notes, final verification & documentation.
