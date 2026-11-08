@@ -2724,6 +2724,28 @@ class AppLocalizations {
   String get copy => _t('نسخ', 'Copy');
   String get invalidPasswordLength => _t('كلمة المرور يجب أن لا تقل عن 6 أحرف', 'Password must be at least 6 characters');
 
+  // ========== ANALYTICS & TELEMETRY ==========
+  String get analyticsConsentTitle => _t(
+    'إحصائيات الاستخدام المجهولة',
+    'Anonymous usage statistics',
+  );
+  String get analyticsConsentDesc => _t(
+    'مساعدة في تحسين التطبيق عبر بيانات تشغيلية مجهولة، بدون مبالغ أو أسماء أو فواتير',
+    'Help improve the app via anonymous telemetry, excluding amounts, names, and invoices',
+  );
+  String get anonymousAnalyticsTitle => _t(
+    'إحصائيات الاستخدام المجهولة',
+    'Anonymous Telemetry',
+  );
+  String get anonymousAnalyticsSubtitle => _t(
+    'بيانات مجهولة لتحسين الأداء بدون مبالغ أو أسماء',
+    'Anonymous metrics to improve performance, zero amounts or names',
+  );
+  String get anonymousAnalyticsExplainer => _t(
+    'يجمع التطبيق إحصائيات مجهولة حول الميزات المستخدمة (مثل إنشاء الفواتير والنسخ الاحتياطي) لتحسين الاستقرار. لا يتم إرسال أي مبالغ، أسعار، تكاليف، أرقام هواتف، أسماء عملاء أو موردين، أو معلومات شخصية إطلاقاً. يمكنك إيقاف هذا الخيار في أي وقت من الإعدادات.',
+    'The app collects anonymous statistics on feature usage (such as document creation and backup) to improve reliability. No amounts, prices, costs, phone numbers, contact names, or personal data are ever collected. You can disable this anytime in Settings.',
+  );
+
   bool get isArabic => langCode == 'ar';
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
