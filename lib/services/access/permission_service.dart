@@ -1,6 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
+import 'access_policy.dart';
 import 'permission_registry.dart';
 import 'session_manager.dart';
 
@@ -77,16 +78,22 @@ class PermissionService {
 
     for (final row in overrideRows) {
       final key = row['permission_key'] as String;
-      final effect = row['effect'] as String;
+      final rawEffect = row['effect'];
+      final effect = rawEffect?.toString().toLowerCase().trim() ?? '';
 
       // Unknown keys in DB are ignored safely
       if (PermissionRegistry.get(key) == null) continue;
 
-      if (effect.toLowerCase() == 'allow') {
+      if (effect == 'allow' || effect == '1' || effect == 'true') {
         effective.add(key);
-      } else if (effect.toLowerCase() == 'deny') {
+      } else if (effect == 'deny' || effect == '0' || effect == 'false') {
         effective.remove(key); // DENY always wins
       }
+    }
+
+    // 6. OWNER_ONLY keys are strictly stripped for all non-Owner accounts (H1)
+    if (!user.isOwner) {
+      effective.removeAll(AccessPolicy.ownerOnlyKeys);
     }
 
     _cache[user.id] = effective;

@@ -29,6 +29,7 @@ class PermissionItem {
   final String descriptionEn;
   final PermissionGroup group;
   final bool isSensitive;
+  final bool isOwnerOnly;
 
   const PermissionItem({
     required this.key,
@@ -38,6 +39,7 @@ class PermissionItem {
     required this.descriptionEn,
     required this.group,
     this.isSensitive = false,
+    this.isOwnerOnly = false,
   });
 
   String name(bool isArabic) => isArabic ? nameAr : nameEn;
@@ -492,6 +494,7 @@ abstract final class PermissionRegistry {
       descriptionEn: 'Restore database from backup file, replacing local data',
       group: PermissionGroup.system,
       isSensitive: true,
+      isOwnerOnly: true,
     ),
     PermissionItem(
       key: systemRepair,
@@ -501,6 +504,7 @@ abstract final class PermissionRegistry {
       descriptionEn: 'Run database health diagnostics and repair scripts',
       group: PermissionGroup.system,
       isSensitive: true,
+      isOwnerOnly: true,
     ),
     PermissionItem(
       key: accountingPeriodLock,
@@ -575,6 +579,7 @@ abstract final class PermissionRegistry {
       descriptionEn: 'Activate license keys and manage subscription',
       group: PermissionGroup.access,
       isSensitive: true,
+      isOwnerOnly: true,
     ),
   ];
 

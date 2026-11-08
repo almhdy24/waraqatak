@@ -251,7 +251,111 @@ abstract final class AccessDao {
 
     // 6. Ensure audit log triggers and genesis anchor
     await createAuditLogTriggers(db);
+    await createSecurityTriggers(db);
     await AuditService.instance.ensureGenesis(db);
+  }
+
+  /// Creates SQLite triggers enforcing security invariants (H6, INV-14..INV-18):
+  /// - Owner row cannot be deleted.
+  /// - Owner core columns (is_owner, is_active, role_id, username) are immutable.
+  /// - Only one Owner account can ever exist.
+  /// - Non-owner users cannot be promoted to Owner.
+  /// - System roles cannot be deleted or modified.
+  /// - Owner role permissions cannot be deleted or modified.
+  static Future<void> createSecurityTriggers(DatabaseExecutor db) async {
+    if (await tableExists(db, 'users')) {
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_users_owner_no_delete
+        BEFORE DELETE ON users
+        FOR EACH ROW
+        WHEN OLD.is_owner = 1
+        BEGIN
+          SELECT RAISE(ABORT, 'The Owner account is protected and cannot be deleted');
+        END;
+      ''');
+
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_users_owner_protect_columns
+        BEFORE UPDATE ON users
+        FOR EACH ROW
+        WHEN OLD.is_owner = 1 AND (
+          NEW.is_owner != 1 OR
+          NEW.is_active != 1 OR
+          NEW.role_id != OLD.role_id OR
+          NEW.username != OLD.username
+        )
+        BEGIN
+          SELECT RAISE(ABORT, 'Owner account core attributes (is_owner, is_active, role_id, username) are immutable');
+        END;
+      ''');
+
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_users_single_owner
+        BEFORE INSERT ON users
+        FOR EACH ROW
+        WHEN NEW.is_owner = 1 AND (SELECT COUNT(*) FROM users WHERE is_owner = 1) > 0
+        BEGIN
+          SELECT RAISE(ABORT, 'Only a single Owner account is permitted');
+        END;
+      ''');
+
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_users_no_promote_to_owner
+        BEFORE UPDATE ON users
+        FOR EACH ROW
+        WHEN OLD.is_owner = 0 AND NEW.is_owner = 1
+        BEGIN
+          SELECT RAISE(ABORT, 'Cannot promote user to Owner');
+        END;
+      ''');
+    }
+
+    if (await tableExists(db, 'roles')) {
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_roles_system_no_delete
+        BEFORE DELETE ON roles
+        FOR EACH ROW
+        WHEN OLD.is_system = 1
+        BEGIN
+          SELECT RAISE(ABORT, 'System roles are protected and cannot be deleted');
+        END;
+      ''');
+
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_roles_system_no_update
+        BEFORE UPDATE ON roles
+        FOR EACH ROW
+        WHEN OLD.is_system = 1 AND (
+          NEW.id != OLD.id OR
+          NEW.is_system != 1
+        )
+        BEGIN
+          SELECT RAISE(ABORT, 'System roles cannot be modified or demoted');
+        END;
+      ''');
+    }
+
+    if (await tableExists(db, 'role_permissions')) {
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_owner_role_permissions_no_delete
+        BEFORE DELETE ON role_permissions
+        FOR EACH ROW
+        WHEN OLD.role_id = 'role-owner'
+        BEGIN
+          SELECT RAISE(ABORT, 'Permissions cannot be deleted from the Owner role');
+        END;
+      ''');
+
+      await db.execute('''
+        CREATE TRIGGER IF NOT EXISTS trg_owner_role_permissions_no_update
+        BEFORE UPDATE ON role_permissions
+        FOR EACH ROW
+        WHEN OLD.role_id = 'role-owner'
+        BEGIN
+          SELECT RAISE(ABORT, 'Permissions cannot be modified on the Owner role');
+        END;
+      ''');
+    }
   }
 
   /// Creates SQLite triggers preventing UPDATE and DELETE on audit_log.
@@ -280,5 +384,10 @@ abstract final class AccessDao {
     await createAccessControlTables(db);
     await ensureAttributionColumns(db);
     await seedAccessControlDefaults(db);
+  }
+
+  /// Full Schema v30 upgrade routine: installs security triggers.
+  static Future<void> upgradeToSchemaV30(DatabaseExecutor db) async {
+    await createSecurityTriggers(db);
   }
 }

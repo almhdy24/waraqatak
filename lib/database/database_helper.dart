@@ -40,7 +40,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 29;
+  static const int dbVersion = 30;
 
   static Database? _database;
 
@@ -687,6 +687,10 @@ class DatabaseHelper {
       await AccessDao.createAccessControlTables(db);
       await AccessDao.ensureAttributionColumns(db);
       await AccessDao.seedAccessControlDefaults(db);
+    }
+
+    if (version >= 30) {
+      await AccessDao.createSecurityTriggers(db);
     }
   }
 
@@ -1527,6 +1531,10 @@ class DatabaseHelper {
 
     if (oldVersion < 29 && newVersion >= 29) {
       await AccessDao.upgradeToSchemaV29(db);
+    }
+
+    if (oldVersion < 30 && newVersion >= 30) {
+      await AccessDao.upgradeToSchemaV30(db);
     }
   }
 

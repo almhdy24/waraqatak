@@ -36,7 +36,7 @@ void main() {
       );
 
       try {
-        expect(DatabaseHelper.dbVersion, 29);
+        expect(DatabaseHelper.dbVersion >= 29, isTrue);
 
         // Verify new access control tables
         final tables = await db.rawQuery(

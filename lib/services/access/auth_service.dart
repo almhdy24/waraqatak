@@ -5,6 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
+import 'access_guard.dart';
+import 'access_policy.dart';
+import 'audit_service.dart';
+import 'permission_service.dart';
+import 'session_manager.dart';
 
 class _HashRequest {
   final String secret;
@@ -259,6 +264,8 @@ class AuthService {
   Future<void> setPassword(
     String userId,
     String newPassword, {
+    AppUser? actor,
+    String? currentPassword,
     DatabaseExecutor? executor,
   }) async {
     if (!isValidPassword(newPassword)) {
@@ -268,6 +275,82 @@ class AuthService {
       );
     }
     final db = executor ?? await DatabaseHelper.instance.database;
+
+    final enforcePolicy =
+        !AccessGuard.isSystemContext && SessionManager.instance.isMultiUserEnabled;
+    if (enforcePolicy) {
+      final effectiveActor = actor ?? SessionManager.instance.currentUser;
+      if (effectiveActor == null) {
+        throw const AuthException(
+          'غير مصرح: يجب تسجيل الدخول',
+          'Unauthorized: session is not authenticated',
+        );
+      }
+
+      final targetRows = await db.query(
+        'users',
+        where: 'id = ?',
+        whereArgs: [userId],
+        limit: 1,
+      );
+      if (targetRows.isEmpty) {
+        throw const AuthException('المستخدم غير موجود', 'User not found');
+      }
+      final targetUser = AppUser.fromMap(targetRows.first);
+
+      if (effectiveActor.id == targetUser.id) {
+        if (targetUser.hasPassword) {
+          if (currentPassword == null || currentPassword.isEmpty) {
+            throw const AuthException(
+              'يجب إدخال كلمة المرور الحالية لتغيير كلمة المرور',
+              'Current password required to change password',
+            );
+          }
+          final verified = await verifyPassword(
+            targetUser.id,
+            currentPassword,
+            executor: db,
+          );
+          if (!verified) {
+            throw const AuthException(
+              'كلمة المرور الحالية غير صحيحة',
+              'Incorrect current password',
+            );
+          }
+        }
+      } else {
+        final actorPerms = await PermissionService.instance
+            .getEffectivePermissions(effectiveActor, executor: db);
+        final targetPerms = await PermissionService.instance
+            .getEffectivePermissions(targetUser, executor: db);
+
+        final policy = AccessPolicy.canResetCredentials(
+          actor: effectiveActor,
+          target: targetUser,
+          actorPermissions: actorPerms,
+          targetPermissions: targetPerms,
+        );
+
+        if (!policy.isAllowed) {
+          await AuditService.instance.logEvent(
+            db,
+            'privilege_escalation_denied',
+            entityType: 'user',
+            details: jsonEncode({
+              'action': 'setPassword',
+              'actor_user_id': effectiveActor.id,
+              'actor_username': effectiveActor.username,
+              'target_user_id': targetUser.id,
+              'target_username': targetUser.username,
+              'decision': policy.decision.name,
+              'reason': policy.reasonEn,
+            }),
+          );
+          throw AuthException(policy.reasonAr, policy.reasonEn);
+        }
+      }
+    }
+
     final salt = generateSalt();
     final hash = await hashSecret(newPassword, salt);
     final now = DateTime.now().toIso8601String();
@@ -289,6 +372,8 @@ class AuthService {
   Future<void> setPin(
     String userId,
     String newPin, {
+    AppUser? actor,
+    String? currentPinOrPassword,
     DatabaseExecutor? executor,
   }) async {
     if (!isValidPin(newPin)) {
@@ -298,6 +383,93 @@ class AuthService {
       );
     }
     final db = executor ?? await DatabaseHelper.instance.database;
+
+    final enforcePolicy =
+        !AccessGuard.isSystemContext && SessionManager.instance.isMultiUserEnabled;
+    if (enforcePolicy) {
+      final effectiveActor = actor ?? SessionManager.instance.currentUser;
+      if (effectiveActor == null) {
+        throw const AuthException(
+          'غير مصرح: يجب تسجيل الدخول',
+          'Unauthorized: session is not authenticated',
+        );
+      }
+
+      final targetRows = await db.query(
+        'users',
+        where: 'id = ?',
+        whereArgs: [userId],
+        limit: 1,
+      );
+      if (targetRows.isEmpty) {
+        throw const AuthException('المستخدم غير موجود', 'User not found');
+      }
+      final targetUser = AppUser.fromMap(targetRows.first);
+
+      if (effectiveActor.id == targetUser.id) {
+        if (targetUser.hasPin) {
+          if (currentPinOrPassword == null || currentPinOrPassword.isEmpty) {
+            throw const AuthException(
+              'يجب إدخال رمز المرور أو كلمة المرور الحالية',
+              'Current PIN or password required',
+            );
+          }
+          bool verified = false;
+          if (isValidPin(currentPinOrPassword)) {
+            final pinHash = await hashSecret(
+              currentPinOrPassword,
+              targetUser.pinSalt!,
+              iterations: targetUser.kdfIterations,
+            );
+            verified = constantTimeEquals(pinHash, targetUser.pinHash!);
+          }
+          if (!verified && targetUser.hasPassword) {
+            verified = await verifyPassword(
+              targetUser.id,
+              currentPinOrPassword,
+              executor: db,
+            );
+          }
+          if (!verified) {
+            throw const AuthException(
+              'رمز المرور أو كلمة المرور الحالية غير صحيحة',
+              'Incorrect current PIN or password',
+            );
+          }
+        }
+      } else {
+        final actorPerms = await PermissionService.instance
+            .getEffectivePermissions(effectiveActor, executor: db);
+        final targetPerms = await PermissionService.instance
+            .getEffectivePermissions(targetUser, executor: db);
+
+        final policy = AccessPolicy.canResetCredentials(
+          actor: effectiveActor,
+          target: targetUser,
+          actorPermissions: actorPerms,
+          targetPermissions: targetPerms,
+        );
+
+        if (!policy.isAllowed) {
+          await AuditService.instance.logEvent(
+            db,
+            'privilege_escalation_denied',
+            entityType: 'user',
+            details: jsonEncode({
+              'action': 'setPin',
+              'actor_user_id': effectiveActor.id,
+              'actor_username': effectiveActor.username,
+              'target_user_id': targetUser.id,
+              'target_username': targetUser.username,
+              'decision': policy.decision.name,
+              'reason': policy.reasonEn,
+            }),
+          );
+          throw AuthException(policy.reasonAr, policy.reasonEn);
+        }
+      }
+    }
+
     final salt = generateSalt();
     final hash = await hashSecret(newPin, salt);
     final now = DateTime.now().toIso8601String();

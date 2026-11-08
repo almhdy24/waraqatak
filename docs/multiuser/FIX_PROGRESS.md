@@ -6,8 +6,8 @@ Branch: fix/multiuser-stabilization
 | # | Title | Status (TODO/IN_PROGRESS/DONE/BLOCKED) | Commit | Tests run | Notes |
 |---|-------|---|---|---|---|
 | 1 | Audit & entry-point matrix | DONE | cde497f | flutter analyze, test/guards/access_guards_test.dart | Deep inspection completed; FIX_AUDIT.md and FIX_PROGRESS.md generated; all D/N/E defects confirmed with file/line evidence. |
-| 2 | Session layer hardening | DONE | Pending | test/services/session_hardening_test.dart (20 passed), test/guards/access_guards_test.dart, architecture_guards_test.dart | Fail-closed init, DB-first enable, locked can() check, attribution fix, UserSessionScope assert, AppUser sentinel copyWith, auto-lock periodic check. |
-| 3 | AccessPolicy, Owner protection & OWNER_ONLY keys | TODO | | | access_policy.dart, OWNER_ONLY stripping, Owner triggers, escalation audit. |
+| 2 | Session layer hardening | DONE | 614c1c1 | test/services/session_hardening_test.dart (20 passed), test/guards/access_guards_test.dart, architecture_guards_test.dart | Fail-closed init, DB-first enable, locked can() check, attribution fix, UserSessionScope assert, AppUser sentinel copyWith, auto-lock periodic check. |
+| 3 | AccessPolicy, Owner protection & OWNER_ONLY keys | DONE | 743611b | test/services/access_policy_test.dart (15 passed), session_hardening_test.dart, access_guards_test.dart, architecture_guards_test.dart | access_policy.dart (H1-H4), OWNER_ONLY stripping in PermissionService, Schema v30 SQLite security triggers (H6), escalation audit (H7), AuthService guards (E3). |
 | 4 | AccessAdminService | TODO | | | Move all writes out of screens into transactional AccessAdminService. Disable instead of delete. |
 | 5 | Screen, route & Settings lockdown | TODO | | | ScreenAccessPolicy manifest, PermissionGate push & build checks, service guards on settings/repair/backup. |
 | 6 | Login, PIN, wizard, recovery & lockout-DoS | TODO | | | Explicit PIN confirm, device throttle, atomic recovery with pre-unlock code display, optional Owner PIN. |
@@ -39,14 +39,14 @@ Branch: fix/multiuser-stabilization
 | N9 | Fixed | Batch 2 | session_hardening_test | `AppUser.copyWith` uses sentinel pattern to allow clearing nullable fields |
 | E1 | Confirmed | Batch 3, 4 | Pending | Owner edit path in `user_form_screen` skips all permission checks |
 | E2 | Confirmed | Batch 4, 5 | Pending | Tapping any user row in `users_list_screen` opens edit form without guard |
-| E3 | Confirmed | Batch 3, 4 | Pending | `AuthService.setPassword` and `setPin` have no actor or permission guards |
-| E4 | Confirmed | Batch 3 | Pending | No privilege hierarchy or delegation checks |
+| E3 | Fixed | Batch 3 | access_policy_test | `AuthService.setPassword` and `setPin` guard with AccessPolicy, audit privilege escalation |
+| E4 | Fixed | Batch 3 | access_policy_test | Strict privilege hierarchy in `AccessPolicy`: delegates cannot touch peers/superiors or unheld permissions |
 | E5 | Confirmed | Batch 5 | Pending | Auto-lock menu item ungated; any user can disable auto-lock |
 | E6 | Confirmed | Batch 5 | Pending | Regular users can reach Settings, licensing, business info, diagnostics, restore |
 | E7 | Confirmed | Batch 6 | Pending | Owner lockout DoS: failed attempts on lock screen lock Owner out for 15 min |
-| E8 | Confirmed | Batch 3 | Pending | Owner row has no database triggers protecting against delete/update |
+| E8 | Fixed | Batch 3 | access_policy_test | Schema v30 SQLite triggers defend Owner row from delete, demote, rename, and system role tampering |
 | E9 | Confirmed | Batch 5 | Pending | Mutating services (`LicenseService`, `BackupService`, `DatabaseRepairService`) lack guards |
-| E10 | Confirmed | Batch 3 | Pending | Critical admin keys (`users.manage`, `backup.restore`, etc.) are grantable |
+| E10 | Fixed | Batch 3 | access_policy_test | OWNER_ONLY keys strictly stripped in `PermissionService` and blocked in `AccessPolicy` |
 | N-NEW1 | Confirmed | Batch 5 | Pending | `DatabaseHelper.adjustStock` lacks `AccessGuard.require(stockAdjust)` |
 | N-NEW2 | Confirmed | Batch 4 | Pending | `user_form_screen` inserts non-existent `'created_at'` into overrides table |
 | N-NEW3 | Confirmed | Batch 2, 5 | Pending | Pushed routes remain active above `MainShell` during lock screen display |
@@ -81,4 +81,4 @@ Current status: Audited; hardening plan assigned to Batches 2–7.
 (None)
 
 ## RESUME NOTE
-Batch 2 complete (Session layer hardened: fail-closed init, DB-first enable, locked can() checks, attribution never falling back to Owner in multi-user mode, sentinel copyWith, UserSessionScope in MaterialApp.builder, auto-lock periodic timer). Resume with Batch 3 (AccessPolicy, Owner protection and OWNER_ONLY keys: pure policy class, strip OWNER_ONLY keys, SQLite triggers on users/roles, escalation audit).
+Batch 3 complete (AccessPolicy, Owner protection & OWNER_ONLY keys: pure AccessPolicy class, OWNER_ONLY stripping in PermissionService, tolerant override effect parsing, Schema v30 SQLite security triggers on users/roles/permissions, escalation audit logging, AuthService credential guards). Resume with Batch 4 (AccessAdminService: move all user/role writes out of screens into transactional AccessAdminService, soft disable instead of delete, D2-D5 fixes, refactor user_form_screen, users_list_screen, roles_screen).
