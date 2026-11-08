@@ -14,7 +14,7 @@ Branch: feat/analytics
 ## DECISIONS
 - A1: SDK is vendored (unchanged) into `packages/almhdy_analytics` with `VENDORED_FROM.txt`. (Batch 1/2)
 - A2: Single entry point `AnalyticsService` with strict allowlist of events, keys, and values. (Batch 2)
-- A3: Key via `--dart-define=ALMHDY_ANALYTICS_KEY=...`; empty key or debug build without define = disabled. (Batch 2)
+- A3: Built-in write-only ingestion key in `AnalyticsConfig`; empty key or unit-test environment = disabled.
 - A4: Init after first frame, unawaited, all failures silently swallowed. (Batch 2)
 - A5: Default ON with Settings opt-out (product choice for user review). (Batch 4)
 - A6: No DB-layer or in-transaction calls; migration result recorded in SharedPreferences on startup and sent on next init. (Batch 3)

@@ -64,23 +64,22 @@ To add a new event or modify properties without breaking privacy invariants:
 
 ---
 
-## 4. Building with Environment Defines
+## 4. Configuration & Ingestion Key
 
-The project key is supplied at build time via `--dart-define` so no live secrets exist in version control:
+The write-only ingestion key is configured directly in `lib/core/analytics/analytics_config.dart` via `AnalyticsConfig.defaultProjectKey`. Because it is a write-only ingestion key (not an administrative secret) that can be paused, rotated, or revoked remotely from the AlmHdy Analytics dashboard, no build-time `--dart-define` flags are required.
 
 ```bash
-# Production Android APK build
-flutter build apk --release \
-  --dart-define=ALMHDY_ANALYTICS_KEY=ak_live_xxxxxxxxxxxxxxxxxxxxxxxx
+# Production Android APK build (standard flutter build command)
+flutter build apk --release
 
 # Production App Bundle
-flutter build appbundle --release \
-  --dart-define=ALMHDY_ANALYTICS_KEY=ak_live_xxxxxxxxxxxxxxxxxxxxxxxx
+flutter build appbundle --release
 ```
 
 ### Debug & Testing Behavior:
-- If `ALMHDY_ANALYTICS_KEY` is omitted or empty, `AnalyticsService.initialize()` disables the subsystem completely. No SDK initialization occurs, no timers run, and no network traffic is generated.
-- In `kDebugMode`, telemetry is disabled unless `--dart-define=ALMHDY_ANALYTICS_KEY=...` is explicitly passed.
+- During automated unit tests (`Platform.environment['FLUTTER_TEST']`), `AnalyticsConfig.projectKey` returns an empty string by default, keeping the subsystem completely disabled.
+- Tests can override or mock the key using `AnalyticsConfig.injectKey(...)` or `AnalyticsService.instance.setProjectKeyForTesting(...)`.
+- If the resolved project key is empty, `AnalyticsService.initialize()` disables the subsystem completely. No SDK initialization occurs, no timers run, and no network traffic is generated.
 
 ---
 
@@ -105,7 +104,7 @@ flutter build appbundle --release \
 ## 7. Release Checklist
 
 Before releasing a build with analytics enabled:
-- [ ] Project created in `api.almhdy24.com` dashboard and live API key issued (`ak_live_...`).
+- [ ] Project created in `api.almhdy24.com` dashboard and ingestion key verified in `AnalyticsConfig`.
 - [ ] Privacy policy paragraph updated on `https://almhdy24.com/privacy` (using [PRIVACY_TEXT.md](file:///data/data/com.termux/files/home/projects/waraqatak/docs/analytics/PRIVACY_TEXT.md)).
-- [ ] Release build compiled with `--dart-define=ALMHDY_ANALYTICS_KEY=ak_live_...`.
+- [ ] Release build compiled and tested with default-on telemetry and settings opt-out.
 - [ ] Test release APK on test device to verify zero network errors and smooth offline buffering.
