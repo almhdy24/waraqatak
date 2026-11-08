@@ -214,6 +214,68 @@ void main() {
     });
   });
 
+  group('AnalyticsService error reporting channel', () {
+    setUp(() async {
+      AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');
+      await AnalyticsService.instance.initialize(
+        storagePath: 'test_buffer.json',
+        forceEnable: true,
+      );
+    });
+
+    test('records sanitized error event to sink', () {
+      AnalyticsService.instance.recordError(
+        FormatException('Invalid phone +249912345678 in payment of 100 USD'),
+        StackTrace.fromString('#0 main (package:warqatek/main.dart:10:5)'),
+        'payment_flow',
+      );
+
+      expect(fakeSink.trackedEvents.length, equals(1));
+      final event = fakeSink.trackedEvents.first;
+      expect(event['event'], equals('error_report'));
+      final props = event['properties'] as Map<String, dynamic>;
+      expect(props['error_type'], equals('FormatException'));
+      expect(props['sanitized_message'], contains('[number redacted]'));
+      expect(props['sanitized_message'], contains('[amount redacted]'));
+      expect(props['context'], equals('payment_flow'));
+      expect(props['platform'], isNotEmpty);
+    });
+
+    test('deduplicates identical repeated errors in same session', () {
+      final err = StateError('Duplicate error');
+      final stack =
+          StackTrace.fromString('#0 run (package:warqatek/main.dart:12:3)');
+
+      AnalyticsService.instance.recordError(err, stack);
+      AnalyticsService.instance.recordError(err, stack);
+      AnalyticsService.instance.recordError(err, stack);
+
+      // Only first instance is dispatched
+      expect(fakeSink.trackedEvents.length, equals(1));
+    });
+
+    test('caps error events at 20 per session', () {
+      for (int i = 0; i < 25; i++) {
+        AnalyticsService.instance.recordError(
+          Exception('Unique error #$i'),
+          StackTrace.fromString('#0 run$i (package:warqatek/main.dart:$i:1)'),
+        );
+      }
+
+      expect(fakeSink.trackedEvents.length, equals(20));
+    });
+
+    test('drops error reports when error reporting is disabled', () async {
+      await AnalyticsService.instance.setErrorReportingEnabled(false);
+
+      AnalyticsService.instance.recordError(
+        Exception('Should not report'),
+      );
+
+      expect(fakeSink.trackedEvents, isEmpty);
+    });
+  });
+
   group('AnalyticsService allowlist enforcement', () {
     setUp(() async {
       AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');

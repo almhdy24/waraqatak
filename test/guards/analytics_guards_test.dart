@@ -97,6 +97,7 @@ void main() {
           'multiUserEnabled',
           'migrationResult',
           'errorCaught',
+          'errorReport',
         };
 
         final violatingCalls = <String>[];

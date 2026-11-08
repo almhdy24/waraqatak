@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:almhdy_analytics/almhdy_analytics.dart' hide SessionManager;
 import '../../core/analytics/analytics_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../access/session_manager.dart';
+import 'error_sanitizer.dart';
 
 /// Strictly allowlisted analytics events for Waraqatak.
 enum AnalyticsEvent {
@@ -27,7 +29,8 @@ enum AnalyticsEvent {
   activationResult('activation_result'),
   multiUserEnabled('multi_user_enabled'),
   migrationResult('migration_result'),
-  errorCaught('error_caught');
+  errorCaught('error_caught'),
+  errorReport('error_report');
 
   final String eventName;
   const AnalyticsEvent(this.eventName);
@@ -278,6 +281,10 @@ class AnalyticsService {
     _testProjectKey = key;
   }
 
+  static const int maxErrorsPerSession = 20;
+  int _sessionErrorCount = 0;
+  final Set<String> _seenErrorSignatures = <String>{};
+
   /// Resets internal state for unit tests.
   @visibleForTesting
   void resetForTesting() {
@@ -285,6 +292,8 @@ class AnalyticsService {
     _isErrorReportingEnabled = true;
     _isInitialized = false;
     _testProjectKey = null;
+    _sessionErrorCount = 0;
+    _seenErrorSignatures.clear();
     AnalyticsConfig.reset();
     _sink = AlmHdyAnalyticsSink();
   }
@@ -472,6 +481,70 @@ class AnalyticsService {
     }
   }
 
+  /// Records an observed application error/crash with deep sanitization.
+  /// Deduplicates repeated errors, caps session reports at 20, and never throws.
+  void recordError(
+    dynamic error, [
+    StackTrace? stackTrace,
+    String? context,
+  ]) {
+    if (!_isErrorReportingEnabled || !_isInitialized) return;
+
+    // Drop all error reports if multi-user session is currently locked
+    if (SessionManager.instance.isLocked) return;
+
+    // Cap error events per session to avoid battery/bandwidth drain
+    if (_sessionErrorCount >= maxErrorsPerSession) return;
+
+    try {
+      final exType = ErrorSanitizer.sanitizeExceptionType(
+        error.runtimeType.toString(),
+      );
+      final msg = ErrorSanitizer.sanitizeMessage(error.toString());
+      final stack = ErrorSanitizer.sanitizeStackTrace(stackTrace?.toString());
+
+      // Deduplicate identical repeated errors in the same session
+      final firstFrame = _extractFirstFrame(stack);
+      final signature = '$exType::$msg::$firstFrame';
+      if (_seenErrorSignatures.contains(signature)) {
+        return;
+      }
+      _seenErrorSignatures.add(signature);
+      _sessionErrorCount++;
+
+      final props = <String, dynamic>{
+        'error_type': exType,
+        'sanitized_message': msg,
+        'app_version': AppConstants.appVersion,
+        'platform': Platform.operatingSystem,
+        'os_version': ErrorSanitizer.sanitizeOsVersion(
+          Platform.operatingSystemVersion,
+        ),
+        'sanitized_stack': stack,
+      };
+
+      if (context != null && context.isNotEmpty) {
+        props['context'] = ErrorSanitizer.sanitizeExceptionType(context);
+      }
+
+      _sink.track(AnalyticsEvent.errorReport.eventName, properties: props);
+    } catch (_) {
+      // Error reporter must never throw or disrupt application execution
+    }
+  }
+
+  static String _extractFirstFrame(String stack) {
+    if (stack.isEmpty) return '';
+    final lines = stack.split('\n');
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('#0') || trimmed.startsWith('#1')) {
+        return trimmed;
+      }
+    }
+    return lines.first;
+  }
+
   Map<String, dynamic>? _validateAndSanitize(
     AnalyticsEvent event,
     Map<String, dynamic>? props,
@@ -522,6 +595,7 @@ class AnalyticsService {
       case AnalyticsEvent.multiUserEnabled:
       case AnalyticsEvent.migrationResult:
       case AnalyticsEvent.errorCaught:
+      case AnalyticsEvent.errorReport:
         return true;
       case AnalyticsEvent.stocktakeFinalized:
       case AnalyticsEvent.activationStarted:
@@ -624,6 +698,16 @@ class AnalyticsService {
       case AnalyticsEvent.errorCaught:
         if (key == 'area' && _allowedErrorAreas.contains(val)) return;
         if (key == 'kind' && _allowedErrorKind.contains(val)) return;
+        break;
+
+      case AnalyticsEvent.errorReport:
+        if (key == 'error_type' && val is String) return;
+        if (key == 'sanitized_message' && val is String) return;
+        if (key == 'sanitized_stack' && val is String) return;
+        if (key == 'platform' && val is String) return;
+        if (key == 'os_version' && val is String) return;
+        if (key == 'app_version' && val is String) return;
+        if (key == 'context' && val is String) return;
         break;
     }
 
