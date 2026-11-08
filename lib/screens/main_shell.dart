@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
+import '../services/access/session_manager.dart';
 import '../services/access/user_session_scope.dart';
+import '../services/analytics/analytics_service.dart';
 import '../services/app_update_service.dart';
 import '../widgets/responsive.dart';
 import 'access/pin_lock_screen.dart';
@@ -35,6 +37,18 @@ class _MainShellState extends State<MainShell> {
           context: context,
           manual: false,
         );
+        try {
+          final lang = Localizations.localeOf(context).languageCode == 'ar'
+              ? 'ar'
+              : 'en';
+          final brightness = MediaQuery.of(context).platformBrightness;
+          final theme = brightness == Brightness.dark ? 'dark' : 'light';
+          AnalyticsService.instance.track(AnalyticsEvent.appOpened, {
+            'language': lang,
+            'theme': theme,
+            'multi_user': SessionManager.instance.isMultiUserEnabled,
+          });
+        } catch (_) {}
       }
     });
   }
@@ -42,6 +56,14 @@ class _MainShellState extends State<MainShell> {
   void _select(int i) {
     _built.add(i);
     setState(() => _index = i);
+    const screens = ['home', 'invoices', 'customers', 'products', 'settings'];
+    if (i >= 0 && i < screens.length) {
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.screenViewed, {
+          'screen': screens[i],
+        });
+      } catch (_) {}
+    }
     switch (i) {
       case 0:
         _homeKey.currentState?.reload();

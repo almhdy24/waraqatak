@@ -5,6 +5,7 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../services/access/access_guard.dart';
 import '../services/access/permission_registry.dart';
+import '../services/analytics/analytics_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'reports/accounting_screen.dart';
 import 'reports/customer_report_screen.dart';
@@ -38,7 +39,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.initState();
     LicenseService.instance
         .checkEntitlement(force: false)
-        .then((e) { if (mounted) setState(() => _entitlement = e); })
+        .then((e) {
+          if (mounted) setState(() => _entitlement = e);
+        })
         .catchError((_) {});
   }
 
@@ -47,7 +50,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     if (feature != null) {
       // Re-evaluate on every open so a running session cannot outlive expiry.
       try {
-        final fresh = await LicenseService.instance.checkEntitlement(force: true);
+        final fresh = await LicenseService.instance.checkEntitlement(
+          force: true,
+        );
         if (mounted) setState(() => _entitlement = fresh);
       } catch (_) {}
     }
@@ -56,7 +61,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final result = await ProUpgradeSheet.show(context, feature: feature);
       if (result == true && mounted) {
         await Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const ActivationScreen()));
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
         if (!mounted) return;
         LicenseService.instance.invalidateCache();
         final e = await LicenseService.instance.checkEntitlement(force: true);
@@ -65,7 +72,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return;
     }
     if (!mounted) return;
+    try {
+      final reportKey = _resolveReportKey(entry.screen);
+      if (reportKey != null) {
+        AnalyticsService.instance.track(AnalyticsEvent.reportOpened, {
+          'report': reportKey,
+        });
+      }
+    } catch (_) {}
     Navigator.push(context, MaterialPageRoute(builder: (_) => entry.screen));
+  }
+
+  static String? _resolveReportKey(Widget screen) {
+    if (screen is AccountingScreen) return 'accounting';
+    if (screen is SalesReportScreen) return 'sales';
+    if (screen is PurchasesReportScreen) return 'purchases';
+    if (screen is InventoryReportScreen) return 'inventory';
+    if (screen is ProductReportScreen) return 'products';
+    if (screen is AdvancedInventoryAnalyticsScreen) return 'advanced_inventory';
+    if (screen is CustomerReportScreen || screen is SupplierReportScreen) {
+      return 'statement';
+    }
+    return null;
   }
 
   @override
@@ -212,8 +240,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
           itemBuilder: (context, catIndex) {
             final cat = categories[catIndex];
             final availableReports = cat.reports
-                .where((r) =>
-                    r.permission == null || AccessGuard.can(r.permission!))
+                .where(
+                  (r) => r.permission == null || AccessGuard.can(r.permission!),
+                )
                 .toList();
             if (availableReports.isEmpty) return const SizedBox.shrink();
 
@@ -231,16 +260,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                 ),
                 ...availableReports.map((entry) {
-                  final locked = entry.proFeature != null &&
+                  final locked =
+                      entry.proFeature != null &&
                       !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                        borderRadius: BorderRadius.circular(
+                          AppDesignTokens.cardRadius,
+                        ),
                         side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outlineVariant.withValues(alpha: 0.7),
                         ),
                       ),
                       child: ListTile(
@@ -265,9 +299,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             entry.subtitle,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),

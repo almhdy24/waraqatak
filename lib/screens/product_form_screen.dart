@@ -12,6 +12,7 @@ import '../services/product_service.dart';
 import '../services/reference_pricing_service.dart';
 import '../services/access/access_guard.dart';
 import '../services/access/permission_registry.dart';
+import '../services/analytics/analytics_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/number_input.dart';
@@ -472,16 +473,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         referenceSalePrice: ReferencePricingMath.parseReferencePrice(
           _salePriceController.text.trim(),
         ),
-        referenceWholesalePrice: AccessGuard.can(PermissionRegistry.productsViewWholesale)
+        referenceWholesalePrice:
+            AccessGuard.can(PermissionRegistry.productsViewWholesale)
             ? (_wholesalePricingEnabled
-                ? ReferencePricingMath.parseReferencePrice(
-                    _wholesalePriceController.text.trim(),
-                  )
-                : (widget.product?.priceCurrency == _priceCurrency
-                    ? widget.product?.referenceWholesalePrice
-                    : null))
+                  ? ReferencePricingMath.parseReferencePrice(
+                      _wholesalePriceController.text.trim(),
+                    )
+                  : (widget.product?.priceCurrency == _priceCurrency
+                        ? widget.product?.referenceWholesalePrice
+                        : null))
             : widget.product?.referenceWholesalePrice,
-        referencePurchasePrice: AccessGuard.can(PermissionRegistry.productsViewCost)
+        referencePurchasePrice:
+            AccessGuard.can(PermissionRegistry.productsViewCost)
             ? ReferencePricingMath.parseReferencePrice(
                 _purchasePriceController.text.trim(),
               )
@@ -500,15 +503,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
             ? null
             : _unitController.text.trim(),
         salePrice: NumberInput.parse(_salePriceController.text) ?? 0,
-        wholesalePrice: AccessGuard.can(PermissionRegistry.productsViewWholesale)
+        wholesalePrice:
+            AccessGuard.can(PermissionRegistry.productsViewWholesale)
             ? (_wholesalePricingEnabled
-                ? NumberInput.parse(_wholesalePriceController.text.trim())
-                : widget.product?.wholesalePrice)
+                  ? NumberInput.parse(_wholesalePriceController.text.trim())
+                  : widget.product?.wholesalePrice)
             : widget.product?.wholesalePrice,
-        wholesaleMinQuantity: AccessGuard.can(PermissionRegistry.productsViewWholesale)
+        wholesaleMinQuantity:
+            AccessGuard.can(PermissionRegistry.productsViewWholesale)
             ? (_wholesalePricingEnabled
-                ? NumberInput.parse(_wholesaleMinQuantityController.text.trim())
-                : widget.product?.wholesaleMinQuantity)
+                  ? NumberInput.parse(
+                      _wholesaleMinQuantityController.text.trim(),
+                    )
+                  : widget.product?.wholesaleMinQuantity)
             : widget.product?.wholesaleMinQuantity,
         purchasePrice: AccessGuard.can(PermissionRegistry.productsViewCost)
             ? (NumberInput.parse(_purchasePriceController.text) ?? 0)
@@ -547,6 +554,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _productUnits,
         allowClearReferencePricing: allowClear,
       );
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.productSaved, {
+          'is_new': widget.product == null,
+        });
+      } catch (_) {}
       if (!mounted) return;
       Navigator.pop(context, id);
     } catch (e) {
@@ -769,10 +781,10 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     );
                     unitRefWholesalePrice = canWholesale
                         ? (_wholesalePricingEnabled
-                            ? ReferencePricingMath.parseReferencePrice(
-                                wholesaleCtrl.text.trim(),
-                              )
-                            : null)
+                              ? ReferencePricingMath.parseReferencePrice(
+                                  wholesaleCtrl.text.trim(),
+                                )
+                              : null)
                         : existing?.referenceWholesalePrice;
                     if (unitRefSalePrice != null ||
                         unitRefWholesalePrice != null) {
@@ -783,17 +795,17 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         : existing?.salePrice;
                     unitWholesalePrice = canWholesale
                         ? (_wholesalePricingEnabled
-                            ? (unitRefWholesalePrice != null
-                                ? null
-                                : existing?.wholesalePrice)
-                            : null)
+                              ? (unitRefWholesalePrice != null
+                                    ? null
+                                    : existing?.wholesalePrice)
+                              : null)
                         : existing?.wholesalePrice;
                   } else {
                     unitSalePrice = NumberInput.parse(saleCtrl.text.trim());
                     unitWholesalePrice = canWholesale
                         ? (_wholesalePricingEnabled
-                            ? NumberInput.parse(wholesaleCtrl.text.trim())
-                            : null)
+                              ? NumberInput.parse(wholesaleCtrl.text.trim())
+                              : null)
                         : existing?.wholesalePrice;
                   }
 
@@ -1338,9 +1350,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                 : null,
                           ),
                           if (_wholesalePricingEnabled &&
-                      AccessGuard.can(
-                        PermissionRegistry.productsViewWholesale,
-                      )) ...[
+                              AccessGuard.can(
+                                PermissionRegistry.productsViewWholesale,
+                              )) ...[
                             const SizedBox(height: 12),
                             ReferencePriceField(
                               controller: _wholesalePriceController,
@@ -1436,9 +1448,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             },
                           ),
                           if (_wholesalePricingEnabled &&
-                      AccessGuard.can(
-                        PermissionRegistry.productsViewWholesale,
-                      )) ...[
+                              AccessGuard.can(
+                                PermissionRegistry.productsViewWholesale,
+                              )) ...[
                             const SizedBox(height: 12),
                             AmountField(
                               controller: _wholesalePriceController,

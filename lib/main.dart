@@ -11,6 +11,7 @@ import 'localization/app_localizations.dart';
 import 'services/access/session_manager.dart';
 import 'services/access/user_session_scope.dart';
 import 'services/accounting/journal_backfill_service.dart';
+import 'services/analytics/analytics_service.dart';
 import 'services/app_diagnostics_service.dart';
 import 'services/app_update_service.dart';
 import 'services/license_service.dart';
@@ -37,10 +38,21 @@ Future<void> main() async {
       };
 
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      final prefs = await SharedPreferences.getInstance();
+      final lastRecordedDbVersion = prefs.getInt('last_app_db_version');
       await DatabaseHelper.instance.database;
+      if (lastRecordedDbVersion != null &&
+          lastRecordedDbVersion < DatabaseHelper.dbVersion) {
+        await AnalyticsService.recordMigrationResult(
+          fromVersion: lastRecordedDbVersion,
+          toVersion: DatabaseHelper.dbVersion,
+          ok: true,
+        );
+      }
+      await prefs.setInt('last_app_db_version', DatabaseHelper.dbVersion);
+
       await AppDiagnosticsService.instance.init();
       await SessionManager.instance.init();
-      final prefs = await SharedPreferences.getInstance();
       final lang = prefs.getString('language') ?? 'ar';
       final themeMode = ThemeModeScope.decode(prefs.getString('theme_mode'));
       runApp(WarqatekApp(initialLanguage: lang, initialThemeMode: themeMode));

@@ -14,6 +14,7 @@ import 'pdf/pdf_customer_statement_builder.dart';
 import 'pdf/pdf_document_builder.dart';
 import 'pdf/pdf_report_builder.dart';
 import 'package:printing/printing.dart';
+import 'analytics/analytics_service.dart';
 
 class PdfService {
   static Future<Uint8List> generateDocumentPdf({
@@ -64,6 +65,12 @@ class PdfService {
         fileNameOverrides: ['${doc.documentNumber}.pdf'],
       ),
     );
+    try {
+      AnalyticsService.instance.track(
+        AnalyticsEvent.pdfShared,
+        {'kind': 'document'},
+      );
+    } catch (_) {}
   }
 
   static Future<Uint8List> generateCustomerStatementPdf({
@@ -117,6 +124,12 @@ class PdfService {
         text: text,
       ),
     );
+    try {
+      AnalyticsService.instance.track(
+        AnalyticsEvent.pdfShared,
+        {'kind': 'statement'},
+      );
+    } catch (_) {}
   }
 
   static Future<Uint8List> generateReportPdf({
@@ -152,5 +165,11 @@ class PdfService {
       onLayout: (format) async => bytes,
       name: safeName,
     );
+    try {
+      AnalyticsService.instance.track(
+        AnalyticsEvent.pdfShared,
+        {'kind': 'report'},
+      );
+    } catch (_) {}
   }
 }

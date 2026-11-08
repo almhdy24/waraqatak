@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:almhdy_analytics/almhdy_analytics.dart';
+import 'package:almhdy_analytics/almhdy_analytics.dart' hide SessionManager;
 import '../../core/constants/app_constants.dart';
+import '../access/session_manager.dart';
 
 /// Strictly allowlisted analytics events for Waraqatak.
 enum AnalyticsEvent {
@@ -398,6 +399,9 @@ class AnalyticsService {
   void track(AnalyticsEvent event, [Map<String, dynamic>? properties]) {
     if (!_isEnabled || !_isInitialized) return;
 
+    // Drop all events if multi-user session is currently locked
+    if (SessionManager.instance.isLocked) return;
+
     try {
       final sanitized = _validateAndSanitize(event, properties);
       _sink.track(event.eventName, properties: sanitized);
@@ -482,8 +486,9 @@ class AnalyticsService {
       case AnalyticsEvent.documentCreated:
         if (key == 'type' && _allowedDocTypes.contains(val)) return;
         if (key == 'has_payment' && val is bool) return;
-        if (key == 'item_count_bucket' && _allowedItemBuckets.contains(val))
+        if (key == 'item_count_bucket' && _allowedItemBuckets.contains(val)) {
           return;
+        }
         break;
 
       case AnalyticsEvent.documentCancelled:
@@ -491,8 +496,9 @@ class AnalyticsService {
         break;
 
       case AnalyticsEvent.paymentRecorded:
-        if (key == 'method_category' && _allowedPaymentMethods.contains(val))
+        if (key == 'method_category' && _allowedPaymentMethods.contains(val)) {
           return;
+        }
         break;
 
       case AnalyticsEvent.productSaved:
@@ -546,8 +552,9 @@ class AnalyticsService {
         break;
 
       case AnalyticsEvent.multiUserEnabled:
-        if (key == 'user_count_bucket' && _allowedUserBuckets.contains(val))
+        if (key == 'user_count_bucket' && _allowedUserBuckets.contains(val)) {
           return;
+        }
         break;
 
       case AnalyticsEvent.migrationResult:

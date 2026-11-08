@@ -5,6 +5,7 @@ import '../../localization/app_localizations.dart';
 import '../../services/access/auth_service.dart';
 import '../../services/access/recovery_service.dart';
 import '../../services/access/session_manager.dart';
+import '../../services/analytics/analytics_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 
@@ -62,6 +63,12 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
       // 3. Enable multi-user mode in settings & session
       await SessionManager.instance.setMultiUserEnabled(true);
 
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.multiUserEnabled, {
+          'user_count_bucket': '1',
+        });
+      } catch (_) {}
+
       if (!mounted) return;
       AppSnackBar.show(context, l10n.multiUserEnabledLabel);
       Navigator.pop(context, true);
@@ -82,14 +89,14 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.setupOwnerCredentials),
-      ),
+      appBar: AppBar(title: Text(l10n.setupOwnerCredentials)),
       body: ResponsiveCenter(
         maxWidth: 480,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: _currentStep == 0 ? _buildStep1(l10n, cs) : _buildStep2(l10n, cs),
+          child: _currentStep == 0
+              ? _buildStep1(l10n, cs)
+              : _buildStep2(l10n, cs),
         ),
       ),
     );
@@ -101,7 +108,11 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.admin_panel_settings_outlined, size: 56, color: cs.primary),
+          Icon(
+            Icons.admin_panel_settings_outlined,
+            size: 56,
+            color: cs.primary,
+          ),
           const SizedBox(height: 16),
           Text(
             l10n.setupOwnerCredentials,
@@ -125,8 +136,13 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               ),
             ),
             validator: (v) {
@@ -147,8 +163,13 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.lock_reset_outlined),
               suffixIcon: IconButton(
-                icon: Icon(_obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                icon: Icon(
+                  _obscureConfirm
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () =>
+                    setState(() => _obscureConfirm = !_obscureConfirm),
               ),
             ),
             validator: (v) {

@@ -11,6 +11,7 @@ import 'package:sqflite/sqflite.dart';
 import '../database/database_helper.dart';
 import '../widgets/backup_password_dialog.dart';
 import 'accounting/journal_backfill_service.dart';
+import 'analytics/analytics_service.dart';
 import 'backup_encryption_service.dart';
 
 class BackupService {
@@ -165,6 +166,12 @@ class BackupService {
       }
 
       await tempFile.rename(targetFile.path);
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.backupCreated, {
+          'destination': 'local',
+          'encrypted': password != null && password.isNotEmpty,
+        });
+      } catch (_) {}
       return targetFile.path;
     } catch (e) {
       try {
@@ -386,7 +393,17 @@ class BackupService {
       type: FileType.any,
     );
 
-    return uri != null;
+    final success = uri != null;
+    if (success) {
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.backupCreated, {
+          'destination': 'user_chosen',
+          'encrypted': password != null && password.isNotEmpty,
+        });
+      } catch (_) {}
+    }
+
+    return success;
   }
 
   // ============================================================
@@ -442,6 +459,15 @@ class BackupService {
       }
       jsonMap = decoded;
     } catch (_) {
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.backupRestored, {
+          'ok': false,
+        });
+        AnalyticsService.instance.track(AnalyticsEvent.errorCaught, {
+          'area': 'restore',
+          'kind': 'format',
+        });
+      } catch (_) {}
       throw Exception('Invalid backup file');
     }
 
@@ -502,7 +528,8 @@ class BackupService {
       if (await tableExists('app_settings')) {
         savedAccessSettings = await txn.query(
           'app_settings',
-          where: "key IN ('multi_user_enabled', 'auto_lock_minutes', 'workspace_id', 'owner_recovery_hash', 'owner_recovery_salt')",
+          where:
+              "key IN ('multi_user_enabled', 'auto_lock_minutes', 'workspace_id', 'owner_recovery_hash', 'owner_recovery_salt')",
         );
         await txn.delete('app_settings');
       }
@@ -760,6 +787,12 @@ class BackupService {
     if (createSafetyBackup) {
       await pruneSafetyBackups(preservePath: safetyPath);
     }
+
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.backupRestored, {
+        'ok': true,
+      });
+    } catch (_) {}
 
     return true;
   }

@@ -1,5 +1,6 @@
 import '../database/database_helper.dart';
 import '../models/stocktake.dart';
+import 'analytics/analytics_service.dart';
 
 class StocktakeReviewItem {
   final StocktakeItem item;
@@ -78,7 +79,9 @@ class StocktakeService {
   }
 
   Future<StocktakeReviewSummary> reviewSession(int sessionId) async {
-    final session = await DatabaseHelper.instance.getStocktakeSession(sessionId);
+    final session = await DatabaseHelper.instance.getStocktakeSession(
+      sessionId,
+    );
     if (session == null) {
       throw StateError('Stocktake session $sessionId not found');
     }
@@ -116,13 +119,15 @@ class StocktakeService {
 
       if (!it.isCounted) {
         uncounted++;
-        reviewItems.add(StocktakeReviewItem(
-          item: it,
-          currentLiveStock: liveStock,
-          hasInterimMovement: hasInterim,
-          liveVariance: null,
-          valuationImpact: null,
-        ));
+        reviewItems.add(
+          StocktakeReviewItem(
+            item: it,
+            currentLiveStock: liveStock,
+            hasInterimMovement: hasInterim,
+            liveVariance: null,
+            valuationImpact: null,
+          ),
+        );
       } else {
         counted++;
         final variance = it.countedQuantity! - liveStock;
@@ -135,13 +140,15 @@ class StocktakeService {
           discrepant++;
         }
 
-        reviewItems.add(StocktakeReviewItem(
-          item: it,
-          currentLiveStock: liveStock,
-          hasInterimMovement: hasInterim,
-          liveVariance: variance,
-          valuationImpact: valImpact,
-        ));
+        reviewItems.add(
+          StocktakeReviewItem(
+            item: it,
+            currentLiveStock: liveStock,
+            hasInterimMovement: hasInterim,
+            liveVariance: variance,
+            valuationImpact: valImpact,
+          ),
+        );
       }
     }
 
@@ -165,10 +172,14 @@ class StocktakeService {
     if (!confirmed) {
       throw ArgumentError('Confirmation is required to finalize stocktake');
     }
-    return DatabaseHelper.instance.finalizeStocktakeSession(
+    final result = await DatabaseHelper.instance.finalizeStocktakeSession(
       sessionId,
       notes: notes,
     );
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.stocktakeFinalized);
+    } catch (_) {}
+    return result;
   }
 
   Future<void> cancelSession(int sessionId) async {
