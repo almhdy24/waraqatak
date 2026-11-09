@@ -11,6 +11,7 @@ import '../services/license_service.dart';
 import '../services/app_diagnostics_service.dart';
 import '../services/app_update_service.dart';
 import '../utils/url_launcher_utils.dart';
+import '../utils/date_format_utils.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
 import 'database_diagnostic_screen.dart';
@@ -20,6 +21,7 @@ import 'financial_settings_screen.dart';
 import 'exchange_rates_screen.dart';
 import 'payment_methods_screen.dart';
 import 'pdf_customize_screen.dart';
+import 'period_closing_screen.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_icons.dart';
@@ -49,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _errorReportingConsent = true;
   bool _analyticsConsent = true;
   bool _wholesalePricingEnabled = false;
+  DateTime? _booksClosedThrough;
 
   @override
   void initState() {
@@ -56,6 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadEntitlement();
     _loadConsent();
     _loadWholesaleStatus();
+    _loadBooksClosedThrough();
   }
 
   Future<void> _loadWholesaleStatus() async {
@@ -66,6 +70,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _wholesalePricingEnabled = WholesaleFeature.isEnabledForBusiness(b),
       );
     }
+  }
+
+  Future<void> _loadBooksClosedThrough() async {
+    final d = await DatabaseHelper.instance.getBooksClosedThrough();
+    if (mounted) setState(() => _booksClosedThrough = d);
   }
 
   Future<void> _loadConsent() async {
@@ -302,6 +311,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 builder: (_) => const PaymentMethodsScreen(),
                               ),
                             ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
+                      ),
+                    ),
+                    PermissionGate(
+                      permission: PermissionRegistry.accountingPeriodLock,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.lock_clock_outlined),
+                            title: Text(l10n.periodLockSection),
+                            subtitle: Text(
+                              _booksClosedThrough != null
+                                  ? '${l10n.periodLockClosedThrough}: ${AppDateUtils.formatDate(_booksClosedThrough)}'
+                                  : l10n.periodLockSectionDesc,
+                            ),
+                            trailing: Icon(chevronIcon),
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const PeriodClosingScreen(),
+                                ),
+                              );
+                              // Refresh date in case the user changed it
+                              _loadBooksClosedThrough();
+                            },
                           ),
                           const Divider(height: 1, indent: 16, endIndent: 16),
                         ],

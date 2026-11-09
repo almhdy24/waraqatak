@@ -52,6 +52,7 @@ import '../../screens/audit_history_screen.dart';
 import '../../screens/database_diagnostic_screen.dart';
 import '../../screens/google_drive_backup_screen.dart';
 import '../../screens/exchange_rates_screen.dart';
+import '../../screens/period_closing_screen.dart';
 import '../../screens/access/audit_trail_screen.dart';
 import '../../screens/access/multi_user_wizard_screen.dart';
 import '../../screens/access/pin_lock_screen.dart';
@@ -124,6 +125,7 @@ abstract final class ScreenAccessPolicy {
     PaymentMethodsScreen: const ScreenPolicy.require(PermissionRegistry.paymentMethodsManage),
     TaxProfilesScreen: const ScreenPolicy.require(PermissionRegistry.taxProfilesManage),
     PdfCustomizeScreen: const ScreenPolicy.require(PermissionRegistry.settingsManage),
+    PeriodClosingScreen: const ScreenPolicy.require(PermissionRegistry.accountingPeriodLock),
 
     // 5. Products & Inventory
     ProductsScreen: const ScreenPolicy.require(PermissionRegistry.productsView),
