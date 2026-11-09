@@ -20,6 +20,8 @@ enum Feature {
   csvImportExport,
   inventoryAudit,
   multiUser,
+  referenceCurrency,
+  wholesalePricing,
 }
 
 class FeatureAccess {
@@ -40,6 +42,8 @@ class FeatureAccess {
     Feature.bulkPriceUpdate,
     Feature.csvImportExport,
     Feature.inventoryAudit,
+    Feature.referenceCurrency,
+    Feature.wholesalePricing,
     if (multiUserRequiresPro) Feature.multiUser,
   };
 

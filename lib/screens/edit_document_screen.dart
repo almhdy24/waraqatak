@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
@@ -248,7 +249,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       _taxableList.add(true);
       _productIds.add(null);
       _pricingCategories.add(
-        _business?.wholesalePricingEnabled == true
+        WholesaleFeature.isEnabledForBusiness(_business)
             ? (_selectedContact?.pricingCategory ?? Contact.categoryRetail)
             : null,
       );
@@ -503,7 +504,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                                 _addressController.text =
                                     contact?.address ?? '';
                               });
-                              if (_business?.wholesalePricingEnabled == true &&
+                              if (WholesaleFeature.isEnabledForBusiness(
+                                    _business,
+                                  ) &&
                                   !isPurchase) {
                                 final newCat =
                                     contact?.pricingCategory ??
@@ -711,7 +714,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                       productId: _productIds[index],
                       usePurchasePrice: isPurchase,
                       wholesalePricingEnabled:
-                          _business?.wholesalePricingEnabled ?? false,
+                          WholesaleFeature.isEnabledForBusiness(_business),
                       pricingCategory: _pricingCategories[index],
                       onPricingCategoryChanged: (cat) {
                         setState(() => _pricingCategories[index] = cat);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
@@ -107,7 +108,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
   bool get _isDirty {
     return _contact != null ||
         _notesController.text.isNotEmpty ||
-        (_validityController.text != '7' && _validityController.text.isNotEmpty) ||
+        (_validityController.text != '7' &&
+            _validityController.text.isNotEmpty) ||
         _desc.any((c) => c.text.isNotEmpty) ||
         _productIds.any((id) => id != null) ||
         _desc.length > 1;
@@ -126,7 +128,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
   }
 
   Future<void> _removeItem(int index) async {
-    final hasContent = _desc[index].text.isNotEmpty || _productIds[index] != null;
+    final hasContent =
+        _desc[index].text.isNotEmpty || _productIds[index] != null;
     if (hasContent) {
       final l10n = AppLocalizations.of(context);
       final proceed = await AppConfirmDialog.show(
@@ -175,26 +178,25 @@ class _QuotationScreenState extends State<QuotationScreen> {
     );
   }
 
-  List<DocumentItemInput> _buildItems() => List.generate(
-    _desc.length,
-    (i) {
-      final q = NumberInput.parse(_qty[i].text) ?? 1;
-      final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
-      final unit = i < _saleUnits.length ? _saleUnits[i] : null;
-      return DocumentItemInput(
-        description: _desc[i].text.trim(),
-        quantity: q,
-        price: NumberInput.parse(_price[i].text) ?? 0,
-        taxable: _taxable[i],
-        productId: _productIds[i],
-        taxRate: _taxRates[i],
-        pricingCategory: i < _pricingCategories.length ? _pricingCategories[i] : null,
-        saleUnit: unit,
-        unitConversionFactor: factor,
-        baseQuantity: q * factor,
-      );
-    },
-  );
+  List<DocumentItemInput> _buildItems() => List.generate(_desc.length, (i) {
+    final q = NumberInput.parse(_qty[i].text) ?? 1;
+    final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
+    final unit = i < _saleUnits.length ? _saleUnits[i] : null;
+    return DocumentItemInput(
+      description: _desc[i].text.trim(),
+      quantity: q,
+      price: NumberInput.parse(_price[i].text) ?? 0,
+      taxable: _taxable[i],
+      productId: _productIds[i],
+      taxRate: _taxRates[i],
+      pricingCategory: i < _pricingCategories.length
+          ? _pricingCategories[i]
+          : null,
+      saleUnit: unit,
+      unitConversionFactor: factor,
+      baseQuantity: q * factor,
+    );
+  });
 
   Future<void> _save({bool isDraft = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
@@ -305,7 +307,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
                 FilledButton(
                   onPressed: _saving ? null : () => _save(),
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size(110, AppDesignTokens.minTouchTarget),
+                    minimumSize: const Size(
+                      110,
+                      AppDesignTokens.minTouchTarget,
+                    ),
                   ),
                   child: _saving
                       ? SizedBox(
@@ -334,19 +339,25 @@ class _QuotationScreenState extends State<QuotationScreen> {
                   initialContact: _contact,
                   onContactChanged: (contact) async {
                     setState(() => _contact = contact);
-                    if (_business?.wholesalePricingEnabled == true) {
+                    if (WholesaleFeature.isEnabledForBusiness(_business)) {
                       final newCat =
                           contact?.pricingCategory ?? Contact.categoryRetail;
                       for (int i = 0; i < _desc.length; i++) {
-                        final p = i < _cachedProducts.length ? _cachedProducts[i] : null;
-                        if (i < _isManualPriceList.length && !_isManualPriceList[i] && p != null) {
+                        final p = i < _cachedProducts.length
+                            ? _cachedProducts[i]
+                            : null;
+                        if (i < _isManualPriceList.length &&
+                            !_isManualPriceList[i] &&
+                            p != null) {
                           _pricingCategories[i] = newCat;
                           final q = NumberInput.parse(_qty[i].text) ?? 1.0;
                           final currentP = NumberInput.parse(_price[i].text);
-                          List<ProductUnit> units = _unitsCache[p.id] ?? const [];
+                          List<ProductUnit> units =
+                              _unitsCache[p.id] ?? const [];
                           if (units.isEmpty && p.id != null) {
                             try {
-                              units = await DatabaseHelper.instance.getProductUnits(p.id!);
+                              units = await DatabaseHelper.instance
+                                  .getProductUnits(p.id!);
                               _unitsCache[p.id!] = units;
                             } catch (_) {}
                           }
@@ -362,8 +373,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
                             isManualPrice: _isManualPriceList[i],
                             wholesalePricingEnabled: true,
                           );
-                          _price[i].text = NumberInput.formatForInput(resolved,
-                              maxDecimals: 4);
+                          _price[i].text = NumberInput.formatForInput(
+                            resolved,
+                            maxDecimals: 4,
+                          );
                         }
                       }
                       if (mounted) setState(() {});
@@ -383,14 +396,13 @@ class _QuotationScreenState extends State<QuotationScreen> {
                     taxRate: _taxRates[i],
                     productId: _productIds[i],
                     wholesalePricingEnabled:
-                        _business?.wholesalePricingEnabled ?? false,
+                        WholesaleFeature.isEnabledForBusiness(_business),
                     pricingCategory: _pricingCategories[i],
                     onPricingCategoryChanged: (cat) {
                       setState(() => _pricingCategories[i] = cat);
                     },
                     customerPricingCategory:
-                        _contact?.pricingCategory ??
-                        Contact.categoryRetail,
+                        _contact?.pricingCategory ?? Contact.categoryRetail,
                     isManualPrice: _isManualPriceList[i],
                     onManualPriceChanged: (manual) {
                       setState(() => _isManualPriceList[i] = manual);
@@ -424,8 +436,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
                         DatabaseHelper.instance
                             .getProductUnits(product!.id!)
                             .then((u) {
-                          _unitsCache[product.id!] = u;
-                        });
+                              _unitsCache[product.id!] = u;
+                            });
                       }
                     },
                     onTaxableChanged: (value) {

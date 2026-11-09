@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import '../models/product.dart';
@@ -103,8 +104,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     if (mounted && _selectedProductId == id) {
       ProductUnit? matchedUnit;
       if (widget.saleUnit != null && widget.saleUnit!.isNotEmpty) {
-        matchedUnit =
-            units.where((u) => u.unitName == widget.saleUnit).firstOrNull;
+        matchedUnit = units
+            .where((u) => u.unitName == widget.saleUnit)
+            .firstOrNull;
       }
       setState(() {
         _selectedProduct = p;
@@ -154,8 +156,10 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
       setState(() {
         _selectedProductId = product.id;
         widget.descriptionController.text = product.name;
-        widget.priceController.text =
-            NumberInput.formatForInput(price, maxDecimals: 4);
+        widget.priceController.text = NumberInput.formatForInput(
+          price,
+          maxDecimals: 4,
+        );
         widget.onTaxableChanged(product.isTaxable);
       });
     }
@@ -181,8 +185,10 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         wholesalePricingEnabled: widget.wholesalePricingEnabled,
         unit: unit,
       );
-      widget.priceController.text =
-          NumberInput.formatForInput(resolved, maxDecimals: 4);
+      widget.priceController.text = NumberInput.formatForInput(
+        resolved,
+        maxDecimals: 4,
+      );
     }
     widget.onChanged?.call();
   }
@@ -214,8 +220,10 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         wholesalePricingEnabled: true,
         unit: _selectedUnit,
       );
-      widget.priceController.text =
-          NumberInput.formatForInput(resolved, maxDecimals: 4);
+      widget.priceController.text = NumberInput.formatForInput(
+        resolved,
+        maxDecimals: 4,
+      );
     }
     widget.onChanged?.call();
   }
@@ -234,11 +242,12 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         wholesalePricingEnabled: widget.wholesalePricingEnabled,
         unit: _selectedUnit,
       );
-      final currentP =
-          NumberInput.parse(widget.priceController.text) ?? 0.0;
+      final currentP = NumberInput.parse(widget.priceController.text) ?? 0.0;
       if ((resolved - currentP).abs() > 0.0001) {
-        widget.priceController.text =
-            NumberInput.formatForInput(resolved, maxDecimals: 4);
+        widget.priceController.text = NumberInput.formatForInput(
+          resolved,
+          maxDecimals: 4,
+        );
       }
     }
     widget.onChanged?.call();
@@ -389,7 +398,10 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
               validator: (v) => v == null || v.isEmpty ? l10n.required : null,
               onChanged: (_) => widget.onChanged?.call(),
             ),
-            if (widget.wholesalePricingEnabled && !widget.usePurchasePrice) ...[
+            if (WholesaleFeature.isWholesaleActive(
+                  widget.wholesalePricingEnabled,
+                ) &&
+                !widget.usePurchasePrice) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -403,8 +415,13 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
-                    label: Text(l10n.linePriceRetail, style: const TextStyle(fontSize: 11)),
-                    selected: widget.pricingCategory == Contact.categoryRetail && !widget.isManualPrice,
+                    label: Text(
+                      l10n.linePriceRetail,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    selected:
+                        widget.pricingCategory == Contact.categoryRetail &&
+                        !widget.isManualPrice,
                     onSelected: (selected) {
                       if (selected) {
                         _applyTier(Contact.categoryRetail);
@@ -415,8 +432,13 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                   ),
                   const SizedBox(width: 6),
                   ChoiceChip(
-                    label: Text(l10n.linePriceWholesale, style: const TextStyle(fontSize: 11)),
-                    selected: widget.pricingCategory == Contact.categoryWholesale && !widget.isManualPrice,
+                    label: Text(
+                      l10n.linePriceWholesale,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    selected:
+                        widget.pricingCategory == Contact.categoryWholesale &&
+                        !widget.isManualPrice,
                     onSelected: (selected) {
                       if (selected) {
                         _applyTier(Contact.categoryWholesale);
@@ -425,11 +447,17 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  if (widget.isManualPrice || widget.pricingCategory == null) ...[
+                  if (widget.isManualPrice ||
+                      widget.pricingCategory == null) ...[
                     const SizedBox(width: 6),
                     Chip(
-                      label: Text(l10n.linePriceManual, style: const TextStyle(fontSize: 11)),
-                      backgroundColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      label: Text(
+                        l10n.linePriceManual,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      backgroundColor: cs.surfaceContainerHighest.withValues(
+                        alpha: 0.5,
+                      ),
                       visualDensity: VisualDensity.compact,
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
@@ -437,7 +465,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                 ],
               ),
             ],
-            if (_selectedProduct != null && _availableUnits.isNotEmpty && !widget.usePurchasePrice) ...[
+            if (_selectedProduct != null &&
+                _availableUnits.isNotEmpty &&
+                !widget.usePurchasePrice) ...[
               const SizedBox(height: 8),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -467,18 +497,24 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     ..._availableUnits.map((u) {
-                      final isSel = _selectedUnit?.id == u.id ||
-                          (_selectedUnit != null && _selectedUnit!.unitName == u.unitName);
+                      final isSel =
+                          _selectedUnit?.id == u.id ||
+                          (_selectedUnit != null &&
+                              _selectedUnit!.unitName == u.unitName);
                       return Padding(
                         padding: const EdgeInsetsDirectional.only(start: 6),
                         child: ChoiceChip(
-                          label: Text(u.unitName, style: const TextStyle(fontSize: 11)),
+                          label: Text(
+                            u.unitName,
+                            style: const TextStyle(fontSize: 11),
+                          ),
                           selected: isSel,
                           onSelected: (selected) {
                             if (selected) _onUnitSelected(u);
                           },
                           visualDensity: VisualDensity.compact,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
                       );
                     }),

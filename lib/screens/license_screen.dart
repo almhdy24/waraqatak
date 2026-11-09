@@ -127,6 +127,8 @@ class _LicenseScreenState extends State<LicenseScreen> {
     Feature.csvImportExport => l10n.featureCsvImportExport,
     Feature.inventoryAudit => l10n.featureInventoryAudit,
     Feature.multiUser => l10n.multiUserTitle,
+    Feature.referenceCurrency => l10n.featureReferenceCurrency,
+    Feature.wholesalePricing => l10n.featureWholesalePricing,
   };
 
   Future<void> _launchEmail(BuildContext context, AppLocalizations l10n) async {

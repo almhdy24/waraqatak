@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../database/reference_pricing_dao.dart';
+import '../features/reference_currency/reference_currency_feature.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../models/reference_pricing_types.dart';
@@ -206,11 +208,14 @@ class CsvService {
     for (final row in products) {
       final pid = row['id'] as int;
       final units = allUnits[pid] ?? const <ProductUnit>[];
+      final exportRef = ReferenceCurrencyFeature.isAvailable;
+      final exportWs = WholesaleFeature.isAvailable && canViewWholesale;
+
       final unitsStr = units
           .map((u) {
             final buf = StringBuffer('${u.unitName}:${u.conversionFactor}');
             if (u.salePrice != null) buf.write(':${u.salePrice}');
-            if (canViewWholesale && u.wholesalePrice != null) {
+            if (exportWs && u.wholesalePrice != null) {
               if (u.salePrice == null) buf.write(':');
               buf.write(':${u.wholesalePrice}');
             }
@@ -218,10 +223,18 @@ class CsvService {
           })
           .join(';');
 
-      final priceCurr = row['price_currency'] as String? ?? '';
-      final refSale = (row['reference_sale_price'] as num?)?.toDouble();
-      final refWs = (row['reference_wholesale_price'] as num?)?.toDouble();
-      final refPur = (row['reference_purchase_price'] as num?)?.toDouble();
+      final priceCurr = exportRef
+          ? (row['price_currency'] as String? ?? '')
+          : '';
+      final refSale = exportRef
+          ? (row['reference_sale_price'] as num?)?.toDouble()
+          : null;
+      final refWs = (exportRef && exportWs)
+          ? (row['reference_wholesale_price'] as num?)?.toDouble()
+          : null;
+      final refPur = (exportRef && canViewCost)
+          ? (row['reference_purchase_price'] as num?)?.toDouble()
+          : null;
 
       buffer.writeln(
         [
@@ -236,10 +249,10 @@ class CsvService {
               ? ((row['purchase_price'] as num?)?.toDouble() ?? 0.0)
                     .toStringAsFixed(2)
               : '',
-          canViewWholesale && (row['wholesale_price'] as num?) != null
+          exportWs && (row['wholesale_price'] as num?) != null
               ? ((row['wholesale_price'] as num).toDouble()).toStringAsFixed(2)
               : '',
-          canViewWholesale && (row['wholesale_min_quantity'] as num?) != null
+          exportWs && (row['wholesale_min_quantity'] as num?) != null
               ? ((row['wholesale_min_quantity'] as num).toDouble())
                     .toStringAsFixed(2)
               : '',
@@ -251,8 +264,11 @@ class CsvService {
           (row['is_active'] as int? ?? 1).toString(),
           sanitizeCell(priceCurr),
           formatRefPrice(refSale),
-          canViewWholesale ? formatRefPrice(refWs) : '',
-          canViewCost ? formatRefPrice(refPur) : '',
+          formatRefPrice(refWs),
+          formatRefPrice(refPur),
+        ].join(','),
+      );
+    }
         ].join(','),
       );
     }
@@ -622,7 +638,7 @@ class CsvService {
       }
 
       double? wholesalePrice;
-      if (rawWholesale.isNotEmpty) {
+      if (WholesaleFeature.isAvailable && rawWholesale.isNotEmpty) {
         wholesalePrice = double.tryParse(rawWholesale);
         if (wholesalePrice == null || wholesalePrice < 0) {
           error++;
@@ -640,7 +656,7 @@ class CsvService {
       }
 
       double? wholesaleMinQty;
-      if (rawWholesaleMin.isNotEmpty) {
+      if (WholesaleFeature.isAvailable && rawWholesaleMin.isNotEmpty) {
         wholesaleMinQty = double.tryParse(rawWholesaleMin);
         if (wholesaleMinQty == null || wholesaleMinQty < 0) {
           error++;
@@ -688,7 +704,9 @@ class CsvService {
               unitName: uName,
               conversionFactor: factor,
               salePrice: uSalePrice,
-              wholesalePrice: uWholesalePrice,
+              wholesalePrice: WholesaleFeature.isAvailable
+                  ? uWholesalePrice
+                  : null,
             ),
           );
         }
@@ -734,7 +752,7 @@ class CsvService {
       double? parsedRefPur;
       String? refError;
 
-      if (rawPriceCurr.isNotEmpty) {
+      if (ReferenceCurrencyFeature.isAvailable && rawPriceCurr.isNotEmpty) {
         parsedPriceCurrency = rawPriceCurr;
 
         if (baseCurrencyCode == null) {

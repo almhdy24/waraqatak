@@ -1755,6 +1755,10 @@ class AppLocalizations {
       _t('استيراد وتصدير CSV', 'CSV Import & Export');
   String get featureInventoryAudit =>
       _t('سجل تدقيق المخزون', 'Inventory Audit Log');
+  String get featureReferenceCurrency =>
+      _t('أسعار الصرف والعملة المرجعية', 'Exchange Rates & Reference Currency');
+  String get featureWholesalePricing =>
+      _t('أسعار الجملة والتجزئة', 'Wholesale & Retail Pricing');
 
   String get stocktakeTitle => _t('جرد المخزون', 'Stocktake');
   String get startStocktake => _t('بدء جلسة جرد', 'Start Stocktake');

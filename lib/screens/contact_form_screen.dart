@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import '../services/analytics/analytics_service.dart';
@@ -83,7 +84,8 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
     final b = await DatabaseHelper.instance.getFirstBusiness();
     if (mounted) {
       setState(
-        () => _wholesalePricingEnabled = b?.wholesalePricingEnabled ?? false,
+        () =>
+            _wholesalePricingEnabled = WholesaleFeature.isEnabledForBusiness(b),
       );
     }
   }
@@ -120,7 +122,9 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
           : _notesController.text.trim(),
       type: _type,
       pricingCategory: _type == 'customer'
-          ? _pricingCategory
+          ? (_wholesalePricingEnabled
+                ? _pricingCategory
+                : (widget.contact?.pricingCategory ?? Contact.categoryRetail))
           : Contact.categoryRetail,
       active: _active,
     );

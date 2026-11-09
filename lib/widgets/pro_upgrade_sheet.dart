@@ -198,6 +198,8 @@ class ProUpgradeSheet extends StatelessWidget {
       Feature.bulkPriceUpdate => l10n.featureBulkPriceUpdate,
       Feature.csvImportExport => l10n.featureCsvImportExport,
       Feature.inventoryAudit => l10n.featureInventoryAudit,
+      Feature.referenceCurrency => l10n.exchangeRates,
+      Feature.wholesalePricing => l10n.wholesalePricing,
       _ => l10n.proFeatureTitle,
     };
   }

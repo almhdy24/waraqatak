@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../core/feature_gate.dart';
 import '../models/entitlement.dart';
 import 'access/access_guard.dart';
 import 'access/permission_registry.dart';
@@ -196,10 +197,14 @@ class LicenseService {
   Future<EntitlementState> checkEntitlement({bool force = false}) async {
     if (!force && _cached != null) return _cached!;
     _cached = await _compute();
+    FeatureGate.setEntitlement(_cached);
     return _cached!;
   }
 
-  void invalidateCache() => _cached = null;
+  void invalidateCache() {
+    _cached = null;
+    FeatureGate.setEntitlement(null);
+  }
 
   Future<EntitlementState> _compute() async {
     _storageFault = false;
