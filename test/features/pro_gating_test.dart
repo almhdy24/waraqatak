@@ -1,12 +1,15 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/core/feature_gate.dart';
 import 'package:warqatek/features/reference_currency/reference_currency_feature.dart';
 import 'package:warqatek/features/wholesale/wholesale_feature.dart';
+import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/models/business.dart';
 import 'package:warqatek/models/entitlement.dart';
 import 'package:warqatek/models/product.dart';
 import 'package:warqatek/models/product_unit.dart';
 import 'package:warqatek/models/reference_pricing_types.dart';
+import 'package:warqatek/screens/exchange_rates_screen.dart';
 import 'package:warqatek/services/document_service.dart';
 import 'package:warqatek/services/feature_access.dart';
 
@@ -347,6 +350,26 @@ void main() {
         wholesalePricingEnabled: WholesaleFeature.isWholesaleActive(true),
       );
       expect(proSalePrice, equals(22000.0));
+    });
+
+    testWidgets('ExchangeRatesScreen renders locked upsell view in Free mode', (
+      tester,
+    ) async {
+      FeatureGate.setOverrideForTesting(false);
+
+      await tester.pumpWidget(
+        LanguageProvider(
+          langCode: 'ar',
+          onChangeLanguage: (_) async {},
+          child: const MaterialApp(
+            home: ExchangeRatesScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+      expect(find.byIcon(Icons.stars), findsOneWidget);
     });
   });
 }

@@ -49,8 +49,7 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
     try {
       if (!ReferenceCurrencyFeature.isAvailable) {
         if (!mounted) return;
-        Navigator.pop(context);
-        ProUpgradeSheet.show(context, feature: Feature.referenceCurrency);
+        setState(() => _loading = false);
         return;
       }
 
@@ -381,6 +380,45 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+
+    if (!ReferenceCurrencyFeature.isAvailable) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.exchangeRates)),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppDesignTokens.space24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 56, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.exchangeRates,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.proFeaturesActivation,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  icon: const Icon(Icons.stars),
+                  label: Text(l10n.proFeatureTitle),
+                  onPressed: () => ProUpgradeSheet.show(
+                    context,
+                    feature: Feature.referenceCurrency,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     if (_loading) {
       return Scaffold(

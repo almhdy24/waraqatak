@@ -247,28 +247,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
-                    if (ReferenceCurrencyFeature.isAvailable)
-                      PermissionGate(
-                        permission: PermissionRegistry.pricingRates,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ListTile(
-                              leading: const Icon(Icons.currency_exchange_outlined),
-                              title: Text(l10n.exchangeRates),
-                              subtitle: Text(l10n.exchangeRatesDesc),
-                              trailing: Icon(chevronIcon),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const ExchangeRatesScreen(),
-                                ),
-                              ),
-                            ),
-                            const Divider(height: 1, indent: 16, endIndent: 16),
-                          ],
-                        ),
+                    PermissionGate(
+                      permission: PermissionRegistry.pricingRates,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.currency_exchange_outlined),
+                            title: Text(l10n.exchangeRates),
+                            subtitle: Text(l10n.exchangeRatesDesc),
+                            trailing: ReferenceCurrencyFeature.isAvailable
+                                ? Icon(chevronIcon)
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const ProBadge(),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.lock_outline, size: 20),
+                                    ],
+                                  ),
+                            onTap: () {
+                              if (ReferenceCurrencyFeature.isAvailable) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const ExchangeRatesScreen(),
+                                  ),
+                                );
+                              } else {
+                                ProUpgradeSheet.show(
+                                  context,
+                                  feature: Feature.referenceCurrency,
+                                );
+                              }
+                            },
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
+                    ),
                     PermissionGate(
                       permission: PermissionRegistry.paymentMethodsManage,
                       child: Column(
@@ -311,43 +328,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
-                    if (WholesaleFeature.isAvailable)
-                      PermissionGate(
-                        permission: PermissionRegistry.settingsManage,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SwitchListTile(
-                              secondary: const Icon(Icons.storefront_outlined),
-                              title: Text(l10n.wholesalePricing),
-                              subtitle: Text(l10n.wholesalePricingDesc),
-                              value: _wholesalePricingEnabled,
-                              onChanged: (v) async {
-                                if (!v && _wholesalePricingEnabled) {
-                                  final proceed = await AppConfirmDialog.show(
+                    PermissionGate(
+                      permission: PermissionRegistry.settingsManage,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          WholesaleFeature.isAvailable
+                              ? SwitchListTile(
+                                  secondary:
+                                      const Icon(Icons.storefront_outlined),
+                                  title: Text(l10n.wholesalePricing),
+                                  subtitle: Text(l10n.wholesalePricingDesc),
+                                  value: _wholesalePricingEnabled,
+                                  onChanged: (v) async {
+                                    if (!v && _wholesalePricingEnabled) {
+                                      final proceed =
+                                          await AppConfirmDialog.show(
+                                            context,
+                                            title: l10n.wholesalePricing,
+                                            message:
+                                                l10n
+                                                    .wholesalePricingDisableWarning,
+                                            confirmLabel: l10n.disableAction,
+                                            isDestructive: false,
+                                          );
+                                      if (!proceed) return;
+                                    }
+                                    if (!mounted) return;
+                                    setState(
+                                      () => _wholesalePricingEnabled = v,
+                                    );
+                                    final b = await DatabaseHelper.instance
+                                        .getFirstBusiness();
+                                    if (b != null) {
+                                      await DatabaseHelper.instance
+                                          .updateBusiness(
+                                            b.copyWith(
+                                              wholesalePricingEnabled: v,
+                                            ),
+                                          );
+                                    }
+                                  },
+                                )
+                              : ListTile(
+                                  leading:
+                                      const Icon(Icons.storefront_outlined),
+                                  title: Text(l10n.wholesalePricing),
+                                  subtitle: Text(l10n.wholesalePricingDesc),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const ProBadge(),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.lock_outline, size: 20),
+                                    ],
+                                  ),
+                                  onTap: () => ProUpgradeSheet.show(
                                     context,
-                                    title: l10n.wholesalePricing,
-                                    message: l10n.wholesalePricingDisableWarning,
-                                    confirmLabel: l10n.disableAction,
-                                    isDestructive: false,
-                                  );
-                                  if (!proceed) return;
-                                }
-                                if (!mounted) return;
-                                setState(() => _wholesalePricingEnabled = v);
-                                final b = await DatabaseHelper.instance
-                                    .getFirstBusiness();
-                                if (b != null) {
-                                  await DatabaseHelper.instance.updateBusiness(
-                                    b.copyWith(wholesalePricingEnabled: v),
-                                  );
-                                }
-                              },
-                            ),
-                            const Divider(height: 1, indent: 16, endIndent: 16),
-                          ],
-                        ),
+                                    feature: Feature.wholesalePricing,
+                                  ),
+                                ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                        ],
                       ),
+                    ),
                     PermissionGate(
                       permission: PermissionRegistry.usersManage,
                       child: ListTile(
