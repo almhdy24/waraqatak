@@ -864,9 +864,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onSelected: (_) {
         final newRange = switch (preset) {
           DateRangePreset.today => DateRangeFilter.today(),
+          DateRangePreset.yesterday => DateRangeFilter.yesterday(),
+          DateRangePreset.thisWeek => DateRangeFilter.thisWeek(),
           DateRangePreset.last7Days => DateRangeFilter.last7Days(),
           DateRangePreset.thisMonth => DateRangeFilter.thisMonth(),
+          DateRangePreset.lastMonth => DateRangeFilter.lastMonth(),
           DateRangePreset.previousMonth => DateRangeFilter.previousMonth(),
+          DateRangePreset.thisYear => DateRangeFilter.thisYear(),
           DateRangePreset.custom => _dateRange,
         };
         setState(() => _dateRange = newRange);
