@@ -760,20 +760,22 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                     label: Text(l10n.products),
                   ),
                   const Divider(),
-                  if (isInvoice || isPurchase) ...[
+                  if (isInvoice || isPurchase || isQuotation) ...[
                     AmountField(
                       controller: _discountController,
                       maxDecimals: 4,
                       showMultipliers: true,
                       decoration: InputDecoration(labelText: l10n.discount),
                     ),
-                    const SizedBox(height: 8),
-                    AmountField(
-                      controller: _paidController,
-                      maxDecimals: 4,
-                      showMultipliers: true,
-                      decoration: InputDecoration(labelText: l10n.paid),
-                    ),
+                    if (!isQuotation) ...[
+                      const SizedBox(height: 8),
+                      AmountField(
+                        controller: _paidController,
+                        maxDecimals: 4,
+                        showMultipliers: true,
+                        decoration: InputDecoration(labelText: l10n.paid),
+                      ),
+                    ],
                   ],
                   if (isQuotation) ...[
                     AmountField(

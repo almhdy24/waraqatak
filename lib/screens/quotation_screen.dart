@@ -32,6 +32,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _notesController = TextEditingController();
   final _validityController = TextEditingController(text: '7');
+  final _discountController = TextEditingController();
   bool _saving = false;
 
   final List<TextEditingController> _desc = [];
@@ -62,6 +63,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   void dispose() {
     _notesController.dispose();
     _validityController.dispose();
+    _discountController.dispose();
     for (final c in _desc) {
       c.dispose();
     }
@@ -167,9 +169,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
     final effectiveTaxRate = (_business?.taxesEnabled ?? false)
         ? (_business?.taxRate ?? 0)
         : 0.0;
+    final discount = NumberInput.parse(_discountController.text) ?? 0.0;
     return DocumentService.calculateInvoiceTotals(
       items: items,
-      discount: 0,
+      discount: discount,
       taxRate: effectiveTaxRate,
       pricesIncludeTax:
           (_business?.taxesEnabled ?? false) &&
@@ -224,6 +227,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
         business: _business!,
         contact: _contact,
         items: _buildItems(),
+        discount: NumberInput.parse(_discountController.text) ?? 0,
         notes: _notesController.text,
         date: documentDate,
         validUntil: validUntil,
@@ -462,9 +466,29 @@ class _QuotationScreenState extends State<QuotationScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                AmountField(
+                  controller: _discountController,
+                  decoration: InputDecoration(
+                    labelText: l10n.discount,
+                    prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+                  ),
+                  textInputAction: TextInputAction.next,
+                  maxDecimals: 4,
+                  showMultipliers: true,
+                  onChanged: (_) => setState(() {}),
+                  onTap: () {
+                    if (_discountController.text.isNotEmpty) {
+                      _discountController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _discountController.text.length,
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
                 AppTotalsCard(
                   subtotal: totals.subtotal,
-                  discount: 0,
+                  discount: NumberInput.parse(_discountController.text) ?? 0,
                   taxAmount: totals.taxAmount,
                   taxRate: _business?.taxRate ?? 0,
                   total: totals.total,
