@@ -1,31 +1,24 @@
 import 'package:intl/intl.dart';
 
+import 'date_format_utils.dart';
 import 'number_input.dart';
 
 class FormatUtils {
   static final NumberFormat _qtyFormat = NumberFormat('#,##0.####');
-  static final DateFormat _defaultDateFmt = DateFormat('dd/MM/yyyy');
-  static final DateFormat _defaultDateTimeFmt = DateFormat('dd/MM/yyyy HH:mm');
-  static final DateFormat _defaultTimestampFmt = DateFormat(
-    'dd/MM/yyyy HH:mm:ss',
-  );
 
-  /// Formats a [DateTime] into standard user-facing date 'dd/MM/yyyy'.
+  /// Formats a [DateTime] into standard user-facing date 'dd/MM/yyyy' in Western digits.
   static String formatDate(DateTime? date, {String fallback = '—'}) {
-    if (date == null) return fallback;
-    return _defaultDateFmt.format(date);
+    return AppDateUtils.formatDateDayMonthYear(date, fallback: fallback);
   }
 
-  /// Formats a [DateTime] into standard user-facing datetime 'dd/MM/yyyy HH:mm'.
+  /// Formats a [DateTime] into standard user-facing datetime 'dd/MM/yyyy HH:mm' in Western digits.
   static String formatDateTime(DateTime? dateTime, {String fallback = '—'}) {
-    if (dateTime == null) return fallback;
-    return _defaultDateTimeFmt.format(dateTime);
+    return AppDateUtils.formatDateTimeDayMonthYear(dateTime, fallback: fallback);
   }
 
-  /// Formats a [DateTime] into standard timestamp with seconds 'dd/MM/yyyy HH:mm:ss'.
+  /// Formats a [DateTime] into standard timestamp with seconds 'dd/MM/yyyy HH:mm:ss' in Western digits.
   static String formatTimestamp(DateTime? dateTime, {String fallback = '—'}) {
-    if (dateTime == null) return fallback;
-    return _defaultTimestampFmt.format(dateTime);
+    return AppDateUtils.formatTimestampDayMonthYear(dateTime, fallback: fallback);
   }
 
   /// Formats a stock or movement quantity with up to 4 decimal places,

@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database/database_helper.dart';
 import '../widgets/backup_password_dialog.dart';
+import 'analytics/analytics_service.dart';
 import 'backup_encryption_service.dart';
 import 'backup_service.dart';
 
@@ -392,6 +393,13 @@ class GoogleDriveBackupService {
           details: 'file_id=${uploaded.id}; name=${uploaded.name}',
         );
       }
+
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.backupCreated, {
+          'destination': 'drive',
+          'encrypted': password != null && password.isNotEmpty,
+        });
+      } catch (_) {}
 
       // Retention: keep newest 7 backups, delete the rest.
       try {

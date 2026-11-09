@@ -3,6 +3,9 @@ import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
+import '../services/analytics/analytics_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'reports/accounting_screen.dart';
 import 'reports/customer_report_screen.dart';
@@ -36,7 +39,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     super.initState();
     LicenseService.instance
         .checkEntitlement(force: false)
-        .then((e) { if (mounted) setState(() => _entitlement = e); })
+        .then((e) {
+          if (mounted) setState(() => _entitlement = e);
+        })
         .catchError((_) {});
   }
 
@@ -45,7 +50,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     if (feature != null) {
       // Re-evaluate on every open so a running session cannot outlive expiry.
       try {
-        final fresh = await LicenseService.instance.checkEntitlement(force: true);
+        final fresh = await LicenseService.instance.checkEntitlement(
+          force: true,
+        );
         if (mounted) setState(() => _entitlement = fresh);
       } catch (_) {}
     }
@@ -54,7 +61,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       final result = await ProUpgradeSheet.show(context, feature: feature);
       if (result == true && mounted) {
         await Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const ActivationScreen()));
+          context,
+          MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        );
         if (!mounted) return;
         LicenseService.instance.invalidateCache();
         final e = await LicenseService.instance.checkEntitlement(force: true);
@@ -63,7 +72,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return;
     }
     if (!mounted) return;
+    try {
+      final reportKey = _resolveReportKey(entry.screen);
+      if (reportKey != null) {
+        AnalyticsService.instance.track(AnalyticsEvent.reportOpened, {
+          'report': reportKey,
+        });
+      }
+    } catch (_) {}
     Navigator.push(context, MaterialPageRoute(builder: (_) => entry.screen));
+  }
+
+  static String? _resolveReportKey(Widget screen) {
+    if (screen is AccountingScreen) return 'accounting';
+    if (screen is SalesReportScreen) return 'sales';
+    if (screen is PurchasesReportScreen) return 'purchases';
+    if (screen is InventoryReportScreen) return 'inventory';
+    if (screen is ProductReportScreen) return 'products';
+    if (screen is AdvancedInventoryAnalyticsScreen) return 'advanced_inventory';
+    if (screen is CustomerReportScreen || screen is SupplierReportScreen) {
+      return 'statement';
+    }
+    return null;
   }
 
   @override
@@ -82,6 +112,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleAccounting,
             screen: const AccountingScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewFinancials,
           ),
         ],
       ),
@@ -94,6 +125,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.salesReport,
             subtitle: l10n.reportSubtitleSales,
             screen: const SalesReportScreen(),
+            permission: PermissionRegistry.reportsViewSales,
           ),
           _ReportEntry(
             icon: Icons.shopping_cart_outlined,
@@ -102,6 +134,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitlePurchases,
             screen: const PurchasesReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewPurchases,
           ),
           _ReportEntry(
             icon: Icons.payments_outlined,
@@ -109,6 +142,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.paymentsReport,
             subtitle: l10n.reportSubtitlePayments,
             screen: const PaymentsReportScreen(),
+            permission: PermissionRegistry.paymentsRecord,
           ),
           _ReportEntry(
             icon: Icons.people_outlined,
@@ -116,6 +150,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.customerReport,
             subtitle: l10n.reportSubtitleCustomers,
             screen: const CustomerReportScreen(),
+            permission: PermissionRegistry.contactsViewBalances,
           ),
           _ReportEntry(
             icon: Icons.store_outlined,
@@ -124,6 +159,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleSuppliers,
             screen: const SupplierReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.contactsViewBalances,
           ),
         ],
       ),
@@ -137,6 +173,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleInventory,
             screen: const InventoryReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewInventoryCost,
           ),
           _ReportEntry(
             icon: Icons.notification_important_outlined,
@@ -145,6 +182,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleLowStock,
             screen: const InventoryReportScreen(initialFilter: 'low_stock'),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.stockAdjust,
           ),
           _ReportEntry(
             icon: Icons.history_outlined,
@@ -153,6 +191,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleMovements,
             screen: const StockMovementsScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.stockViewCost,
           ),
           _ReportEntry(
             icon: Icons.inventory_2_outlined,
@@ -161,6 +200,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleProducts,
             screen: const ProductReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewInventoryCost,
           ),
           _ReportEntry(
             icon: Icons.analytics_outlined,
@@ -169,6 +209,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleAdvancedAnalytics,
             screen: const AdvancedInventoryAnalyticsScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewInventoryCost,
           ),
         ],
       ),
@@ -182,6 +223,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleAudit,
             screen: const AuditHistoryScreen(),
             proFeature: Feature.inventoryAudit,
+            permission: PermissionRegistry.auditView,
           ),
         ],
       ),
@@ -197,6 +239,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
           itemCount: categories.length,
           itemBuilder: (context, catIndex) {
             final cat = categories[catIndex];
+            final availableReports = cat.reports
+                .where(
+                  (r) => r.permission == null || AccessGuard.can(r.permission!),
+                )
+                .toList();
+            if (availableReports.isEmpty) return const SizedBox.shrink();
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -207,20 +256,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                   child: AppSectionHeader(
                     title: cat.title,
-                    count: cat.reports.length,
+                    count: availableReports.length,
                   ),
                 ),
-                ...cat.reports.map((entry) {
-                  final locked = entry.proFeature != null &&
+                ...availableReports.map((entry) {
+                  final locked =
+                      entry.proFeature != null &&
                       !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Card(
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+                        borderRadius: BorderRadius.circular(
+                          AppDesignTokens.cardRadius,
+                        ),
                         side: BorderSide(
-                          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.outlineVariant.withValues(alpha: 0.7),
                         ),
                       ),
                       child: ListTile(
@@ -245,9 +299,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             entry.subtitle,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -292,6 +346,7 @@ class _ReportEntry {
   final String subtitle;
   final Widget screen;
   final Feature? proFeature;
+  final String? permission;
 
   const _ReportEntry({
     required this.icon,
@@ -300,5 +355,6 @@ class _ReportEntry {
     required this.subtitle,
     required this.screen,
     this.proFeature,
+    this.permission,
   });
 }

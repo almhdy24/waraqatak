@@ -9,6 +9,7 @@ import '../localization/app_localizations.dart';
 import '../services/backup_encryption_service.dart';
 import '../services/google_drive_backup_service.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/access/screen_access_gate.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
 
@@ -46,6 +47,19 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
 
   String _mapErrorToMessage(Object error, AppLocalizations l10n) {
     final str = error.toString().toLowerCase();
+
+    final isCancellation =
+        (error is GoogleSignInException &&
+            error.code == GoogleSignInExceptionCode.canceled) ||
+        str.contains('cancelled') ||
+        str.contains('canceled') ||
+        str.contains('sign-in was cancelled') ||
+        str.contains('user canceled');
+
+    if (isCancellation) {
+      return l10n.googleDriveSignInCancelled;
+    }
+
     if (error is SocketException ||
         str.contains('socketexception') ||
         str.contains('clientexception') ||
@@ -374,7 +388,9 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: GoogleDriveBackupScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.googleDriveTitle),
         centerTitle: true,
@@ -713,6 +729,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

@@ -22,7 +22,7 @@ jobs:
   build-and-release:
     name: Build & Publish Release
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -54,7 +54,7 @@ jobs:
         run: flutter analyze
 
       - name: Test
-        run: flutter test
+        run: flutter test --concurrency=2 --timeout=60s
 
       - name: Prepare signing
         env:
@@ -113,6 +113,8 @@ jobs:
           NOTES_FILE=""
           if [ -f "docs/release-notes-${VERSION_NUM}.md" ]; then
             NOTES_FILE="docs/release-notes-${VERSION_NUM}.md"
+          elif [ -f "CHANGELOG.md" ]; then
+            NOTES_FILE="CHANGELOG.md"
           fi
           PRERELEASE_FLAG=""
           case "$TAG" in

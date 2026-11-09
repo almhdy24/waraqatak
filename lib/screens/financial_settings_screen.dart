@@ -7,7 +7,6 @@ import '../models/tax_profile.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import 'tax_profiles_screen.dart';
-import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
@@ -23,7 +22,6 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
   Business? _business;
   List<TaxProfile> _profiles = [];
   bool _saving = false;
-  DateTime? _booksClosedThrough;
 
   // Legal identity controllers
   final _legalNameCtrl = TextEditingController();
@@ -64,12 +62,10 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
     final profiles = await DatabaseHelper.instance.getTaxProfiles(
       activeOnly: true,
     );
-    final closedThrough = await DatabaseHelper.instance.getBooksClosedThrough();
     if (!mounted) return;
     setState(() {
       _business = business;
       _profiles = profiles;
-      _booksClosedThrough = closedThrough;
       if (business != null) {
         _legalNameCtrl.text = business.legalName ?? '';
         _taxIdCtrl.text = business.taxId ?? '';
@@ -447,150 +443,9 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
               maxLines: 3,
             ),
             const SizedBox(height: 24),
-
-            // ── Section 4: Accounting Period Lock ──
-            _sectionHeader(l10n.periodLockSection, Icons.lock_clock_outlined),
-            Text(
-              l10n.periodLockSectionDesc,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: 0.35),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: _booksClosedThrough != null
-                      ? Colors.orange.withValues(alpha: 0.5)
-                      : Theme.of(context)
-                          .colorScheme
-                          .outlineVariant
-                          .withValues(alpha: 0.5),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _booksClosedThrough != null
-                            ? Icons.lock_outline_rounded
-                            : Icons.lock_open_rounded,
-                        color: _booksClosedThrough != null
-                            ? Colors.orange
-                            : Colors.green,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _booksClosedThrough != null
-                              ? '${l10n.periodLockClosedThrough}: ${_booksClosedThrough!.toIso8601String().substring(0, 10)}'
-                              : l10n.periodLockOpen,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.calendar_today_outlined, size: 16),
-                          label: Text(l10n.setPeriodLock),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                          onPressed: _pickLockDate,
-                        ),
-                      ),
-                      if (_booksClosedThrough != null) ...[
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.lock_open_rounded, size: 16),
-                            label: Text(l10n.clearPeriodLock),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(48),
-                              foregroundColor:
-                                  Theme.of(context).colorScheme.error,
-                            ),
-                            onPressed: _clearLockDate,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
           ],
         ),
       ),
-    );
-  }
-
-  Future<void> _pickLockDate() async {
-    final l10n = AppLocalizations.of(context);
-    final initialDate = _booksClosedThrough ?? DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
-    );
-    if (picked == null || !mounted) return;
-
-    final confirmed = await AppConfirmDialog.show(
-      context,
-      title: l10n.confirmSetPeriodLockTitle,
-      message: l10n.confirmSetPeriodLockMessage,
-      confirmLabel: l10n.confirm,
-      isDestructive: false,
-    );
-    if (!confirmed || !mounted) return;
-
-    await DatabaseHelper.instance.setBooksClosedThrough(picked);
-    await _load();
-    if (!mounted) return;
-    AppSnackBar.show(
-      context,
-      '${l10n.periodLockClosedThrough}: ${picked.toIso8601String().substring(0, 10)}',
-      severity: AppSnackBarSeverity.success,
-    );
-  }
-
-  Future<void> _clearLockDate() async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await AppConfirmDialog.show(
-      context,
-      title: l10n.confirmClearPeriodLockTitle,
-      message: l10n.confirmClearPeriodLockMessage,
-      confirmLabel: l10n.confirm,
-      isDestructive: true,
-    );
-    if (!confirmed || !mounted) return;
-
-    await DatabaseHelper.instance.setBooksClosedThrough(null);
-    await _load();
-    if (!mounted) return;
-    AppSnackBar.show(
-      context,
-      l10n.periodLockOpen,
-      severity: AppSnackBarSeverity.success,
     );
   }
 

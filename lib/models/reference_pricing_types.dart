@@ -44,6 +44,9 @@ enum ReferencePricingError {
 
   /// Business settings are not yet configured.
   businessNotConfigured,
+
+  /// The reference pricing feature requires an active Pro license or trial.
+  proFeatureRequired,
 }
 
 /// Exception thrown by reference pricing operations.
@@ -73,11 +76,7 @@ class DerivedPrices {
   final double? purchase;
 
   /// Creates a [DerivedPrices] container.
-  const DerivedPrices({
-    this.sale,
-    this.wholesale,
-    this.purchase,
-  });
+  const DerivedPrices({this.sale, this.wholesale, this.purchase});
 }
 
 /// Flags indicating whether product price fields are currently reference-driven.
@@ -108,10 +107,7 @@ class RepriceCounts {
   final int units;
 
   /// Creates a [RepriceCounts] instance.
-  const RepriceCounts({
-    required this.products,
-    required this.units,
-  });
+  const RepriceCounts({required this.products, required this.units});
 }
 
 /// A sample product before/after price change for repricing preview.
@@ -172,7 +168,7 @@ class RepriceResult {
 
   /// Represents an empty/no-op repricing result.
   const RepriceResult.empty()
-      : affectedProducts = 0,
-        affectedUnits = 0,
-        currencies = const [];
+    : affectedProducts = 0,
+      affectedUnits = 0,
+      currencies = const [];
 }

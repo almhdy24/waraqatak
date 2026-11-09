@@ -16,6 +16,7 @@ import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
 import '../document_detail_screen.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
 
@@ -281,7 +282,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
     final hasIncompleteCost = baseFinalized.any((s) => !s.isCostReliable);
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: SalesReportScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(l10n.salesReport),
         centerTitle: true,
@@ -518,6 +521,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

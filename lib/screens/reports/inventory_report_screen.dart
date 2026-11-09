@@ -12,6 +12,7 @@ import '../../utils/format_utils.dart';
 import '../../utils/number_input.dart';
 import '../../widgets/amount_field.dart';
 import '../inventory_screen.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 
@@ -371,7 +372,9 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
     final outOfStock = summary?.outOfStockCount ?? 0;
     final total = summary?.trackedProductsCount ?? 0;
 
-    return Scaffold(
+    return ScreenAccessGate(
+      screenType: InventoryReportScreen,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(
           _selectedStatus == 'low_stock'
@@ -536,6 +539,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 

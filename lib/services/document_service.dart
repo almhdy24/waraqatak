@@ -8,6 +8,9 @@ import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../utils/money_utils.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
+import 'analytics/analytics_service.dart';
 import 'feature_access.dart';
 import 'license_service.dart';
 
@@ -85,6 +88,18 @@ class DocumentService {
     String? payNowMethod,
     bool? strictStock,
   }) async {
+    if (type == 'purchase') {
+      AccessGuard.require(PermissionRegistry.purchasesCreate);
+    } else if (type == 'payment_receipt' || type == 'expense_voucher') {
+      AccessGuard.require(PermissionRegistry.vouchersCreate);
+    } else {
+      AccessGuard.require(PermissionRegistry.salesCreate);
+    }
+
+    if (discount > 0) {
+      AccessGuard.require(PermissionRegistry.salesEditDiscount);
+    }
+
     _validateBusiness(business);
     if (payNowMethod != null) {
       // Quick sale: the invoice is settled in full, in the same transaction,
@@ -276,13 +291,25 @@ class DocumentService {
     }
 
     final db = DatabaseHelper.instance;
-    return db.insertDocumentWithItems(
+    final docId = await db.insertDocumentWithItems(
       document,
       documentItems,
       contact: contact,
       payNowMethod: payNowMethod,
       strictStock: enforceStock,
     );
+
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.documentCreated, {
+        'type': _canonicalDocType(type),
+        'has_payment': finalPaid > 0 || payNowMethod != null,
+        'item_count_bucket': AnalyticsService.itemCountBucket(
+          effectiveItems.length,
+        ),
+      });
+    } catch (_) {}
+
+    return docId;
   }
 
   /// Updates an existing document.
@@ -305,6 +332,16 @@ class DocumentService {
     String? payNowMethod,
     bool? strictStock,
   }) async {
+    if (type == 'purchase') {
+      AccessGuard.require(PermissionRegistry.purchasesEdit);
+    } else {
+      AccessGuard.require(PermissionRegistry.salesEdit);
+    }
+
+    if (discount > 0) {
+      AccessGuard.require(PermissionRegistry.salesEditDiscount);
+    }
+
     _validateBusiness(business);
     if (payNowMethod != null) {
       // Quick sale: the invoice is settled in full, in the same transaction,
@@ -528,12 +565,20 @@ class DocumentService {
     if (amount <= 0) {
       throw ArgumentError('Payment amount must be greater than zero');
     }
-    return DatabaseHelper.instance.recordPaymentWithReceipt(
+    final receiptId = await DatabaseHelper.instance.recordPaymentWithReceipt(
       documentId: documentId,
       amount: amount,
       paymentMethod: paymentMethod,
       notes: notes,
     );
+
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.paymentRecorded, {
+        'method_category': _categorizePaymentMethod(paymentMethod),
+      });
+    } catch (_) {}
+
+    return receiptId;
   }
 
   /// Records payment allocated across open documents for [contactId] using FIFO.
@@ -564,6 +609,13 @@ class DocumentService {
       details:
           'amount=$amount docType=$docType receipts=${receiptIds.join(",")}',
     );
+
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.paymentRecorded, {
+        'method_category': _categorizePaymentMethod(paymentMethod),
+      });
+    } catch (_) {}
+
     return receiptIds;
   }
 
@@ -575,6 +627,7 @@ class DocumentService {
     String? refundStatus,
     String? refundNotes,
   }) async {
+    final doc = await DatabaseHelper.instance.getDocumentById(documentId);
     await DatabaseHelper.instance.cancelDocument(
       documentId,
       refundStatus: refundStatus,
@@ -585,6 +638,12 @@ class DocumentService {
       entityType: 'document',
       entityId: documentId,
     );
+
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.documentCancelled, {
+        'type': _canonicalDocType(doc?.type ?? 'invoice'),
+      });
+    } catch (_) {}
   }
 
   /// Updates or records the refund status for a cancelled document.
@@ -967,6 +1026,10 @@ class DocumentService {
     ProductUnit? unit,
   }) {
     if (isManualPrice && currentPrice != null) {
+      AccessGuard.require(
+        PermissionRegistry.salesEditPrice,
+        'Manual price override requires sales.edit_price permission',
+      );
       return currentPrice;
     }
     if (pricingCategory == null && currentPrice != null) {
@@ -1022,5 +1085,40 @@ class DocumentService {
       wholesalePricingEnabled: wholesalePricingEnabled,
       unit: matchingUnit,
     );
+  }
+
+  static String _canonicalDocType(String type) {
+    if (type == 'payment_receipt') return 'receipt';
+    if (type == 'expense_voucher') return 'expense';
+    if (const {'invoice', 'purchase', 'quotation', 'custom'}.contains(type)) {
+      return type;
+    }
+    return 'custom';
+  }
+
+  static String _categorizePaymentMethod(String? method) {
+    if (method == null) return 'other';
+    final lower = method.toLowerCase().trim();
+    if (lower.contains('cash') ||
+        lower.contains('نقد') ||
+        lower.contains('كاش')) {
+      return 'cash';
+    }
+    if (lower.contains('bank') ||
+        lower.contains('بنك') ||
+        lower.contains('تحويل') ||
+        lower.contains('شيك') ||
+        lower.contains('card') ||
+        lower.contains('بطاق')) {
+      return 'bank';
+    }
+    if (lower.contains('mobile') ||
+        lower.contains('محفظ') ||
+        lower.contains('pay') ||
+        lower.contains('insta') ||
+        lower.contains('فودافون')) {
+      return 'mobile';
+    }
+    return 'other';
   }
 }

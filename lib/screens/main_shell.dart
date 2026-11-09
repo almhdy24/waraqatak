@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
+import '../services/access/session_manager.dart';
+import '../services/access/user_session_scope.dart';
+import '../services/analytics/analytics_service.dart';
 import '../services/app_update_service.dart';
+import '../widgets/analytics_notice_dialog.dart';
 import '../widgets/responsive.dart';
+import 'access/pin_lock_screen.dart';
 import 'customers_screen.dart';
 import 'documents_screen.dart';
 import 'home_screen.dart';
@@ -22,6 +27,20 @@ class _MainShellState extends State<MainShell> {
   int _customersRefreshToken = 0;
   int _productsRefreshToken = 0;
   late final GlobalKey<HomeScreenState> _homeKey;
+  bool _noticeChecked = false;
+
+  void _triggerNoticeCheck() {
+    if (_noticeChecked) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (SessionManager.instance.isLocked) return;
+      _noticeChecked = true;
+      AnalyticsNoticeDialog.checkAndShow(
+        context,
+        onOpenSettings: () => _select(4),
+      );
+    });
+  }
 
   @override
   void initState() {
@@ -33,6 +52,18 @@ class _MainShellState extends State<MainShell> {
           context: context,
           manual: false,
         );
+        try {
+          final lang = Localizations.localeOf(context).languageCode == 'ar'
+              ? 'ar'
+              : 'en';
+          final brightness = MediaQuery.of(context).platformBrightness;
+          final theme = brightness == Brightness.dark ? 'dark' : 'light';
+          AnalyticsService.instance.track(AnalyticsEvent.appOpened, {
+            'language': lang,
+            'theme': theme,
+            'multi_user': SessionManager.instance.isMultiUserEnabled,
+          });
+        } catch (_) {}
       }
     });
   }
@@ -40,6 +71,14 @@ class _MainShellState extends State<MainShell> {
   void _select(int i) {
     _built.add(i);
     setState(() => _index = i);
+    const screens = ['home', 'invoices', 'customers', 'products', 'settings'];
+    if (i >= 0 && i < screens.length) {
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.screenViewed, {
+          'screen': screens[i],
+        });
+      } catch (_) {}
+    }
     switch (i) {
       case 0:
         _homeKey.currentState?.reload();
@@ -54,6 +93,13 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final session = UserSessionScope.of(context);
+    if (session.isLocked) {
+      return const PinLockScreen();
+    }
+
+    _triggerNoticeCheck();
+
     return PopScope(
       canPop: _index == 0,
       onPopInvokedWithResult: (didPop, result) {

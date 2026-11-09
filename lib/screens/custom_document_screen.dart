@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
@@ -12,6 +11,8 @@ import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
+import '../widgets/app_date_picker.dart';
+import '../utils/date_format_utils.dart';
 
 class CustomDocumentScreen extends StatefulWidget {
   const CustomDocumentScreen({super.key});
@@ -245,11 +246,26 @@ class _CustomDocumentScreenState extends State<CustomDocumentScreen> {
                           const SizedBox(height: 12),
                           Row(
                             children: [
-                              Expanded(child: Text(DateFormat('dd/MM/yyyy').format(_selectedDate))),
-                              TextButton(onPressed: () async {
-                                final picked = await showDatePicker(context: context, initialDate: _selectedDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
-                                if (picked != null && mounted) setState(() => _selectedDate = picked);
-                              }, child: Text(l10n.edit)),
+                              Expanded(
+                                child: Text(
+                                  AppDateUtils.formatDate(_selectedDate),
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  final picked = await AppDatePicker.show(
+                                    context: context,
+                                    initialDate: _selectedDate,
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (picked != null && mounted) {
+                                    setState(() => _selectedDate = picked);
+                                  }
+                                },
+                                child: Text(l10n.edit),
+                              ),
                             ],
                           ),
                         ],

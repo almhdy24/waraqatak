@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
+import '../access/access_context.dart';
 import '../../models/document.dart';
 import '../../models/document_item.dart';
 import '../../models/document_payment.dart';
@@ -89,9 +90,12 @@ class JournalWriter {
     }
 
     // 3. Insert journal entry header
+    final header = Map<String, dynamic>.from(draft.toHeaderMap());
+    header['created_by'] ??= AccessContext.currentUserId;
+    header['origin_device_id'] ??= AccessContext.currentDeviceId;
     final entryId = await txn.insert(
       'journal_entries',
-      draft.toHeaderMap(),
+      header,
     );
 
     // 4. Batch insert journal lines

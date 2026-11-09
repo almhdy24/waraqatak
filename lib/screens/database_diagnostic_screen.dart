@@ -12,6 +12,8 @@ import '../services/accounting/ledger_service.dart';
 import '../services/database_diagnostic_service.dart';
 import '../services/database_repair_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/access/screen_access_gate.dart';
+import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
@@ -207,6 +209,14 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    final authed = await SensitiveActionGate.reauthenticate(
+      context,
+      title: l10n.repairActionFix,
+      message: issue.title,
+      requireOwner: true,
+    );
+    if (!authed || !mounted) return;
+
     setState(() => _isRepairing = true);
 
     try {
@@ -292,6 +302,16 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     );
 
     if (confirmed != true || !mounted) return;
+
+    final authed = await SensitiveActionGate.reauthenticate(
+      context,
+      title: l10n.repairActionFix,
+      message: l10n.isArabic
+          ? 'إصلاح جميع المشكلات الآمنة (${safeIssues.length})'
+          : 'Repair all safe issues (${safeIssues.length})',
+      requireOwner: true,
+    );
+    if (!authed || !mounted) return;
 
     setState(() => _isRepairing = true);
 
@@ -888,26 +908,29 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.databaseDiagnosticsTitle),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined),
-            tooltip: l10n.repairActionExport,
-            onPressed: (_loading || _report == null) ? null : _exportReport,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: l10n.diagnosticsRefresh,
-            onPressed: (_loading || _isScanning || _isRepairing)
-                ? null
-                : _runDiagnostics,
-          ),
-        ],
+    return ScreenAccessGate(
+      screenType: DatabaseDiagnosticScreen,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.databaseDiagnosticsTitle),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.share_outlined),
+              tooltip: l10n.repairActionExport,
+              onPressed: (_loading || _report == null) ? null : _exportReport,
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: l10n.diagnosticsRefresh,
+              onPressed: (_loading || _isScanning || _isRepairing)
+                  ? null
+                  : _runDiagnostics,
+            ),
+          ],
+        ),
+        body: ResponsiveCenter(child: _buildBody(context, l10n, theme, cs)),
       ),
-      body: ResponsiveCenter(child: _buildBody(context, l10n, theme, cs)),
     );
   }
 

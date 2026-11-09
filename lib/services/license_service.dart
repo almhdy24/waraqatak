@@ -2,7 +2,10 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../core/feature_gate.dart';
 import '../models/entitlement.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'activation_service.dart';
 import 'license_key.dart';
 import 'license_notification_service.dart';
@@ -194,10 +197,14 @@ class LicenseService {
   Future<EntitlementState> checkEntitlement({bool force = false}) async {
     if (!force && _cached != null) return _cached!;
     _cached = await _compute();
+    FeatureGate.setEntitlement(_cached);
     return _cached!;
   }
 
-  void invalidateCache() => _cached = null;
+  void invalidateCache() {
+    _cached = null;
+    FeatureGate.setEntitlement(null);
+  }
 
   Future<EntitlementState> _compute() async {
     _storageFault = false;
@@ -405,6 +412,7 @@ class LicenseService {
     String? licenseType,
     String? activationToken,
   }) async {
+    AccessGuard.require(PermissionRegistry.licenseManage);
     // Seed trial start if not already set, binding trial lifetime from
     // the installation / activation time.
     await _getOrInitTrialStart(_clock());
@@ -555,6 +563,7 @@ class LicenseService {
   /// last-seen time is kept too, so removing a key cannot be used to rewind
   /// the clock guard.
   Future<void> clearLicense() async {
+    AccessGuard.require(PermissionRegistry.licenseManage);
     await _store.delete(key: _kLicenseKey);
     await _store.delete(key: _kLicenseExpiry);
     await _store.delete(key: _kLicenseStatus);

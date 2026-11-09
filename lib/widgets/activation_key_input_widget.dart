@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../localization/app_localizations.dart';
 import '../screens/about_screen.dart';
 import '../services/activation_service.dart';
+import '../services/analytics/analytics_service.dart';
 import '../services/license_key.dart';
 import '../services/license_service.dart';
 import 'app_snackbar.dart';
@@ -123,6 +124,10 @@ class _ActivationKeyInputWidgetState extends State<ActivationKeyInputWidget> {
     if (!ActivationKeyInputWidget.isFormatValid(rawKey)) return;
 
     _focusNode.unfocus();
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.activationStarted);
+    } catch (_) {}
+
     setState(() {
       _loading = true;
       _error = null;
@@ -138,6 +143,14 @@ class _ActivationKeyInputWidgetState extends State<ActivationKeyInputWidget> {
 
       _lastOutcome = res.outcome;
       widget.onOutcome?.call(res.outcome);
+
+      try {
+        final reason = _mapOutcomeToReason(res.outcome);
+        AnalyticsService.instance.track(AnalyticsEvent.activationResult, {
+          'ok': res.outcome == ActivationOutcome.success,
+          'reason': reason,
+        });
+      } catch (_) {}
 
       final l10n = AppLocalizations.of(context);
       if (res.outcome == ActivationOutcome.success) {
@@ -450,5 +463,21 @@ class _ActivationKeyInputWidgetState extends State<ActivationKeyInputWidget> {
         ),
       ],
     );
+  }
+
+  static String _mapOutcomeToReason(ActivationOutcome outcome) {
+    switch (outcome) {
+      case ActivationOutcome.success:
+        return 'success';
+      case ActivationOutcome.serverUnreachable:
+        return 'network_error';
+      case ActivationOutcome.invalid:
+        return 'invalid_key';
+      case ActivationOutcome.tooManyAttempts:
+        return 'device_limit';
+      case ActivationOutcome.deviceUnavailable:
+      case ActivationOutcome.storageFailed:
+        return 'unknown';
+    }
   }
 }

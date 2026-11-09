@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart' hide TextDirection;
 import '../database/database_helper.dart';
+import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
@@ -20,6 +20,8 @@ import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
+import '../widgets/app_date_picker.dart';
+import '../utils/date_format_utils.dart';
 
 class EditDocumentScreen extends StatefulWidget {
   final int documentId;
@@ -248,7 +250,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       _taxableList.add(true);
       _productIds.add(null);
       _pricingCategories.add(
-        _business?.wholesalePricingEnabled == true
+        WholesaleFeature.isEnabledForBusiness(_business)
             ? (_selectedContact?.pricingCategory ?? Contact.categoryRetail)
             : null,
       );
@@ -503,7 +505,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                                 _addressController.text =
                                     contact?.address ?? '';
                               });
-                              if (_business?.wholesalePricingEnabled == true &&
+                              if (WholesaleFeature.isEnabledForBusiness(
+                                    _business,
+                                  ) &&
                                   !isPurchase) {
                                 final newCat =
                                     contact?.pricingCategory ??
@@ -711,7 +715,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                       productId: _productIds[index],
                       usePurchasePrice: isPurchase,
                       wholesalePricingEnabled:
-                          _business?.wholesalePricingEnabled ?? false,
+                          WholesaleFeature.isEnabledForBusiness(_business),
                       pricingCategory: _pricingCategories[index],
                       onPricingCategoryChanged: (cat) {
                         setState(() => _pricingCategories[index] = cat);
@@ -756,20 +760,22 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                     label: Text(l10n.products),
                   ),
                   const Divider(),
-                  if (isInvoice || isPurchase) ...[
+                  if (isInvoice || isPurchase || isQuotation) ...[
                     AmountField(
                       controller: _discountController,
                       maxDecimals: 4,
                       showMultipliers: true,
                       decoration: InputDecoration(labelText: l10n.discount),
                     ),
-                    const SizedBox(height: 8),
-                    AmountField(
-                      controller: _paidController,
-                      maxDecimals: 4,
-                      showMultipliers: true,
-                      decoration: InputDecoration(labelText: l10n.paid),
-                    ),
+                    if (!isQuotation) ...[
+                      const SizedBox(height: 8),
+                      AmountField(
+                        controller: _paidController,
+                        maxDecimals: 4,
+                        showMultipliers: true,
+                        decoration: InputDecoration(labelText: l10n.paid),
+                      ),
+                    ],
                   ],
                   if (isQuotation) ...[
                     AmountField(
@@ -834,14 +840,13 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  DateFormat(
-                                    'dd/MM/yyyy',
-                                  ).format(_selectedDate!),
+                                  AppDateUtils.formatDate(_selectedDate!),
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
                               ),
                               TextButton(
                                 onPressed: () async {
-                                  final picked = await showDatePicker(
+                                  final picked = await AppDatePicker.show(
                                     context: context,
                                     initialDate: _selectedDate!,
                                     firstDate: DateTime(2000),

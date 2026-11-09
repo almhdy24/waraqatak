@@ -9,6 +9,8 @@ void main() {
     test('purchases is Pro', () => expect(FeatureAccess.isPro(Feature.purchases), isTrue));
     test('inventory is Pro', () => expect(FeatureAccess.isPro(Feature.inventory), isTrue));
     test('advancedReports is Pro', () => expect(FeatureAccess.isPro(Feature.advancedReports), isTrue));
+    test('referenceCurrency is Pro', () => expect(FeatureAccess.isPro(Feature.referenceCurrency), isTrue));
+    test('wholesalePricing is Pro', () => expect(FeatureAccess.isPro(Feature.wholesalePricing), isTrue));
     test('invoices is Free', () => expect(FeatureAccess.isPro(Feature.invoices), isFalse));
     test('quotations is Free', () => expect(FeatureAccess.isPro(Feature.quotations), isFalse));
     test('vouchers is Free', () => expect(FeatureAccess.isPro(Feature.vouchers), isFalse));
@@ -155,6 +157,44 @@ void main() {
       expect(FeatureAccess.canAccess(Feature.inventory, expired), isFalse);
       expect(FeatureAccess.canAccess(Feature.inventory, revoked), isFalse);
       expect(FeatureAccess.canAccess(Feature.inventory, null), isFalse);
+    });
+
+    test('referenceCurrency is gated for Pro users only', () {
+      final licensed = EntitlementState(
+          status: EntitlementStatus.licensed, deviceId: 'd');
+      final trial = EntitlementState(
+          status: EntitlementStatus.trialActive,
+          deviceId: 'd',
+          trialDaysRemaining: 5);
+      expect(FeatureAccess.canAccess(Feature.referenceCurrency, licensed), isTrue);
+      expect(FeatureAccess.canAccess(Feature.referenceCurrency, trial), isTrue);
+
+      final expired = EntitlementState(
+          status: EntitlementStatus.trialExpired, deviceId: 'd');
+      final revoked = EntitlementState(
+          status: EntitlementStatus.licenseRevoked, deviceId: 'd');
+      expect(FeatureAccess.canAccess(Feature.referenceCurrency, expired), isFalse);
+      expect(FeatureAccess.canAccess(Feature.referenceCurrency, revoked), isFalse);
+      expect(FeatureAccess.canAccess(Feature.referenceCurrency, null), isFalse);
+    });
+
+    test('wholesalePricing is gated for Pro users only', () {
+      final licensed = EntitlementState(
+          status: EntitlementStatus.licensed, deviceId: 'd');
+      final trial = EntitlementState(
+          status: EntitlementStatus.trialActive,
+          deviceId: 'd',
+          trialDaysRemaining: 5);
+      expect(FeatureAccess.canAccess(Feature.wholesalePricing, licensed), isTrue);
+      expect(FeatureAccess.canAccess(Feature.wholesalePricing, trial), isTrue);
+
+      final expired = EntitlementState(
+          status: EntitlementStatus.trialExpired, deviceId: 'd');
+      final revoked = EntitlementState(
+          status: EntitlementStatus.licenseRevoked, deviceId: 'd');
+      expect(FeatureAccess.canAccess(Feature.wholesalePricing, expired), isFalse);
+      expect(FeatureAccess.canAccess(Feature.wholesalePricing, revoked), isFalse);
+      expect(FeatureAccess.canAccess(Feature.wholesalePricing, null), isFalse);
     });
 
     test('regular customer invoice action uses Feature.invoices (always free)', () {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../localization/app_localizations.dart';
+import '../widgets/access/screen_access_gate.dart';
 import '../widgets/activation_key_input_widget.dart';
 import '../widgets/responsive.dart';
 
@@ -45,7 +46,9 @@ class _ActivationScreenState extends State<ActivationScreen> {
     final cs = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    return PopScope(
+    return ScreenAccessGate(
+      screenType: ActivationScreen,
+      child: PopScope(
       canPop: !_loading,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
@@ -73,6 +76,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 

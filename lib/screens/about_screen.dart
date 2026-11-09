@@ -30,16 +30,18 @@ class AboutScreen extends StatelessWidget {
 
   Future<void> _launchWhatsApp(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final uri = Uri.parse(AppConstants.whatsappUrl).replace(
-      queryParameters: {'text': l10n.supportWhatsAppGreeting},
-    );
+    final uri = Uri.parse(
+      AppConstants.whatsappUrl,
+    ).replace(queryParameters: {'text': l10n.supportWhatsAppGreeting});
     await UrlLauncherUtils.launchUri(context, uri);
   }
 
   Future<void> _shareApp(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
     await SharePlus.instance.share(
-      ShareParams(text: '${l10n.shareAppMessage}\n${AppConstants.playStoreUrl}'),
+      ShareParams(
+        text: '${l10n.shareAppMessage}\n${AppConstants.playStoreUrl}',
+      ),
     );
   }
 
@@ -64,117 +66,170 @@ class AboutScreen extends StatelessWidget {
                 _Hero(version: version),
                 const SizedBox(height: 16),
                 _QuickActions(
-                  onRate: () =>
-                      UrlLauncherUtils.launch(context, AppConstants.playStoreUrl),
+                  onRate: () => UrlLauncherUtils.launch(
+                    context,
+                    AppConstants.playStoreUrl,
+                  ),
                   onShare: () => _shareApp(context),
                   onSupport: () => _launchWhatsApp(context),
                 ),
                 const SizedBox(height: 24),
 
                 _SectionTitle(l10n.supportAndContact),
-                _Group(children: [
-                  _LinkTile(
-                    icon: Icons.help_outline_rounded,
-                    iconColor: Theme.of(context).colorScheme.primary,
-                    title: l10n.helpCenter,
-                    subtitle: 'almhdy24.com/products/waraqatak/help',
-                    onTap: () => UrlLauncherUtils.launch(
-                        context, AppConstants.helpCenterUrl),
-                  ),
-                  _LinkTile(
-                    icon: Icons.chat_rounded,
-                    iconColor: const Color(0xFF25D366),
-                    title: l10n.whatsappSupport,
-                    subtitle: l10n.whatsappSupportDesc,
-                    onTap: () => _launchWhatsApp(context),
-                  ),
-                  _LinkTile(
-                    icon: Icons.email_outlined,
-                    iconColor: const Color(0xFFEA4335),
-                    title: l10n.contactEmail,
-                    subtitle: AppConstants.supportEmail,
-                    onTap: () => _launchEmail(context),
-                  ),
-                  _LinkTile(
-                    icon: Icons.facebook_rounded,
-                    iconColor: const Color(0xFF1877F2),
-                    title: l10n.facebookPage,
-                    subtitle: l10n.facebookPageDesc,
-                    onTap: () => UrlLauncherUtils.launch(
-                        context, AppConstants.facebookPageUrl),
-                  ),
-                  _LinkTile(
-                    icon: Icons.language_rounded,
-                    title: l10n.developerWebsite,
-                    subtitle: 'almhdy24.com',
-                    onTap: () =>
-                        UrlLauncherUtils.launch(context, AppConstants.websiteUrl),
-                  ),
-                ]),
+                _Group(
+                  children: [
+                    _LinkTile(
+                      icon: Icons.help_outline_rounded,
+                      iconColor: Theme.of(context).colorScheme.primary,
+                      title: l10n.helpCenter,
+                      subtitle: 'almhdy24.com/products/waraqatak/help',
+                      onTap: () => UrlLauncherUtils.launch(
+                        context,
+                        AppConstants.helpCenterUrl,
+                      ),
+                    ),
+                    _LinkTile(
+                      icon: Icons.chat_rounded,
+                      iconColor: const Color(0xFF25D366),
+                      title: l10n.whatsappSupport,
+                      subtitle: l10n.whatsappSupportDesc,
+                      onTap: () => _launchWhatsApp(context),
+                    ),
+                    _LinkTile(
+                      icon: Icons.email_outlined,
+                      iconColor: const Color(0xFFEA4335),
+                      title: l10n.contactEmail,
+                      subtitle: AppConstants.supportEmail,
+                      onTap: () => _launchEmail(context),
+                    ),
+                    _LinkTile(
+                      icon: Icons.facebook_rounded,
+                      iconColor: const Color(0xFF1877F2),
+                      title: l10n.facebookPage,
+                      subtitle: l10n.facebookPageDesc,
+                      onTap: () => UrlLauncherUtils.launch(
+                        context,
+                        AppConstants.facebookPageUrl,
+                      ),
+                    ),
+                    _LinkTile(
+                      icon: Icons.language_rounded,
+                      title: l10n.developerWebsite,
+                      subtitle: 'almhdy24.com',
+                      onTap: () => UrlLauncherUtils.launch(
+                        context,
+                        AppConstants.websiteUrl,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
 
                 _SectionTitle(l10n.whatYouCanDo),
-                _FeatureGrid(features: [
-                  _Feature(Icons.receipt_long_rounded, l10n.invoice),
-                  _Feature(Icons.request_quote_outlined, l10n.quotation),
-                  _Feature(Icons.shopping_cart_outlined, l10n.purchase),
-                  _Feature(Icons.payments_outlined, l10n.paymentReceipt),
-                  _Feature(Icons.money_off_csred_outlined, l10n.expenseVoucher),
-                  _Feature(Icons.picture_as_pdf_outlined, l10n.sharePdf),
-                  _Feature(Icons.people_alt_outlined, l10n.customers),
-                  _Feature(Icons.inventory_2_outlined, l10n.products),
-                  _Feature(Icons.warehouse_outlined, l10n.stock),
-                  _Feature(Icons.qr_code_scanner_rounded, l10n.barcodeScanner),
-                  _Feature(Icons.bar_chart_rounded, l10n.reports),
-                  _Feature(Icons.wifi_off_rounded, l10n.offlineFirst),
-                ]),
+                _FeatureGrid(
+                  features: [
+                    _Feature(Icons.receipt_long_rounded, l10n.invoice),
+                    _Feature(Icons.request_quote_outlined, l10n.quotation),
+                    _Feature(Icons.shopping_cart_outlined, l10n.purchase),
+                    _Feature(Icons.payments_outlined, l10n.paymentReceipt),
+                    _Feature(
+                      Icons.money_off_csred_outlined,
+                      l10n.expenseVoucher,
+                    ),
+                    _Feature(Icons.picture_as_pdf_outlined, l10n.sharePdf),
+                    _Feature(Icons.people_alt_outlined, l10n.customers),
+                    _Feature(Icons.inventory_2_outlined, l10n.products),
+                    _Feature(Icons.warehouse_outlined, l10n.stock),
+                    _Feature(
+                      Icons.qr_code_scanner_rounded,
+                      l10n.barcodeScanner,
+                    ),
+                    _Feature(Icons.bar_chart_rounded, l10n.reports),
+                    _Feature(Icons.wifi_off_rounded, l10n.offlineFirst),
+                  ],
+                ),
                 const SizedBox(height: 24),
 
                 _SectionTitle(l10n.legalAndPrivacy),
-                _Group(children: [
-                  _LinkTile(
-                    icon: Icons.info_outline,
-                    title: l10n.transparencyTitle,
-                    subtitle: l10n.seeFreeVsPro,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const TransparencyScreen()),
+                _Group(
+                  children: [
+                    _LinkTile(
+                      icon: Icons.info_outline,
+                      title: l10n.transparencyTitle,
+                      subtitle: l10n.seeFreeVsPro,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const TransparencyScreen(),
+                        ),
+                      ),
                     ),
-                  ),
-                  _LinkTile(
-                    icon: Icons.privacy_tip_outlined,
-                    title: l10n.privacyPolicy,
-                    subtitle: l10n.privacySettingsDescription,
-                    onTap: () => UrlLauncherUtils.launch(
-                        context, AppConstants.privacyPolicyUrl),
-                  ),
-                  _LinkTile(
-                    icon: Icons.gavel_outlined,
-                    title: l10n.termsOfUse,
-                    subtitle: l10n.termsDescription,
-                    onTap: () =>
-                        UrlLauncherUtils.launch(context, AppConstants.termsUrl),
-                  ),
-                  _LinkTile(
-                    icon: Icons.delete_sweep_outlined,
-                    title: l10n.deleteAccountData,
-                    subtitle: l10n.deleteAccountDataDescription,
-                    onTap: () => UrlLauncherUtils.launch(
-                        context, AppConstants.deleteDataUrl),
-                  ),
-                  _LinkTile(
-                    icon: Icons.description_outlined,
-                    title: l10n.openSourceLicenses,
-                    subtitle: l10n.openSourceLicensesDescription,
-                    onTap: () => showLicensePage(
-                      context: context,
-                      applicationName: l10n.appName,
-                      applicationVersion: version,
-                      applicationLegalese: l10n.openSourceLicensesLegalese,
+                    _LinkTile(
+                      icon: Icons.privacy_tip_outlined,
+                      title: l10n.privacyPolicy,
+                      subtitle: l10n.privacySettingsDescription,
+                      onTap: () => UrlLauncherUtils.launch(
+                        context,
+                        AppConstants.privacyPolicyUrl,
+                      ),
                     ),
-                  ),
-                ]),
+                    _LinkTile(
+                      icon: Icons.analytics_outlined,
+                      title: l10n.anonymousAnalyticsTitle,
+                      subtitle: l10n.anonymousAnalyticsSubtitle,
+                      onTap: () {
+                        showDialog<void>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: Text(l10n.anonymousAnalyticsTitle),
+                            content: SingleChildScrollView(
+                              child: Text(l10n.anonymousAnalyticsExplainer),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: Text(
+                                  MaterialLocalizations.of(
+                                    ctx,
+                                  ).closeButtonLabel,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    _LinkTile(
+                      icon: Icons.gavel_outlined,
+                      title: l10n.termsOfUse,
+                      subtitle: l10n.termsDescription,
+                      onTap: () => UrlLauncherUtils.launch(
+                        context,
+                        AppConstants.termsUrl,
+                      ),
+                    ),
+                    _LinkTile(
+                      icon: Icons.delete_sweep_outlined,
+                      title: l10n.deleteAccountData,
+                      subtitle: l10n.deleteAccountDataDescription,
+                      onTap: () => UrlLauncherUtils.launch(
+                        context,
+                        AppConstants.deleteDataUrl,
+                      ),
+                    ),
+                    _LinkTile(
+                      icon: Icons.description_outlined,
+                      title: l10n.openSourceLicenses,
+                      subtitle: l10n.openSourceLicensesDescription,
+                      onTap: () => showLicensePage(
+                        context: context,
+                        applicationName: l10n.appName,
+                        applicationVersion: version,
+                        applicationLegalese: l10n.openSourceLicensesLegalese,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 28),
                 _Footer(version: version),
               ],
@@ -287,26 +342,26 @@ class _QuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     Widget action(IconData icon, String label, VoidCallback onTap) => Expanded(
-          child: _Card(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-              child: Column(
-                children: [
-                  Icon(icon, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(height: 6),
-                  Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ],
+      child: _Card(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+          child: Column(
+            children: [
+              Icon(icon, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-            ),
+            ],
           ),
-        );
+        ),
+      ),
+    );
     return Row(
       children: [
         action(Icons.star_rate_rounded, l10n.rateApp, onRate),
@@ -331,9 +386,9 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          fontWeight: FontWeight.w800,
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }
@@ -438,41 +493,45 @@ class _FeatureGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return LayoutBuilder(builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 560 ? 3 : 2;
-      const gap = 10.0;
-      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-      return Wrap(
-        spacing: gap,
-        runSpacing: gap,
-        children: [
-          for (final f in features)
-            SizedBox(
-              width: width,
-              child: _Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(f.icon, size: 20, color: cs.primary),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          f.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 13),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 560 ? 3 : 2;
+        const gap = 10.0;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final f in features)
+              SizedBox(
+                width: width,
+                child: _Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(f.icon, size: 20, color: cs.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            f.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
-      );
-    });
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -484,15 +543,22 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final muted = theme.textTheme.bodySmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     return Column(
       children: [
-        Text('${l10n.madeBy} ${AppConstants.developerName} · ${AppConstants.developerBrand}',
-            textAlign: TextAlign.center, style: muted),
+        Text(
+          '${l10n.madeBy} ${AppConstants.developerName} · ${AppConstants.developerBrand}',
+          textAlign: TextAlign.center,
+          style: muted,
+        ),
         const SizedBox(height: 4),
-        Text('© ${DateTime.now().year} ${AppConstants.developerBrand}',
-            textAlign: TextAlign.center, style: muted),
+        Text(
+          '© ${DateTime.now().year} ${AppConstants.developerBrand}',
+          textAlign: TextAlign.center,
+          style: muted,
+        ),
       ],
     );
   }

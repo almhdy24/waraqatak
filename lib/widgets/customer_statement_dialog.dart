@@ -10,6 +10,7 @@ import '../models/customer_statement.dart';
 import '../models/document.dart';
 import '../services/customer_statement_service.dart';
 import '../services/pdf_service.dart';
+import 'app_date_picker.dart';
 import 'app_snackbar.dart';
 
 enum StatementPeriodPreset { thisMonth, last7Days, allTime, custom }
@@ -124,7 +125,7 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
         newFrom = DateTime(2020, 1, 1);
         break;
       case StatementPeriodPreset.custom:
-        final picked = await showDateRangePicker(
+        final picked = await AppDatePicker.showRange(
           context: context,
           firstDate: DateTime(2020),
           lastDate: DateTime.now().add(const Duration(days: 365)),

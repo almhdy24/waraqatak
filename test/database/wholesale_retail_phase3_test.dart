@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
+import 'package:warqatek/core/feature_gate.dart';
 import 'package:warqatek/models/business.dart';
 import 'package:warqatek/models/contact.dart';
 import 'package:warqatek/models/product.dart';
@@ -24,6 +25,7 @@ void main() {
   late Directory tempDir;
 
   setUpAll(() async {
+    FeatureGate.setOverrideForTesting(true);
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     sqfliteFfiInit();
@@ -49,7 +51,10 @@ void main() {
     try {
       await DatabaseHelper.instance.closeDatabase();
       if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      FeatureGate.resetForTesting();
+    }
   });
 
   // 1. POS retail and wholesale pricing resolution

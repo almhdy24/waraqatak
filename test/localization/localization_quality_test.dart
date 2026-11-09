@@ -137,8 +137,7 @@ void main() {
       // Statement warning detail
       final stmtAr = l10nAr.statementWarningDetail('INV-2026-001', '500', 'SAR');
       expect(stmtAr, contains('#$fsi' 'INV-2026-001' '$pdi'));
-      expect(stmtAr, contains('$fsi' '500' '$pdi'));
-      expect(stmtAr, contains('$fsi' 'SAR' '$pdi'));
+      expect(stmtAr, contains('$fsi' '500 SAR' '$pdi'));
 
       // WhatsApp statement caption
       final waAr = l10nAr.whatsAppStatementCaption('أحمد', 'مؤسسة النيل', '01/01/2026', '31/01/2026', '1250', 'SDG');

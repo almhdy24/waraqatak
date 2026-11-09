@@ -4,6 +4,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import 'package:printing/printing.dart';
 
 import '../core/catalog_events.dart';
+import '../features/wholesale/wholesale_feature.dart';
 
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
@@ -124,7 +125,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           FeatureAccess.canAccess(Feature.inventory, entitlement),
         );
         _cart.setWholesalePricingEnabled(
-          business?.wholesalePricingEnabled ?? false,
+          WholesaleFeature.isEnabledForBusiness(business),
         );
         if (business != null) {
           _cart.setDecimalDigits(
@@ -788,7 +789,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final units = p.id != null
         ? (_productUnits[p.id!] ?? const <ProductUnit>[])
         : const <ProductUnit>[];
-    final wholesaleEnabled = _business?.wholesalePricingEnabled ?? false;
+    final wholesaleEnabled = WholesaleFeature.isEnabledForBusiness(_business);
 
     ProductUnit? selectedUnit = line.unit;
     String selectedCategory = line.pricingCategory ?? Contact.categoryRetail;
@@ -1113,7 +1114,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     return Column(
       children: [
-        if (_business?.wholesalePricingEnabled == true)
+        if (WholesaleFeature.isEnabledForBusiness(_business))
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Row(
@@ -1145,7 +1146,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               final line = _cart.lines[i];
               final unitLabel = line.unit?.unitName ?? line.product.unit ?? '';
               final tierLabel =
-                  (_business?.wholesalePricingEnabled == true &&
+                  (WholesaleFeature.isEnabledForBusiness(_business) &&
                       line.pricingCategory == Contact.categoryWholesale)
                   ? ' (${l10n.wholesalePricing})'
                   : '';

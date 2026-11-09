@@ -122,10 +122,12 @@ SUPPORT_URL_RE='^(https://wa\.me/249993452125|https://www\.facebook\.com/profile
 # Dart comments that *describe absence* ("No WhatsApp, no Facebook") are
 # intentionally not flagged — the pass sees string literals and code
 # identifiers, not docstrings.
-LEAK_PATTERN='whatsapp|wa\.me|facebook|pro\.html|pricing|\+[0-9]{3,}'
+# "pricing" counts only as a standalone word (Pricing page, /pricing, pricing.html);
+# code identifiers such as wholesalePricing are not a leak.
+LEAK_PATTERN='whatsapp|wa\.me|facebook|pro\.html|(^|[^A-Za-z0-9_])pricing([^A-Za-z0-9_]|$)|\+[0-9]{3,}'
 # On the support surface, support-channel names are expected; prices and
 # pricing pages are still forbidden.
-SUPPORT_LEAK_PATTERN='pro\.html|pricing|\+[0-9]{3,}'
+SUPPORT_LEAK_PATTERN='pro\.html|(^|[^A-Za-z0-9_])pricing([^A-Za-z0-9_]|$)|\+[0-9]{3,}'
 
 is_support_surface() {
   local f
