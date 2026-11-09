@@ -228,13 +228,21 @@ abstract final class AccessDao {
     ''', [ownerRoleId, defaultWorkspaceId, 'المالك', 'مالك النظام بجميع الصلاحيات']);
 
     // 3. Default Owner User
-    await db.rawInsert('''
-      INSERT OR IGNORE INTO users (
-        id, workspace_id, username, display_name, role_id,
-        is_owner, is_active, setup_complete, failed_attempts,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, ?, ?)
-    ''', [ownerUserId, defaultWorkspaceId, 'owner', 'المالك', ownerRoleId, now, now]);
+    final existingOwner = await db.query(
+      'users',
+      where: 'id = ? OR is_owner = 1',
+      whereArgs: [ownerUserId],
+      limit: 1,
+    );
+    if (existingOwner.isEmpty) {
+      await db.rawInsert('''
+        INSERT OR IGNORE INTO users (
+          id, workspace_id, username, display_name, role_id,
+          is_owner, is_active, setup_complete, failed_attempts,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, 1, 1, 0, 0, ?, ?)
+      ''', [ownerUserId, defaultWorkspaceId, 'owner', 'المالك', ownerRoleId, now, now]);
+    }
 
     // 4. Initial app_settings
     await db.rawInsert('''
@@ -293,7 +301,7 @@ abstract final class AccessDao {
         CREATE TRIGGER IF NOT EXISTS trg_users_single_owner
         BEFORE INSERT ON users
         FOR EACH ROW
-        WHEN NEW.is_owner = 1 AND (SELECT COUNT(*) FROM users WHERE is_owner = 1) > 0
+        WHEN NEW.is_owner = 1 AND (SELECT COUNT(*) FROM users WHERE is_owner = 1 AND id != NEW.id) > 0
         BEGIN
           SELECT RAISE(ABORT, 'Only a single Owner account is permitted');
         END;
