@@ -87,7 +87,24 @@ class DateRangeFilter {
     );
   }
 
-  factory DateRangeFilter.previousMonth() => DateRangeFilter.lastMonth();
+  factory DateRangeFilter.previousMonth() {
+    final now = DateTime.now();
+    final firstDayPrev = DateTime(now.year, now.month - 1, 1);
+    final lastDayPrev = DateTime(
+      now.year,
+      now.month,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    return DateRangeFilter._(
+      preset: DateRangePreset.previousMonth,
+      from: firstDayPrev,
+      to: lastDayPrev,
+    );
+  }
 
   factory DateRangeFilter.thisYear() {
     final now = DateTime.now();

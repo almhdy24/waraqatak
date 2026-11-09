@@ -184,7 +184,7 @@ void main() {
       final textWidget = (w as pw.Directionality).child as pw.Text;
       final textSpan = textWidget.text as pw.TextSpan;
       expect(isolateRegex.hasMatch(textSpan.text!), isFalse);
-      expect(textSpan.text, contains('• الفاتورة #INV-001 تتضمن فارقاً محاسبياً بمقدار 350.00 SDG'));
+      expect(textSpan.text, contains('• الفاتورة #INV-001 تتضمن فرقاً بمقدار 350.00 SDG ناتجاً عن تعديل سابق.'));
     });
 
     test('PdfCustomerStatementBuilder builds statement with discrepancy warning without isolates reaching text', () async {
