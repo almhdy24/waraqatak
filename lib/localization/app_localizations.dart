@@ -2198,11 +2198,11 @@ class AppLocalizations {
     'Restore failed: Backup file is invalid or corrupted.',
   );
   String get googleDriveSignInCancelled => _t(
-    'لم يكتمل تسجيل الدخول.',
+    'تم إلغاء تسجيل الدخول أو لم يتم إكمال التحقق.',
     'Sign-in was cancelled or verification was not completed.',
   );
   String get googleDriveErrorConfig => _t(
-    'تعذّر ربط حساب Google على هذا الجهاز. حاول لاحقاً، وإن تكرر الخطأ تواصل مع الدعم.',
+    'تعذّر ربط حساب Google على هذا الجهاز. يُرجى التحقق من إعدادات Google Cloud وشهادة التطبيق، ثم المحاولة مجدداً.',
     'Authentication configuration failed. Please verify Google Cloud settings and app certificate.',
   );
   String get googleDriveDeleteBackup => _t('حذف النسخة', 'Delete Backup');

@@ -47,6 +47,19 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
 
   String _mapErrorToMessage(Object error, AppLocalizations l10n) {
     final str = error.toString().toLowerCase();
+
+    final isCancellation =
+        (error is GoogleSignInException &&
+            error.code == GoogleSignInExceptionCode.canceled) ||
+        str.contains('cancelled') ||
+        str.contains('canceled') ||
+        str.contains('sign-in was cancelled') ||
+        str.contains('user canceled');
+
+    if (isCancellation) {
+      return l10n.googleDriveSignInCancelled;
+    }
+
     if (error is SocketException ||
         str.contains('socketexception') ||
         str.contains('clientexception') ||
