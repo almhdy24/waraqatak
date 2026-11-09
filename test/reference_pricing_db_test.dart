@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/core/catalog_events.dart';
+import 'package:warqatek/core/feature_gate.dart';
 import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/database/reference_pricing_dao.dart';
 import 'package:warqatek/models/business.dart';
@@ -105,6 +106,7 @@ void main() {
     });
 
     tearDownAll(() async {
+      FeatureGate.resetForTesting();
       await db.closeDatabase();
       try {
         tempDir.deleteSync(recursive: true);
@@ -112,6 +114,7 @@ void main() {
     });
 
     setUp(() async {
+      FeatureGate.setOverrideForTesting(true);
       await db.closeDatabase();
       if (tempDir.existsSync()) {
         for (final f in tempDir.listSync()) {
@@ -840,6 +843,35 @@ void main() {
       expect(preview.rows.first.priceCurrency, 'USD');
 
       expect(await ReferencePricingDao.verifyInvariants(rawDb), isEmpty);
+    });
+
+    test('D17b: CSV export hides reference pricing for non-Pro users',
+        () async {
+      await ReferencePricingService.addCurrencyWithRate(ExchangeRate(
+        code: 'USD',
+        nameAr: 'دولار',
+        symbol: '\$',
+        rate: 500.0,
+        isActive: true,
+        isCustom: false,
+        updatedAt: DateTime.now(),
+      ));
+      await db.insertProduct(const Product(
+        name: 'CSV Free Product',
+        priceCurrency: 'USD',
+        referenceSalePrice: 15.0,
+        salePrice: 7500.0,
+        purchasePrice: 0,
+      ));
+
+      FeatureGate.setOverrideForTesting(false);
+      try {
+        final csvString = utf8.decode(await CsvService.instance.exportProducts());
+        expect(csvString.contains('CSV Free Product'), isTrue);
+        expect(csvString.contains('USD'), isFalse);
+      } finally {
+        FeatureGate.setOverrideForTesting(true);
+      }
     });
 
     // =========================================================================
