@@ -172,6 +172,11 @@ class AuditService {
 
   Future<void> _chainLock = Future.value();
 
+  @visibleForTesting
+  void resetChainLockForTesting() {
+    _chainLock = Future.value();
+  }
+
   /// Logs an event into the tamper-evident audit chain.
   /// Execution is serialized to prevent hash chain forks from concurrent calls (D7).
   Future<void> logEvent(

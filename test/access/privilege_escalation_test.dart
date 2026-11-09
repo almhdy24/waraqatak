@@ -46,8 +46,8 @@ void main() {
   });
 
   tearDownAll(() async {
-    AuthService.useCompute = true;
-    AuthService.testingIterations = null;
+    AuthService.useCompute = false;
+    AuthService.testingIterations = 50;
     SessionManager.enableInactivityTimer = true;
     try {
       await DatabaseHelper.instance.closeDatabase();

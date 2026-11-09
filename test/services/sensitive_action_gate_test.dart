@@ -29,8 +29,8 @@ void main() {
   });
 
   tearDownAll(() async {
-    AuthService.useCompute = true;
-    AuthService.testingIterations = null;
+    AuthService.useCompute = false;
+    AuthService.testingIterations = 50;
     SessionManager.enableInactivityTimer = true;
     try {
       await DatabaseHelper.instance.closeDatabase();
@@ -43,6 +43,7 @@ void main() {
 
     setUp(() async {
       AuthService.resetDeviceThrottle();
+      AuditService.instance.resetChainLockForTesting();
       SessionManager.instance.resetForTesting();
       await DatabaseHelper.instance.closeDatabase();
       final dir = Directory.systemTemp.createTempSync('sens_run_');
@@ -53,6 +54,7 @@ void main() {
 
     tearDown(() async {
       AuthService.resetDeviceThrottle();
+      AuditService.instance.resetChainLockForTesting();
       SessionManager.instance.resetForTesting();
       await DatabaseHelper.instance.closeDatabase();
     });
@@ -152,13 +154,16 @@ void main() {
       );
 
       bool? result;
-      Future<void> launchReauth() async {
-        result = await SensitiveActionGate.reauthenticate(
-          ctx,
-          title: 'Database Repair',
-          message: 'Fixing corruption',
-          requireOwner: true,
-        );
+      late Future<void> reauthFuture;
+      void launchReauth() {
+        reauthFuture = () async {
+          result = await SensitiveActionGate.reauthenticate(
+            ctx,
+            title: 'Database Repair',
+            message: 'Fixing corruption',
+            requireOwner: true,
+          );
+        }();
       }
 
       launchReauth();
@@ -217,11 +222,17 @@ void main() {
         }
       }
       if (!isClosed) {
-        await tester.pumpAndSettle();
+        for (int i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+          if (find.byType(CircularProgressIndicator).evaluate().isEmpty) {
+            break;
+          }
+        }
         isClosed = find.byType(AlertDialog).evaluate().isEmpty;
       }
 
       // Dialog closes, result is true
+      await reauthFuture;
       expect(isClosed, isTrue);
       expect(result, isTrue);
       expect(find.byType(AlertDialog), findsNothing);
@@ -235,38 +246,41 @@ void main() {
         );
         expect(successRows.length, 1);
       });
+      await tester.pumpWidget(const SizedBox());
     });
 
-    test('SessionManager.setMultiUserEnabled(false) requires Owner session', () async {
-      await SessionManager.instance.setMultiUserEnabled(true);
+    testWidgets('SessionManager.setMultiUserEnabled(false) requires Owner session', (tester) async {
+      await tester.runAsync(() async {
+        await SessionManager.instance.setMultiUserEnabled(true);
 
-      final owner = await AccessAdminService.instance.getUserById(AccessDao.ownerUserId, executor: db);
-      expect(owner, isNotNull);
+        final owner = await AccessAdminService.instance.getUserById(AccessDao.ownerUserId, executor: db);
+        expect(owner, isNotNull);
 
-      final cashier = AppUser(
-        id: 'user-cashier-disable',
-        workspaceId: AccessDao.defaultWorkspaceId,
-        username: 'cashier_disable_test',
-        displayName: 'Cashier Disable Test',
-        roleId: AccessSeeder.roleTemplateSalesperson,
-        isOwner: false,
-        isActive: true,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+        final cashier = AppUser(
+          id: 'user-cashier-disable',
+          workspaceId: AccessDao.defaultWorkspaceId,
+          username: 'cashier_disable_test',
+          displayName: 'Cashier Disable Test',
+          roleId: AccessSeeder.roleTemplateSalesperson,
+          isOwner: false,
+          isActive: true,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
 
-      SessionManager.instance.setSession(cashier, {});
+        SessionManager.instance.setSession(cashier, {});
 
-      // Cashier cannot disable multi-user mode
-      expect(
-        () => SessionManager.instance.setMultiUserEnabled(false),
-        throwsA(isA<PermissionDeniedException>()),
-      );
+        // Cashier cannot disable multi-user mode
+        await expectLater(
+          SessionManager.instance.setMultiUserEnabled(false),
+          throwsA(isA<PermissionDeniedException>()),
+        );
 
-      // Owner CAN disable multi-user mode
-      SessionManager.instance.setSession(owner!, {'*'});
-      await SessionManager.instance.setMultiUserEnabled(false);
-      expect(SessionManager.instance.isMultiUserEnabled, isFalse);
+        // Owner CAN disable multi-user mode
+        SessionManager.instance.setSession(owner!, {'*'});
+        await SessionManager.instance.setMultiUserEnabled(false);
+        expect(SessionManager.instance.isMultiUserEnabled, isFalse);
+      });
     });
   });
 }
