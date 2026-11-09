@@ -7,6 +7,7 @@ import '../models/tax_profile.dart';
 import '../services/document_service.dart';
 import '../utils/format_utils.dart';
 import 'tax_profiles_screen.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/app_snackbar.dart';
@@ -547,7 +548,7 @@ class _FinancialSettingsScreenState extends State<FinancialSettingsScreen> {
   Future<void> _pickLockDate() async {
     final l10n = AppLocalizations.of(context);
     final initialDate = _booksClosedThrough ?? DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await AppDatePicker.show(
       context: context,
       initialDate: initialDate,
       firstDate: DateTime(2020),

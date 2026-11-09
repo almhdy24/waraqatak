@@ -711,12 +711,28 @@ class AppLocalizations {
       _t('إنشاء منتج بهذا الباركود', 'Create product with this barcode');
   String get allProducts => _t('كل المنتجات', 'All Products');
 
-  // ========== DASHBOARD DATE FILTERS ==========
+  // ========== DASHBOARD & REPORT DATE FILTERS ==========
   String get today => _t('اليوم', 'Today');
+  String get yesterday => _t('أمس', 'Yesterday');
+  String get thisWeek => _t('هذا الأسبوع', 'This Week');
   String get last7Days => _t('آخر 7 أيام', 'Last 7 Days');
   String get thisMonth => _t('هذا الشهر', 'This Month');
   String get previousMonth => _t('الشهر السابق', 'Previous Month');
+  String get lastMonth => _t('الشهر الماضي', 'Last Month');
+  String get thisYear => _t('هذا العام', 'This Year');
   String get customRange => _t('فترة مخصصة', 'Custom Range');
+  String get fromDate => _t('من', 'From');
+  String get toDate => _t('إلى', 'To');
+  String get dateRange => _t('الفترة الزمنية', 'Date Range');
+  String get selectDate => _t('اختر التاريخ', 'Select Date');
+  String get invalidDate =>
+      _t('تاريخ غير صحيح (سنة/شهر/يوم)', 'Invalid date (YYYY/MM/DD)');
+  String get dateOutOfRange =>
+      _t('التاريخ خارج النطاق المسموح', 'Date is out of allowed range');
+  String get dateFromMustBeBeforeTo => _t(
+    'تاريخ البداية يجب أن يسبق أو يطابق تاريخ النهاية',
+    'Start date must be before or equal to end date',
+  );
 
   // ========== DASHBOARD METRIC CARDS ==========
   String get salesPeriod => _t('المبيعات', 'Sales');

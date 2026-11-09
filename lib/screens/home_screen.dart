@@ -10,6 +10,7 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../services/access/permission_registry.dart';
 import '../widgets/access/permission_gate.dart';
+import '../widgets/app_date_picker.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
@@ -171,7 +172,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    final picked = await AppDatePicker.showRange(
       context: context,
       firstDate: DateTime(now.year - 3),
       lastDate: now,

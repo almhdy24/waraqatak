@@ -21,6 +21,8 @@ import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
+import '../widgets/app_date_picker.dart';
+import '../utils/date_format_utils.dart';
 
 class EditDocumentScreen extends StatefulWidget {
   final int documentId;
@@ -837,14 +839,13 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  DateFormat(
-                                    'dd/MM/yyyy',
-                                  ).format(_selectedDate!),
+                                  AppDateUtils.formatDate(_selectedDate!),
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
                               ),
                               TextButton(
                                 onPressed: () async {
-                                  final picked = await showDatePicker(
+                                  final picked = await AppDatePicker.show(
                                     context: context,
                                     initialDate: _selectedDate!,
                                     firstDate: DateTime(2000),
