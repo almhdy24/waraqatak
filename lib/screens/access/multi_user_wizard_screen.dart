@@ -96,11 +96,63 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
         maxWidth: 480,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: _currentStep == 0
-              ? _buildStep1(l10n, cs)
-              : _buildStep2(l10n, cs),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Stepper progress indicator
+              _buildStepIndicator(l10n, cs),
+              const SizedBox(height: 24),
+              _currentStep == 0
+                  ? _buildStep1(l10n, cs)
+                  : _buildStep2(l10n, cs),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStepIndicator(AppLocalizations l10n, ColorScheme cs) {
+    return Row(
+      children: [
+        _buildStepBadge(1, l10n.isArabic ? 'كلمة المرور' : 'Password', _currentStep >= 0, cs),
+        Expanded(
+          child: Container(
+            height: 2,
+            margin: const EdgeInsets.symmetric(horizontal: 12),
+            color: _currentStep >= 1 ? cs.primary : cs.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+        _buildStepBadge(2, l10n.isArabic ? 'رمز الاسترداد' : 'Recovery Code', _currentStep >= 1, cs),
+      ],
+    );
+  }
+
+  Widget _buildStepBadge(int number, String label, bool isActive, ColorScheme cs) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 14,
+          backgroundColor: isActive ? cs.primary : cs.surfaceContainerHighest,
+          child: Text(
+            '$number',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: isActive ? cs.onPrimary : cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            color: isActive ? cs.onSurface : cs.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 
@@ -192,7 +244,9 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
               labelText: l10n.ownerPinLabel,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.pin_outlined),
-              helperText: l10n.pinCode,
+              helperText: l10n.isArabic
+                  ? 'اختياري: رمز PIN للدخول السريع من شاشة البيع بدون إدخال كلمة المرور كاملة'
+                  : 'Optional: PIN for quick unlocking without entering full password',
             ),
             validator: (v) {
               if (v == null || v.trim().isEmpty) {
@@ -259,12 +313,12 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
         ),
         const SizedBox(height: 20),
 
-        // Display Recovery Code
+        // Display Recovery Code Card
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: cs.primary.withValues(alpha: 0.5)),
           ),
           child: Row(
@@ -279,7 +333,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
                   ),
                 ),
               ),
-              IconButton(
+              IconButton.filledTonal(
                 icon: const Icon(Icons.copy_rounded),
                 tooltip: l10n.copy,
                 onPressed: () {

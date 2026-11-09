@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
@@ -19,15 +20,24 @@ class PinLockScreen extends StatefulWidget {
 
 class _PinLockScreenState extends State<PinLockScreen> {
   List<AppUser> _users = [];
+  Map<String, String> _roleNames = {};
   AppUser? _selectedUser;
   String _enteredPin = '';
   bool _loading = true;
   bool _submitting = false;
+  int _lockoutRemainingSeconds = 0;
+  Timer? _lockoutTimer;
 
   @override
   void initState() {
     super.initState();
     _loadUsers();
+  }
+
+  @override
+  void dispose() {
+    _lockoutTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadUsers() async {
@@ -39,9 +49,17 @@ class _PinLockScreenState extends State<PinLockScreen> {
         orderBy: 'is_owner DESC, display_name ASC',
       );
       final users = rows.map((r) => AppUser.fromMap(r)).toList();
+
+      // Load role names for chips
+      final roleRows = await db.query('roles');
+      final roleNames = {
+        for (final r in roleRows) r['id'] as String: r['name'] as String,
+      };
+
       if (!mounted) return;
       setState(() {
         _users = users;
+        _roleNames = roleNames;
         // Default to current user or Owner
         final currentId = SessionManager.instance.currentUser?.id;
         _selectedUser = users.firstWhere(
@@ -53,14 +71,53 @@ class _PinLockScreenState extends State<PinLockScreen> {
         );
         _loading = false;
       });
+      _checkLockout();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
     }
   }
 
+  void _checkLockout() {
+    final user = _selectedUser;
+    if (user == null) return;
+
+    final now = DateTime.now();
+    int rem = 0;
+
+    // Check device throttle first
+    if (AuthService.isDeviceThrottled) {
+      rem = AuthService.deviceThrottledUntil!.difference(now).inSeconds + 1;
+    } else if (user.isLocked) {
+      rem = user.lockedUntil!.difference(now).inSeconds + 1;
+    }
+
+    if (rem > 0) {
+      setState(() => _lockoutRemainingSeconds = rem);
+      _startLockoutCountdown();
+    } else {
+      setState(() => _lockoutRemainingSeconds = 0);
+    }
+  }
+
+  void _startLockoutCountdown() {
+    _lockoutTimer?.cancel();
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_lockoutRemainingSeconds <= 1) {
+        timer.cancel();
+        setState(() => _lockoutRemainingSeconds = 0);
+      } else {
+        setState(() => _lockoutRemainingSeconds--);
+      }
+    });
+  }
+
   void _onDigitPress(String digit) {
-    if (_submitting || _enteredPin.length >= 6) return;
+    if (_submitting || _lockoutRemainingSeconds > 0 || _enteredPin.length >= 6) return;
     setState(() {
       _enteredPin += digit;
     });
@@ -80,7 +137,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
 
   Future<void> _tryUnlock() async {
     final user = _selectedUser;
-    if (user == null || _enteredPin.length < 4 || _submitting) return;
+    if (user == null || _enteredPin.length < 4 || _submitting || _lockoutRemainingSeconds > 0) return;
 
     final l10n = AppLocalizations.of(context);
     setState(() => _submitting = true);
@@ -103,6 +160,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
         _enteredPin = '';
         _submitting = false;
       });
+      _checkLockout();
       AppSnackBar.show(
         context,
         e.message(l10n.isArabic),
@@ -114,12 +172,95 @@ class _PinLockScreenState extends State<PinLockScreen> {
         _enteredPin = '';
         _submitting = false;
       });
+      _checkLockout();
       AppSnackBar.show(
         context,
         l10n.invalidPin,
         severity: AppSnackBarSeverity.error,
       );
     }
+  }
+
+  void _showUserPicker() {
+    if (_users.length <= 1) return;
+    final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.people_outline_rounded, color: cs.primary),
+                      const SizedBox(width: 12),
+                      Text(
+                        l10n.isArabic ? 'تبديل المستخدم' : 'Switch User',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _users.length,
+                    itemBuilder: (context, index) {
+                      final u = _users[index];
+                      final isSelected = u.id == _selectedUser?.id;
+                      final roleName = _roleNames[u.roleId] ?? (u.isOwner ? (l10n.isArabic ? 'المالك' : 'Owner') : u.roleId);
+
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: u.isOwner
+                              ? cs.primaryContainer
+                              : cs.surfaceContainerHighest,
+                          child: Icon(
+                            u.isOwner ? Icons.shield_rounded : Icons.person_outline,
+                            color: u.isOwner ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+                          ),
+                        ),
+                        title: Text(
+                          u.displayName,
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          ),
+                        ),
+                        subtitle: Text('@${u.username} • $roleName'),
+                        trailing: isSelected
+                            ? Icon(Icons.check_circle_rounded, color: cs.primary)
+                            : null,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          setState(() {
+                            _selectedUser = u;
+                            _enteredPin = '';
+                          });
+                          _checkLockout();
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showPasswordLoginDialog() async {
@@ -190,6 +331,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
         SessionManager.instance.unlock(authenticatedUser, permissions);
       } on AuthException catch (e) {
         if (!mounted) return;
+        _checkLockout();
         AppSnackBar.show(
           context,
           e.message(l10n.isArabic),
@@ -197,6 +339,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
         );
       } catch (e) {
         if (!mounted) return;
+        _checkLockout();
         AppSnackBar.show(
           context,
           l10n.invalidCredentials,
@@ -268,6 +411,11 @@ class _PinLockScreenState extends State<PinLockScreen> {
       );
     }
 
+    final user = _selectedUser;
+    final roleName = user != null
+        ? (_roleNames[user.roleId] ?? (user.isOwner ? (l10n.isArabic ? 'المالك' : 'Owner') : user.roleId))
+        : '';
+
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -278,8 +426,16 @@ class _PinLockScreenState extends State<PinLockScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
                 children: [
-                  const SizedBox(height: 16),
-                  Icon(Icons.lock_outline_rounded, size: 48, color: cs.primary),
+                  const SizedBox(height: 12),
+                  // Lock Icon Badge
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.primaryContainer.withValues(alpha: 0.4),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.lock_rounded, size: 36, color: cs.primary),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     l10n.enterPin,
@@ -287,73 +443,142 @@ class _PinLockScreenState extends State<PinLockScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // User Selector
-                  if (_users.length > 1)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<AppUser>(
-                          value: _selectedUser,
-                          isExpanded: true,
-                          items: _users.map((u) {
-                            return DropdownMenuItem(
-                              value: u,
-                              child: Row(
+                  // Enhanced User Switcher Card
+                  if (user != null)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: _users.length > 1 ? _showUserPicker : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: cs.outlineVariant.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 20,
+                              backgroundColor: user.isOwner
+                                  ? cs.primaryContainer
+                                  : cs.surfaceContainerHigh,
+                              child: Icon(
+                                user.isOwner ? Icons.shield_rounded : Icons.person_rounded,
+                                size: 20,
+                                color: user.isOwner
+                                    ? cs.onPrimaryContainer
+                                    : cs.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(
-                                    u.isOwner ? Icons.shield_rounded : Icons.person_outline,
-                                    size: 20,
-                                    color: u.isOwner ? cs.primary : cs.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      '${u.displayName} (@${u.username})',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontWeight: u.isOwner ? FontWeight.bold : FontWeight.normal,
-                                      ),
+                                  Text(
+                                    user.displayName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: user.isOwner
+                                              ? cs.primary.withValues(alpha: 0.15)
+                                              : cs.secondaryContainer.withValues(alpha: 0.6),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          roleName,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: user.isOwner ? cs.primary : cs.onSecondaryContainer,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '@${user.username}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: cs.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            );
-                          }).toList(),
-                          onChanged: (u) {
-                            if (u != null) {
-                              setState(() {
-                                _selectedUser = u;
-                                _enteredPin = '';
-                              });
-                            }
-                          },
+                            ),
+                            if (_users.length > 1)
+                              Icon(
+                                Icons.unfold_more_rounded,
+                                color: cs.onSurfaceVariant,
+                                size: 22,
+                              ),
+                          ],
                         ),
                       ),
-                    )
-                  else if (_selectedUser != null)
-                    Text(
-                      _selectedUser!.displayName,
-                      style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16),
                     ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // Lockout Warning Card
+                  if (_lockoutRemainingSeconds > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: cs.errorContainer.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: cs.error.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.timer_outlined, color: cs.error, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              l10n.isArabic
+                                  ? 'الحساب معلق مؤقتاً. يرجى الانتظار $_lockoutRemainingSeconds ثانية'
+                                  : 'Account paused. Try again in $_lockoutRemainingSeconds s',
+                              style: TextStyle(
+                                color: cs.onErrorContainer,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                   // PIN Dots
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(6, (i) {
                       final filled = i < _enteredPin.length;
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 6),
-                        width: 16,
-                        height: 16,
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        margin: const EdgeInsets.symmetric(horizontal: 7),
+                        width: filled ? 18 : 14,
+                        height: filled ? 18 : 14,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: filled ? cs.primary : cs.outlineVariant,
+                          color: filled ? cs.primary : cs.outlineVariant.withValues(alpha: 0.4),
+                          border: Border.all(
+                            color: filled ? cs.primary : cs.outlineVariant,
+                            width: filled ? 2 : 1,
+                          ),
                         ),
                       );
                     }),
@@ -389,13 +614,13 @@ class _PinLockScreenState extends State<PinLockScreen> {
                       ),
                       _KeypadIconButton(
                         icon: Icons.check_circle_rounded,
-                        color: _enteredPin.length >= 4
+                        color: _enteredPin.length >= 4 && _lockoutRemainingSeconds == 0
                             ? cs.onPrimary
                             : cs.outlineVariant,
-                        backgroundColor: _enteredPin.length >= 4
+                        backgroundColor: _enteredPin.length >= 4 && _lockoutRemainingSeconds == 0
                             ? cs.primary
                             : cs.surfaceContainerHighest.withValues(alpha: 0.2),
-                        onTap: (_enteredPin.length >= 4 && !_submitting)
+                        onTap: (_enteredPin.length >= 4 && !_submitting && _lockoutRemainingSeconds == 0)
                             ? _tryUnlock
                             : null,
                       ),
