@@ -2768,6 +2768,11 @@ class AppLocalizations {
   String get currentActiveUser => _t('المستخدم الحالي', 'Current User');
   String get lockNow => _t('قفل التطبيق الآن', 'Lock App Now');
   String get logout => _t('تسجيل الخروج', 'Logout');
+  String get logoutConfirmTitle => _t('تسجيل الخروج', 'Logout');
+  String get logoutConfirmMessage => _t(
+    'هل أنت متأكد من تسجيل الخروج؟ سيتم قفل الجلسة وفقدان أي تعديلات غير محفوظة في النماذج المفتوحة والعودة لشاشة الدخول.',
+    'Are you sure you want to log out? Any unsaved changes in open forms will be lost and you will return to the lock screen.',
+  );
   String get reauthenticateRequired => _t(
     'يرجى إدخال كلمة المرور للمتابعة',
     'Please enter your password to proceed',

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
 import '../../database/access_dao.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
@@ -282,14 +283,39 @@ class SessionManager extends ChangeNotifier {
     setSession(user, permissions);
   }
 
-  /// Logs out current user.
-  void logout() {
+  /// Logs out current user and locks the session.
+  ///
+  /// In multi-user mode:
+  /// - Cancels idle inactivity timer.
+  /// - Synchronously clears in-memory credentials and caches.
+  /// - Locks the session and pops open routes back to root.
+  /// - Appends a 'user_logout' event into the audit trail.
+  Future<void> logout({DatabaseExecutor? executor}) async {
     if (!_isMultiUserEnabled) return;
+    _inactivityTimer?.cancel();
+    final user = _currentUser;
     _currentUser = null;
     _cachedPermissions = {};
     _isLocked = true;
     navigatorKey.currentState?.popUntil((route) => route.isFirst);
     notifyListeners();
+
+    if (user != null) {
+      try {
+        final db = executor ?? await DatabaseHelper.instance.database;
+        await AuditService.instance.logEvent(
+          db,
+          'user_logout',
+          entityType: 'user',
+          entityId: int.tryParse(user.id),
+          details: 'user=${user.username}',
+          userId: user.id,
+          userName: user.displayName,
+        );
+      } catch (_) {
+        // Silently ignore logging failure during logout to ensure user remains logged out
+      }
+    }
   }
 
   /// Records user activity (touches, keystrokes) to prevent idle auto-lock.

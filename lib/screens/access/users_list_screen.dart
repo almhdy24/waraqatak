@@ -6,6 +6,7 @@ import '../../services/access/access_guard.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
 import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/access/sensitive_action_gate.dart';
 import '../../widgets/app_snackbar.dart';
@@ -93,6 +94,22 @@ class _UsersListScreenState extends State<UsersListScreen> {
     if (selected != null && mounted) {
       await SessionManager.instance.setAutoLockMinutes(selected);
       setState(() {});
+    }
+  }
+
+  Future<void> _confirmLogout() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.logoutConfirmTitle,
+      message: l10n.logoutConfirmMessage,
+      confirmLabel: l10n.logout,
+      cancelLabel: l10n.cancel,
+      isDestructive: true,
+      icon: Icons.logout_rounded,
+    );
+    if (confirmed) {
+      await SessionManager.instance.logout();
     }
   }
 
@@ -256,6 +273,9 @@ class _UsersListScreenState extends State<UsersListScreen> {
                   case 'lock':
                     SessionManager.instance.lock();
                     break;
+                  case 'logout':
+                    _confirmLogout();
+                    break;
                   case 'toggle':
                     _toggleMultiUserMode();
                     break;
@@ -281,6 +301,19 @@ class _UsersListScreenState extends State<UsersListScreen> {
                         const Icon(Icons.lock_outline, size: 20),
                         const SizedBox(width: 8),
                         Text(l10n.lockNow),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'logout',
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout_rounded, size: 20, color: cs.error),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.logout,
+                          style: TextStyle(color: cs.error),
+                        ),
                       ],
                     ),
                   ),

@@ -25,6 +25,7 @@ import '../widgets/app_snackbar.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
 import '../services/access/permission_registry.dart';
+import '../services/access/session_manager.dart';
 import '../services/analytics/analytics_service.dart';
 import '../services/backup_encryption_service.dart';
 import '../services/feature_access.dart';
@@ -149,6 +150,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
           children: [
+            // ── Current User Profile (Multi-User Only) ──────────────────────
+            const CurrentUserProfileCard(),
+
             // ── Activation ──────────────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -724,5 +728,142 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Profile card displaying current user information and a logout button.
+/// Visible ONLY when Multi-User mode is ON.
+class CurrentUserProfileCard extends StatelessWidget {
+  const CurrentUserProfileCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: SessionManager.instance,
+      builder: (context, _) {
+        final session = SessionManager.instance;
+        if (!session.isMultiUserEnabled) {
+          return const SizedBox.shrink();
+        }
+
+        final user = session.currentUser;
+        if (user == null) {
+          return const SizedBox.shrink();
+        }
+
+        final l10n = AppLocalizations.of(context);
+        final cs = Theme.of(context).colorScheme;
+
+        final roleName = user.isOwner
+            ? (l10n.isArabic ? 'المالك' : 'Owner')
+            : (user.roleId == 'role-template-admin'
+                ? (l10n.isArabic ? 'مدير النظام' : 'Administrator')
+                : (user.roleId == 'role-template-salesperson'
+                    ? (l10n.isArabic ? 'بائع' : 'Salesperson')
+                    : (user.roleId == 'role-template-accountant'
+                        ? (l10n.isArabic ? 'محاسب' : 'Accountant')
+                        : user.roleId)));
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+              side: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: 0.7),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: user.isOwner
+                        ? cs.primaryContainer
+                        : cs.surfaceContainerHighest,
+                    child: Icon(
+                      user.isOwner
+                          ? Icons.shield_rounded
+                          : Icons.person_outline_rounded,
+                      color: user.isOwner
+                          ? cs.onPrimaryContainer
+                          : cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.displayName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '@${user.username} • $roleName',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('logout_button'),
+                    onPressed: () => _handleLogout(context),
+                    icon: Icon(Icons.logout_rounded, size: 18, color: cs.error),
+                    label: Text(
+                      l10n.logout,
+                      style: TextStyle(
+                        color: cs.error,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: cs.error.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      minimumSize: const Size(48, 40),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static Future<void> _handleLogout(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.logoutConfirmTitle,
+      message: l10n.logoutConfirmMessage,
+      confirmLabel: l10n.logout,
+      cancelLabel: l10n.cancel,
+      isDestructive: true,
+      icon: Icons.logout_rounded,
+    );
+
+    if (confirmed) {
+      await SessionManager.instance.logout();
+    }
   }
 }

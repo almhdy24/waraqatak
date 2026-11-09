@@ -185,6 +185,8 @@ class AuditService {
     String? entityType,
     int? entityId,
     String? details,
+    String? userId,
+    String? userName,
   }) {
     final next = _chainLock.then((_) => _logEventInternal(
       db,
@@ -192,6 +194,8 @@ class AuditService {
       entityType: entityType,
       entityId: entityId,
       details: details,
+      explicitUserId: userId,
+      explicitUserName: userName,
     ));
     _chainLock = next.catchError((_) {});
     return next;
@@ -203,6 +207,8 @@ class AuditService {
     String? entityType,
     int? entityId,
     String? details,
+    String? explicitUserId,
+    String? explicitUserName,
   }) async {
     // 1. Find previous hash in the chain
     final lastRow = await db.rawQuery('''
@@ -223,7 +229,10 @@ class AuditService {
     // 2. Resolve actor attribution
     String userId;
     String userName;
-    if (AccessGuard.isSystemContext) {
+    if (explicitUserId != null && explicitUserName != null) {
+      userId = explicitUserId;
+      userName = explicitUserName;
+    } else if (AccessGuard.isSystemContext) {
       userId = 'system';
       userName = 'النظام';
     } else {
