@@ -7,6 +7,7 @@ import '../../services/access/recovery_service.dart';
 import '../../services/access/session_manager.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
+import '../../widgets/access/pin_keypad.dart';
 
 class RecoveryScreen extends StatefulWidget {
   const RecoveryScreen({super.key});
@@ -248,6 +249,9 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
                   controller: _newPinCtrl,
                   keyboardType: TextInputType.number,
                   maxLength: 6,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.center,
+                  inputFormatters: const [WesternPinInputFormatter(maxLength: 6)],
                   decoration: InputDecoration(
                     labelText: l10n.newOwnerPin,
                     border: const OutlineInputBorder(),

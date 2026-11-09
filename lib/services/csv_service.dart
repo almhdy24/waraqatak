@@ -269,9 +269,6 @@ class CsvService {
         ].join(','),
       );
     }
-        ].join(','),
-      );
-    }
 
     final resultBytes = Uint8List.fromList(utf8.encode(buffer.toString()));
     if (!templateOnly) {

@@ -11,6 +11,7 @@ import '../../services/access/session_manager.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
+import '../../widgets/access/pin_keypad.dart';
 
 class UserFormScreen extends StatefulWidget {
   final AppUser? user;
@@ -441,6 +442,9 @@ class _UserFormScreenState extends State<UserFormScreen> {
                       controller: _pinCtrl,
                       keyboardType: TextInputType.number,
                       maxLength: 6,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.center,
+                      inputFormatters: const [WesternPinInputFormatter(maxLength: 6)],
                       decoration: InputDecoration(
                         labelText: l10n.pinCode,
                         prefixIcon: const Icon(Icons.pin_outlined),

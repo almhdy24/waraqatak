@@ -9,6 +9,7 @@ import '../../services/access/permission_service.dart';
 import '../../services/access/session_manager.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
+import '../../widgets/access/pin_keypad.dart';
 import 'recovery_screen.dart';
 
 class PinLockScreen extends StatefulWidget {
@@ -19,12 +20,14 @@ class PinLockScreen extends StatefulWidget {
 }
 
 class _PinLockScreenState extends State<PinLockScreen> {
+  final _shakeKey = GlobalKey<ShakeWidgetState>();
   List<AppUser> _users = [];
   Map<String, String> _roleNames = {};
   AppUser? _selectedUser;
   String _enteredPin = '';
   bool _loading = true;
   bool _submitting = false;
+  bool _hasError = false;
   int _lockoutRemainingSeconds = 0;
   Timer? _lockoutTimer;
 
@@ -156,28 +159,44 @@ class _PinLockScreenState extends State<PinLockScreen> {
       SessionManager.instance.unlock(authenticatedUser, permissions);
     } on AuthException catch (e) {
       if (!mounted) return;
+      _shakeKey.currentState?.shake();
       setState(() {
-        _enteredPin = '';
+        _hasError = true;
         _submitting = false;
       });
-      _checkLockout();
       AppSnackBar.show(
         context,
         e.message(l10n.isArabic),
         severity: AppSnackBarSeverity.error,
       );
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) {
+        setState(() {
+          _enteredPin = '';
+          _hasError = false;
+        });
+        _checkLockout();
+      }
     } catch (e) {
       if (!mounted) return;
+      _shakeKey.currentState?.shake();
       setState(() {
-        _enteredPin = '';
+        _hasError = true;
         _submitting = false;
       });
-      _checkLockout();
       AppSnackBar.show(
         context,
         l10n.invalidPin,
         severity: AppSnackBarSeverity.error,
       );
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) {
+        setState(() {
+          _enteredPin = '';
+          _hasError = false;
+        });
+        _checkLockout();
+      }
     }
   }
 
@@ -562,69 +581,31 @@ class _PinLockScreenState extends State<PinLockScreen> {
                       ),
                     ),
 
-                  // PIN Dots
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(6, (i) {
-                      final filled = i < _enteredPin.length;
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        margin: const EdgeInsets.symmetric(horizontal: 7),
-                        width: filled ? 18 : 14,
-                        height: filled ? 18 : 14,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: filled ? cs.primary : cs.outlineVariant.withValues(alpha: 0.4),
-                          border: Border.all(
-                            color: filled ? cs.primary : cs.outlineVariant,
-                            width: filled ? 2 : 1,
-                          ),
-                        ),
-                      );
-                    }),
+                  // Direction-safe PIN dots with shake container
+                  ShakeWidget(
+                    key: _shakeKey,
+                    child: PinDotsView(
+                      length: _enteredPin.length,
+                      maxDigits: 6,
+                      hasError: _hasError,
+                    ),
                   ),
 
                   const Spacer(),
 
-                  // Number Keypad
-                  for (var row = 0; row < 3; row++) ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        for (var col = 1; col <= 3; col++)
-                          _KeypadButton(
-                            label: '${row * 3 + col}',
-                            onTap: () => _onDigitPress('${row * 3 + col}'),
-                          ),
-                      ],
+                  // Global LTR Keypad
+                  PinKeypad(
+                    enabled: !_submitting && _lockoutRemainingSeconds == 0,
+                    onDigit: _onDigitPress,
+                    onBackspace: _onBackspace,
+                    onClear: _onClear,
+                    leftAction: PinKeypadConfirmButton(
+                      active: _enteredPin.length >= 4 && _lockoutRemainingSeconds == 0,
+                      semanticsLabel: l10n.confirmAction,
+                      onTap: (_enteredPin.length >= 4 && !_submitting && _lockoutRemainingSeconds == 0)
+                          ? _tryUnlock
+                          : null,
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _KeypadIconButton(
-                        icon: Icons.backspace_outlined,
-                        onTap: _onBackspace,
-                        onLongPress: _onClear,
-                      ),
-                      _KeypadButton(
-                        label: '0',
-                        onTap: () => _onDigitPress('0'),
-                      ),
-                      _KeypadIconButton(
-                        icon: Icons.check_circle_rounded,
-                        color: _enteredPin.length >= 4 && _lockoutRemainingSeconds == 0
-                            ? cs.onPrimary
-                            : cs.outlineVariant,
-                        backgroundColor: _enteredPin.length >= 4 && _lockoutRemainingSeconds == 0
-                            ? cs.primary
-                            : cs.surfaceContainerHighest.withValues(alpha: 0.2),
-                        onTap: (_enteredPin.length >= 4 && !_submitting && _lockoutRemainingSeconds == 0)
-                            ? _tryUnlock
-                            : null,
-                      ),
-                    ],
                   ),
 
                   const Spacer(),
@@ -656,72 +637,6 @@ class _PinLockScreenState extends State<PinLockScreen> {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KeypadButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _KeypadButton({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 72,
-      height: 72,
-      child: Material(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.35),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Center(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KeypadIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
-  final Color? color;
-  final Color? backgroundColor;
-
-  const _KeypadIconButton({
-    required this.icon,
-    required this.onTap,
-    this.onLongPress,
-    this.color,
-    this.backgroundColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 72,
-      height: 72,
-      child: Material(
-        color: backgroundColor ?? Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          onLongPress: onLongPress,
-          child: Center(
-            child: Icon(icon, size: 26, color: color),
           ),
         ),
       ),

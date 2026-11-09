@@ -8,6 +8,7 @@ import '../../services/access/session_manager.dart';
 import '../../services/analytics/analytics_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
+import '../../widgets/access/pin_keypad.dart';
 
 class MultiUserWizardScreen extends StatefulWidget {
   const MultiUserWizardScreen({super.key});
@@ -240,6 +241,9 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
             controller: _pinCtrl,
             keyboardType: TextInputType.number,
             maxLength: 6,
+            textDirection: TextDirection.ltr,
+            textAlign: TextAlign.center,
+            inputFormatters: const [WesternPinInputFormatter(maxLength: 6)],
             decoration: InputDecoration(
               labelText: l10n.ownerPinLabel,
               border: const OutlineInputBorder(),
