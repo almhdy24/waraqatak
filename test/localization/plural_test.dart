@@ -65,8 +65,7 @@ void main() {
 
       final stmtMsg = l10nAr.statementWarningDetail('INV-001', '150.00', 'SAR');
       expect(stmtMsg, contains('#$fsi' 'INV-001' '$pdi'));
-      expect(stmtMsg, contains('$fsi' '150.00' '$pdi'));
-      expect(stmtMsg, contains('$fsi' 'SAR' '$pdi'));
+      expect(stmtMsg, contains('$fsi' '150.00 SAR' '$pdi'));
     });
 
     test('English strings do not contain Bidi isolates', () {
