@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -135,54 +137,66 @@ void main() {
   test(
     'migration v30 → v31: adds image_path, existing rows preserved',
     () async {
-      // Create a v30 database manually.
-      final db = await databaseFactoryFfi.openDatabase(
-        inMemoryDatabasePath,
-        options: OpenDatabaseOptions(
-          version: 30,
-          onCreate: (db, v) =>
-              DatabaseHelper.instance.createTablesForTest(db, v),
-        ),
+      final tempDir = await Directory.systemTemp.createTemp(
+        'waraqatak_product_image_migration_',
       );
+      final databasePath = '${tempDir.path}/migration.sqlite';
 
-      // Insert a product without image_path (pre-migration state).
-      final productId = await db.insert('products', {
-        'name': 'OldProduct',
-        'type': 'product',
-        'sale_price': 99.0,
-        'purchase_price': 50.0,
-        'stock_quantity': 10.0,
-        'min_stock': 0.0,
-        'is_taxable': 1,
-        'is_active': 1,
-        'cost_status': 'unknown',
-      });
-      await db.close();
+      try {
+        // Create a v30 database manually.
+        final db = await databaseFactoryFfi.openDatabase(
+          databasePath,
+          options: OpenDatabaseOptions(
+            version: 30,
+            onCreate: (db, v) =>
+                DatabaseHelper.instance.createTablesForTest(db, v),
+          ),
+        );
 
-      // Re-open with upgrade from v30 → v31.
-      final db2 = await databaseFactoryFfi.openDatabase(
-        inMemoryDatabasePath,
-        options: OpenDatabaseOptions(
-          version: 31,
-          onUpgrade: (db, old, nw) =>
-              DatabaseHelper.instance.upgradeTablesForTest(db, old, nw),
-        ),
-      );
+        // Insert a product without image_path (pre-migration state).
+        final productId = await db.insert('products', {
+          'name': 'OldProduct',
+          'type': 'product',
+          'sale_price': 99.0,
+          'purchase_price': 50.0,
+          'stock_quantity': 10.0,
+          'min_stock': 0.0,
+          'is_taxable': 1,
+          'is_active': 1,
+          'cost_status': 'unknown',
+        });
+        await db.close();
 
-      final cols = await db2.rawQuery('PRAGMA table_info(products)');
-      final names = cols.map((c) => c['name'] as String).toList();
-      expect(names, contains('image_path'));
+        // Re-open with upgrade from v30 → v31.
+        final db2 = await databaseFactoryFfi.openDatabase(
+          databasePath,
+          options: OpenDatabaseOptions(
+            version: 31,
+            onUpgrade: (db, old, nw) =>
+                DatabaseHelper.instance.upgradeTablesForTest(db, old, nw),
+          ),
+        );
 
-      final rows = await db2.query(
-        'products',
-        where: 'id = ?',
-        whereArgs: [productId],
-      );
-      expect(rows, hasLength(1));
-      expect(rows.first['name'], equals('OldProduct'));
-      expect(rows.first['image_path'], isNull); // default NULL after migration
+        final cols = await db2.rawQuery('PRAGMA table_info(products)');
+        final names = cols.map((c) => c['name'] as String).toList();
+        expect(names, contains('image_path'));
 
-      await db2.close();
+        final rows = await db2.query(
+          'products',
+          where: 'id = ?',
+          whereArgs: [productId],
+        );
+        expect(rows, hasLength(1));
+        expect(rows.first['name'], equals('OldProduct'));
+        expect(
+          rows.first['image_path'],
+          isNull,
+        ); // default NULL after migration
+
+        await db2.close();
+      } finally {
+        await tempDir.delete(recursive: true);
+      }
     },
   );
 }
