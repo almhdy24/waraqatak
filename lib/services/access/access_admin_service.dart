@@ -592,6 +592,8 @@ class AccessAdminService {
       updates['pin_salt'] = newPinSalt;
     }
 
+    final overridesToApply = sanitizedOverrides;
+
     late final AppUser updatedUser;
     await database.transaction((txn) async {
       // Check username collision if changed
@@ -612,13 +614,13 @@ class AccessAdminService {
 
       await txn.update('users', updates, where: 'id = ?', whereArgs: [userId]);
 
-      if (sanitizedOverrides != null) {
+      if (overridesToApply != null) {
         await txn.delete(
           'user_permission_overrides',
           where: 'user_id = ?',
           whereArgs: [userId],
         );
-        for (final entry in sanitizedOverrides.entries) {
+        for (final entry in overridesToApply.entries) {
           await txn.insert('user_permission_overrides', {
             'user_id': userId,
             'permission_key': entry.key,
@@ -635,7 +637,7 @@ class AccessAdminService {
           'user_id': userId,
           'target_username': targetUser.username,
           'updated_fields': updates.keys.toList(),
-          if (sanitizedOverrides != null) 'overrides_count': sanitizedOverrides.length,
+          if (overridesToApply != null) 'overrides_count': overridesToApply.length,
         }),
       );
 
