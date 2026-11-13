@@ -46,7 +46,7 @@ void main() {
     expect(find.text('×10'), findsNothing);
 
     await tester.enterText(find.byType(TextFormField), '5');
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('×10'), findsOneWidget);
     expect(find.text('×100'), findsOneWidget);
     expect(find.text('×1,000'), findsOneWidget);

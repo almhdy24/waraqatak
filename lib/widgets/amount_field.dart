@@ -54,7 +54,7 @@ class AmountField extends StatefulWidget {
   final bool allowNegative;
   final bool showMultipliers;
 
-  static const List<int> multipliers = [100, 1000, 1000000];
+  static const List<int> multipliers = [10, 100, 1000, 10000, 1000000];
   static const double _maxResult = 1e13;
 
   @override
@@ -179,17 +179,16 @@ class _AmountFieldState extends State<AmountField> {
       for (final f in AmountField.multipliers) {
         final multiplied = MoneyUtils.round(value * f, widget.maxDecimals);
         if (multiplied.abs() > AmountField._maxResult) continue;
-        final label = NumberInput.formatForInput(
-          multiplied,
-          maxDecimals: widget.maxDecimals,
-        );
+        final label =
+            '×${NumberInput.formatForInput(f.toDouble(), maxDecimals: 0)}';
         chips.add(
           Padding(
             padding: const EdgeInsetsDirectional.only(end: 8),
             child: ActionChip(
               // Long-press hint keeps the factor discoverable without
               // spending chip width on it.
-              tooltip: '×${NumberInput.formatForInput(f.toDouble(), maxDecimals: 0)}',
+              tooltip:
+                  '×${NumberInput.formatForInput(f.toDouble(), maxDecimals: 0)}',
               label: Directionality(
                 textDirection: TextDirection.ltr,
                 child: Text(
