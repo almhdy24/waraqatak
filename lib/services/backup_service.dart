@@ -871,7 +871,9 @@ class BackupService {
       return <String, List<Map<String, Object?>>>{
         'businesses': await txn.query('businesses'),
         'contacts': await txn.query('contacts'),
-        'products': await txn.query('products'),
+        'products': (await txn.query('products'))
+            .map((row) => Map<String, Object?>.from(row))
+            .toList(),
         'product_units': await txn.query('product_units'),
         'documents': await txn.query('documents'),
         'document_items': await txn.query('document_items'),
