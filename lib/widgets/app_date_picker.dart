@@ -36,6 +36,7 @@ class AppDatePicker {
       firstDate: effectiveFirst,
       lastDate: effectiveLast,
       // 'ar_DZ' locale retains Arabic localized text but enforces Western Arabic (0-9) digits.
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       locale: const Locale('ar', 'DZ'),
       builder: (ctx, child) {
         return Directionality(
@@ -62,6 +63,7 @@ class AppDatePicker {
       firstDate: effectiveFirst,
       lastDate: effectiveLast,
       // 'ar_DZ' locale retains Arabic localized text but enforces Western Arabic (0-9) digits.
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       locale: const Locale('ar', 'DZ'),
       builder: (ctx, child) {
         return Directionality(
@@ -191,9 +193,7 @@ class _AppDateInputFieldState extends State<AppDateInputField> {
         enabled: widget.enabled,
         keyboardType: TextInputType.datetime,
         textDirection: TextDirection.ltr,
-        inputFormatters: const [
-          DateTextInputFormatter(),
-        ],
+        inputFormatters: const [DateTextInputFormatter()],
         decoration: InputDecoration(
           labelText: effectiveLabel,
           hintText: widget.hintText ?? 'YYYY/MM/DD',

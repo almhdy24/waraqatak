@@ -148,13 +148,46 @@ abstract final class ReferencePricingMath {
   }
 
   /// Parses and validates a reference price string.
+  ///
+  /// Follows the app-wide number convention used by the amount fields:
+  /// ',' '،' '٬' are THOUSANDS separators and are ignored ("1,200" == 1200),
+  /// '.' and '٫' are the decimal separator. When [allowCommaDecimal] is false,
+  /// any ',' or '،' makes the input invalid (strict mode).
   static double? parseReferencePrice(
     String? input, {
     bool allowCommaDecimal = true,
   }) {
-    final v = parseDecimal(input, allowCommaDecimal: allowCommaDecimal);
+    if (input == null) return null;
+    if (!allowCommaDecimal && (input.contains(',') || input.contains('،'))) {
+      return null;
+    }
+    final v = parseDecimal(
+      _stripGroupingSeparators(input),
+      allowCommaDecimal: false,
+    );
     if (v == null || !isValidReferencePrice(v)) return null;
     return v;
+  }
+
+  /// Removes thousands separators, spaces and bidi control marks.
+  static String _stripGroupingSeparators(String input) {
+    final b = StringBuffer();
+    for (final r in input.runes) {
+      final drop =
+          r == 0x002C ||
+          r == 0x060C ||
+          r == 0x066C ||
+          r == 0x0020 ||
+          r == 0x00A0 ||
+          r == 0x202F ||
+          r == 0x200E ||
+          r == 0x200F ||
+          r == 0x061C ||
+          (r >= 0x202A && r <= 0x202E) ||
+          (r >= 0x2066 && r <= 0x2069);
+      if (!drop) b.writeCharCode(r);
+    }
+    return b.toString();
   }
 
   /// Parses a rounding string from app_settings, returning an allowed integer or [defaultRounding].

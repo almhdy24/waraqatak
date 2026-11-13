@@ -85,12 +85,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _unitController.text = p.unit ?? '';
       _categoryController.text = p.category ?? '';
       _wholesaleMinQuantityController.text = p.wholesaleMinQuantity != null
-          ? FormatUtils.formatQuantity(p.wholesaleMinQuantity)
+          ? NumberInput.formatForInput(p.wholesaleMinQuantity!, maxDecimals: 4)
           : '';
       _currentStock = p.stockQuantity;
-      _stockController.text = FormatUtils.formatQuantity(p.stockQuantity);
+      _stockController.text = NumberInput.formatForInput(
+        p.stockQuantity,
+        maxDecimals: 4,
+      );
       _minStockController.text = p.minStock > 0
-          ? FormatUtils.formatQuantity(p.minStock)
+          ? NumberInput.formatForInput(p.minStock, maxDecimals: 4)
           : '0';
       _notesController.text = p.notes ?? '';
       _taxable = p.isTaxable;
@@ -278,8 +281,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       if (updated != null && mounted) {
         setState(() {
           _currentStock = updated.stockQuantity;
-          _stockController.text = FormatUtils.formatQuantity(
+          _stockController.text = NumberInput.formatForInput(
             updated.stockQuantity,
+            maxDecimals: 4,
           );
         });
       }
@@ -304,10 +308,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       setState(() {
         _priceCurrency = null;
         final p = widget.product;
-        _salePriceController.text = p != null ? p.salePrice.toString() : '';
-        _wholesalePriceController.text = p?.wholesalePrice?.toString() ?? '';
+        _salePriceController.text = p != null
+            ? NumberInput.formatForInput(p.salePrice, maxDecimals: 4)
+            : '';
+        _wholesalePriceController.text = p?.wholesalePrice != null
+            ? NumberInput.formatForInput(p!.wholesalePrice!, maxDecimals: 4)
+            : '';
         _purchasePriceController.text = p != null
-            ? p.purchasePrice.toString()
+            ? NumberInput.formatForInput(p.purchasePrice, maxDecimals: 4)
             : '';
 
         bool hadUnitRefPrices = false;

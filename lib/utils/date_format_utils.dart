@@ -41,7 +41,10 @@ class AppDateUtils {
   }
 
   /// Formats [date] strictly using Western digits `DD/MM/YYYY` (e.g. `09/11/2026`).
-  static String formatDateDayMonthYear(DateTime? date, {String fallback = '—'}) {
+  static String formatDateDayMonthYear(
+    DateTime? date, {
+    String fallback = '—',
+  }) {
     if (date == null) return fallback;
     final d = date.day.toString().padLeft(2, '0');
     final m = date.month.toString().padLeft(2, '0');
@@ -50,7 +53,10 @@ class AppDateUtils {
   }
 
   /// Formats [date] with time in DD/MM/YYYY format: `DD/MM/YYYY HH:mm` in Western digits.
-  static String formatDateTimeDayMonthYear(DateTime? date, {String fallback = '—'}) {
+  static String formatDateTimeDayMonthYear(
+    DateTime? date, {
+    String fallback = '—',
+  }) {
     if (date == null) return fallback;
     final dmy = formatDateDayMonthYear(date);
     final h = date.hour.toString().padLeft(2, '0');
@@ -59,7 +65,10 @@ class AppDateUtils {
   }
 
   /// Formats [date] with seconds in DD/MM/YYYY format: `DD/MM/YYYY HH:mm:ss` in Western digits.
-  static String formatTimestampDayMonthYear(DateTime? date, {String fallback = '—'}) {
+  static String formatTimestampDayMonthYear(
+    DateTime? date, {
+    String fallback = '—',
+  }) {
     if (date == null) return fallback;
     final dmy = formatDateDayMonthYear(date);
     final h = date.hour.toString().padLeft(2, '0');
@@ -202,7 +211,15 @@ class AppDateUtils {
     }
 
     if (lastDate != null) {
-      final end = DateTime(lastDate.year, lastDate.month, lastDate.day, 23, 59, 59, 999);
+      final end = DateTime(
+        lastDate.year,
+        lastDate.month,
+        lastDate.day,
+        23,
+        59,
+        59,
+        999,
+      );
       if (date.isAfter(end)) {
         return l10n?.dateOutOfRange ?? 'التاريخ خارج النطاق المسموح';
       }
@@ -245,17 +262,40 @@ class DateTextInputFormatter extends TextInputFormatter {
       );
     }
 
-    // Extract digits only up to 8 digits (YYYYMMDD)
-    final digits = rawText.replaceAll('/', '');
-    final buffer = StringBuffer();
-    for (int i = 0; i < digits.length && i < 8; i++) {
-      buffer.write(digits[i]);
-      if (i == 3 || i == 5) {
-        buffer.write('/');
+    final String formatted;
+    if (rawText.contains('/')) {
+      // Slashes already present (typed, pasted or prefilled): keep that layout
+      // (DD/MM/YYYY or YYYY/MM/DD) instead of regrouping the digits as YYYY/MM/DD.
+      var cleaned = rawText.replaceAll(RegExp(r'/+'), '/');
+      if (cleaned.startsWith('/')) cleaned = cleaned.substring(1);
+      final parts = cleaned.split('/');
+      final dayFirst = parts[0].length <= 2;
+      final limits = dayFirst ? const [2, 2, 4] : const [4, 2, 2];
+      final kept = <String>[];
+      for (int i = 0; i < parts.length && i < 3; i++) {
+        final p = parts[i];
+        kept.add(p.length > limits[i] ? p.substring(0, limits[i]) : p);
       }
+      var out = kept.join('/');
+      final last = kept.length - 1;
+      if (parts.length == kept.length &&
+          last < 2 &&
+          kept[last].length == limits[last]) {
+        out += '/';
+      }
+      formatted = out;
+    } else {
+      // Digits only: default YYYY/MM/DD masking (up to 8 digits).
+      final digits = rawText;
+      final buffer = StringBuffer();
+      for (int i = 0; i < digits.length && i < 8; i++) {
+        buffer.write(digits[i]);
+        if (i == 3 || i == 5) {
+          buffer.write('/');
+        }
+      }
+      formatted = buffer.toString();
     }
-
-    final formatted = buffer.toString();
     return TextEditingValue(
       text: formatted,
       selection: TextSelection.collapsed(offset: formatted.length),

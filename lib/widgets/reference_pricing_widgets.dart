@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
 import '../models/exchange_rate.dart';
 import '../models/reference_pricing_types.dart';
+import '../utils/number_input.dart';
 import '../utils/reference_pricing_math.dart';
 
 const String _baseSentinel = '__BASE_CURRENCY__';
@@ -48,7 +49,10 @@ class PricingCurrencySelector extends StatelessWidget {
       decoration: InputDecoration(
         labelText: l10n.pricingCurrency,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
       ),
       items: [
         DropdownMenuItem<String>(
@@ -146,6 +150,11 @@ class ReferencePriceField extends StatelessWidget {
         return TextFormField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            AmountInputFormatter(
+              maxDecimals: ReferencePricingMath.maxReferenceDecimals,
+            ),
+          ],
           decoration: InputDecoration(
             labelText: label,
             suffixText: currencyCode,
@@ -182,10 +191,7 @@ class PricingSelectionResult {
   final bool reverted;
 
   /// Creates a [PricingSelectionResult].
-  const PricingSelectionResult({
-    required this.code,
-    required this.reverted,
-  });
+  const PricingSelectionResult({required this.code, required this.reverted});
 }
 
 /// Pure static reconciliation helper for currency selections.
@@ -206,7 +212,8 @@ abstract final class PricingSelection {
     if (activeCodes.contains(selected)) {
       return PricingSelectionResult(code: selected, reverted: false);
     }
-    final fallback = (storedCurrency != null && allCodes.contains(storedCurrency))
+    final fallback =
+        (storedCurrency != null && allCodes.contains(storedCurrency))
         ? storedCurrency
         : null;
     return PricingSelectionResult(code: fallback, reverted: true);

@@ -4,7 +4,7 @@ import 'date_format_utils.dart';
 import 'number_input.dart';
 
 class FormatUtils {
-  static final NumberFormat _qtyFormat = NumberFormat('#,##0.####');
+  static final NumberFormat _qtyFormat = NumberFormat('#,##0.####', 'en_US');
 
   /// Formats a [DateTime] into standard user-facing date 'dd/MM/yyyy' in Western digits.
   static String formatDate(DateTime? date, {String fallback = '—'}) {
@@ -13,12 +13,18 @@ class FormatUtils {
 
   /// Formats a [DateTime] into standard user-facing datetime 'dd/MM/yyyy HH:mm' in Western digits.
   static String formatDateTime(DateTime? dateTime, {String fallback = '—'}) {
-    return AppDateUtils.formatDateTimeDayMonthYear(dateTime, fallback: fallback);
+    return AppDateUtils.formatDateTimeDayMonthYear(
+      dateTime,
+      fallback: fallback,
+    );
   }
 
   /// Formats a [DateTime] into standard timestamp with seconds 'dd/MM/yyyy HH:mm:ss' in Western digits.
   static String formatTimestamp(DateTime? dateTime, {String fallback = '—'}) {
-    return AppDateUtils.formatTimestampDayMonthYear(dateTime, fallback: fallback);
+    return AppDateUtils.formatTimestampDayMonthYear(
+      dateTime,
+      fallback: fallback,
+    );
   }
 
   /// Formats a stock or movement quantity with up to 4 decimal places,
@@ -53,6 +59,6 @@ class FormatUtils {
     if (rate % 1 == 0) {
       return '${rate.toStringAsFixed(0)}%';
     }
-    return '${NumberFormat('#,##0.##').format(rate)}%';
+    return '${NumberFormat('#,##0.##', 'en_US').format(rate)}%';
   }
 }
