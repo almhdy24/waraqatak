@@ -6,6 +6,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
+import '../services/image_storage_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import 'barcode_scanner_screen.dart';
@@ -19,6 +20,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/product_image_thumbnail.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'bulk_pricing_screen.dart';
@@ -123,7 +125,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     final query = barcode.trim();
     final matched = await DatabaseHelper.instance.searchProducts(query);
-    final exact = matched.where((p) => p.barcode == query).firstOrNull ??
+    final exact =
+        matched.where((p) => p.barcode == query).firstOrNull ??
         (matched.isNotEmpty ? matched.first : null);
 
     if (!mounted) return;
@@ -150,8 +153,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   Future<void> _handleDelete(Product product) async {
     final l10n = AppLocalizations.of(context);
-    final referenced =
-        await DatabaseHelper.instance.isProductReferenced(product.id!);
+    final referenced = await DatabaseHelper.instance.isProductReferenced(
+      product.id!,
+    );
 
     if (!mounted) return;
 
@@ -163,11 +167,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
           content: Text(l10n.deactivateProductMessage),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(l10n.cancel)),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
             FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(l10n.deactivateProduct)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.deactivateProduct),
+            ),
           ],
         ),
       );
@@ -191,6 +197,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     if (confirmed && mounted) {
       try {
         await DatabaseHelper.instance.deleteProduct(product.id!);
+        await ImageStorageService.deleteImage(product.imagePath);
         if (!mounted) return;
         AppSnackBar.show(
           context,
@@ -220,15 +227,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
     _load();
   }
 
-  void _editProduct(Product product) =>
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ProductFormScreen(product: product)),
-      ).then((_) => _load());
+  void _editProduct(Product product) => Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => ProductFormScreen(product: product)),
+  ).then((_) => _load());
 
   Future<void> _openInventory() async {
-    final entitlement =
-        await LicenseService.instance.checkEntitlement(force: true);
+    final entitlement = await LicenseService.instance.checkEntitlement(
+      force: true,
+    );
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
       final result = await ProUpgradeSheet.show(
@@ -256,8 +263,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Future<void> _openBulkPricing() async {
-    final entitlement =
-        await LicenseService.instance.checkEntitlement(force: true);
+    final entitlement = await LicenseService.instance.checkEntitlement(
+      force: true,
+    );
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.bulkPriceUpdate, entitlement)) {
       final result = await ProUpgradeSheet.show(
@@ -283,8 +291,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Future<void> _openCsv() async {
-    final entitlement =
-        await LicenseService.instance.checkEntitlement(force: true);
+    final entitlement = await LicenseService.instance.checkEntitlement(
+      force: true,
+    );
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.csvImportExport, entitlement)) {
       final result = await ProUpgradeSheet.show(
@@ -359,79 +368,85 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
         ],
       ),
-      body: ResponsiveCenter(child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                hintText: l10n.search,
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_query.isNotEmpty)
+      body: ResponsiveCenter(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: l10n.search,
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_query.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).closeButtonLabel,
+                          onPressed: () {
+                            _debounceTimer?.cancel();
+                            _searchCtrl.clear();
+                            _query = '';
+                            _load();
+                          },
+                        ),
                       IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        tooltip: MaterialLocalizations.of(context).closeButtonLabel,
-                        onPressed: () {
-                          _debounceTimer?.cancel();
-                          _searchCtrl.clear();
-                          _query = '';
-                          _load();
-                        },
+                        icon: const Icon(Icons.qr_code_scanner, size: 20),
+                        tooltip: l10n.scanBarcode,
+                        onPressed: _scanBarcode,
                       ),
-                    IconButton(
-                      icon: const Icon(Icons.qr_code_scanner, size: 20),
-                      tooltip: l10n.scanBarcode,
-                      onPressed: _scanBarcode,
-                    ),
-                  ],
+                    ],
+                  ),
+                  filled: true,
+                  fillColor: cs.surfaceContainerLow,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
-                filled: true,
-                fillColor: cs.surfaceContainerLow,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                onChanged: _onSearchChanged,
               ),
-              onChanged: _onSearchChanged,
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-            child: Row(
-              children: [
-                _filterChip(l10n.allTypes, null),
-                const SizedBox(width: 6),
-                _filterChip(l10n.productsOnly, Product.typeProduct),
-                const SizedBox(width: 6),
-                _filterChip(l10n.servicesOnly, Product.typeService),
-              ],
-            ),
-          ),
-          if (_categories.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-              child: SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _categoryChip(l10n.allCategories, null),
-                    ..._categories.map((cat) => Padding(
-                          padding: const EdgeInsetsDirectional.only(start: 6),
-                          child: _categoryChip(cat, cat),
-                        )),
-                  ],
-                ),
+              child: Row(
+                children: [
+                  _filterChip(l10n.allTypes, null),
+                  const SizedBox(width: 6),
+                  _filterChip(l10n.productsOnly, Product.typeProduct),
+                  const SizedBox(width: 6),
+                  _filterChip(l10n.servicesOnly, Product.typeService),
+                ],
               ),
             ),
-          Expanded(child: _buildList(context, l10n, cs)),
-        ],
-      )),
+            if (_categories.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+                child: SizedBox(
+                  height: 36,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      _categoryChip(l10n.allCategories, null),
+                      ..._categories.map(
+                        (cat) => Padding(
+                          padding: const EdgeInsetsDirectional.only(start: 6),
+                          child: _categoryChip(cat, cat),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Expanded(child: _buildList(context, l10n, cs)),
+          ],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'fab_products',
         onPressed: () => Navigator.push(
@@ -472,7 +487,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Widget _buildList(
-      BuildContext context, AppLocalizations l10n, ColorScheme cs) {
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme cs,
+  ) {
     if (_error != null) {
       return AppErrorState(
         message: ErrorUtils.toFriendlyMessage(_error!, l10n),
@@ -544,15 +562,17 @@ class _ProductCard extends StatelessWidget {
     final isService = product.isService;
 
     final stockOut = !isService && product.stockQuantity <= 0;
-    final stockLow = !isService && !stockOut &&
+    final stockLow =
+        !isService &&
+        !stockOut &&
         product.minStock > 0 &&
         product.stockQuantity <= product.minStock;
 
     final stockColor = stockOut
         ? cs.error
         : stockLow
-            ? Colors.orange
-            : Colors.green;
+        ? Colors.orange
+        : Colors.green;
 
     return Opacity(
       opacity: product.isActive ? 1.0 : 0.6,
@@ -575,25 +595,14 @@ class _ProductCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Icon swatch
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: isService
-                          ? Colors.blue.withValues(alpha: 0.12)
-                          : cs.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      isService
-                          ? Icons.build_circle_outlined
-                          : Icons.inventory_2_outlined,
-                      size: 22,
-                      color: isService
-                          ? Colors.blue.shade700
-                          : cs.onPrimaryContainer,
-                    ),
+                  // Icon swatch / image thumbnail
+                  ProductImageThumbnail(
+                    imagePath: product.imagePath,
+                    isService: isService,
+                    size: 44,
+                    heroTag: product.id != null
+                        ? 'product_image_${product.id}'
+                        : null,
                   ),
                   const SizedBox(width: 12),
 
@@ -627,28 +636,37 @@ class _ProductCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Wrap(spacing: 10, children: [
-                          if (product.category != null &&
-                              product.category!.isNotEmpty)
-                            _metaChip(
-                                Icons.category_outlined, product.category!),
-                          if (product.code != null &&
-                              product.code!.isNotEmpty)
-                            _metaChip(
-                                Icons.tag, '${l10n.sku}: ${product.code}'),
-                          if (product.barcode != null &&
-                              product.barcode!.isNotEmpty)
-                            _metaChip(Icons.qr_code,
-                                product.barcode!),
-                        ]),
+                        Wrap(
+                          spacing: 10,
+                          children: [
+                            if (product.category != null &&
+                                product.category!.isNotEmpty)
+                              _metaChip(
+                                Icons.category_outlined,
+                                product.category!,
+                              ),
+                            if (product.code != null &&
+                                product.code!.isNotEmpty)
+                              _metaChip(
+                                Icons.tag,
+                                '${l10n.sku}: ${product.code}',
+                              ),
+                            if (product.barcode != null &&
+                                product.barcode!.isNotEmpty)
+                              _metaChip(Icons.qr_code, product.barcode!),
+                          ],
+                        ),
                       ],
                     ),
                   ),
 
                   // Action menu
                   PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert,
-                        size: 20, color: cs.onSurfaceVariant),
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
                     onSelected: (v) {
                       if (v == 'edit') onEdit();
                       if (v == 'toggle') onToggleActive();
@@ -668,12 +686,16 @@ class _ProductCard extends StatelessWidget {
                         value: 'toggle',
                         child: ListTile(
                           dense: true,
-                          leading: Icon(product.isActive
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined),
-                          title: Text(product.isActive
-                              ? l10n.deactivateProduct
-                              : l10n.activateProduct),
+                          leading: Icon(
+                            product.isActive
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                          title: Text(
+                            product.isActive
+                                ? l10n.deactivateProduct
+                                : l10n.activateProduct,
+                          ),
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
@@ -681,11 +703,14 @@ class _ProductCard extends StatelessWidget {
                         value: 'delete',
                         child: ListTile(
                           dense: true,
-                          leading: const Icon(Icons.delete_outline,
-                              color: Colors.red),
-                          title: Text(l10n.delete,
-                              style:
-                                  const TextStyle(color: Colors.red)),
+                          leading: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                          ),
+                          title: Text(
+                            l10n.delete,
+                            style: const TextStyle(color: Colors.red),
+                          ),
                           contentPadding: EdgeInsets.zero,
                         ),
                       ),
@@ -722,9 +747,13 @@ class _ProductCard extends StatelessWidget {
                             color: Colors.grey.shade500,
                           ),
                         ),
-                      Text(l10n.unitPrice,
-                          style: TextStyle(
-                              fontSize: 10, color: Colors.grey.shade500)),
+                      Text(
+                        l10n.unitPrice,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
                     ],
                   ),
                   if (!isService) ...[
@@ -735,28 +764,37 @@ class _ProductCard extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.inventory_2_outlined,
-                                  size: 13, color: stockColor),
+                              Icon(
+                                Icons.inventory_2_outlined,
+                                size: 13,
+                                color: stockColor,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 FormatUtils.formatQuantity(
-                                    product.stockQuantity,
-                                    unit: product.unit),
+                                  product.stockQuantity,
+                                  unit: product.unit,
+                                ),
                                 style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: stockColor),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: stockColor,
+                                ),
                               ),
                               if (product.minStock > 0) ...[
-                                Text(' / ',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade400)),
+                                Text(
+                                  ' / ',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                ),
                                 Text(
                                   FormatUtils.formatQuantity(product.minStock),
                                   style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade500),
+                                    fontSize: 11,
+                                    color: Colors.grey.shade500,
+                                  ),
                                 ),
                               ],
                             ],
@@ -768,8 +806,7 @@ class _ProductCard extends StatelessWidget {
                               value: _stockPercent(product),
                               minHeight: 5,
                               backgroundColor: Colors.grey.shade200,
-                              valueColor:
-                                  AlwaysStoppedAnimation(stockColor),
+                              valueColor: AlwaysStoppedAnimation(stockColor),
                             ),
                           ),
                         ],
@@ -779,13 +816,19 @@ class _ProductCard extends StatelessWidget {
                     Expanded(
                       child: Row(
                         children: [
-                          Icon(Icons.build_circle_outlined,
-                              size: 13, color: Colors.blue.shade600),
+                          Icon(
+                            Icons.build_circle_outlined,
+                            size: 13,
+                            color: Colors.blue.shade600,
+                          ),
                           const SizedBox(width: 4),
-                          Text(l10n.servicesOnly,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.blue.shade600)),
+                          Text(
+                            l10n.servicesOnly,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue.shade600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -804,26 +847,24 @@ class _ProductCard extends StatelessWidget {
   }
 
   Widget _badge(String label, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 9,
-                color: color,
-                fontWeight: FontWeight.w700)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w700),
+    ),
+  );
 
   Widget _metaChip(IconData icon, String label) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: Colors.grey.shade500),
-          const SizedBox(width: 3),
-          Text(label,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 11, color: Colors.grey.shade500),
+      const SizedBox(width: 3),
+      Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+    ],
+  );
 }

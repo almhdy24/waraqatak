@@ -40,7 +40,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 30;
+  static const int dbVersion = 31;
 
   static Database? _database;
 
@@ -320,6 +320,7 @@ class DatabaseHelper {
         reference_sale_price REAL,
         reference_wholesale_price REAL,
         reference_purchase_price REAL,
+        image_path TEXT,
         created_at TEXT,
         updated_at TEXT
       )
@@ -1536,6 +1537,12 @@ class DatabaseHelper {
     if (oldVersion < 30 && newVersion >= 30) {
       await AccessDao.upgradeToSchemaV30(db);
     }
+
+    if (oldVersion < 31 && newVersion >= 31) {
+      if (!await columnExists('products', 'image_path')) {
+        await db.execute('ALTER TABLE products ADD COLUMN image_path TEXT');
+      }
+    }
   }
 
   static Future<void> _upgradeToReferenceCurrencySchema(
@@ -2665,12 +2672,7 @@ class DatabaseHelper {
 
       final map = b.toMap();
       map['updated_by'] = AccessContext.currentUserId;
-      return txn.update(
-        'businesses',
-        map,
-        where: 'id = ?',
-        whereArgs: [b.id],
-      );
+      return txn.update('businesses', map, where: 'id = ?', whereArgs: [b.id]);
     });
   }
 
@@ -3186,10 +3188,7 @@ class DatabaseHelper {
     final db = await database;
     await db.update(
       'products',
-      {
-        'is_active': active ? 1 : 0,
-        'updated_by': AccessContext.currentUserId,
-      },
+      {'is_active': active ? 1 : 0, 'updated_by': AccessContext.currentUserId},
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -3613,7 +3612,8 @@ class DatabaseHelper {
 
       if (doc.type == 'purchase') {
         AccessGuard.require(PermissionRegistry.purchasesCreate);
-      } else if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
+      } else if (doc.type == 'payment_receipt' ||
+          doc.type == 'expense_voucher') {
         AccessGuard.require(PermissionRegistry.vouchersCreate);
       } else {
         AccessGuard.require(PermissionRegistry.salesCreate);

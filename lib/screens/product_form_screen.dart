@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../features/reference_currency/reference_currency_feature.dart';
@@ -11,6 +13,7 @@ import '../models/tax_profile.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../services/product_service.dart';
+import '../services/image_storage_service.dart';
 import '../services/access/access_guard.dart';
 import '../services/access/permission_registry.dart';
 import '../services/analytics/analytics_service.dart';
@@ -22,6 +25,7 @@ import '../widgets/amount_field.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/product_image_picker.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/reference_pricing_widgets.dart';
 import '../widgets/responsive.dart';
@@ -71,6 +75,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   String _baseSymbol = '';
   int _baseDecimals = 2;
   String _baseCurrencyCode = '';
+  String? _imagePath;
+  bool _imageSaved = false;
 
   @override
   void initState() {
@@ -99,6 +105,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _taxable = p.isTaxable;
       _isActive = p.isActive;
       _taxProfileId = p.taxProfileId;
+      _imagePath = p.imagePath;
       if (p.id != null) {
         _loadProductUnits(p.id!);
       }
@@ -236,8 +243,38 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     } catch (_) {}
   }
 
+  void _onImageChanged(String? newPath) {
+    final previous = _imagePath;
+    final original = widget.product?.imagePath;
+
+    if (!mounted) {
+      if (newPath != null && newPath != original) {
+        unawaited(ImageStorageService.deleteImage(newPath));
+      }
+      return;
+    }
+
+    setState(() => _imagePath = newPath);
+
+    // Only discard an unsaved temporary selection.
+    // Never delete the persisted image before the DB save succeeds.
+    if (previous != null &&
+        previous != original &&
+        previous != newPath) {
+      unawaited(ImageStorageService.deleteImage(previous));
+    }
+  }
+
   @override
   void dispose() {
+    if (!_imageSaved) {
+      final original = widget.product?.imagePath;
+      final current = _imagePath;
+      if (current != null && current != original) {
+        unawaited(ImageStorageService.deleteImage(current));
+      }
+    }
+
     _nameController.dispose();
     _codeController.dispose();
     _barcodeController.dispose();
@@ -504,6 +541,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 _purchasePriceController.text.trim(),
               )
             : widget.product?.referencePurchasePrice,
+        imagePath: _imagePath,
       );
     } else {
       product = Product(
@@ -574,6 +612,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                 widget.product?.priceCurrency != null)
             ? widget.product!.referencePurchasePrice
             : null,
+        imagePath: _imagePath,
       );
     }
 
@@ -587,6 +626,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _productUnits,
         allowClearReferencePricing: allowClear,
       );
+      _imageSaved = true;
+      final originalImage = widget.product?.imagePath;
+      if (originalImage != null && originalImage != _imagePath) {
+        await ImageStorageService.deleteImage(originalImage);
+      }
+
       try {
         AnalyticsService.instance.track(AnalyticsEvent.productSaved, {
           'is_new': widget.product == null,
@@ -926,7 +971,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     if (confirmed && mounted) {
       try {
+        final imagePath = widget.product?.imagePath;
         await DatabaseHelper.instance.deleteProduct(id);
+        await ImageStorageService.deleteImage(imagePath);
         if (!mounted) return;
         Navigator.pop(context, true);
       } catch (e) {
@@ -954,7 +1001,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           _stockController.text != '0' ||
           _minStockController.text != '0' ||
           _notesController.text.isNotEmpty ||
-          _productUnits.isNotEmpty;
+          _productUnits.isNotEmpty ||
+          _imagePath != null;
     }
     final p = widget.product!;
     final bool pricesDirty;
@@ -1006,7 +1054,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _taxable != p.isTaxable ||
         _taxProfileId != p.taxProfileId ||
         _isActive != p.isActive ||
-        _notesController.text != (p.notes ?? '');
+        _notesController.text != (p.notes ?? '') ||
+        _imagePath != p.imagePath;
   }
 
   Future<bool> _onWillPop() async {
@@ -1146,6 +1195,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
+                        ),
+                        const SizedBox(height: 12),
+                        ProductImagePicker(
+                          imagePath: _imagePath,
+                          onChanged: _onImageChanged,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(

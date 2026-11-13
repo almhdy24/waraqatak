@@ -15,10 +15,11 @@ import 'access/permission_registry.dart';
 import 'accounting/journal_backfill_service.dart';
 import 'analytics/analytics_service.dart';
 import 'backup_encryption_service.dart';
+import 'image_storage_service.dart';
 
 class BackupService {
   static const String backupExtension = 'waraq';
-  static const int currentBackupVersion = 5;
+  static const int currentBackupVersion = 6;
   static const String appId = 'warqatek';
 
   @visibleForTesting
@@ -568,7 +569,8 @@ class BackupService {
         await txn.insert('contacts', sanitizeRow(row, contactCols));
       }
       for (final row in _convertRows(data['products'])) {
-        await txn.insert('products', sanitizeRow(row, productCols));
+        final productRow = Map<String, dynamic>.from(row)..remove('image_path');
+        await txn.insert('products', sanitizeRow(productRow, productCols));
       }
       if (data.containsKey('product_units') && data['product_units'] is List) {
         final puCols = await getTableCols('product_units');
@@ -750,6 +752,7 @@ class BackupService {
     }
 
     await _restoreLogoIfNeeded(jsonMap);
+    await _restoreProductImagesIfNeeded(jsonMap);
     await DatabaseHelper.instance.logAuditEvent(
       'backup_restored',
       details:
@@ -906,13 +909,33 @@ class BackupService {
       }
     }
 
+    // Collect product images as base64, keyed by product id string.
+    final productImages = <String, String>{};
+    for (final row in snapshot['products']!) {
+      final id = row['id']?.toString();
+      final imgPath = row['image_path'] as String?;
+      if (id != null && imgPath != null && imgPath.isNotEmpty) {
+        final b64 = await ImageStorageService.imageToBase64(imgPath);
+        if (b64 != null) productImages[id] = b64;
+      }
+    }
+
+    // Device-local paths are not portable. The image bytes are stored
+    // separately in assets.product_images.
+    for (final row in snapshot['products']!) {
+      row['image_path'] = null;
+    }
+
     final backupData = <String, dynamic>{
       'app': appId,
       'backup_version': currentBackupVersion,
       'database_version': DatabaseHelper.dbVersion,
       'created_at': DateTime.now().toIso8601String(),
       'data': snapshot,
-      'assets': {'logo_base64': logoBase64},
+      'assets': {
+        'logo_base64': logoBase64,
+        'product_images': productImages.isEmpty ? null : productImages,
+      },
     };
 
     return jsonEncode(backupData);
@@ -969,6 +992,61 @@ class BackupService {
 
     if (!restored) {
       await _clearMissingLogoPath();
+    }
+  }
+
+  // ============================================================
+  // RESTORE PRODUCT IMAGES
+  // ============================================================
+
+  static Future<void> _restoreProductImagesIfNeeded(
+    Map<String, dynamic> jsonMap,
+  ) async {
+    // Old backups without product_images are silently skipped.
+    final assets = jsonMap['assets'];
+    if (assets is! Map<String, dynamic>) return;
+    final productImages = assets['product_images'];
+    if (productImages is! Map<String, dynamic>) return;
+    if (productImages.isEmpty) return;
+
+    final db = await DatabaseHelper.instance.database;
+
+    for (final entry in productImages.entries) {
+      final productId = int.tryParse(entry.key);
+      final b64 = entry.value;
+
+      if (productId == null ||
+          productId <= 0 ||
+          b64 is! String ||
+          b64.isEmpty) {
+        continue;
+      }
+
+      try {
+        final products = await db.query(
+          'products',
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [productId],
+          limit: 1,
+        );
+        if (products.isEmpty) continue;
+
+        final imagePath = await ImageStorageService.base64ToImage(
+          b64,
+          entry.key,
+        );
+        if (imagePath == null) continue;
+
+        await db.update(
+          'products',
+          {'image_path': imagePath},
+          where: 'id = ?',
+          whereArgs: [productId],
+        );
+      } catch (_) {
+        // Never fail restore due to a single product image error.
+      }
     }
   }
 }

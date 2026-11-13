@@ -84,6 +84,9 @@ class Product {
   /// Reference purchase price in [priceCurrency].
   final double? referencePurchasePrice;
 
+  /// Optional local path to the product image file.
+  final String? imagePath;
+
   /// Creation timestamp.
   final DateTime? createdAt;
 
@@ -127,6 +130,7 @@ class Product {
     this.referenceSalePrice,
     this.referenceWholesalePrice,
     this.referencePurchasePrice,
+    this.imagePath,
     this.createdAt,
     this.updatedAt,
   });
@@ -163,52 +167,53 @@ class Product {
     bool clearWholesalePrice = false,
     bool clearWholesaleMinQuantity = false,
     bool clearAverageCost = false,
+    String? imagePath,
+    bool clearImagePath = false,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) =>
-      Product(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        type: type ?? this.type,
-        code: code ?? this.code,
-        barcode: barcode ?? this.barcode,
-        unit: unit ?? this.unit,
-        salePrice: salePrice ?? this.salePrice,
-        wholesalePrice: clearWholesalePrice
-            ? null
-            : (wholesalePrice ?? this.wholesalePrice),
-        wholesaleMinQuantity: clearWholesaleMinQuantity
-            ? null
-            : (wholesaleMinQuantity ?? this.wholesaleMinQuantity),
-        purchasePrice: purchasePrice ?? this.purchasePrice,
-        stockQuantity: stockQuantity ?? this.stockQuantity,
-        minStock: minStock ?? this.minStock,
-        isTaxable: isTaxable ?? this.isTaxable,
-        isActive: isActive ?? this.isActive,
-        notes: notes ?? this.notes,
-        category: category ?? this.category,
-        taxProfileId: taxProfileId ?? this.taxProfileId,
-        averageCost:
-            clearAverageCost ? null : (averageCost ?? this.averageCost),
-        costStatus: costStatus ?? this.costStatus,
-        priceCurrency: clearPriceCurrency ? null : (priceCurrency ?? this.priceCurrency),
-        referenceSalePrice:
-            clearReferenceSalePrice ? null : (referenceSalePrice ?? this.referenceSalePrice),
-        referenceWholesalePrice: clearReferenceWholesalePrice
-            ? null
-            : (referenceWholesalePrice ?? this.referenceWholesalePrice),
-        referencePurchasePrice: clearReferencePurchasePrice
-            ? null
-            : (referencePurchasePrice ?? this.referencePurchasePrice),
-        createdAt: createdAt ?? this.createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+  }) => Product(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    type: type ?? this.type,
+    code: code ?? this.code,
+    barcode: barcode ?? this.barcode,
+    unit: unit ?? this.unit,
+    salePrice: salePrice ?? this.salePrice,
+    wholesalePrice: clearWholesalePrice
+        ? null
+        : (wholesalePrice ?? this.wholesalePrice),
+    wholesaleMinQuantity: clearWholesaleMinQuantity
+        ? null
+        : (wholesaleMinQuantity ?? this.wholesaleMinQuantity),
+    purchasePrice: purchasePrice ?? this.purchasePrice,
+    stockQuantity: stockQuantity ?? this.stockQuantity,
+    minStock: minStock ?? this.minStock,
+    isTaxable: isTaxable ?? this.isTaxable,
+    isActive: isActive ?? this.isActive,
+    notes: notes ?? this.notes,
+    category: category ?? this.category,
+    taxProfileId: taxProfileId ?? this.taxProfileId,
+    averageCost: clearAverageCost ? null : (averageCost ?? this.averageCost),
+    costStatus: costStatus ?? this.costStatus,
+    priceCurrency: clearPriceCurrency
+        ? null
+        : (priceCurrency ?? this.priceCurrency),
+    referenceSalePrice: clearReferenceSalePrice
+        ? null
+        : (referenceSalePrice ?? this.referenceSalePrice),
+    referenceWholesalePrice: clearReferenceWholesalePrice
+        ? null
+        : (referenceWholesalePrice ?? this.referenceWholesalePrice),
+    referencePurchasePrice: clearReferencePurchasePrice
+        ? null
+        : (referencePurchasePrice ?? this.referencePurchasePrice),
+    imagePath: clearImagePath ? null : (imagePath ?? this.imagePath),
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   /// Returns a copy of this product with sensitive cost and wholesale fields redacted.
-  Product redacted({
-    bool redactCost = false,
-    bool redactWholesale = false,
-  }) {
+  Product redacted({bool redactCost = false, bool redactWholesale = false}) {
     if (!redactCost && !redactWholesale) return this;
     return copyWith(
       purchasePrice: redactCost ? 0.0 : purchasePrice,
@@ -228,66 +233,67 @@ class Product {
 
   /// Converts this [Product] to a database map.
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'type': type,
-        'code': code,
-        'barcode': barcode,
-        'unit': unit,
-        'sale_price': salePrice,
-        'wholesale_price': wholesalePrice,
-        'wholesale_min_quantity': wholesaleMinQuantity,
-        'purchase_price': purchasePrice,
-        'stock_quantity': stockQuantity,
-        'min_stock': minStock,
-        'is_taxable': isTaxable ? 1 : 0,
-        'is_active': isActive ? 1 : 0,
-        'notes': notes,
-        'category': category,
-        'tax_profile_id': taxProfileId,
-        'average_cost': averageCost,
-        'cost_status': costStatus,
-        'price_currency': priceCurrency,
-        'reference_sale_price': referenceSalePrice,
-        'reference_wholesale_price': referenceWholesalePrice,
-        'reference_purchase_price': referencePurchasePrice,
-        'created_at': createdAt?.toIso8601String(),
-        'updated_at': updatedAt?.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'type': type,
+    'code': code,
+    'barcode': barcode,
+    'unit': unit,
+    'sale_price': salePrice,
+    'wholesale_price': wholesalePrice,
+    'wholesale_min_quantity': wholesaleMinQuantity,
+    'purchase_price': purchasePrice,
+    'stock_quantity': stockQuantity,
+    'min_stock': minStock,
+    'is_taxable': isTaxable ? 1 : 0,
+    'is_active': isActive ? 1 : 0,
+    'notes': notes,
+    'category': category,
+    'tax_profile_id': taxProfileId,
+    'average_cost': averageCost,
+    'cost_status': costStatus,
+    'price_currency': priceCurrency,
+    'reference_sale_price': referenceSalePrice,
+    'reference_wholesale_price': referenceWholesalePrice,
+    'reference_purchase_price': referencePurchasePrice,
+    'image_path': imagePath,
+    'created_at': createdAt?.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(),
+  };
 
   /// Constructs a [Product] from a database row.
   factory Product.fromMap(Map<String, dynamic> map) => Product(
-        id: map['id'] as int?,
-        name: map['name'] as String,
-        type: map['type'] as String? ?? typeProduct,
-        code: map['code'] as String?,
-        barcode: map['barcode'] as String?,
-        unit: map['unit'] as String?,
-        salePrice: (map['sale_price'] as num?)?.toDouble() ?? 0,
-        wholesalePrice: (map['wholesale_price'] as num?)?.toDouble(),
-        wholesaleMinQuantity:
-            (map['wholesale_min_quantity'] as num?)?.toDouble(),
-        purchasePrice: (map['purchase_price'] as num?)?.toDouble() ?? 0,
-        stockQuantity: (map['stock_quantity'] as num?)?.toDouble() ?? 0,
-        minStock: (map['min_stock'] as num?)?.toDouble() ?? 0,
-        isTaxable: (map['is_taxable'] as int?) == 1,
-        isActive: (map['is_active'] as int? ?? 1) == 1,
-        notes: map['notes'] as String?,
-        category: map['category'] as String?,
-        taxProfileId: map['tax_profile_id'] as int?,
-        averageCost: (map['average_cost'] as num?)?.toDouble(),
-        costStatus: map['cost_status'] as String? ?? costStatusUnknown,
-        priceCurrency: map['price_currency'] as String?,
-        referenceSalePrice: (map['reference_sale_price'] as num?)?.toDouble(),
-        referenceWholesalePrice:
-            (map['reference_wholesale_price'] as num?)?.toDouble(),
-        referencePurchasePrice:
-            (map['reference_purchase_price'] as num?)?.toDouble(),
-        createdAt: map['created_at'] != null
-            ? DateTime.tryParse(map['created_at'] as String)
-            : null,
-        updatedAt: map['updated_at'] != null
-            ? DateTime.tryParse(map['updated_at'] as String)
-            : null,
-      );
+    id: map['id'] as int?,
+    name: map['name'] as String,
+    type: map['type'] as String? ?? typeProduct,
+    code: map['code'] as String?,
+    barcode: map['barcode'] as String?,
+    unit: map['unit'] as String?,
+    salePrice: (map['sale_price'] as num?)?.toDouble() ?? 0,
+    wholesalePrice: (map['wholesale_price'] as num?)?.toDouble(),
+    wholesaleMinQuantity: (map['wholesale_min_quantity'] as num?)?.toDouble(),
+    purchasePrice: (map['purchase_price'] as num?)?.toDouble() ?? 0,
+    stockQuantity: (map['stock_quantity'] as num?)?.toDouble() ?? 0,
+    minStock: (map['min_stock'] as num?)?.toDouble() ?? 0,
+    isTaxable: (map['is_taxable'] as int?) == 1,
+    isActive: (map['is_active'] as int? ?? 1) == 1,
+    notes: map['notes'] as String?,
+    category: map['category'] as String?,
+    taxProfileId: map['tax_profile_id'] as int?,
+    averageCost: (map['average_cost'] as num?)?.toDouble(),
+    costStatus: map['cost_status'] as String? ?? costStatusUnknown,
+    priceCurrency: map['price_currency'] as String?,
+    referenceSalePrice: (map['reference_sale_price'] as num?)?.toDouble(),
+    referenceWholesalePrice: (map['reference_wholesale_price'] as num?)
+        ?.toDouble(),
+    referencePurchasePrice: (map['reference_purchase_price'] as num?)
+        ?.toDouble(),
+    imagePath: map['image_path'] as String?,
+    createdAt: map['created_at'] != null
+        ? DateTime.tryParse(map['created_at'] as String)
+        : null,
+    updatedAt: map['updated_at'] != null
+        ? DateTime.tryParse(map['updated_at'] as String)
+        : null,
+  );
 }

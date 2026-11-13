@@ -1,5 +1,6 @@
 import '../database/database_helper.dart';
 import '../models/product.dart';
+import 'image_storage_service.dart';
 
 class ProductService {
   static Future<int> createProduct({
@@ -47,7 +48,9 @@ class ProductService {
   }
 
   static Future<void> deleteProduct(int id) async {
+    final product = await DatabaseHelper.instance.getProductById(id);
     await DatabaseHelper.instance.deleteProduct(id);
+    await ImageStorageService.deleteImage(product?.imagePath);
   }
 
   static Future<void> setActive(int id, {required bool active}) async {

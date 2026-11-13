@@ -189,9 +189,9 @@ class AppLocalizations {
   String get customerHasDocumentsTitle =>
       _t('للعميل معاملات مسجلة', 'Customer has transactions');
   String get customerHasDocumentsMessage => _t(
-        'لهذا العميل مستندات مسجلة، والحذف سيمحو سجل حسابه وأرصدته. أرشف العميل بدلاً من ذلك: يختفي من المستندات الجديدة وتبقى كل السجلات سليمة.',
-        'This customer has recorded documents. Deleting would erase their account history and balances. Archive the customer instead: they stop appearing for new documents, and all records stay intact.',
-      );
+    'لهذا العميل مستندات مسجلة، والحذف سيمحو سجل حسابه وأرصدته. أرشف العميل بدلاً من ذلك: يختفي من المستندات الجديدة وتبقى كل السجلات سليمة.',
+    'This customer has recorded documents. Deleting would erase their account history and balances. Archive the customer instead: they stop appearing for new documents, and all records stay intact.',
+  );
   String get archiveCustomer => _t('أرشفة العميل', 'Archive customer');
   String get deleteProductMessage =>
       _t('هل تريد حذف هذا المنتج؟', 'Delete this product?');
@@ -349,10 +349,14 @@ class AppLocalizations {
     'The backup file contains your data in unencrypted form. '
         'Keep it in a safe place and do not share it with anyone you do not trust.',
   );
-  String get backupEncryptionQuestion =>
-      _t('هل تريد حماية النسخة بكلمة مرور؟', 'Do you want to protect this backup with a password?');
-  String get backupWithoutPassword =>
-      _t('لا، بدون كلمة مرور (غير مشفرة)', 'No, without password (unencrypted)');
+  String get backupEncryptionQuestion => _t(
+    'هل تريد حماية النسخة بكلمة مرور؟',
+    'Do you want to protect this backup with a password?',
+  );
+  String get backupWithoutPassword => _t(
+    'لا، بدون كلمة مرور (غير مشفرة)',
+    'No, without password (unencrypted)',
+  );
   String get backupWithPassword =>
       _t('نعم، حماية بكلمة مرور', 'Yes, protect with password');
   String get backupPassword => _t('كلمة المرور', 'Password');
@@ -360,8 +364,10 @@ class AppLocalizations {
       _t('تأكيد كلمة المرور', 'Confirm password');
   String get backupPasswordRequired =>
       _t('أدخل كلمة المرور', 'Please enter a password');
-  String get backupPasswordMinLength =>
-      _t('كلمة المرور يجب أن لا تقل عن 8 أحرف', 'Password must be at least 8 characters');
+  String get backupPasswordMinLength => _t(
+    'كلمة المرور يجب أن لا تقل عن 8 أحرف',
+    'Password must be at least 8 characters',
+  );
   String get backupPasswordsDoNotMatch =>
       _t('كلمتا المرور غير متطابقتين', 'Passwords do not match');
   String get backupPasswordWarning => _t(
@@ -590,6 +596,15 @@ class AppLocalizations {
   String get addService => _t('إضافة خدمة', 'Add Service');
   String get editProduct => _t('تعديل المنتج', 'Edit Product');
   String get editService => _t('تعديل الخدمة', 'Edit Service');
+
+  // Product image strings
+  String get addPhoto => _t('إضافة صورة', 'Add Photo');
+  String get changePhoto => _t('تغيير الصورة', 'Change Photo');
+  String get removePhoto => _t('حذف الصورة', 'Remove Photo');
+  String get takePicture => _t('التقاط صورة', 'Take Picture');
+  String get chooseFromGallery => _t('اختر من المعرض', 'Choose from Gallery');
+  String get imageLoadError => _t('تعذر تحميل الصورة', 'Failed to load image');
+  String get imagePickFailed => _t('تعذر اختيار الصورة أو حفظها', 'Failed to select or save image');
   String get deactivateProduct => _t('تعطيل المنتج', 'Deactivate Product');
   String get activateProduct => _t('تفعيل المنتج', 'Activate Product');
   String get deactivateProductMessage => _t(
@@ -1160,10 +1175,14 @@ class AppLocalizations {
     'If the problem continues, contact support from the About page.',
   );
   String get openAboutPage => _t('صفحة حول التطبيق', 'About page');
-  String get copySupportInfo => _t('نسخ معلومات الدعم الفني', 'Copy support info');
-  String get supportInfoCopied =>
-      _t('تم نسخ معلومات الدعم الفني للحافظة', 'Support info copied to clipboard');
-  String referenceIdLabel(String id) => _t('الرقم المرجعي: ${_iso(id)}', 'Reference ID: $id');
+  String get copySupportInfo =>
+      _t('نسخ معلومات الدعم الفني', 'Copy support info');
+  String get supportInfoCopied => _t(
+    'تم نسخ معلومات الدعم الفني للحافظة',
+    'Support info copied to clipboard',
+  );
+  String referenceIdLabel(String id) =>
+      _t('الرقم المرجعي: ${_iso(id)}', 'Reference ID: $id');
   String get copiedToClipboard => _t('تم النسخ للحافظة', 'Copied to clipboard');
   String get transferNoticeTitle =>
       _t('نقل الترخيص إلى جهاز آخر', 'License Transfer');
@@ -2812,8 +2831,10 @@ class AppLocalizations {
     'إرسال تقارير تشخيصية مجهولة ومجردة من أي بيانات عند حدوث أخطاء للمساعدة في إصلاحها',
     'Send anonymous, sanitized crash and error diagnostics to help fix bugs',
   );
-  String get analyticsNoticeTitle =>
-      _t('بيانات الاستخدام وتقارير الأخطاء', 'Usage Statistics & Error Reports');
+  String get analyticsNoticeTitle => _t(
+    'بيانات الاستخدام وتقارير الأخطاء',
+    'Usage Statistics & Error Reports',
+  );
   String get analyticsNoticeBody => _t(
     'يساعد جمع إحصائيات الاستخدام المجهولة وتقارير الأعطال في تحسين موثوقية وأداء ورقتك. لا يتم جمع أي بيانات شخصية أو تجارية على الإطلاق، ويمكنك إيقاف أي منهما في أي وقت من الإعدادات.',
     'Anonymous usage statistics and error reports help improve the app\'s stability. No personal or business data is ever collected. You can turn them off anytime from Settings.',
