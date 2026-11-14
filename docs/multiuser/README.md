@@ -39,6 +39,19 @@ Phase 1 implements an offline-first, local multi-user and Role-Based Access Cont
    - Sensitive read paths and exports (cost prices, wholesale margins, profit reports, CSV/PDF exports) redact columns and data according to user permissions.
    - Field-level pricing protections: manual line repricing and discount overrides are independently gated.
 
+7. **Codes-Not-Strings Architecture (Rule R4):**
+   - Services, policies, and DAOs never construct or return user-facing display text in Arabic or English.
+   - All access denials and domain failures return typed `AccessErrorCode` enums and arguments (`AccessError`, `AdminException`, `AuthException`).
+   - The UI layer maps codes to localized text through `access_messages.dart` and `AppLocalizations`.
+
+8. **No Raw Permission Keys in UI:**
+   - Permission identifiers (e.g. `sales.view`, `users.manage`) are internal data identifiers and must never appear raw in user-facing UI.
+   - Every permission displays through `localizedPermissionName(l10n, key)` with a localized safe fallback (`accessGenericPermission`) for unregistered keys.
+
+9. **Language-Neutral Audit Trail Data:**
+   - Stored audit log entries persist language-neutral actor identifiers (`system`, `unauthenticated`, or user ID/username).
+   - Localized actor titles are resolved dynamically at render time using `localizedActorName(l10n, actor)` to ensure audit logs remain independent of the active session language.
+
 ---
 
 ## Architecture Components
