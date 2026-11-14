@@ -2,15 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../screens/full_screen_image_viewer.dart';
+import '../localization/app_localizations.dart';
+import '../services/image_storage_service.dart';
+import 'full_screen_image_viewer.dart';
 
-/// A 44 × 44 (by default) thumbnail for a product image.
+/// A display thumbnail for a product image.
 ///
-/// Shows a file image when [imagePath] points to an existing file,
-/// otherwise falls back to the standard product/service icon swatch
-/// (matching the visual style of the existing product cards).
-///
-/// Tap opens [FullScreenImageViewer] when an image is available.
+/// Decodes at display size using thumbnail image if available, with lazy background
+/// backfill, and smooth error fallback to a theme-aware icon placeholder.
 class ProductImageThumbnail extends StatelessWidget {
   const ProductImageThumbnail({
     super.key,
@@ -19,6 +18,8 @@ class ProductImageThumbnail extends StatelessWidget {
     this.size = 44,
     this.heroTag,
     this.borderRadius = 12,
+    this.enableFullScreen = true,
+    this.excludeSemantics = false,
   });
 
   final String? imagePath;
@@ -29,23 +30,60 @@ class ProductImageThumbnail extends StatelessWidget {
   final String? heroTag;
   final double borderRadius;
 
+  /// When false, no gesture detector or hero is mounted, allowing parent taps.
+  final bool enableFullScreen;
+
+  /// When true, semantics are excluded (e.g. in list rows where name is already read).
+  final bool excludeSemantics;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final hasImage =
-        imagePath != null &&
-        imagePath!.isNotEmpty &&
-        File(imagePath!).existsSync();
+    final l10n = AppLocalizations.of(context);
+    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final hasCandidate = imagePath != null && imagePath!.trim().isNotEmpty;
 
     Widget content;
-    if (hasImage) {
-      content = Image.file(
-        File(imagePath!),
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _iconFallback(cs),
-      );
+
+    if (hasCandidate) {
+      // C1: Prefer thumbnail file when available, fallback to main file
+      final thumbPath = ImageStorageService.thumbPathFor(imagePath);
+      final mainPath = ImageStorageService.resolve(imagePath);
+
+      String? targetPath;
+      if (thumbPath != null && File(thumbPath).existsSync()) {
+        targetPath = thumbPath;
+      } else if (mainPath != null) {
+        targetPath = mainPath;
+        // A2: Lazy backfill in background without blocking UI
+        ImageStorageService.requestThumbnailBackfill(imagePath);
+      }
+
+      if (targetPath != null) {
+        content = Image.file(
+          File(targetPath),
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.low,
+          gaplessPlayback: true,
+          cacheWidth: (size * pixelRatio).round(),
+          frameBuilder: (ctx, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded || frame != null) {
+              return child;
+            }
+            return AnimatedOpacity(
+              opacity: frame == null ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              child: child,
+            );
+          },
+          errorBuilder: (_, __, ___) => _iconFallback(cs),
+        );
+      } else {
+        content = _iconFallback(cs);
+      }
     } else {
       content = _iconFallback(cs);
     }
@@ -55,9 +93,19 @@ class ProductImageThumbnail extends StatelessWidget {
       child: SizedBox(width: size, height: size, child: content),
     );
 
-    if (!hasImage) return rounded;
+    // C3: If full screen is disabled or no candidate image exists, return non-tappable widget
+    if (!enableFullScreen || !hasCandidate) {
+      if (excludeSemantics) {
+        return ExcludeSemantics(child: rounded);
+      }
+      return Semantics(
+        label: l10n.imageSemanticLabel,
+        image: true,
+        child: rounded,
+      );
+    }
 
-    // Wrap in hero + tap for full-screen if image is available.
+    // Wrap in gesture detector and hero only when enabled
     Widget tappable = GestureDetector(
       onTap: () => _openFullScreen(context),
       child: rounded,
@@ -67,28 +115,36 @@ class ProductImageThumbnail extends StatelessWidget {
       tappable = Hero(tag: heroTag!, child: tappable);
     }
 
-    return tappable;
+    if (excludeSemantics) {
+      return ExcludeSemantics(child: tappable);
+    }
+
+    return Semantics(
+      button: true,
+      label: l10n.imageSemanticLabel,
+      child: tappable,
+    );
   }
 
+  // C5: Theme-aware placeholder colors
   Widget _iconFallback(ColorScheme cs) {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: isService
-            ? Colors.blue.withValues(alpha: 0.12)
-            : cs.primaryContainer,
+        color: isService ? cs.tertiaryContainer : cs.primaryContainer,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
       child: Icon(
         isService ? Icons.build_circle_outlined : Icons.inventory_2_outlined,
         size: size * 0.5,
-        color: isService ? Colors.blue.shade700 : cs.onPrimaryContainer,
+        color: isService ? cs.onTertiaryContainer : cs.onPrimaryContainer,
       ),
     );
   }
 
   void _openFullScreen(BuildContext context) {
+    if (imagePath == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(

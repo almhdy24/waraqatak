@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../localization/app_localizations.dart';
+import '../services/image_storage_service.dart';
 
 /// Full-screen zoomable viewer for a product image.
 ///
@@ -37,28 +38,18 @@ class FullScreenImageViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final resolved = ImageStorageService.resolve(imagePath);
 
-    Widget image = Image.file(
-      File(imagePath),
-      fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.broken_image_outlined,
-              size: 64,
-              color: Colors.white54,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              l10n.imageLoadError,
-              style: const TextStyle(color: Colors.white54),
-            ),
-          ],
-        ),
-      ),
-    );
+    Widget image;
+    if (resolved != null) {
+      image = Image.file(
+        File(resolved),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => _errorFallback(l10n),
+      );
+    } else {
+      image = _errorFallback(l10n);
+    }
 
     if (heroTag != null) {
       image = Hero(tag: heroTag!, child: image);
@@ -73,6 +64,26 @@ class FullScreenImageViewer extends StatelessWidget {
       ),
       body: Center(
         child: InteractiveViewer(minScale: 0.5, maxScale: 4.0, child: image),
+      ),
+    );
+  }
+
+  Widget _errorFallback(AppLocalizations l10n) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.broken_image_outlined,
+            size: 64,
+            color: Colors.white54,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.imageLoadError,
+            style: const TextStyle(color: Colors.white54),
+          ),
+        ],
       ),
     );
   }
