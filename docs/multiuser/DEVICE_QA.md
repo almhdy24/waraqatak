@@ -141,3 +141,62 @@
    - Zero Arabic characters `[\u0600-\u06FF]` appear in the English UI.
    - Zero untranslated English sentences appear in the Arabic UI.
    - Western digits (`0-9`) remain LTR in PIN inputs and timestamps across both languages.
+
+---
+
+## 3. Product Images QA Runbook (4 GB RAM Phone)
+
+### Summary of Product Image Storage
+Product images use filename-only storage in SQLite (`image_path` holds base filenames like `img_...jpg`, never absolute paths). The main image longest dimension is capped $\le 1024$ px, and square companion thumbnails are capped $\le 256$ px with `_t` suffix. The image directory path is cached in memory for synchronous zero-I/O resolution. `ImageStorageService.sweepOrphans()` runs at startup to safely delete unreferenced image files older than 24 hours.
+
+### Compressor Behavior Under Asymmetric Aspect Ratios (Answer to A1)
+`flutter_image_compress` uses `minWidth` and `minHeight` as lower bounds while preserving aspect ratio. For asymmetric images (e.g. 4000x1000), specifying `minWidth: 1024, minHeight: 1024` causes the compressor to preserve the 4:1 ratio by expanding width to 4096 px. Waraqatak resolves this by pre-computing exact target dimensions using pure-Dart header parsing (`readImageDimensions`) and `computeTargetDimensions`, ensuring `max(width, height) <= maxDimension` (yielding `1024 x 256` for 4000x1000) prior to compression.
+
+### Test 12: Quick Sale 50 Products Scroll, Memory & Toggle
+1. **Setup:** Seed 50 products with images in local SQLite.
+2. **Action:**
+   - Open Quick Sale screen. Scroll fast up and down through the 50 products.
+   - Type in the search box to filter products.
+   - Toggle product images OFF and ON via the AppBar action icon.
+3. **Expected Outcome:**
+   - Smooth 60 fps scrolling with zero hitching.
+   - RSS memory remains comfortably below 200 MB without creep.
+   - Toggling images OFF immediately updates the grid to the compact layout without resetting the cart, search query, or category filter.
+
+### Test 13: Camera Capture & Low-Memory Activity Destruction
+1. **Setup:** On Android, enable Developer Options -> "Don't keep activities".
+2. **Action:**
+   - Open Product Form, tap camera icon to capture a photo.
+   - Snap photo and confirm in the camera app.
+   - Return to Waraqatak (which was recreated due to "Don't keep activities").
+3. **Expected Outcome:**
+   - `ImagePicker.retrieveLostData()` recovers the photo.
+   - Localized notification snackbar (`imagePhotoRecovered`) appears.
+   - Photo is saved, thumbnail is generated, and preview is shown.
+
+### Test 14: Backup Export, Wipe & Restore with Thumbnail Backfill
+1. **Setup:** Products with images created. Export `.waraq` backup file.
+2. **Action:**
+   - Clear app storage or delete database.
+   - Restore the `.waraq` backup file.
+3. **Expected Outcome:**
+   - Products are restored and their images are restored from the archive.
+   - Corrupt or invalid images are safely skipped and reported via `imageRestoreSkipped`.
+   - Missing thumbnails trigger asynchronous background backfill when viewed.
+
+### Test 15: Product Deletion Safety & File Cleanup
+1. **Setup:** Product A is referenced in an invoice. Product B is not referenced anywhere.
+2. **Action:**
+   - Attempt to delete Product A from Products list.
+   - Delete Product B.
+3. **Expected Outcome:**
+   - Product A deletion throws `ProductInUseException` and displays `errProductInUse` snackbar; row and image files remain intact.
+   - Product B deletion deletes the database row and purges both `img_...jpg` and `img_..._t.jpg` from the storage directory.
+
+### Test 16: Camera Permission Revocation
+1. **Setup:** Revoke Camera permission in Android App Info settings.
+2. **Action:** Open Product Form and tap the Camera button.
+3. **Expected Outcome:**
+   - App does not crash.
+   - Localized snackbar `cameraPermissionDenied` is displayed with "Open app settings" action button.
+   - Tapping the button opens Android system app settings.
