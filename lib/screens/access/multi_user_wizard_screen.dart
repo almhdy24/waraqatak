@@ -7,6 +7,7 @@ import '../../services/access/auth_service.dart';
 import '../../services/access/recovery_service.dart';
 import '../../services/access/session_manager.dart';
 import '../../services/analytics/analytics_service.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 import '../../widgets/access/pin_keypad.dart';
@@ -88,6 +89,20 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
     }
   }
 
+  Future<void> _confirmCancel() async {
+    final l10n = AppLocalizations.of(context);
+    final discard = await AppConfirmDialog.show(
+      context,
+      title: l10n.cancelSetup,
+      message: l10n.cancelSetupConfirm,
+      confirmLabel: l10n.discardAction,
+      isDestructive: true,
+    );
+    if (discard && mounted) {
+      Navigator.pop(context, false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -95,22 +110,38 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
 
     return ScreenAccessGate(
       screenType: MultiUserWizardScreen,
-      child: Scaffold(
-        appBar: AppBar(title: Text(l10n.setupOwnerCredentials)),
-        body: ResponsiveCenter(
-          maxWidth: 480,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Stepper progress indicator
-                _buildStepIndicator(l10n, cs),
-                const SizedBox(height: 24),
-                _currentStep == 0
-                    ? _buildStep1(l10n, cs)
-                    : _buildStep2(l10n, cs),
-              ],
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop && !_loading) {
+            _confirmCancel();
+          }
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(l10n.setupOwnerCredentials),
+            actions: [
+              TextButton(
+                onPressed: _loading ? null : _confirmCancel,
+                child: Text(l10n.cancel),
+              ),
+            ],
+          ),
+          body: ResponsiveCenter(
+            maxWidth: 480,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Stepper progress indicator
+                  _buildStepIndicator(l10n, cs),
+                  const SizedBox(height: 24),
+                  _currentStep == 0
+                      ? _buildStep1(l10n, cs)
+                      : _buildStep2(l10n, cs),
+                ],
+              ),
             ),
           ),
         ),

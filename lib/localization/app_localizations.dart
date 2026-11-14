@@ -1529,6 +1529,36 @@ class AppLocalizations {
       _t('المدفوع والمتبقي (الفواتير)', 'Paid and remaining (invoices)');
   String get pdfShowSignature =>
       _t('خانة التوقيع والختم', 'Signature and stamp area');
+  String get pdfSealsSection =>
+      _t('الختم والتوقيع الرقمي', 'Digital Stamp & Signature');
+  String get pdfSealStamp => _t('الختم الرقمي', 'Digital Stamp');
+  String get pdfSealSignature => _t('التوقيع الرقمي', 'Digital Signature');
+  String get pdfUploadSeal => _t('رفع صورة', 'Upload image');
+  String get pdfReplaceSeal => _t('استبدال', 'Replace');
+  String get pdfRemoveSeal => _t('إزالة', 'Remove');
+  String get pdfSealOpacity => _t('درجة الشفافية', 'Opacity');
+  String get pdfSealPagePlacement =>
+      _t('موضع الصفحات', 'Page placement');
+  String get pdfSealPageLast => _t('الصفحة الأخيرة', 'Last page');
+  String get pdfSealPageFirst => _t('الصفحة الأولى', 'First page');
+  String get pdfSealPageAll => _t('جميع الصفحات', 'All pages');
+  String get pdfSealVisualEditor =>
+      _t('محرر الموضع والحجم', 'Position & size editor');
+  String get pdfSealResetPosition =>
+      _t('إعادة ضبط الموضع', 'Reset position');
+  String get pdfSealEditorHint =>
+      _t('اسحب للتحريك أو اسحب من الزوايا لتغيير الحجم',
+          'Drag to move or drag corners to resize');
+  String get pdfSealInvalidFormat => _t(
+      'صيغة غير مدعومة. يرجى اختيار صورة PNG أو JPG',
+      'Unsupported format. Please select a PNG or JPG image');
+  String get pdfSealOversized => _t(
+      'حجم الصورة كبير جداً (الحد الأقصى 10 ميغابايت)',
+      'Image file is too large (max 10MB)');
+  String get pdfSealUploadFailed =>
+      _t('فشل في تحميل الصورة', 'Failed to upload image');
+  String get pdfSealActive => _t('مفعل', 'Enabled');
+  String get pdfSealInactive => _t('معطل', 'Disabled');
   String get pdfShowPageNumbers => _t('أرقام الصفحات', 'Page numbers');
   String get pdfZebraRows =>
       _t('تظليل صفوف الجدول بالتناوب', 'Striped table rows');
@@ -3413,6 +3443,37 @@ class AppLocalizations {
   String auditBrokenAtId(int id) =>
       _t('تم اكتشاف الخلل عند السجل رقم $id', 'Chain broken at entry #$id');
   String get auditUnknownTime => _t('وقت غير معروف', 'Unknown time');
+  String get auditActionGenesis => _t('بدء سجل التدقيق', 'Audit Chain Genesis');
+  String get auditActionUserCreated => _t('إنشاء مستخدم', 'User Created');
+  String get auditActionUserUpdated => _t('تعديل مستخدم', 'User Updated');
+  String get auditActionUserUnlocked => _t('إلغاء قفل حساب', 'User Unlocked');
+  String get auditActionRoleCreated => _t('إنشاء دور', 'Role Created');
+  String get auditActionRoleUpdated => _t('تعديل دور', 'Role Updated');
+  String get auditActionRoleDeleted => _t('حذف دور', 'Role Deleted');
+  String get auditActionEscalationDenied => _t('محاولة تصعيد صلاحيات مرفوضة', 'Privilege Escalation Blocked');
+  String get auditActionRecoveryFailed => _t('فشل استرداد الحساب', 'Recovery Failed');
+  String get auditActionRecoveryCompleted => _t('اكتمال استرداد الحساب', 'Recovery Completed');
+  String get auditActionMultiUserEnabled => _t('تفعيل وضع تعدد المستخدمين', 'Multi-User Enabled');
+  String get auditActionMultiUserDisabled => _t('تعطيل وضع تعدد المستخدمين', 'Multi-User Disabled');
+  String get auditActionUserLogout => _t('تسجيل خروج', 'User Logout');
+  String get auditActionUserLogin => _t('تسجيل دخول', 'User Login');
+  String get auditActionLoginFailed => _t('فشل تسجيل الدخول', 'Login Failed');
+  String get auditActionSessionLocked => _t('قفل الجلسة', 'Session Locked');
+  String get auditActionSensitiveReauth => _t('تأكيد عملية حساسة', 'Sensitive Action Reauth');
+
+  String get auditDetailUserId => _t('معرف المستخدم', 'User ID');
+  String get auditDetailUsername => _t('اسم المستخدم', 'Username');
+  String get auditDetailDisplayName => _t('الاسم المعروض', 'Display Name');
+  String get auditDetailRole => _t('الدور', 'Role');
+  String get auditDetailPermissionsCount => _t('عدد الصلاحيات', 'Permissions Count');
+  String get auditDetailUpdatedFields => _t('الحقول المعدلة', 'Updated Fields');
+  String get auditDetailAction => _t('الإجراء المستهدف', 'Target Action');
+  String get auditDetailDecision => _t('القرار', 'Decision');
+  String get auditDetailReason => _t('السبب', 'Reason');
+  String get auditDetailActor => _t('المنفذ', 'Actor');
+  String get auditDetailFailedAttempts => _t('المحاولات الفاشلة', 'Failed Attempts');
+  String get loadMore => _t('تحميل المزيد', 'Load More');
+  String get auditVerifyingProgress => _t('جارٍ التحقق من السجلات...', 'Verifying audit records...');
 
   String get ownerPinHelper => _t(
         'اختياري: رمز PIN للدخول السريع من شاشة البيع بدون إدخال كلمة المرور كاملة',

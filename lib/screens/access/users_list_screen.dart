@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
 import '../../services/access/access_admin_service.dart';
@@ -115,6 +116,35 @@ class _UsersListScreenState extends State<UsersListScreen> {
     }
   }
 
+  Future<void> _unlockUser(AppUser user) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.unlockUserAction,
+      message: l10n.unlockUserConfirm(user.displayName),
+      confirmLabel: l10n.unlockUserAction,
+      cancelLabel: l10n.cancel,
+      icon: Icons.lock_open_rounded,
+    );
+    if (confirmed && mounted) {
+      try {
+        await AccessAdminService.instance.unlockUser(user.id);
+        if (mounted) {
+          AppSnackBar.show(context, l10n.userUnlockedSuccess);
+          _load();
+        }
+      } catch (e) {
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            friendlyError(l10n, e),
+            severity: AppSnackBarSeverity.error,
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _toggleMultiUserMode() async {
     final l10n = AppLocalizations.of(context);
     final isEnabled = SessionManager.instance.isMultiUserEnabled;
@@ -206,7 +236,9 @@ class _UsersListScreenState extends State<UsersListScreen> {
 
     return ScreenAccessGate(
       screenType: UsersListScreen,
-      child: Scaffold(
+      child: ListenableBuilder(
+        listenable: SessionManager.instance,
+        builder: (context, _) => Scaffold(
         appBar: AppBar(
           title: _isSearching
               ? TextField(
@@ -381,8 +413,13 @@ class _UsersListScreenState extends State<UsersListScreen> {
 
                               final userIndex = (_users.length == 1 && i > 0) ? i - 1 : i;
                               final user = filteredUsers[userIndex];
-                              final roleName = _roleNames[user.roleId] ?? user.roleId;
+                              final roleName = localizedRoleName(
+                                l10n,
+                                user.roleId,
+                                _roleNames[user.roleId] ?? (user.isOwner ? l10n.ownerRole : user.roleId),
+                              );
                               final isCurrent = user.id == SessionManager.instance.currentUser?.id;
+                              final isLocked = user.isLocked || (user.lockedUntil != null && user.lockedUntil!.isAfter(DateTime.now()));
 
                               return Card(
                                 elevation: 0,
@@ -462,6 +499,45 @@ class _UsersListScreenState extends State<UsersListScreen> {
                                             ),
                                           ),
                                         ),
+                                      if (isLocked)
+                                        Container(
+                                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: cs.errorContainer,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            l10n.userLockedUntilBadge(DateFormat('HH:mm').format(user.lockedUntil!.toLocal())),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: cs.onErrorContainer,
+                                            ),
+                                          ),
+                                        ),
+                                      if (!user.hasPin)
+                                        Container(
+                                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: cs.surfaceContainerHighest,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            l10n.noPinBadge,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: cs.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                   subtitle: Padding(
@@ -496,7 +572,18 @@ class _UsersListScreenState extends State<UsersListScreen> {
                                       ],
                                     ),
                                   ),
-                                  trailing: const Icon(Icons.chevron_right),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (SessionManager.instance.isOwnerSession && (isLocked || user.failedAttempts > 0))
+                                        IconButton(
+                                          icon: Icon(Icons.lock_open_rounded, color: cs.primary),
+                                          tooltip: l10n.unlockUserAction,
+                                          onPressed: () => _unlockUser(user),
+                                        ),
+                                      const Icon(Icons.chevron_right),
+                                    ],
+                                  ),
                                   onTap: () async {
                                     final currentUser = SessionManager.instance.currentUser;
                                     final isOwnerSession = currentUser?.isOwner == true;
@@ -551,7 +638,8 @@ class _UsersListScreenState extends State<UsersListScreen> {
               )
             : null,
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildDisabledState(AppLocalizations l10n, ColorScheme cs) {

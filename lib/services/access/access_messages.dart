@@ -216,3 +216,80 @@ String friendlyError(AppLocalizations l10n, Object error) {
   }
   return l10n.errUnexpected;
 }
+
+/// Resolves localized audit action label.
+/// Returns null if [action] is unrecognized, allowing the UI to display fallback.
+String? localizedAuditAction(AppLocalizations l10n, String action) {
+  switch (action) {
+    case 'audit_chain_genesis':
+      return l10n.auditActionGenesis;
+    case 'user_created':
+      return l10n.auditActionUserCreated;
+    case 'user_updated':
+      return l10n.auditActionUserUpdated;
+    case 'user_unlocked':
+      return l10n.auditActionUserUnlocked;
+    case 'role_created':
+      return l10n.auditActionRoleCreated;
+    case 'role_updated':
+      return l10n.auditActionRoleUpdated;
+    case 'role_deleted':
+      return l10n.auditActionRoleDeleted;
+    case 'privilege_escalation_denied':
+      return l10n.auditActionEscalationDenied;
+    case 'recovery_failed':
+      return l10n.auditActionRecoveryFailed;
+    case 'recovery_completed':
+      return l10n.auditActionRecoveryCompleted;
+    case 'multi_user_enabled':
+      return l10n.auditActionMultiUserEnabled;
+    case 'multi_user_disabled':
+      return l10n.auditActionMultiUserDisabled;
+    case 'user_logout':
+      return l10n.auditActionUserLogout;
+    case 'user_login':
+      return l10n.auditActionUserLogin;
+    case 'login_failed':
+      return l10n.auditActionLoginFailed;
+    case 'session_locked':
+      return l10n.auditActionSessionLocked;
+    case 'sensitive_action_reauth':
+      return l10n.auditActionSensitiveReauth;
+    default:
+      return null;
+  }
+}
+
+/// Resolves localized key for structured audit details.
+String localizedAuditDetailKey(AppLocalizations l10n, String key) {
+  switch (key) {
+    case 'user_id':
+    case 'target_user_id':
+      return l10n.auditDetailUserId;
+    case 'username':
+    case 'target_username':
+      return l10n.auditDetailUsername;
+    case 'display_name':
+      return l10n.auditDetailDisplayName;
+    case 'role_id':
+      return l10n.auditDetailRole;
+    case 'permissions_count':
+      return l10n.auditDetailPermissionsCount;
+    case 'updated_fields':
+      return l10n.auditDetailUpdatedFields;
+    case 'action':
+      return l10n.auditDetailAction;
+    case 'decision':
+      return l10n.auditDetailDecision;
+    case 'reason':
+      return l10n.auditDetailReason;
+    case 'actor_username':
+    case 'actor_user_id':
+      return l10n.auditDetailActor;
+    case 'failed_attempts':
+      return l10n.auditDetailFailedAttempts;
+    default:
+      return key.replaceAll('_', ' ');
+  }
+}
+

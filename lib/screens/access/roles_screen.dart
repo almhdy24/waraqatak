@@ -60,6 +60,11 @@ class _RolesScreenState extends State<RolesScreen> {
     final isSystem = role?.isSystem == true;
     final isOwnerSession =
         SessionManager.instance.currentUser?.isOwner == true;
+    final canManageRoles = AccessGuard.can(PermissionRegistry.rolesManage);
+    final actorPerms = SessionManager.instance.cachedPermissions;
+    final isReadOnly = !canManageRoles || isSystem;
+    final roleDisplayName = role != null ? localizedRoleName(l10n, role.id, role.name) : '';
+    final roleDisplayDesc = role != null ? localizedRoleDescription(l10n, role.id, role.description) : '';
 
     final nameCtrl = TextEditingController(text: role?.name ?? '');
     final descCtrl = TextEditingController(text: role?.description ?? '');
@@ -85,10 +90,10 @@ class _RolesScreenState extends State<RolesScreen> {
                   title: Text(isNew
                       ? l10n.addRole
                       : (isSystem
-                          ? '${role.name} (${l10n.isSystemRole})'
-                          : l10n.editRole)),
+                          ? '$roleDisplayName (${l10n.isSystemRole})'
+                          : (isReadOnly ? roleDisplayName : l10n.editRole))),
                   actions: [
-                    if (!isSystem)
+                    if (!isReadOnly)
                       TextButton(
                         onPressed: () async {
                           if (nameCtrl.text.trim().isEmpty) {
@@ -134,6 +139,7 @@ class _RolesScreenState extends State<RolesScreen> {
                     if (!isSystem) ...[
                       TextField(
                         controller: nameCtrl,
+                        enabled: !isReadOnly,
                         decoration: InputDecoration(
                           labelText: l10n.roleName,
                           border: const OutlineInputBorder(),
@@ -142,6 +148,7 @@ class _RolesScreenState extends State<RolesScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: descCtrl,
+                        enabled: !isReadOnly,
                         decoration: InputDecoration(
                           labelText: l10n.roleDescription,
                           border: const OutlineInputBorder(),
@@ -149,9 +156,9 @@ class _RolesScreenState extends State<RolesScreen> {
                       ),
                       const SizedBox(height: 20),
                     ] else ...[
-                      if (role?.description != null)
+                      if (roleDisplayDesc.isNotEmpty)
                         Text(
-                          role!.description!,
+                          roleDisplayDesc,
                           style: TextStyle(color: cs.onSurfaceVariant),
                         ),
                       const SizedBox(height: 16),
@@ -201,22 +208,33 @@ class _RolesScreenState extends State<RolesScreen> {
                           children: perms.map((perm) {
                             final isGranted =
                                 selectedPerms.contains(perm.key);
+                            final actorHoldsPerm =
+                                isOwnerSession || actorPerms.contains(perm.key);
+                            final canToggle = !isReadOnly && actorHoldsPerm;
 
                             return CheckboxListTile(
                               title: Text(
                                 perm.localizedName(l10n),
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                              subtitle: Text(
-                                perm.key,
                                 style: TextStyle(
-                                    fontSize: 11, color: cs.outline),
+                                  fontSize: 14,
+                                  color: canToggle ? null : cs.onSurface.withValues(alpha: 0.5),
+                                ),
                               ),
+                              subtitle: actorHoldsPerm
+                                  ? Text(
+                                      perm.key,
+                                      style: TextStyle(
+                                          fontSize: 11, color: cs.outline),
+                                    )
+                                  : Text(
+                                      l10n.cannotEditHeldPermissionsHelper,
+                                      style: TextStyle(
+                                          fontSize: 11, color: cs.error),
+                                    ),
                               value: isGranted,
-                              enabled: !isSystem,
-                              onChanged: isSystem
-                                  ? null
-                                  : (checked) {
+                              enabled: canToggle,
+                              onChanged: canToggle
+                                  ? (checked) {
                                       setSheetState(() {
                                         if (checked == true) {
                                           selectedPerms.add(perm.key);
@@ -224,7 +242,8 @@ class _RolesScreenState extends State<RolesScreen> {
                                           selectedPerms.remove(perm.key);
                                         }
                                       });
-                                    },
+                                    }
+                                  : null,
                             );
                           }).toList(),
                         ),
@@ -320,14 +339,14 @@ class _RolesScreenState extends State<RolesScreen> {
                         ),
                       ),
                       title: Text(
-                        role.name,
+                        localizedRoleName(l10n, role.id, role.name),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
                         isOwnerRole
                             ? l10n.isSystemRole
-                            : (role.description?.isNotEmpty == true
-                                ? role.description!
+                            : (localizedRoleDescription(l10n, role.id, role.description).isNotEmpty
+                                ? localizedRoleDescription(l10n, role.id, role.description)
                                 : '$permCount ${l10n.rolesAndPermissions}'),
                       ),
                       trailing: Row(

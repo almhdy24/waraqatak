@@ -328,6 +328,7 @@ class AuditService {
   Future<AuditVerificationResult> verifyChain({
     DatabaseExecutor? db,
     int pageSize = 100,
+    void Function(int verified, int total)? onProgress,
   }) async {
     final executor = db ?? await DatabaseHelper.instance.database;
     final countRow = await executor.rawQuery(
@@ -435,6 +436,7 @@ class AuditService {
 
         expectedPrevHash = storedHash;
         verifiedCount++;
+        onProgress?.call(verifiedCount, totalCount);
       }
     }
 
