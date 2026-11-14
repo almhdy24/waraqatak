@@ -42,7 +42,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 32;
+  static const int dbVersion = 33;
 
   static Database? _database;
 
@@ -1552,6 +1552,30 @@ class DatabaseHelper {
 
     if (oldVersion < 32 && newVersion >= 32) {
       await _upgradeToDigitalSealsSchema(db);
+    }
+
+    if (oldVersion < 33 && newVersion >= 33) {
+      await _upgradeToProductImageBasenameSchema(db);
+    }
+  }
+
+  static Future<void> _upgradeToProductImageBasenameSchema(
+    DatabaseExecutor db,
+  ) async {
+    final rows = await db.rawQuery(
+      "SELECT id, image_path FROM products WHERE image_path IS NOT NULL AND image_path != ''",
+    );
+    for (final row in rows) {
+      final id = row['id'];
+      final rawPath = row['image_path'] as String?;
+      if (rawPath != null &&
+          (rawPath.contains('/') || rawPath.contains(r'\'))) {
+        final filename = basename(rawPath);
+        await db.rawUpdate('UPDATE products SET image_path = ? WHERE id = ?', [
+          filename,
+          id,
+        ]);
+      }
     }
   }
 
