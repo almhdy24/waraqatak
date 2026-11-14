@@ -10,6 +10,7 @@ import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/models/business.dart';
 import 'package:warqatek/screens/quick_sale_screen.dart';
+import 'package:warqatek/services/access/session_manager.dart';
 import 'package:warqatek/services/product_service.dart';
 import 'package:warqatek/utils/quick_sale_settings.dart';
 import 'package:warqatek/widgets/pos_product_tile.dart';
@@ -22,6 +23,7 @@ void main() {
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
+    SessionManager.instance.setMultiUserEnabledForTesting(false);
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     final dir = await getDatabasesPath();

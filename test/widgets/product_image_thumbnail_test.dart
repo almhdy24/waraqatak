@@ -105,7 +105,7 @@ void main() {
           of: find.byType(ProductImageThumbnail),
           matching: find.byType(ExcludeSemantics),
         ),
-        findsOneWidget,
+        findsWidgets,
       );
     });
   });

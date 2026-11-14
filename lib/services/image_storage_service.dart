@@ -630,7 +630,7 @@ class ImageStorageService {
           // Best effort
         }
 
-        return destPath;
+        return filename;
       } finally {
         await _deleteIfExists(tempPath);
       }

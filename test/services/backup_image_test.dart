@@ -78,7 +78,8 @@ void main() {
       final restoredPath = await ImageStorageService.base64ToImage(b64!, '1');
       expect(restoredPath, isNotNull);
 
-      final restoredBytes = File(restoredPath!).readAsBytesSync();
+      final fullPath = ImageStorageService.resolve(restoredPath);
+      final restoredBytes = File(fullPath ?? restoredPath!).readAsBytesSync();
       expect(restoredBytes, equals(src.readAsBytesSync()));
     });
 
