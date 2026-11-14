@@ -12,6 +12,7 @@ import '../services/app_diagnostics_service.dart';
 import '../services/app_update_service.dart';
 import '../utils/url_launcher_utils.dart';
 import '../utils/date_format_utils.dart';
+import '../utils/quick_sale_settings.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
 import 'database_diagnostic_screen.dart';
@@ -504,6 +505,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         selected: {themeScope?.themeMode ?? ThemeMode.light},
                         onSelectionChanged: (s) =>
                             themeScope?.onChangeThemeMode(s.first),
+                      ),
+                    ),
+                    const Divider(height: 1, indent: 16, endIndent: 16),
+                    // Per-device display preference, not an organization-wide setting,
+                    // so it intentionally does NOT require an admin permission.
+                    ListenableBuilder(
+                      listenable: QuickSaleSettings.instance,
+                      builder: (context, _) => SwitchListTile(
+                        secondary: const Icon(Icons.photo_library_outlined),
+                        title: Text(l10n.quickSaleImagesSettingTitle),
+                        subtitle: Text(l10n.quickSaleImagesSettingDesc),
+                        value: QuickSaleSettings.instance.showProductImages,
+                        onChanged: (val) {
+                          QuickSaleSettings.instance.setShowProductImages(val);
+                        },
                       ),
                     ),
                   ],

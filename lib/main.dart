@@ -17,6 +17,7 @@ import 'services/app_update_service.dart';
 import 'services/license_service.dart';
 import 'screens/splash_screen.dart';
 import 'theme.dart';
+import 'utils/quick_sale_settings.dart';
 
 Future<void> main() async {
   runZonedGuarded<Future<void>>(
@@ -69,6 +70,7 @@ Future<void> main() async {
 
       await AppDiagnosticsService.instance.init();
       await SessionManager.instance.init();
+      await QuickSaleSettings.instance.load(prefs);
       final lang = prefs.getString('language') ?? 'ar';
       final themeMode = ThemeModeScope.decode(prefs.getString('theme_mode'));
       runApp(WarqatekApp(initialLanguage: lang, initialThemeMode: themeMode));

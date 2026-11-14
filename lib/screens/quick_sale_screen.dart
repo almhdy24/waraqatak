@@ -27,6 +27,7 @@ import '../utils/arabic_search_utils.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../utils/number_input.dart';
+import '../utils/quick_sale_settings.dart';
 import '../widgets/amount_field.dart';
 import '../utils/print_settings.dart';
 import '../widgets/app_amount_text.dart';
@@ -34,6 +35,7 @@ import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/pos_product_tile.dart';
 import 'barcode_scanner_screen.dart';
 import 'document_detail_screen.dart';
 
@@ -591,6 +593,25 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         appBar: AppBar(
           title: Text(l10n.posQuickSale),
           actions: [
+            ListenableBuilder(
+              listenable: QuickSaleSettings.instance,
+              builder: (context, _) {
+                final showImages = QuickSaleSettings.instance.showProductImages;
+                return IconButton(
+                  tooltip: showImages
+                      ? l10n.posHideProductImages
+                      : l10n.posShowProductImages,
+                  icon: Icon(
+                    showImages
+                        ? Icons.image_outlined
+                        : Icons.image_not_supported_outlined,
+                  ),
+                  onPressed: () {
+                    QuickSaleSettings.instance.setShowProductImages(!showImages);
+                  },
+                );
+              },
+            ),
             IconButton(
               tooltip: l10n.scanBarcode,
               icon: const Icon(Icons.qr_code_scanner),
@@ -670,13 +691,18 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     ),
                   ),
                 )
-              : Builder(
-                  builder: (context) {
+              : ListenableBuilder(
+                  listenable: QuickSaleSettings.instance,
+                  builder: (context, _) {
+                    final showImages =
+                        QuickSaleSettings.instance.showProductImages;
                     final textScale = MediaQuery.textScalerOf(
                       context,
                     ).scale(1.0);
-                    final tileHeight = (116.0 * textScale.clamp(1.0, 1.6))
-                        .roundToDouble();
+                    final tileHeight = posTileExtent(
+                      showImage: showImages,
+                      textScale: textScale,
+                    ).roundToDouble();
                     return GridView.builder(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
@@ -686,17 +712,29 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         mainAxisSpacing: 10,
                       ),
                       itemCount: products.length,
-                      itemBuilder: (_, i) => _ProductTile(
-                        product: products[i],
-                        inCart: products[i].id == null
-                            ? 0
-                            : _cart.quantityOf(products[i].id!),
-                        price: _fmt(products[i].salePrice),
-                        l10n: l10n,
-                        enforceStock: _cart.enforceStock,
-                        onTap: () => _addProduct(products[i]),
-                        onLongPress: () => _promptAddQuantity(products[i]),
-                      ),
+                      itemBuilder: (_, i) {
+                        final p = products[i];
+                        final tracks = PosCart.tracksStock(p);
+                        final inCart = p.id == null
+                            ? 0.0
+                            : _cart.quantityOf(p.id!);
+                        final available = tracks
+                            ? p.stockQuantity - inCart
+                            : double.infinity;
+                        final soldOut = tracks && available <= 0;
+                        final isBlocked = _cart.enforceStock && soldOut;
+                        return PosProductTile(
+                          product: p,
+                          cartQuantity: inCart.round(),
+                          showImage: showImages,
+                          price: _fmt(p.salePrice),
+                          availableQuantity: available,
+                          isSoldOut: soldOut,
+                          isBlocked: isBlocked,
+                          onTap: () => _addProduct(p),
+                          onLongPress: () => _promptAddQuantity(p),
+                        );
+                      },
                     );
                   },
                 ),
@@ -1279,122 +1317,6 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           Text(label, style: style),
           Text(value, style: style),
         ],
-      ),
-    );
-  }
-}
-
-class _ProductTile extends StatelessWidget {
-  final Product product;
-  final double inCart;
-  final String price;
-  final AppLocalizations l10n;
-  final bool enforceStock;
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-
-  const _ProductTile({
-    required this.product,
-    required this.inCart,
-    required this.price,
-    required this.l10n,
-    this.enforceStock = true,
-    required this.onTap,
-    this.onLongPress,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tracks = PosCart.tracksStock(product);
-    final available = tracks ? product.stockQuantity - inCart : double.infinity;
-    final soldOut = tracks && available <= 0;
-    final isBlocked = enforceStock && soldOut;
-    return Material(
-      color: inCart > 0 ? cs.primary.withValues(alpha: 0.08) : cs.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(
-          color: inCart > 0 ? cs.primary : cs.outlineVariant,
-          width: inCart > 0 ? 1.5 : 1,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: isBlocked ? null : onTap,
-        onLongPress: isBlocked ? null : onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: soldOut ? cs.onSurfaceVariant : null,
-                      ),
-                    ),
-                  ),
-                  if (inCart > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        FormatUtils.formatQuantity(inCart),
-                        style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    price,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: cs.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    !tracks
-                        ? l10n.posService
-                        : soldOut
-                        ? l10n.outOfStock
-                        : l10n.posInStock(
-                            FormatUtils.formatQuantity(available),
-                          ),
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: soldOut ? cs.error : cs.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
