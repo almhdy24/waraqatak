@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import '../../lib/database/database_helper.dart';
-import '../../lib/models/product.dart';
+import 'package:warqatek/database/database_helper.dart';
+import 'package:warqatek/models/product.dart';
 
 void main() {
   setUpAll(() {
@@ -14,7 +14,7 @@ void main() {
 
   // ── Helper: open an in-memory DB and create tables at a given version ──────
 
-  Future<Database> _openAt(int version) async {
+  Future<Database> openAt(int version) async {
     final helper = DatabaseHelper.instance;
     final db = await databaseFactoryFfi.openDatabase(
       inMemoryDatabasePath,
@@ -30,7 +30,7 @@ void main() {
   // ── 1. Fresh DB at current version has image_path column ──────────────────
 
   test('fresh v${DatabaseHelper.dbVersion} DB has image_path column', () async {
-    final db = await _openAt(DatabaseHelper.dbVersion);
+    final db = await openAt(DatabaseHelper.dbVersion);
     final cols = await db.rawQuery('PRAGMA table_info(products)');
     final names = cols.map((c) => c['name'] as String).toList();
     expect(names, contains('image_path'));
@@ -40,7 +40,7 @@ void main() {
   // ── 2. image_path defaults to NULL ───────────────────────────────────────
 
   test('image_path defaults to NULL for new product', () async {
-    final db = await _openAt(DatabaseHelper.dbVersion);
+    final db = await openAt(DatabaseHelper.dbVersion);
     final id = await db.insert('products', {
       'name': 'Test',
       'type': 'product',

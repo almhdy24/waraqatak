@@ -1,3 +1,5 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,8 +8,8 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import '../../lib/services/backup_service.dart';
-import '../../lib/services/image_storage_service.dart';
+import 'package:warqatek/services/backup_service.dart';
+import 'package:warqatek/services/image_storage_service.dart';
 
 // ---------------------------------------------------------------------------
 // Minimal path_provider mock

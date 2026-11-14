@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/models/app_user.dart';
 import 'package:warqatek/services/access/access_guard.dart';
 import 'package:warqatek/services/access/access_seeder.dart';
@@ -13,14 +14,19 @@ void main() {
       expect(all.length, greaterThanOrEqualTo(35));
 
       final keys = <String>{};
+      final l10nAr = AppLocalizations('ar');
+      final l10nEn = AppLocalizations('en');
       for (final item in all) {
-        expect(keys.contains(item.key), isFalse,
-            reason: 'Duplicate key: ${item.key}');
+        expect(
+          keys.contains(item.key),
+          isFalse,
+          reason: 'Duplicate key: ${item.key}',
+        );
         keys.add(item.key);
-        expect(item.nameAr.isNotEmpty, isTrue);
-        expect(item.nameEn.isNotEmpty, isTrue);
-        expect(item.descriptionAr.isNotEmpty, isTrue);
-        expect(item.descriptionEn.isNotEmpty, isTrue);
+        expect(item.localizedName(l10nAr).isNotEmpty, isTrue);
+        expect(item.localizedName(l10nEn).isNotEmpty, isTrue);
+        expect(item.localizedDescription(l10nAr).isNotEmpty, isTrue);
+        expect(item.localizedDescription(l10nEn).isNotEmpty, isTrue);
       }
       expect(PermissionRegistry.allKeys.length, all.length);
     });
@@ -79,12 +85,18 @@ void main() {
   });
 
   group('AccessGuard & System Context', () {
-    test('in single-user mode (disabled), can is always true and require does not throw', () {
-      // SessionManager default state is disabled
-      expect(SessionManager.instance.isMultiUserEnabled, isFalse);
-      expect(AccessGuard.can('any_permission_key'), isTrue);
-      expect(() => AccessGuard.require('any_permission_key'), returnsNormally);
-    });
+    test(
+      'in single-user mode (disabled), can is always true and require does not throw',
+      () {
+        // SessionManager default state is disabled
+        expect(SessionManager.instance.isMultiUserEnabled, isFalse);
+        expect(AccessGuard.can('any_permission_key'), isTrue);
+        expect(
+          () => AccessGuard.require('any_permission_key'),
+          returnsNormally,
+        );
+      },
+    );
 
     test('runAsSystem sets system context and bypasses checks', () {
       expect(AccessGuard.isSystemContext, isFalse);
@@ -124,7 +136,9 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
-      final perms = await PermissionService.instance.getEffectivePermissions(owner);
+      final perms = await PermissionService.instance.getEffectivePermissions(
+        owner,
+      );
       expect(perms, PermissionRegistry.allKeys);
     });
 
@@ -142,7 +156,9 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
-      final perms = await PermissionService.instance.getEffectivePermissions(deactivated);
+      final perms = await PermissionService.instance.getEffectivePermissions(
+        deactivated,
+      );
       expect(perms, isEmpty);
     });
   });

@@ -1,10 +1,12 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-import '../../lib/services/image_storage_service.dart';
+import 'package:warqatek/services/image_storage_service.dart';
 
 // ---------------------------------------------------------------------------
 // Minimal path_provider mock
