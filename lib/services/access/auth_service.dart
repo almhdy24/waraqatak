@@ -80,7 +80,8 @@ class AuthService {
       return minIterations;
     }
 
-    final targetIters = (benchmarkIterations * targetDurationMs / elapsedMs).round();
+    final targetIters = (benchmarkIterations * targetDurationMs / elapsedMs)
+        .round();
     final clamped = targetIters.clamp(minIterations, maxIterations);
     _calibratedIterations = clamped;
     return clamped;
@@ -89,9 +90,6 @@ class AuthService {
   /// Gets cached calibrated iterations, reads from `app_settings`, or benchmarks and persists.
   Future<int> getOrCalibrateIterations([DatabaseExecutor? executor]) async {
     if (testingIterations != null) return testingIterations!;
-    if (_calibratedIterations != null) {
-      return _calibratedIterations!;
-    }
 
     final db = executor ?? await DatabaseHelper.instance.database;
 
@@ -110,14 +108,17 @@ class AuthService {
       }
     } catch (_) {}
 
-    final calibrated = await calibrateIterations();
+    final calibrated = _calibratedIterations ?? await calibrateIterations();
     _calibratedIterations = calibrated;
 
     try {
-      await db.rawInsert('''
+      await db.rawInsert(
+        '''
         INSERT INTO app_settings (key, value) VALUES ('kdf_calibrated_iterations', ?)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      ''', [calibrated.toString()]);
+      ''',
+        [calibrated.toString()],
+      );
     } catch (_) {}
 
     return calibrated;
@@ -130,7 +131,8 @@ class AuthService {
   static int get deviceFailedAttempts => _deviceFailedAttempts;
   static DateTime? get deviceThrottledUntil => _deviceThrottledUntil;
   static bool get isDeviceThrottled =>
-      _deviceThrottledUntil != null && _deviceThrottledUntil!.isAfter(DateTime.now());
+      _deviceThrottledUntil != null &&
+      _deviceThrottledUntil!.isAfter(DateTime.now());
 
   static void recordDeviceFailure() {
     _deviceFailedAttempts++;
@@ -171,7 +173,8 @@ class AuthService {
     String salt, {
     int? iterations,
   }) async {
-    final effectiveIterations = testingIterations ?? iterations ?? defaultIterations;
+    final effectiveIterations =
+        testingIterations ?? iterations ?? defaultIterations;
     final req = _HashRequest(
       secret: secret,
       salt: salt,
@@ -211,7 +214,10 @@ class AuthService {
   /// 8 failures: 240s
   /// 9 failures: 480s
   /// 10+ failures: 900s (15 min) — capped at 300s (5 min) for Owner (E7)
-  static Duration getLockoutDuration(int failedAttempts, {bool isOwner = false}) {
+  static Duration getLockoutDuration(
+    int failedAttempts, {
+    bool isOwner = false,
+  }) {
     if (failedAttempts < 5) return Duration.zero;
     final exp = (failedAttempts - 5).clamp(0, 10);
     final seconds = 30 * (1 << exp);
@@ -455,7 +461,8 @@ class AuthService {
     }
 
     final enforcePolicy =
-        !AccessGuard.isSystemContext && SessionManager.instance.isMultiUserEnabled;
+        !AccessGuard.isSystemContext &&
+        SessionManager.instance.isMultiUserEnabled;
     if (enforcePolicy) {
       final effectiveActor = actor ?? SessionManager.instance.currentUser;
       if (effectiveActor == null) {
@@ -529,7 +536,10 @@ class AuthService {
       }
     }
 
-    final iterations = targetUser != null && targetUser.kdfIterations > 0 && targetUser.kdfIterations != defaultIterations
+    final iterations =
+        targetUser != null &&
+            targetUser.kdfIterations > 0 &&
+            targetUser.kdfIterations != defaultIterations
         ? targetUser.kdfIterations
         : await getOrCalibrateIterations(db);
     final salt = generateSalt();
@@ -578,7 +588,8 @@ class AuthService {
     }
 
     final enforcePolicy =
-        !AccessGuard.isSystemContext && SessionManager.instance.isMultiUserEnabled;
+        !AccessGuard.isSystemContext &&
+        SessionManager.instance.isMultiUserEnabled;
     if (enforcePolicy) {
       final effectiveActor = actor ?? SessionManager.instance.currentUser;
       if (effectiveActor == null) {
@@ -663,7 +674,10 @@ class AuthService {
       }
     }
 
-    final iterations = targetUser != null && targetUser.kdfIterations > 0 && targetUser.kdfIterations != defaultIterations
+    final iterations =
+        targetUser != null &&
+            targetUser.kdfIterations > 0 &&
+            targetUser.kdfIterations != defaultIterations
         ? targetUser.kdfIterations
         : await getOrCalibrateIterations(db);
     final salt = generateSalt();
@@ -687,7 +701,10 @@ class AuthService {
     final newAttempts = user.failedAttempts + 1;
     DateTime? lockedUntil;
     if (newAttempts >= 5) {
-      final lockDuration = getLockoutDuration(newAttempts, isOwner: user.isOwner);
+      final lockDuration = getLockoutDuration(
+        newAttempts,
+        isOwner: user.isOwner,
+      );
       lockedUntil = DateTime.now().add(lockDuration);
     }
 
@@ -718,5 +735,3 @@ class AuthService {
     );
   }
 }
-
-

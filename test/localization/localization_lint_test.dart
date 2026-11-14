@@ -6,9 +6,12 @@ void main() {
   late List<String> arabic;
 
   setUpAll(() {
-    final src =
-        File('lib/localization/app_localizations.dart').readAsStringSync();
-    final re = RegExp(r'''_t\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")''');
+    final src = File(
+      'lib/localization/app_localizations.dart',
+    ).readAsStringSync();
+    final re = RegExp(
+      r'''_t\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")''',
+    );
     arabic = [
       for (final m in re.allMatches(src)) (m.group(1) ?? m.group(2) ?? ''),
     ];
@@ -24,9 +27,7 @@ void main() {
 
   test('no stiff confirmation phrasing', () {
     expect(
-      arabic.where(
-        (s) => s.contains('هل أنت متأكد') || s.contains('بالتأكيد'),
-      ),
+      arabic.where((s) => s.contains('هل أنت متأكد') || s.contains('بالتأكيد')),
       isEmpty,
     );
   });
@@ -62,6 +63,8 @@ void main() {
       'Pro',
       'PIN',
       'EUR',
+      'PNG',
+      'JPG',
     };
     final bad = <String>[];
     for (final s in arabic) {

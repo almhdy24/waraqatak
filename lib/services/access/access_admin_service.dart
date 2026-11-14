@@ -17,7 +17,6 @@ import 'session_manager.dart';
 
 /// Localized exception thrown by [AccessAdminService] for user-friendly error display.
 
-
 /// Service owning all administrative mutations to access control tables:
 /// `users`, `roles`, `role_permissions`, `user_permission_overrides`.
 ///
@@ -84,10 +83,7 @@ class AccessAdminService {
   /// Fetches all roles ordered by system roles first, then name.
   Future<List<Role>> getRoles({DatabaseExecutor? executor}) async {
     final db = executor ?? await DatabaseHelper.instance.database;
-    final rows = await db.query(
-      'roles',
-      orderBy: 'is_system DESC, name ASC',
-    );
+    final rows = await db.query('roles', orderBy: 'is_system DESC, name ASC');
     return rows.map((r) => Role.fromMap(r)).toList();
   }
 
@@ -190,7 +186,9 @@ class AccessAdminService {
         debugMessage: 'Password must be at least 6 characters',
       );
     }
-    if (pin != null && pin.trim().isNotEmpty && !AuthService.isValidPin(pin.trim())) {
+    if (pin != null &&
+        pin.trim().isNotEmpty &&
+        !AuthService.isValidPin(pin.trim())) {
       throw const AdminException(
         AccessErrorCode.pinInvalid,
         debugMessage: 'PIN must be 4 to 8 digits',
@@ -200,7 +198,12 @@ class AccessAdminService {
     final database = db ?? await DatabaseHelper.instance.database;
 
     // 1. Fetch role and permissions
-    final roleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
+    final roleRows = await database.query(
+      'roles',
+      where: 'id = ?',
+      whereArgs: [roleId],
+      limit: 1,
+    );
     if (roleRows.isEmpty) {
       throw const AdminException(
         AccessErrorCode.roleNotFound,
@@ -208,11 +211,16 @@ class AccessAdminService {
       );
     }
     final targetRole = Role.fromMap(roleRows.first);
-    final targetRolePerms = await getRolePermissions(roleId, executor: database);
+    final targetRolePerms = await getRolePermissions(
+      roleId,
+      executor: database,
+    );
 
     // 2. Policy check
-    final actorPerms = await PermissionService.instance
-        .getEffectivePermissions(effectiveActor, executor: database);
+    final actorPerms = await PermissionService.instance.getEffectivePermissions(
+      effectiveActor,
+      executor: database,
+    );
 
     final assignCheck = AccessPolicy.canAssignRole(
       actor: effectiveActor,
@@ -258,10 +266,10 @@ class AccessAdminService {
               policy: grantCheck,
             );
             throw AdminException(
-          grantCheck.decision ?? AccessErrorCode.unexpected,
-          permissionKey: grantCheck.permissionKey,
-          debugMessage: grantCheck.debugReason,
-        );
+              grantCheck.decision ?? AccessErrorCode.unexpected,
+              permissionKey: grantCheck.permissionKey,
+              debugMessage: grantCheck.debugReason,
+            );
           }
         }
         sanitizedOverrides[key] = effect;
@@ -269,7 +277,9 @@ class AccessAdminService {
     }
 
     // 4. Crypto derivation
-    final iterations = await AuthService.instance.getOrCalibrateIterations(database);
+    final iterations = await AuthService.instance.getOrCalibrateIterations(
+      database,
+    );
     final passwordSalt = AuthService.instance.generateSalt();
     final passwordHash = await AuthService.instance.hashSecret(
       password,
@@ -375,7 +385,12 @@ class AccessAdminService {
     final effectiveActor = _resolveActor(actor);
     final database = db ?? await DatabaseHelper.instance.database;
 
-    final targetRows = await database.query('users', where: 'id = ?', whereArgs: [userId], limit: 1);
+    final targetRows = await database.query(
+      'users',
+      where: 'id = ?',
+      whereArgs: [userId],
+      limit: 1,
+    );
     if (targetRows.isEmpty) {
       throw const AdminException(
         AccessErrorCode.userNotFound,
@@ -384,8 +399,10 @@ class AccessAdminService {
     }
     final targetUser = AppUser.fromMap(targetRows.first);
 
-    final actorPerms = await PermissionService.instance
-        .getEffectivePermissions(effectiveActor, executor: database);
+    final actorPerms = await PermissionService.instance.getEffectivePermissions(
+      effectiveActor,
+      executor: database,
+    );
     final targetPerms = await PermissionService.instance
         .getEffectivePermissions(targetUser, executor: database);
 
@@ -435,12 +452,17 @@ class AccessAdminService {
 
     // 3. If role is changing, check canAssignRole
     if (roleId != null && roleId != targetUser.roleId) {
-      final newRoleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
+      final newRoleRows = await database.query(
+        'roles',
+        where: 'id = ?',
+        whereArgs: [roleId],
+        limit: 1,
+      );
       if (newRoleRows.isEmpty) {
         throw const AdminException(
-        AccessErrorCode.roleNotFound,
-        debugMessage: 'Selected role does not exist',
-      );
+          AccessErrorCode.roleNotFound,
+          debugMessage: 'Selected role does not exist',
+        );
       }
       final newRole = Role.fromMap(newRoleRows.first);
       final newRolePerms = await getRolePermissions(roleId, executor: database);
@@ -460,10 +482,10 @@ class AccessAdminService {
           policy: assignCheck,
         );
         throw AdminException(
-        assignCheck.decision ?? AccessErrorCode.unexpected,
-        permissionKey: assignCheck.permissionKey,
-        debugMessage: assignCheck.debugReason,
-      );
+          assignCheck.decision ?? AccessErrorCode.unexpected,
+          permissionKey: assignCheck.permissionKey,
+          debugMessage: assignCheck.debugReason,
+        );
       }
     }
 
@@ -484,10 +506,10 @@ class AccessAdminService {
           policy: disableCheck,
         );
         throw AdminException(
-        disableCheck.decision ?? AccessErrorCode.unexpected,
-        permissionKey: disableCheck.permissionKey,
-        debugMessage: disableCheck.debugReason,
-      );
+          disableCheck.decision ?? AccessErrorCode.unexpected,
+          permissionKey: disableCheck.permissionKey,
+          debugMessage: disableCheck.debugReason,
+        );
       }
     }
 
@@ -601,7 +623,8 @@ class AccessAdminService {
             policy: pinCheck,
           );
           throw AdminException(
-            pinCheck.decision ?? AccessErrorCode.selfCredentialRequiresCurrentSecret,
+            pinCheck.decision ??
+                AccessErrorCode.selfCredentialRequiresCurrentSecret,
             debugMessage: pinCheck.debugReason,
           );
         }
@@ -639,7 +662,19 @@ class AccessAdminService {
     // 6. Check overrides (Self-edit must NOT touch overrides - C4)
     Map<String, String>? sanitizedOverrides;
     final isSelf = effectiveActor.id == targetUser.id;
-    if (overrides != null && !targetUser.isOwner && !isSelf) {
+    if (overrides != null && overrides.isNotEmpty) {
+      if (isSelf) {
+        throw const AdminException(
+          AccessErrorCode.grantUnheldPermission,
+          debugMessage: 'Cannot modify own permission overrides',
+        );
+      }
+      if (targetUser.isOwner) {
+        throw const AdminException(
+          AccessErrorCode.ownerRoleImmutable,
+          debugMessage: 'Cannot modify Owner permission overrides',
+        );
+      }
       sanitizedOverrides = {};
       for (final entry in overrides.entries) {
         final key = entry.key;
@@ -672,9 +707,7 @@ class AccessAdminService {
     }
 
     final now = DateTime.now().toIso8601String();
-    final updates = <String, dynamic>{
-      'updated_at': now,
-    };
+    final updates = <String, dynamic>{'updated_at': now};
 
     if (displayName != null && displayName.trim().isNotEmpty) {
       updates['display_name'] = displayName.trim();
@@ -757,11 +790,17 @@ class AccessAdminService {
           'user_id': userId,
           'target_username': targetUser.username,
           'updated_fields': updates.keys.toList(),
-          if (overridesToApply != null) 'overrides_count': overridesToApply.length,
+          if (overridesToApply != null)
+            'overrides_count': overridesToApply.length,
         }),
       );
 
-      final fresh = await txn.query('users', where: 'id = ?', whereArgs: [userId], limit: 1);
+      final fresh = await txn.query(
+        'users',
+        where: 'id = ?',
+        whereArgs: [userId],
+        limit: 1,
+      );
       updatedUser = AppUser.fromMap(fresh.first);
     });
 
@@ -776,12 +815,7 @@ class AccessAdminService {
     required bool isActive,
     Database? db,
   }) async {
-    await updateUser(
-      actor: actor,
-      userId: userId,
-      isActive: isActive,
-      db: db,
-    );
+    await updateUser(actor: actor, userId: userId, isActive: isActive, db: db);
   }
 
   /// Owner-initiated unlock of a locked-out user (C11).
@@ -808,8 +842,10 @@ class AccessAdminService {
     }
     final targetUser = AppUser.fromMap(targetRows.first);
 
-    final actorPerms = await PermissionService.instance
-        .getEffectivePermissions(effectiveActor, executor: db);
+    final actorPerms = await PermissionService.instance.getEffectivePermissions(
+      effectiveActor,
+      executor: db,
+    );
     final targetPerms = await PermissionService.instance
         .getEffectivePermissions(targetUser, executor: db);
 
@@ -837,11 +873,7 @@ class AccessAdminService {
     final now = DateTime.now().toIso8601String();
     await db.update(
       'users',
-      {
-        'failed_attempts': 0,
-        'locked_until': null,
-        'updated_at': now,
-      },
+      {'failed_attempts': 0, 'locked_until': null, 'updated_at': now},
       where: 'id = ?',
       whereArgs: [userId],
     );
@@ -881,8 +913,10 @@ class AccessAdminService {
     }
 
     final database = db ?? await DatabaseHelper.instance.database;
-    final actorPerms = await PermissionService.instance
-        .getEffectivePermissions(effectiveActor, executor: database);
+    final actorPerms = await PermissionService.instance.getEffectivePermissions(
+      effectiveActor,
+      executor: database,
+    );
 
     final roleId = 'role-custom-${DateTime.now().millisecondsSinceEpoch}';
     final customRole = Role(
@@ -973,7 +1007,12 @@ class AccessAdminService {
     }
 
     final database = db ?? await DatabaseHelper.instance.database;
-    final roleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
+    final roleRows = await database.query(
+      'roles',
+      where: 'id = ?',
+      whereArgs: [roleId],
+      limit: 1,
+    );
     if (roleRows.isEmpty) {
       throw const AdminException(
         AccessErrorCode.roleNotFound,
@@ -982,8 +1021,10 @@ class AccessAdminService {
     }
     final existingRole = Role.fromMap(roleRows.first);
 
-    final actorPerms = await PermissionService.instance
-        .getEffectivePermissions(effectiveActor, executor: database);
+    final actorPerms = await PermissionService.instance.getEffectivePermissions(
+      effectiveActor,
+      executor: database,
+    );
 
     // Filter out unknown and OWNER_ONLY keys
     final sanitizedPerms = permissions
@@ -1015,10 +1056,7 @@ class AccessAdminService {
     await database.transaction((txn) async {
       await txn.update(
         'roles',
-        {
-          'name': trimmedName,
-          'description': description?.trim(),
-        },
+        {'name': trimmedName, 'description': description?.trim()},
         where: 'id = ?',
         whereArgs: [roleId],
       );
@@ -1082,7 +1120,12 @@ class AccessAdminService {
     final effectiveActor = _resolveActor(actor);
     final database = db ?? await DatabaseHelper.instance.database;
 
-    final roleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
+    final roleRows = await database.query(
+      'roles',
+      where: 'id = ?',
+      whereArgs: [roleId],
+      limit: 1,
+    );
     if (roleRows.isEmpty) {
       throw const AdminException(
         AccessErrorCode.roleNotFound,
@@ -1091,9 +1134,14 @@ class AccessAdminService {
     }
     final existingRole = Role.fromMap(roleRows.first);
 
-    final assignedCount = await getAssignedUsersCount(roleId, executor: database);
-    final actorPerms = await PermissionService.instance
-        .getEffectivePermissions(effectiveActor, executor: database);
+    final assignedCount = await getAssignedUsersCount(
+      roleId,
+      executor: database,
+    );
+    final actorPerms = await PermissionService.instance.getEffectivePermissions(
+      effectiveActor,
+      executor: database,
+    );
     final rolePerms = await getRolePermissions(roleId, executor: database);
 
     final deleteCheck = AccessPolicy.canDeleteRole(
@@ -1124,20 +1172,13 @@ class AccessAdminService {
         where: 'role_id = ?',
         whereArgs: [roleId],
       );
-      await txn.delete(
-        'roles',
-        where: 'id = ?',
-        whereArgs: [roleId],
-      );
+      await txn.delete('roles', where: 'id = ?', whereArgs: [roleId]);
 
       await AuditService.instance.logEvent(
         txn,
         'role_deleted',
         entityType: 'role',
-        details: jsonEncode({
-          'role_id': roleId,
-          'name': existingRole.name,
-        }),
+        details: jsonEncode({'role_id': roleId, 'name': existingRole.name}),
       );
     });
 

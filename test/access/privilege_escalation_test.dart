@@ -258,7 +258,7 @@ void main() {
           permissions: cashierPermissions,
         );
         expect(rogueResult.isAllowed, isFalse);
-        expect(rogueResult.decision, AccessErrorCode.missingPermission);
+        expect(rogueResult.decision, AccessErrorCode.undeclaredScreen);
         expect(
           rogueResult.debugReason,
           contains('Undeclared screen security policy'),

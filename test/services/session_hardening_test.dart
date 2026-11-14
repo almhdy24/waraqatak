@@ -109,65 +109,107 @@ void main() {
   group('2. SessionManager.can() and Lock State', () {
     test('in single-user mode, can() returns true for all keys', () {
       expect(SessionManager.instance.isMultiUserEnabled, isFalse);
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isTrue);
-      expect(SessionManager.instance.can(PermissionRegistry.licenseManage), isTrue);
+      expect(
+        SessionManager.instance.can(PermissionRegistry.salesCreate),
+        isTrue,
+      );
+      expect(
+        SessionManager.instance.can(PermissionRegistry.licenseManage),
+        isTrue,
+      );
     });
 
-    test('in multi-user mode, can() returns false when locked for everyone', () {
-      SessionManager.instance.setMultiUserEnabledForTesting(true);
-      expect(SessionManager.instance.isLocked, isTrue);
+    test(
+      'in multi-user mode, can() returns false when locked for everyone',
+      () {
+        SessionManager.instance.setMultiUserEnabledForTesting(true);
+        expect(SessionManager.instance.isLocked, isTrue);
 
-      // Logged out / locked: false for any key
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isFalse);
+        // Logged out / locked: false for any key
+        expect(
+          SessionManager.instance.can(PermissionRegistry.salesCreate),
+          isFalse,
+        );
 
-      // Even if Owner is set, if locked, can() MUST return false
-      final ownerUser = activeUser.copyWith(isOwner: true);
-      // Manually set owner while locked
-      SessionManager.instance.setSession(ownerUser, PermissionRegistry.allKeys);
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isTrue);
+        // Even if Owner is set, if locked, can() MUST return false
+        final ownerUser = activeUser.copyWith(isOwner: true);
+        // Manually set owner while locked
+        SessionManager.instance.setSession(
+          ownerUser,
+          PermissionRegistry.allKeys,
+        );
+        expect(
+          SessionManager.instance.can(PermissionRegistry.salesCreate),
+          isTrue,
+        );
 
-      SessionManager.instance.lock();
-      expect(SessionManager.instance.isLocked, isTrue);
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isFalse);
-      expect(SessionManager.instance.can(PermissionRegistry.licenseManage), isFalse);
-    });
+        SessionManager.instance.lock();
+        expect(SessionManager.instance.isLocked, isTrue);
+        expect(
+          SessionManager.instance.can(PermissionRegistry.salesCreate),
+          isFalse,
+        );
+        expect(
+          SessionManager.instance.can(PermissionRegistry.licenseManage),
+          isFalse,
+        );
+      },
+    );
 
-    test('in multi-user mode, can() returns false when no user is logged in', () {
-      SessionManager.instance.setMultiUserEnabledForTesting(true);
-      SessionManager.instance.logout();
+    test(
+      'in multi-user mode, can() returns false when no user is logged in',
+      () {
+        SessionManager.instance.setMultiUserEnabledForTesting(true);
+        SessionManager.instance.logout();
 
-      expect(SessionManager.instance.currentUser, isNull);
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isFalse);
-    });
+        expect(SessionManager.instance.currentUser, isNull);
+        expect(
+          SessionManager.instance.can(PermissionRegistry.salesCreate),
+          isFalse,
+        );
+      },
+    );
 
-    test('system zone bypasses through AccessGuard even when session is locked', () {
-      SessionManager.instance.setMultiUserEnabledForTesting(true);
-      expect(SessionManager.instance.isLocked, isTrue);
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isFalse);
+    test(
+      'system zone bypasses through AccessGuard even when session is locked',
+      () {
+        SessionManager.instance.setMultiUserEnabledForTesting(true);
+        expect(SessionManager.instance.isLocked, isTrue);
+        expect(
+          SessionManager.instance.can(PermissionRegistry.salesCreate),
+          isFalse,
+        );
 
-      final allowed = AccessGuard.runAsSystem(() {
-        return AccessGuard.can(PermissionRegistry.salesCreate);
-      });
-      expect(allowed, isTrue);
-    });
+        final allowed = AccessGuard.runAsSystem(() {
+          return AccessGuard.can(PermissionRegistry.salesCreate);
+        });
+        expect(allowed, isTrue);
+      },
+    );
   });
 
   group('3. Actor Attribution Invariance', () {
     test('single-user mode attributes to Owner', () {
       expect(SessionManager.instance.isMultiUserEnabled, isFalse);
       expect(AccessContext.currentUserId, AccessDao.ownerUserId);
-      expect(AccessContext.currentUserName, 'المالك');
+      expect(AccessContext.currentUserName, 'owner');
     });
 
-    test('multi-user mode NEVER attributes to Owner when unauthenticated/locked', () {
-      SessionManager.instance.setMultiUserEnabledForTesting(true);
-      expect(SessionManager.instance.isLocked, isTrue);
+    test(
+      'multi-user mode NEVER attributes to Owner when unauthenticated/locked',
+      () {
+        SessionManager.instance.setMultiUserEnabledForTesting(true);
+        expect(SessionManager.instance.isLocked, isTrue);
 
-      // MUST NOT return ownerUserId
-      expect(AccessContext.currentUserId, isNot(equals(AccessDao.ownerUserId)));
-      expect(AccessContext.currentUserId, 'unauthenticated');
-      expect(AccessContext.currentUserName, 'غير مسجل');
-    });
+        // MUST NOT return ownerUserId
+        expect(
+          AccessContext.currentUserId,
+          isNot(equals(AccessDao.ownerUserId)),
+        );
+        expect(AccessContext.currentUserId, 'unauthenticated');
+        expect(AccessContext.currentUserName, 'unauthenticated');
+      },
+    );
 
     test('multi-user mode attributes to authenticated active user', () {
       SessionManager.instance.setMultiUserEnabledForTesting(true);
@@ -182,7 +224,7 @@ void main() {
     test('system zone attributes to system', () {
       AccessGuard.runAsSystem(() {
         expect(AccessContext.currentUserId, 'system');
-        expect(AccessContext.currentUserName, 'النظام');
+        expect(AccessContext.currentUserName, 'system');
       });
     });
   });
@@ -213,11 +255,19 @@ void main() {
     test('successfully establishes session for active, unlocked user', () {
       SessionManager.instance.setMultiUserEnabledForTesting(true);
 
-      SessionManager.instance.unlock(activeUser, {PermissionRegistry.salesCreate});
+      SessionManager.instance.unlock(activeUser, {
+        PermissionRegistry.salesCreate,
+      });
       expect(SessionManager.instance.isLocked, isFalse);
       expect(SessionManager.instance.currentUser?.id, 'user-cashier-1');
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isTrue);
-      expect(SessionManager.instance.can(PermissionRegistry.salesEdit), isFalse);
+      expect(
+        SessionManager.instance.can(PermissionRegistry.salesCreate),
+        isTrue,
+      );
+      expect(
+        SessionManager.instance.can(PermissionRegistry.salesEdit),
+        isFalse,
+      );
     });
   });
 
@@ -261,53 +311,62 @@ void main() {
       await DatabaseHelper.instance.closeDatabase();
     });
 
-    test('enabling multi-user loads real Owner and updates last_login_at atomically', () async {
-      expect(SessionManager.instance.isMultiUserEnabled, isFalse);
+    test(
+      'enabling multi-user loads real Owner and updates last_login_at atomically',
+      () async {
+        expect(SessionManager.instance.isMultiUserEnabled, isFalse);
 
-      await SessionManager.instance.setMultiUserEnabled(true);
+        await SessionManager.instance.setMultiUserEnabled(true);
 
-      expect(SessionManager.instance.isMultiUserEnabled, isTrue);
-      expect(SessionManager.instance.isLocked, isFalse);
-      expect(SessionManager.instance.currentUser?.id, AccessDao.ownerUserId);
-      expect(SessionManager.instance.currentUser?.isOwner, isTrue);
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isTrue);
+        expect(SessionManager.instance.isMultiUserEnabled, isTrue);
+        expect(SessionManager.instance.isLocked, isFalse);
+        expect(SessionManager.instance.currentUser?.id, AccessDao.ownerUserId);
+        expect(SessionManager.instance.currentUser?.isOwner, isTrue);
+        expect(
+          SessionManager.instance.can(PermissionRegistry.salesCreate),
+          isTrue,
+        );
 
-      // Check app_settings persisted
-      final settings = await db.query(
-        'app_settings',
-        where: "key = 'multi_user_enabled'",
-      );
-      expect(settings.first['value'], '1');
+        // Check app_settings persisted
+        final settings = await db.query(
+          'app_settings',
+          where: "key = 'multi_user_enabled'",
+        );
+        expect(settings.first['value'], '1');
 
-      // Check audit_log recorded the event
-      final audit = await db.query(
-        'audit_log',
-        where: "action = 'multi_user_enabled'",
-      );
-      expect(audit, isNotEmpty);
-    });
+        // Check audit_log recorded the event
+        final audit = await db.query(
+          'audit_log',
+          where: "action = 'multi_user_enabled'",
+        );
+        expect(audit, isNotEmpty);
+      },
+    );
 
-    test('disabling multi-user restores single-user mode and writes audit', () async {
-      await SessionManager.instance.setMultiUserEnabled(true);
-      expect(SessionManager.instance.isMultiUserEnabled, isTrue);
+    test(
+      'disabling multi-user restores single-user mode and writes audit',
+      () async {
+        await SessionManager.instance.setMultiUserEnabled(true);
+        expect(SessionManager.instance.isMultiUserEnabled, isTrue);
 
-      await SessionManager.instance.setMultiUserEnabled(false);
-      expect(SessionManager.instance.isMultiUserEnabled, isFalse);
-      expect(SessionManager.instance.isLocked, isFalse);
-      expect(SessionManager.instance.currentUser?.id, AccessDao.ownerUserId);
+        await SessionManager.instance.setMultiUserEnabled(false);
+        expect(SessionManager.instance.isMultiUserEnabled, isFalse);
+        expect(SessionManager.instance.isLocked, isFalse);
+        expect(SessionManager.instance.currentUser?.id, AccessDao.ownerUserId);
 
-      final settings = await db.query(
-        'app_settings',
-        where: "key = 'multi_user_enabled'",
-      );
-      expect(settings.first['value'], '0');
+        final settings = await db.query(
+          'app_settings',
+          where: "key = 'multi_user_enabled'",
+        );
+        expect(settings.first['value'], '0');
 
-      final audit = await db.query(
-        'audit_log',
-        where: "action = 'multi_user_disabled'",
-      );
-      expect(audit, isNotEmpty);
-    });
+        final audit = await db.query(
+          'audit_log',
+          where: "action = 'multi_user_disabled'",
+        );
+        expect(audit, isNotEmpty);
+      },
+    );
 
     test('init() fails closed when database throws error', () async {
       // Close database to force query failure
@@ -321,7 +380,10 @@ void main() {
       expect(SessionManager.instance.isSecurityUnverified, isTrue);
       expect(SessionManager.instance.isLocked, isTrue);
       expect(SessionManager.instance.currentUser, isNull);
-      expect(SessionManager.instance.can(PermissionRegistry.salesCreate), isFalse);
+      expect(
+        SessionManager.instance.can(PermissionRegistry.salesCreate),
+        isFalse,
+      );
     });
   });
 }

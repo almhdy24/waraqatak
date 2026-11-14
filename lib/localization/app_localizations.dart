@@ -2979,7 +2979,7 @@ class AppLocalizations {
     'Permanently delete draft sales documents',
   );
   String get perm_sales_refund_name =>
-      _t('إدارة استرجاع المبالغ (Refund)', 'Manage document refunds');
+      _t('إدارة استرجاع المبالغ', 'Manage document refunds');
   String get perm_sales_refund_desc => _t(
     'تحديث حالة استرجاع المبالغ للفواتير الملغاة',
     'Update refund status on cancelled invoices',
@@ -3715,19 +3715,18 @@ class AppLocalizations {
       _t('المحاولات الفاشلة', 'Failed Attempts');
   String get loadMore => _t('تحميل المزيد', 'Load More');
   String get auditVerifyingProgress =>
-      _t('جارٍ التحقق من السجلات...', 'Verifying audit records...');
+      _t('جارٍ التحقق من السجلات…', 'Verifying audit records…');
 
   String get ownerPinHelper => _t(
     'اختياري: رمز PIN للدخول السريع من شاشة البيع بدون إدخال كلمة المرور كاملة',
     'Optional: PIN for quick unlocking without entering full password',
   );
-  String get securingAccount =>
-      _t('جاري تأمين الحساب...', 'Securing account...');
+  String get securingAccount => _t('جاري تأمين الحساب…', 'Securing account…');
   String get accessBack => _t('رجوع', 'Back');
   String get cancelSetup => _t('إلغاء الإعداد', 'Cancel Setup');
   String get cancelSetupConfirm => _t(
-    'هل أنت متأكد من إلغاء الإعداد؟ سيتم تجاهل رمز الاسترداد الذي تم إنشاؤه.',
-    'Are you sure you want to cancel setup? The generated recovery code will be discarded.',
+    'تأكيد إلغاء الإعداد؟ سيتم تجاهل رمز الاسترداد الذي تم إنشاؤه.',
+    'Cancel setup? The generated recovery code will be discarded.',
   );
   String get ownerRole => _t('المالك', 'Owner');
   String get securityInitFailedTitle =>
@@ -3766,14 +3765,14 @@ class AppLocalizations {
     'Disabling multi-user mode requires confirming the Owner password.',
   );
   String get disableMultiUserDialogMsg => _t(
-    'هل أنت متأكد من رغبتك في تعطيل وضع تعدد المستخدمين والعودة لنمط المستخدم الفردي؟',
-    'Are you sure you want to disable multi-user mode and return to single-user mode?',
+    'تأكيد تعطيل وضع تعدد المستخدمين والعودة لنمط المستخدم الفردي؟',
+    'Disable multi-user mode and return to single-user mode?',
   );
   String get disableMultiUserSuccess => _t(
     'تم تعطيل وضع تعدد المستخدمين بنجاح',
     'Multi-user mode disabled successfully',
   );
-  String get searchUser => _t('بحث عن مستخدم...', 'Search user...');
+  String get searchUser => _t('بحث عن مستخدم…', 'Search user…');
   String get multiUserActiveBanner => _t(
     'وضع تعدد المستخدمين مفعل. يمكنك الآن إضافة كاشير أو محاسب أو مدير لتوزيع المهام بأمان.',
     'Multi-User Mode is active. Add cashiers or managers to safely delegate store operations.',
@@ -3783,8 +3782,8 @@ class AppLocalizations {
   String get noPinBadge => _t('بدون PIN', 'No PIN');
   String get unlockUserAction => _t('إلغاء قفل الحساب', 'Unlock account');
   String unlockUserConfirm(String name) => _t(
-    'هل أنت متأكد من إلغاء قفل حساب $name وإعادة تصفير محاولات الدخول الفاشلة؟',
-    'Are you sure you want to unlock $name and reset failed login attempts?',
+    'تأكيد إلغاء قفل حساب $name وإعادة تصفير محاولات الدخول الفاشلة؟',
+    'Unlock $name and reset failed login attempts?',
   );
   String get userUnlockedSuccess =>
       _t('تم إلغاء قفل الحساب بنجاح', 'User account unlocked successfully');
@@ -3807,7 +3806,7 @@ class AppLocalizations {
       _t('الدخول بكلمة المرور', 'Sign in with password');
   String get passwordRequired =>
       _t('كلمة المرور مطلوبة', 'Password is required');
-  String get signingIn => _t('جاري التحقق...', 'Verifying...');
+  String get signingIn => _t('جاري التحقق…', 'Verifying…');
   String get stepPassword => _t('كلمة المرور', 'Password');
   String get stepRecoveryCode => _t('رمز الاسترداد', 'Recovery Code');
 
