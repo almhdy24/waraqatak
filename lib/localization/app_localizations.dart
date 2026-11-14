@@ -3209,10 +3209,8 @@ class AppLocalizations {
     'تشغيل إصلاحات جدولية وتصدير سجل التشخيص',
     'Run database health diagnostics and repair scripts',
   );
-  String get perm_accounting_period_lock_name => _t(
-    'إقفال الفترات المحاسبية',
-    'Accounting period closing and lock',
-  );
+  String get perm_accounting_period_lock_name =>
+      _t('إقفال الفترات المحاسبية', 'Accounting period closing and lock');
   String get perm_accounting_period_lock_desc => _t(
     'تحديد تاريخ إقفال الحسابات لمنع التعديل السابق',
     'Set books closed date preventing past mutations',
@@ -3237,10 +3235,8 @@ class AppLocalizations {
     'إنشاء وتعديل ملفات ونسب ضريبة القيمة المضافة',
     'Configure tax profiles and VAT rates',
   );
-  String get perm_audit_view_name => _t(
-    'الاطلاع على سجل النشاط والرقابة',
-    'View activity and audit trail',
-  );
+  String get perm_audit_view_name =>
+      _t('الاطلاع على سجل النشاط والرقابة', 'View activity and audit trail');
   String get perm_audit_view_desc => _t(
     'تصفح سجل العمليات وسلسلة التحقق الرقمية',
     'Review system activity log and tamper-evident chain',
@@ -3259,10 +3255,8 @@ class AppLocalizations {
     'إنشاء أدوار مخصصة وتعديل صلاحيات الأدوار',
     'Create custom roles and customize permissions',
   );
-  String get perm_license_manage_name => _t(
-    'إدارة الترخيص والتفعيل',
-    'License and Pro subscription management',
-  );
+  String get perm_license_manage_name =>
+      _t('إدارة الترخيص والتفعيل', 'License and Pro subscription management');
   String get perm_license_manage_desc => _t(
     'إدخال مفاتيح التفعيل وإدارة ترخيص التطبيق',
     'Activate license keys and manage subscription',
@@ -3893,4 +3887,54 @@ class AppLocalizations {
       return enOther ?? other;
     }
   }
+
+  // ========== PRODUCT IMAGES ==========
+  String get posShowProductImages =>
+      _t('إظهار صور المنتجات', 'Show product images');
+  String get posHideProductImages =>
+      _t('إخفاء صور المنتجات', 'Hide product images');
+  String get quickSaleImagesSettingTitle => _t(
+    'إظهار صور المنتجات في البيع السريع',
+    'Show product images in Quick Sale',
+  );
+  String get quickSaleImagesSettingDesc => _t(
+    'أوقفه على الأجهزة البطيئة أو عند وجود منتجات كثيرة.',
+    'Turn off on slow devices or when you have many products.',
+  );
+  String get cameraPermissionDenied => _t(
+    'تم رفض إذن الكاميرا. فعّله من إعدادات التطبيق لالتقاط الصور.',
+    'Camera permission was denied. Enable it in app settings to take photos.',
+  );
+  String get photoPermissionDenied => _t(
+    'تم رفض إذن الصور. فعّله من إعدادات التطبيق لاختيار صورة.',
+    'Photo access was denied. Enable it in app settings to choose a photo.',
+  );
+  String get openAppSettings => _t('فتح إعدادات التطبيق', 'Open app settings');
+  String get imagePhotoRecovered => _t(
+    'تمت استعادة الصورة التي التقطتها.',
+    'Your captured photo was recovered.',
+  );
+  String get imageCroppedHint => _t(
+    'تظهر الصورة مقصوصة على شكل مربع في القوائم.',
+    'The photo is shown cropped to a square in lists.',
+  );
+  String get imageInvalid =>
+      _t('الصورة غير صالحة أو تالفة.', 'The image is invalid or corrupted.');
+  String get imageTooLarge =>
+      _t('حجم الصورة كبير جدًا.', 'The image is too large.');
+  String get imageDiskFull => _t(
+    'لا توجد مساحة كافية لحفظ الصورة.',
+    'Not enough storage space to save the image.',
+  );
+  String get imageSemanticLabel => _t('صورة المنتج', 'Product image');
+  String get imageChangeSemanticLabel =>
+      _t('تغيير صورة المنتج', 'Change product photo');
+  String imageRestoreSkipped(int count) => _t(
+    'تعذّر استعادة $count صورة، وتمت استعادة باقي البيانات.',
+    '$count image(s) couldn\'t be restored; the rest of the data was restored.',
+  );
+  String get errProductInUse => _t(
+    'لا يمكن حذف منتج مستخدم في مستندات. يمكنك تعطيله بدلاً من ذلك.',
+    'A product used in documents can\'t be deleted. You can deactivate it instead.',
+  );
 }
