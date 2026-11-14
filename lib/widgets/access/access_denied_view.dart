@@ -33,7 +33,7 @@ class AccessDeniedView extends StatelessWidget {
             ? l10n.accessDeniedScreenBody(screenType.toString())
             : l10n.accessDeniedScreenBody(l10n.accessGenericScreen);
 
-    String? hint;
+    final String hint;
     if (decision == AccessErrorCode.ownerOnly) {
       hint = l10n.accessDeniedOwnerOnlyHint;
     } else if (decision == AccessErrorCode.missingPermission) {
@@ -44,6 +44,8 @@ class AccessDeniedView extends StatelessWidget {
     } else if (decision == AccessErrorCode.sessionLocked ||
         decision == AccessErrorCode.unauthenticated) {
       hint = l10n.accessDeniedLockedHint;
+    } else {
+      hint = localizeAccessError(l10n, decision);
     }
 
     return Center(
@@ -84,7 +86,7 @@ class AccessDeniedView extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              if (hint != null) ...[
+              if (hint.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsetsDirectional.all(12),
