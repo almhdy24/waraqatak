@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/audit_service.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_empty_state.dart';
@@ -78,8 +79,10 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
           title: Text(l10n.verifyAuditIntegrity),
           content: Text(
             isValid
-                ? '${l10n.auditIntegrityValid} (${result.verifiedCount} ${l10n.isArabic ? 'سجل موثق' : 'verified entries'})'
-                : l10n.auditIntegrityTampered,
+                ? '${l10n.auditIntegrityValid} (${l10n.auditVerifiedEntries(result.verifiedCount)})'
+                : (result.brokenAtId != null
+                    ? '${l10n.auditIntegrityTampered}\n\n${l10n.auditBrokenAtId(result.brokenAtId!)}'
+                    : l10n.auditIntegrityTampered),
             textAlign: TextAlign.center,
           ),
           actions: [
@@ -93,7 +96,7 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
-      AppSnackBar.show(context, e.toString(), severity: AppSnackBarSeverity.error);
+      AppSnackBar.show(context, friendlyError(l10n, e), severity: AppSnackBarSeverity.error);
     }
   }
 
@@ -200,28 +203,28 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                 child: Row(
                   children: [
                     FilterChip(
-                      label: Text(l10n.isArabic ? 'الكل' : 'All'),
+                      label: Text(l10n.auditFilterAll),
                       selected: _activeFilter == AuditFilter.all,
                       onSelected: (_) => setState(() => _activeFilter = AuditFilter.all),
                     ),
                     const SizedBox(width: 8),
                     FilterChip(
                       avatar: const Icon(Icons.shield_outlined, size: 16),
-                      label: Text(l10n.isArabic ? 'الأمان والحماية' : 'Security'),
+                      label: Text(l10n.auditFilterSecurity),
                       selected: _activeFilter == AuditFilter.security,
                       onSelected: (_) => setState(() => _activeFilter = AuditFilter.security),
                     ),
                     const SizedBox(width: 8),
                     FilterChip(
                       avatar: const Icon(Icons.login_rounded, size: 16),
-                      label: Text(l10n.isArabic ? 'الدخول والخروج' : 'Logins'),
+                      label: Text(l10n.auditFilterLogins),
                       selected: _activeFilter == AuditFilter.logins,
                       onSelected: (_) => setState(() => _activeFilter = AuditFilter.logins),
                     ),
                     const SizedBox(width: 8),
                     FilterChip(
                       avatar: const Icon(Icons.edit_note_rounded, size: 16),
-                      label: Text(l10n.isArabic ? 'التعديلات' : 'Changes'),
+                      label: Text(l10n.auditFilterChanges),
                       selected: _activeFilter == AuditFilter.mutations,
                       onSelected: (_) => setState(() => _activeFilter = AuditFilter.mutations),
                     ),

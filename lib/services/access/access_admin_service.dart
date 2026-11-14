@@ -4,7 +4,10 @@ import '../../database/access_dao.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
 import '../../models/role.dart';
+import 'access_error.dart';
 import 'access_guard.dart';
+
+export 'access_error.dart' show AdminException;
 import 'access_policy.dart';
 import 'audit_service.dart';
 import 'auth_service.dart';
@@ -13,17 +16,7 @@ import 'permission_service.dart';
 import 'session_manager.dart';
 
 /// Localized exception thrown by [AccessAdminService] for user-friendly error display.
-class AdminException implements Exception {
-  final String messageAr;
-  final String messageEn;
 
-  const AdminException(this.messageAr, this.messageEn);
-
-  String message(bool isArabic) => isArabic ? messageAr : messageEn;
-
-  @override
-  String toString() => messageEn;
-}
 
 /// Service owning all administrative mutations to access control tables:
 /// `users`, `roles`, `role_permissions`, `user_permission_overrides`.
@@ -43,7 +36,7 @@ class AccessAdminService {
         id: 'system',
         workspaceId: AccessDao.defaultWorkspaceId,
         username: 'system',
-        displayName: 'النظام',
+        displayName: 'system',
         roleId: AccessDao.ownerRoleId,
         isOwner: true,
         isActive: true,
@@ -54,8 +47,8 @@ class AccessAdminService {
     final actor = explicitActor ?? SessionManager.instance.currentUser;
     if (actor == null) {
       throw const AdminException(
-        'غير مصرح: يجب تسجيل الدخول',
-        'Unauthorized: session is not authenticated',
+        AccessErrorCode.unauthenticated,
+        debugMessage: 'Unauthorized: session is not authenticated',
       );
     }
     return actor;
@@ -179,26 +172,26 @@ class AccessAdminService {
 
     if (trimmedUsername.isEmpty) {
       throw const AdminException(
-        'اسم المستخدم مطلوب',
-        'Username is required',
+        AccessErrorCode.usernameRequired,
+        debugMessage: 'Username is required',
       );
     }
     if (trimmedDisplayName.isEmpty) {
       throw const AdminException(
-        'الاسم التعريفي مطلوب',
-        'Display name is required',
+        AccessErrorCode.displayNameRequired,
+        debugMessage: 'Display name is required',
       );
     }
     if (!AuthService.isValidPassword(password)) {
       throw const AdminException(
-        'كلمة المرور يجب أن لا تقل عن 6 أحرف',
-        'Password must be at least 6 characters',
+        AccessErrorCode.passwordTooShort,
+        debugMessage: 'Password must be at least 6 characters',
       );
     }
     if (pin != null && pin.trim().isNotEmpty && !AuthService.isValidPin(pin.trim())) {
       throw const AdminException(
-        'رمز PIN يجب أن يتكون من 4 إلى 6 أرقام',
-        'PIN must be 4 to 6 digits',
+        AccessErrorCode.pinInvalid,
+        debugMessage: 'PIN must be 4 to 8 digits',
       );
     }
 
@@ -207,7 +200,10 @@ class AccessAdminService {
     // 1. Fetch role and permissions
     final roleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
     if (roleRows.isEmpty) {
-      throw const AdminException('الدور المحدد غير موجود', 'Selected role does not exist');
+      throw const AdminException(
+        AccessErrorCode.roleNotFound,
+        debugMessage: 'Selected role does not exist',
+      );
     }
     final targetRole = Role.fromMap(roleRows.first);
     final targetRolePerms = await getRolePermissions(roleId, executor: database);
@@ -230,7 +226,11 @@ class AccessAdminService {
         targetUsername: trimmedUsername,
         policy: assignCheck,
       );
-      throw AdminException(assignCheck.reasonAr, assignCheck.reasonEn);
+      throw AdminException(
+        assignCheck.decision ?? AccessErrorCode.unexpected,
+        permissionKey: assignCheck.permissionKey,
+        debugMessage: assignCheck.debugReason,
+      );
     }
 
     // 3. Check overrides policy
@@ -255,7 +255,11 @@ class AccessAdminService {
               targetUsername: trimmedUsername,
               policy: grantCheck,
             );
-            throw AdminException(grantCheck.reasonAr, grantCheck.reasonEn);
+            throw AdminException(
+          grantCheck.decision ?? AccessErrorCode.unexpected,
+          permissionKey: grantCheck.permissionKey,
+          debugMessage: grantCheck.debugReason,
+        );
           }
         }
         sanitizedOverrides[key] = effect;
@@ -297,8 +301,8 @@ class AccessAdminService {
       );
       if (existing.isNotEmpty) {
         throw const AdminException(
-          'اسم المستخدم مستخدم بالفعل',
-          'Username already taken',
+          AccessErrorCode.usernameTaken,
+          debugMessage: 'Username already taken',
         );
       }
 
@@ -371,7 +375,10 @@ class AccessAdminService {
 
     final targetRows = await database.query('users', where: 'id = ?', whereArgs: [userId], limit: 1);
     if (targetRows.isEmpty) {
-      throw const AdminException('المستخدم غير موجود', 'User not found');
+      throw const AdminException(
+        AccessErrorCode.userNotFound,
+        debugMessage: 'User not found',
+      );
     }
     final targetUser = AppUser.fromMap(targetRows.first);
 
@@ -395,27 +402,31 @@ class AccessAdminService {
         targetUsername: targetUser.username,
         policy: editCheck,
       );
-      throw AdminException(editCheck.reasonAr, editCheck.reasonEn);
+      throw AdminException(
+        editCheck.decision ?? AccessErrorCode.unexpected,
+        permissionKey: editCheck.permissionKey,
+        debugMessage: editCheck.debugReason,
+      );
     }
 
     // 2. Owner immutability constraints
     if (targetUser.isOwner) {
       if (username != null && username.trim() != targetUser.username) {
         throw const AdminException(
-          'لا يمكن تغيير اسم مستخدم حساب المالك',
-          'Cannot change Owner username',
+          AccessErrorCode.ownerUsernameImmutable,
+          debugMessage: 'Cannot change Owner username',
         );
       }
       if (roleId != null && roleId != targetUser.roleId) {
         throw const AdminException(
-          'لا يمكن تغيير دور حساب المالك',
-          'Cannot change Owner role',
+          AccessErrorCode.ownerRoleImmutable,
+          debugMessage: 'Cannot change Owner role',
         );
       }
       if (isActive != null && !isActive) {
         throw const AdminException(
-          'لا يمكن تعطيل حساب المالك',
-          'Cannot disable Owner account',
+          AccessErrorCode.ownerCannotBeDisabled,
+          debugMessage: 'Cannot disable Owner account',
         );
       }
     }
@@ -424,7 +435,10 @@ class AccessAdminService {
     if (roleId != null && roleId != targetUser.roleId) {
       final newRoleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
       if (newRoleRows.isEmpty) {
-        throw const AdminException('الدور المحدد غير موجود', 'Selected role does not exist');
+        throw const AdminException(
+        AccessErrorCode.roleNotFound,
+        debugMessage: 'Selected role does not exist',
+      );
       }
       final newRole = Role.fromMap(newRoleRows.first);
       final newRolePerms = await getRolePermissions(roleId, executor: database);
@@ -443,7 +457,11 @@ class AccessAdminService {
           targetUsername: targetUser.username,
           policy: assignCheck,
         );
-        throw AdminException(assignCheck.reasonAr, assignCheck.reasonEn);
+        throw AdminException(
+        assignCheck.decision ?? AccessErrorCode.unexpected,
+        permissionKey: assignCheck.permissionKey,
+        debugMessage: assignCheck.debugReason,
+      );
       }
     }
 
@@ -463,7 +481,11 @@ class AccessAdminService {
           targetUsername: targetUser.username,
           policy: disableCheck,
         );
-        throw AdminException(disableCheck.reasonAr, disableCheck.reasonEn);
+        throw AdminException(
+        disableCheck.decision ?? AccessErrorCode.unexpected,
+        permissionKey: disableCheck.permissionKey,
+        debugMessage: disableCheck.debugReason,
+      );
       }
     }
 
@@ -473,29 +495,29 @@ class AccessAdminService {
     if (newPassword != null && newPassword.isNotEmpty) {
       if (!AuthService.isValidPassword(newPassword)) {
         throw const AdminException(
-          'كلمة المرور يجب أن لا تقل عن 6 أحرف',
-          'Password must be at least 6 characters',
+          AccessErrorCode.passwordTooShort,
+          debugMessage: 'Password must be at least 6 characters',
         );
       }
       // If self change, verify current password
       if (effectiveActor.id == targetUser.id && targetUser.hasPassword) {
         if (currentPassword == null || currentPassword.isEmpty) {
-          throw const AdminException(
-            'يجب إدخال كلمة المرور الحالية',
-            'Current password required',
-          );
-        }
+            throw const AdminException(
+              AccessErrorCode.selfCredentialRequiresCurrentSecret,
+              debugMessage: 'Current password required',
+            );
+          }
         final verified = await AuthService.instance.verifyPassword(
           targetUser.id,
           currentPassword,
           executor: database,
         );
         if (!verified) {
-          throw const AdminException(
-            'كلمة المرور الحالية غير صحيحة',
-            'Incorrect current password',
-          );
-        }
+            throw const AdminException(
+              AccessErrorCode.wrongCurrentPassword,
+              debugMessage: 'Incorrect current password',
+            );
+          }
       } else if (effectiveActor.id != targetUser.id) {
         final credCheck = AccessPolicy.canResetCredentials(
           actor: effectiveActor,
@@ -511,7 +533,11 @@ class AccessAdminService {
             targetUsername: targetUser.username,
             policy: credCheck,
           );
-          throw AdminException(credCheck.reasonAr, credCheck.reasonEn);
+          throw AdminException(
+          credCheck.decision ?? AccessErrorCode.unexpected,
+          permissionKey: credCheck.permissionKey,
+          debugMessage: credCheck.debugReason,
+        );
         }
       }
 
@@ -524,8 +550,8 @@ class AccessAdminService {
     if (newPin != null && newPin.trim().isNotEmpty) {
       if (!AuthService.isValidPin(newPin.trim())) {
         throw const AdminException(
-          'رمز PIN يجب أن يتكون من 4 إلى 6 أرقام',
-          'PIN must be 4 to 6 digits',
+          AccessErrorCode.pinInvalid,
+          debugMessage: 'PIN must be 4 to 8 digits',
         );
       }
       newPinSalt = AuthService.instance.generateSalt();
@@ -555,7 +581,11 @@ class AccessAdminService {
               targetUsername: targetUser.username,
               policy: grantCheck,
             );
-            throw AdminException(grantCheck.reasonAr, grantCheck.reasonEn);
+            throw AdminException(
+          grantCheck.decision ?? AccessErrorCode.unexpected,
+          permissionKey: grantCheck.permissionKey,
+          debugMessage: grantCheck.debugReason,
+        );
           }
         }
         sanitizedOverrides[key] = effect;
@@ -606,8 +636,8 @@ class AccessAdminService {
         );
         if (existing.isNotEmpty) {
           throw const AdminException(
-            'اسم المستخدم مستخدم بالفعل',
-            'Username already taken',
+            AccessErrorCode.usernameTaken,
+            debugMessage: 'Username already taken',
           );
         }
       }
@@ -679,7 +709,10 @@ class AccessAdminService {
     final effectiveActor = _resolveActor(actor);
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
-      throw const AdminException('اسم الدور مطلوب', 'Role name is required');
+      throw const AdminException(
+        AccessErrorCode.roleNameRequired,
+        debugMessage: 'Role name is required',
+      );
     }
 
     final database = db ?? await DatabaseHelper.instance.database;
@@ -716,7 +749,11 @@ class AccessAdminService {
         targetUsername: trimmedName,
         policy: editCheck,
       );
-      throw AdminException(editCheck.reasonAr, editCheck.reasonEn);
+      throw AdminException(
+        editCheck.decision ?? AccessErrorCode.unexpected,
+        permissionKey: editCheck.permissionKey,
+        debugMessage: editCheck.debugReason,
+      );
     }
 
     await database.transaction((txn) async {
@@ -764,13 +801,19 @@ class AccessAdminService {
     final effectiveActor = _resolveActor(actor);
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
-      throw const AdminException('اسم الدور مطلوب', 'Role name is required');
+      throw const AdminException(
+        AccessErrorCode.roleNameRequired,
+        debugMessage: 'Role name is required',
+      );
     }
 
     final database = db ?? await DatabaseHelper.instance.database;
     final roleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
     if (roleRows.isEmpty) {
-      throw const AdminException('الدور غير موجود', 'Role not found');
+      throw const AdminException(
+        AccessErrorCode.roleNotFound,
+        debugMessage: 'Role not found',
+      );
     }
     final existingRole = Role.fromMap(roleRows.first);
 
@@ -797,7 +840,11 @@ class AccessAdminService {
         targetUsername: existingRole.name,
         policy: editCheck,
       );
-      throw AdminException(editCheck.reasonAr, editCheck.reasonEn);
+      throw AdminException(
+        editCheck.decision ?? AccessErrorCode.unexpected,
+        permissionKey: editCheck.permissionKey,
+        debugMessage: editCheck.debugReason,
+      );
     }
 
     await database.transaction((txn) async {
@@ -855,7 +902,7 @@ class AccessAdminService {
     return createRole(
       actor: actor,
       name: newName,
-      description: 'نسخة من الدور',
+      description: 'Copy of role',
       permissions: perms,
       db: db,
     );
@@ -872,7 +919,10 @@ class AccessAdminService {
 
     final roleRows = await database.query('roles', where: 'id = ?', whereArgs: [roleId], limit: 1);
     if (roleRows.isEmpty) {
-      throw const AdminException('الدور غير موجود', 'Role not found');
+      throw const AdminException(
+        AccessErrorCode.roleNotFound,
+        debugMessage: 'Role not found',
+      );
     }
     final existingRole = Role.fromMap(roleRows.first);
 
@@ -896,7 +946,11 @@ class AccessAdminService {
         targetUsername: existingRole.name,
         policy: deleteCheck,
       );
-      throw AdminException(deleteCheck.reasonAr, deleteCheck.reasonEn);
+      throw AdminException(
+        deleteCheck.decision ?? AccessErrorCode.unexpected,
+        permissionKey: deleteCheck.permissionKey,
+        debugMessage: deleteCheck.debugReason,
+      );
     }
 
     await database.transaction((txn) async {
@@ -946,8 +1000,8 @@ class AccessAdminService {
           'actor_user_id': actor.id,
           'actor_username': actor.username,
           'target': targetUsername,
-          'decision': policy.decision.name,
-          'reason': policy.reasonEn,
+          'decision': policy.decision?.name,
+          'reason': policy.debugReason,
         }),
       );
     } catch (_) {}

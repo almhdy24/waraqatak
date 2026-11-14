@@ -1,21 +1,8 @@
 import 'dart:async';
+import 'access_error.dart';
 import 'session_manager.dart';
 
-/// Exception thrown when an action is attempted without the required permission.
-class PermissionDeniedException implements Exception {
-  final String permissionKey;
-  final String? message;
-
-  const PermissionDeniedException(this.permissionKey, [this.message]);
-
-  @override
-  String toString() {
-    if (message != null && message!.isNotEmpty) {
-      return 'PermissionDeniedException: $permissionKey ($message)';
-    }
-    return 'PermissionDeniedException: missing permission $permissionKey';
-  }
-}
+export 'access_error.dart' show PermissionDeniedException;
 
 /// Choke-point security facade for permission checks and system execution.
 abstract final class AccessGuard {

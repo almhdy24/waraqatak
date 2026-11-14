@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../database/access_dao.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
+import 'access_error.dart';
 import 'audit_service.dart';
 import 'auth_service.dart';
 
@@ -121,8 +122,9 @@ class RecoveryService {
         if (lockedUntil != null && lockedUntil.isAfter(DateTime.now())) {
           final rem = lockedUntil.difference(DateTime.now());
           throw AuthException(
-            'محاولات الاسترداد مقفلة مؤقتاً. حاول بعد ${rem.inSeconds + 1} ثانية',
-            'Recovery attempts locked temporarily. Try again in ${rem.inSeconds + 1}s',
+            AccessErrorCode.recoveryLocked,
+            args: {'duration': rem},
+            debugMessage: 'Recovery attempts locked temporarily',
           );
         }
       }
@@ -165,8 +167,8 @@ class RecoveryService {
       } catch (_) {}
 
       throw const AuthException(
-        'رمز الاسترداد غير صحيح',
-        'Invalid recovery code',
+        AccessErrorCode.recoveryCodeInvalid,
+        debugMessage: 'Invalid recovery code',
       );
     }
 
@@ -186,8 +188,8 @@ class RecoveryService {
       // Validate password
       if (!AuthService.isValidPassword(newPassword)) {
         throw const AuthException(
-          'كلمة المرور يجب أن لا تقل عن 6 أحرف',
-          'Password must be at least 6 characters',
+          AccessErrorCode.passwordTooShort,
+          debugMessage: 'Password must be at least 6 characters',
         );
       }
 
@@ -199,8 +201,8 @@ class RecoveryService {
         final trimmedPin = newPin.trim();
         if (!AuthService.isValidPin(trimmedPin)) {
           throw const AuthException(
-            'رمز PIN يجب أن يتكون من 4 إلى 6 أرقام',
-            'PIN must be 4 to 6 digits',
+            AccessErrorCode.pinInvalid,
+            debugMessage: 'PIN must be 4 to 8 digits',
           );
         }
         pinSalt = AuthService.instance.generateSalt();

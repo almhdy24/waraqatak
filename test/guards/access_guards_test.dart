@@ -32,13 +32,13 @@ void main() {
     test('in single-user mode, currentUserId defaults to Owner', () {
       expect(SessionManager.instance.isMultiUserEnabled, isFalse);
       expect(AccessContext.currentUserId, AccessDao.ownerUserId);
-      expect(AccessContext.currentUserName, 'المالك');
+      expect(AccessContext.currentUserName, 'owner');
     });
 
     test('under runAsSystem, currentUserId returns system', () {
       AccessGuard.runAsSystem(() {
         expect(AccessContext.currentUserId, 'system');
-        expect(AccessContext.currentUserName, 'النظام');
+        expect(AccessContext.currentUserName, 'system');
       });
     });
 

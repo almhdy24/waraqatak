@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/auth_service.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/permission_service.dart';
@@ -166,7 +167,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
       });
       AppSnackBar.show(
         context,
-        e.message(l10n.isArabic),
+        friendlyError(l10n, e),
         severity: AppSnackBarSeverity.error,
       );
       await Future.delayed(const Duration(milliseconds: 300));
@@ -226,7 +227,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
                       Icon(Icons.people_outline_rounded, color: cs.primary),
                       const SizedBox(width: 12),
                       Text(
-                        l10n.isArabic ? 'تبديل المستخدم' : 'Switch User',
+                        l10n.switchUser,
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -240,7 +241,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
                     itemBuilder: (context, index) {
                       final u = _users[index];
                       final isSelected = u.id == _selectedUser?.id;
-                      final roleName = _roleNames[u.roleId] ?? (u.isOwner ? (l10n.isArabic ? 'المالك' : 'Owner') : u.roleId);
+                      final roleName = _roleNames[u.roleId] ?? (u.isOwner ? l10n.ownerRole : u.roleId);
 
                       return ListTile(
                         leading: CircleAvatar(
@@ -353,7 +354,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
         _checkLockout();
         AppSnackBar.show(
           context,
-          e.message(l10n.isArabic),
+          friendlyError(l10n, e),
           severity: AppSnackBarSeverity.error,
         );
       } catch (e) {
@@ -396,9 +397,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
                   Icon(Icons.gpp_maybe_rounded, size: 64, color: cs.error),
                   const SizedBox(height: 16),
                   Text(
-                    l10n.isArabic
-                        ? 'تعذر التحقق من إعدادات الأمان'
-                        : 'Cannot verify security settings',
+                    l10n.securityInitFailedTitle,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontSize: 18,
@@ -407,16 +406,14 @@ class _PinLockScreenState extends State<PinLockScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    l10n.isArabic
-                        ? 'فشلت قراءة إعدادات الأمان. تم إبقاء التطبيق مقفلاً لحماية البيانات.'
-                        : 'Failed to read security configuration. Kept locked to protect data.',
+                    l10n.securityInitFailedBody,
                     textAlign: TextAlign.center,
                     style: TextStyle(color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
                     icon: const Icon(Icons.refresh),
-                    label: Text(l10n.isArabic ? 'إعادة المحاولة' : 'Retry'),
+                    label: Text(l10n.retry),
                     onPressed: () async {
                       await SessionManager.instance.retryInit();
                       if (mounted) _loadUsers();
@@ -432,7 +429,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
 
     final user = _selectedUser;
     final roleName = user != null
-        ? (_roleNames[user.roleId] ?? (user.isOwner ? (l10n.isArabic ? 'المالك' : 'Owner') : user.roleId))
+        ? (_roleNames[user.roleId] ?? (user.isOwner ? l10n.ownerRole : user.roleId))
         : '';
 
     return PopScope(
@@ -567,9 +564,9 @@ class _PinLockScreenState extends State<PinLockScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              l10n.isArabic
-                                  ? 'الحساب معلق مؤقتاً. يرجى الانتظار $_lockoutRemainingSeconds ثانية'
-                                  : 'Account paused. Try again in $_lockoutRemainingSeconds s',
+                              l10n.errAccountLocked(
+                                formatDurationMmSs(Duration(seconds: _lockoutRemainingSeconds)),
+                              ),
                               style: TextStyle(
                                 color: cs.onErrorContainer,
                                 fontSize: 13,

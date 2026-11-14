@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../database/access_dao.dart';
 import '../../localization/app_localizations.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/auth_service.dart';
 import '../../services/access/recovery_service.dart';
 import '../../services/access/session_manager.dart';
@@ -80,7 +81,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
       setState(() => _loading = false);
       AppSnackBar.show(
         context,
-        e.toString(),
+        friendlyError(l10n, e),
         severity: AppSnackBarSeverity.error,
       );
     }
@@ -116,7 +117,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
   Widget _buildStepIndicator(AppLocalizations l10n, ColorScheme cs) {
     return Row(
       children: [
-        _buildStepBadge(1, l10n.isArabic ? 'كلمة المرور' : 'Password', _currentStep >= 0, cs),
+        _buildStepBadge(1, l10n.stepPassword, _currentStep >= 0, cs),
         Expanded(
           child: Container(
             height: 2,
@@ -124,7 +125,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
             color: _currentStep >= 1 ? cs.primary : cs.outlineVariant.withValues(alpha: 0.5),
           ),
         ),
-        _buildStepBadge(2, l10n.isArabic ? 'رمز الاسترداد' : 'Recovery Code', _currentStep >= 1, cs),
+        _buildStepBadge(2, l10n.stepRecoveryCode, _currentStep >= 1, cs),
       ],
     );
   }
@@ -229,7 +230,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
             ),
             validator: (v) {
               if (v != _passwordCtrl.text) {
-                return l10n.invalidCredentials;
+                return l10n.errPasswordsMismatch;
               }
               return null;
             },
@@ -248,9 +249,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
               labelText: l10n.ownerPinLabel,
               border: const OutlineInputBorder(),
               prefixIcon: const Icon(Icons.pin_outlined),
-              helperText: l10n.isArabic
-                  ? 'اختياري: رمز PIN للدخول السريع من شاشة البيع بدون إدخال كلمة المرور كاملة'
-                  : 'Optional: PIN for quick unlocking without entering full password',
+              helperText: l10n.ownerPinHelper,
             ),
             validator: (v) {
               if (v == null || v.trim().isEmpty) {
@@ -377,9 +376,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Text(l10n.isArabic
-                        ? 'جاري تأمين الحساب...'
-                        : 'Securing account...'),
+                    Text(l10n.securingAccount),
                   ],
                 )
               : Text(l10n.enableMultiUserButton),
@@ -387,7 +384,7 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
         const SizedBox(height: 8),
         TextButton(
           onPressed: _loading ? null : () => setState(() => _currentStep = 0),
-          child: Text(l10n.cancel),
+          child: Text(l10n.accessBack),
         ),
       ],
     );

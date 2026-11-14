@@ -1,3 +1,4 @@
+import 'access_error.dart';
 import 'access_policy.dart';
 import 'permission_registry.dart';
 import 'session_manager.dart';
@@ -181,8 +182,7 @@ abstract final class ScreenAccessPolicy {
     final policy = manifest[screenType];
     if (policy == null) {
       return PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'هذه الشاشة غير مصرح بها (سياسة غير معلنة)',
+        AccessErrorCode.undeclaredScreen,
         'Access denied: Undeclared screen security policy for $screenType',
       );
     }
@@ -194,11 +194,16 @@ abstract final class ScreenAccessPolicy {
 
     final effectiveActor = actor ?? SessionManager.instance.currentUser;
     // 4. Unauthenticated or locked session cannot access protected screens
-    if (effectiveActor == null || SessionManager.instance.isLocked) {
+    if (effectiveActor == null) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedUnauthenticated,
-        'يجب تسجيل الدخول للوصول إلى هذه الشاشة',
+        AccessErrorCode.unauthenticated,
         'Authentication required to access this screen',
+      );
+    }
+    if (SessionManager.instance.isLocked) {
+      return const PolicyResult.deny(
+        AccessErrorCode.sessionLocked,
+        'Session is locked',
       );
     }
 
@@ -210,20 +215,20 @@ abstract final class ScreenAccessPolicy {
     // 6. OWNER_ONLY screens blocked for delegates
     if (policy.isOwnerOnly) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedOwnerOnly,
-        'هذه الشاشة مقتصرة حصرياً على مالك النظام',
+        AccessErrorCode.ownerOnly,
         'This screen is strictly restricted to the system Owner',
       );
     }
 
     // 7. Check required permission
-    final effectivePerms = permissions ?? SessionManager.instance.cachedPermissions;
+    final effectivePerms =
+        permissions ?? SessionManager.instance.cachedPermissions;
     if (policy.requiredPermission != null) {
       if (!effectivePerms.contains(policy.requiredPermission)) {
         return PolicyResult.deny(
-          PolicyDecision.deniedMissingPermission,
-          'لا تملك الصلاحية اللازمة للوصول إلى هذه الشاشة (${policy.requiredPermission})',
+          AccessErrorCode.missingPermission,
           'Missing required permission: ${policy.requiredPermission}',
+          permissionKey: policy.requiredPermission,
         );
       }
     }

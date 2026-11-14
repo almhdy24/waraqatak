@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/audit_service.dart';
 import '../../services/access/auth_service.dart';
 import '../../services/access/session_manager.dart';
@@ -81,9 +82,7 @@ class _SensitiveReauthDialogState extends State<_SensitiveReauthDialog> {
     if (AuthService.isDeviceThrottled) {
       final rem = AuthService.deviceThrottledUntil!.difference(DateTime.now());
       setState(() {
-        _errorMessage = l10n.isArabic
-            ? 'تم تجاوز محاولات الدخول. انتظر ${rem.inSeconds + 1} ثانية'
-            : 'Too many failed attempts. Wait ${rem.inSeconds + 1}s';
+        _errorMessage = l10n.errDeviceThrottled(formatDurationMmSs(rem));
       });
       return;
     }
@@ -114,9 +113,7 @@ class _SensitiveReauthDialogState extends State<_SensitiveReauthDialog> {
         if (!mounted) return;
         setState(() {
           _verifying = false;
-          _errorMessage = l10n.isArabic
-              ? 'كلمة المرور غير صحيحة'
-              : 'Incorrect password';
+          _errorMessage = l10n.errWrongPassword;
         });
         return;
       }
@@ -138,7 +135,7 @@ class _SensitiveReauthDialogState extends State<_SensitiveReauthDialog> {
       if (!mounted) return;
       setState(() {
         _verifying = false;
-        _errorMessage = e.toString();
+        _errorMessage = friendlyError(l10n, e);
       });
     }
   }
@@ -168,9 +165,7 @@ class _SensitiveReauthDialogState extends State<_SensitiveReauthDialog> {
             const SizedBox(height: 16),
           ],
           Text(
-            l10n.isArabic
-                ? 'يرجى تأكيد كلمة المرور للمتابعة:'
-                : 'Please confirm your password to proceed:',
+            '${l10n.reauthenticateRequired}:',
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
           const SizedBox(height: 12),

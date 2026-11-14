@@ -1,3 +1,5 @@
+// ignore_for_file: non_constant_identifier_names
+
 import 'package:flutter/material.dart';
 import '../utils/format_utils.dart';
 
@@ -2852,7 +2854,687 @@ class AppLocalizations {
     'The app collects anonymous statistics on feature usage (such as document creation and backup) to improve reliability. No amounts, prices, costs, phone numbers, contact names, or personal data are ever collected. You can disable this anytime in Settings.',
   );
 
-  bool get isArabic => langCode == 'ar';
+
+  // ========== PERMISSION GROUPS ==========
+  String get permGroup_sales_label => _t('المبيعات', 'Sales');
+  String get permGroup_purchases_label => _t('المشتريات', 'Purchases');
+  String get permGroup_payments_label => _t('المدفوعات والسندات', 'Payments & Vouchers');
+  String get permGroup_stock_label => _t('المخزون والجرد', 'Stock & Inventory');
+  String get permGroup_products_label => _t('المنتجات والتسعير', 'Products & Pricing');
+  String get permGroup_contacts_label => _t('العملاء والموردين', 'Customers & Suppliers');
+  String get permGroup_dashboard_label => _t('لوحة المعلومات', 'Dashboard');
+  String get permGroup_reports_label => _t('التقارير والمؤشرات', 'Reports');
+  String get permGroup_data_label => _t('الاستيراد والتصدير', 'Data Import & Export');
+  String get permGroup_system_label => _t('إدارة النظام والنسخ', 'System & Backup');
+  String get permGroup_settings_label => _t('إعدادات العمل والضرائب', 'Settings');
+  String get permGroup_access_label => _t('المستخدمون والصلاحيات', 'Users & Roles');
+
+  String permissionGroupLabelByName(String name) {
+    switch (name) {
+      case 'sales':
+        return permGroup_sales_label;
+      case 'purchases':
+        return permGroup_purchases_label;
+      case 'payments':
+        return permGroup_payments_label;
+      case 'stock':
+        return permGroup_stock_label;
+      case 'products':
+        return permGroup_products_label;
+      case 'contacts':
+        return permGroup_contacts_label;
+      case 'dashboard':
+        return permGroup_dashboard_label;
+      case 'reports':
+        return permGroup_reports_label;
+      case 'data':
+        return permGroup_data_label;
+      case 'system':
+        return permGroup_system_label;
+      case 'settings':
+        return permGroup_settings_label;
+      case 'access':
+        return permGroup_access_label;
+      default:
+        return name;
+    }
+  }
+  String get perm_sales_view_name => _t('عرض المبيعات والفواتير', 'View sales and invoices');
+  String get perm_sales_view_desc => _t('عرض قائمة فواتير المبيعات وتفاصيلها', 'View list of sales invoices and details');
+  String get perm_sales_create_name => _t('إنشاء فواتير المبيعات', 'Create sales invoices');
+  String get perm_sales_create_desc => _t('إصدار فواتير بيع جديدة وعروض أسعار', 'Issue new sales invoices and quotations');
+  String get perm_sales_edit_name => _t('تعديل فواتير المبيعات', 'Edit sales invoices');
+  String get perm_sales_edit_desc => _t('تعديل فواتير المبيعات القائمة', 'Edit existing sales invoices');
+  String get perm_sales_edit_price_name => _t('تعديل سعر البيع يدوياً', 'Manual price override');
+  String get perm_sales_edit_price_desc => _t('تغيير سعر بيع الصنف أثناء إنشاء الفاتورة', 'Change item unit price on the invoice');
+  String get perm_sales_edit_discount_name => _t('إضافة وتعديل الخصومات', 'Apply and edit discounts');
+  String get perm_sales_edit_discount_desc => _t('تطبيق تخفيض على الفاتورة أو البنود', 'Apply discounts to documents or line items');
+  String get perm_sales_cancel_name => _t('إلغاء فواتير المبيعات', 'Cancel sales invoices');
+  String get perm_sales_cancel_desc => _t('إلغاء فواتير البيع واسترجاع كميات المخزون', 'Cancel invoices and restore inventory stock');
+  String get perm_sales_delete_name => _t('حذف مسودات المبيعات', 'Delete draft invoices');
+  String get perm_sales_delete_desc => _t('حذف فواتير المبيعات غير الصادرة نهائياً', 'Permanently delete draft sales documents');
+  String get perm_sales_refund_name => _t('إدارة استرجاع المبالغ (Refund)', 'Manage document refunds');
+  String get perm_sales_refund_desc => _t('تحديث حالة استرجاع المبالغ للفواتير الملغاة', 'Update refund status on cancelled invoices');
+  String get perm_purchases_view_name => _t('عرض فواتير المشتريات', 'View purchase invoices');
+  String get perm_purchases_view_desc => _t('عرض مشتريات البضائع وفواتير الموردين', 'View purchase invoices from suppliers');
+  String get perm_purchases_create_name => _t('إنشاء فواتير المشتريات', 'Create purchase invoices');
+  String get perm_purchases_create_desc => _t('تسجيل شراء بضاعة وتحديث تكلفة المخزون', 'Record incoming stock and update cost');
+  String get perm_purchases_edit_name => _t('تعديل فواتير المشتريات', 'Edit purchase invoices');
+  String get perm_purchases_edit_desc => _t('تعديل بنود وأسعار فواتير الشراء القائمة', 'Edit items and costs on purchase invoices');
+  String get perm_purchases_cancel_name => _t('إلغاء فواتير المشتريات', 'Cancel purchase invoices');
+  String get perm_purchases_cancel_desc => _t('إلغاء فاتورة شراء واسترجاع كميات المخزون', 'Cancel purchase invoice and reverse stock');
+  String get perm_purchases_delete_name => _t('حذف مسودات المشتريات', 'Delete draft purchases');
+  String get perm_purchases_delete_desc => _t('حذف فواتير الشراء غير الصادرة', 'Delete unissued purchase drafts');
+  String get perm_payments_record_name => _t('تسجيل الدفعات والتحصيل', 'Record payments and collections');
+  String get perm_payments_record_desc => _t('تسجيل دفعات نقدية أو بنكية على الفواتير', 'Record cash or bank payments on invoices');
+  String get perm_vouchers_create_name => _t('إنشاء سندات القبض والصرف', 'Create payment receipts and expense vouchers');
+  String get perm_vouchers_create_desc => _t('إصدار سندات مالية مستقلة للمصروفات والقبض', 'Issue financial receipt and payment vouchers');
+  String get perm_expenses_view_name => _t('عرض سندات المصروفات', 'View expense vouchers');
+  String get perm_expenses_view_desc => _t('الاطلاع على سجل المصروفات وسندات الصرف', 'View operating expenses and expense vouchers');
+  String get perm_stock_adjust_name => _t('تسوية المخزون اليدوية', 'Manual stock adjustment');
+  String get perm_stock_adjust_desc => _t('تعديل كميات المخزون بالزيادة أو النقص يدوياً', 'Manually add or reduce product stock levels');
+  String get perm_stock_view_cost_name => _t('الاطلاع على تكلفة المخزون', 'View stock movement costs');
+  String get perm_stock_view_cost_desc => _t('عرض أسعار وتكلفة حركات المخزون الداخلة والخارجة', 'View unit and total cost of stock movements');
+  String get perm_stocktake_manage_name => _t('بدء وإدارة جلسات الجرد', 'Start and manage stocktake');
+  String get perm_stocktake_manage_desc => _t('فتح جلسات الجرد الدوري وتسجيل الكميات المعدودة', 'Open stocktake sessions and enter counted stock');
+  String get perm_stocktake_finalize_name => _t('اعتماد تسويات الجرد', 'Finalize stocktake reconciliation');
+  String get perm_stocktake_finalize_desc => _t('ترحيل فروقات الجرد وتحديث المخزون محاسبياً', 'Post stocktake variances to inventory ledger');
+  String get perm_products_view_name => _t('عرض قائمة المنتجات', 'View products catalog');
+  String get perm_products_view_desc => _t('تصفح قائمة الأصناف والباركود وسعر البيع', 'Browse product catalog, barcodes, and sale prices');
+  String get perm_products_manage_name => _t('إضافة وتعديل المنتجات والوحدات', 'Create and edit products & units');
+  String get perm_products_manage_desc => _t('إنشاء أصناف جديدة وتعديل الأسعار والوحدات', 'Add products and manage pricing and units');
+  String get perm_products_delete_name => _t('حذف المنتجات', 'Delete products');
+  String get perm_products_delete_desc => _t('حذف أو تعطيل الأصناف غير المستخدمة', 'Delete or deactivate unused products');
+  String get perm_products_view_cost_name => _t('الاطلاع على سعر الشراء وتكلفة المنتج', 'View purchase price and average cost');
+  String get perm_products_view_cost_desc => _t('إظهار سعر التكلفة وسعر الشراء في شاشات الأصناف', 'Show purchase price and average cost on product views');
+  String get perm_products_view_wholesale_name => _t('الاطلاع على أسعار الجملة', 'View wholesale prices');
+  String get perm_products_view_wholesale_desc => _t('عرض سعر الجملة والحد الأدنى لكمية الجملة', 'View wholesale tier prices and minimum quantities');
+  String get perm_pricing_manage_name => _t('إدارة التسعير الشامل (Bulk Pricing)', 'Bulk pricing management');
+  String get perm_pricing_manage_desc => _t('تطبيق زيادات أو تخفيضات جماعية على أسعار الأصناف', 'Apply bulk price adjustments across catalog');
+  String get perm_pricing_rates_name => _t('إدارة العملات وأسعار الصرف المرجعية', 'Manage exchange rates & reference currency');
+  String get perm_pricing_rates_desc => _t('تعديل أسعار صرف العملات المرجعية في النظام', 'Update reference currency exchange rates');
+  String get perm_contacts_view_name => _t('عرض العملاء والموردين', 'View contacts list');
+  String get perm_contacts_view_desc => _t('تصفح سجل العملاء والموردين وأرقام هواتفهم', 'Browse customers and suppliers list and contact info');
+  String get perm_contacts_manage_name => _t('إضافة وتعديل العملاء والموردين', 'Create and edit contacts');
+  String get perm_contacts_manage_desc => _t('تسجيل عميل أو مورد جديد وتعديل بيانات الاتصال', 'Add customer/supplier and update details');
+  String get perm_contacts_delete_name => _t('حذف العملاء والموردين', 'Delete contacts');
+  String get perm_contacts_delete_desc => _t('حذف جهات الاتصال غير المرتبطة بمعاملات', 'Delete contacts not referenced in documents');
+  String get perm_contacts_view_balances_name => _t('الاطلاع على مديونيات وحسابات العملاء والموردين', 'View balances, debts, and account statements');
+  String get perm_contacts_view_balances_desc => _t('عرض إجمالي ديون العملاء ومستحقات الموردين وكشف الحساب', 'View receivables, payables, and account statements');
+  String get perm_dashboard_view_totals_name => _t('عرض إجماليات المبيعات والأرباح بالرئيسية', 'View dashboard totals and revenue metrics');
+  String get perm_dashboard_view_totals_desc => _t('إظهار بطاقات إجمالي مبيعات اليوم والديون بالرئيسية', 'Show sales revenue cards and summary metrics on home');
+  String get perm_reports_view_sales_name => _t('تقرير المبيعات وحركة الفواتير', 'Sales report');
+  String get perm_reports_view_sales_desc => _t('عرض تقرير المبيعات التفصيلي مع المجموع', 'View detailed sales and invoice reports');
+  String get perm_reports_view_purchases_name => _t('تقرير المشتريات والمصروفات', 'Purchases report');
+  String get perm_reports_view_purchases_desc => _t('عرض إجماليات المشتريات ومصروفات العمليات', 'View purchases spending and supplier orders');
+  String get perm_reports_view_receivables_name => _t('تقرير الديون والمستحقات', 'Receivables and payables report');
+  String get perm_reports_view_receivables_desc => _t('تقرير أرصدة ومطالبات العملاء والموردين', 'View aging debts and supplier balances');
+  String get perm_reports_view_inventory_cost_name => _t('تقرير تقييم المخزون وأرباح الأصناف', 'Inventory valuation and profit reports');
+  String get perm_reports_view_inventory_cost_desc => _t('عرض قيمة المخزون بسعر الشراء وصافي أرباح المنتجات', 'View inventory cost valuation and product gross profits');
+  String get perm_reports_view_financials_name => _t('التقارير المالية (قائمة الدخل والميزانية)', 'Financial statements (Income Statement & Balance Sheet)');
+  String get perm_reports_view_financials_desc => _t('الاطلاع على قائمة الدخل، الميزانية العمومية، وميزان المراجعة', 'View Income Statement, Balance Sheet, and Trial Balance');
+  String get perm_reports_export_pdf_name => _t('تصدير وطباعة تقارير PDF', 'Export and print PDF reports');
+  String get perm_reports_export_pdf_desc => _t('طباعة أو مشاركة تقارير الأعمال كملفات PDF', 'Print or share business reports as PDF documents');
+  String get perm_data_export_csv_name => _t('تصدير البيانات إلى ملفات CSV / Excel', 'Export data to CSV / Excel');
+  String get perm_data_export_csv_desc => _t('تصدير قائمة الأصناف والبيانات إلى ملفات خارجية', 'Export catalog and records to external spreadsheets');
+  String get perm_data_import_csv_name => _t('استيراد البيانات من ملفات CSV', 'Import data from CSV');
+  String get perm_data_import_csv_desc => _t('إدخال أصناف وقوائم أسعار من ملفات CSV خارجية', 'Batch import products and prices from CSV');
+  String get perm_backup_create_name => _t('إنشاء نسخة احتياطية (.waraq)', 'Create database backup (.waraq)');
+  String get perm_backup_create_desc => _t('تصدير نسخة احتياطية محلية أو إلى Google Drive', 'Generate encrypted or local backup archives');
+  String get perm_backup_restore_name => _t('استعادة النسخة الاحتياطية (حساس)', 'Restore database backup (Sensitive)');
+  String get perm_backup_restore_desc => _t('استرجاع قاعدة البيانات ومسح البيانات الحالية', 'Restore database from backup file, replacing local data');
+  String get perm_system_repair_name => _t('أدوات الفحص والإصلاح وتشخيص القاعدة', 'Diagnostics and database repair tools');
+  String get perm_system_repair_desc => _t('تشغيل إصلاحات جدولية وتصدير سجل التشخيص', 'Run database health diagnostics and repair scripts');
+  String get perm_accounting_period_lock_name => _t('إقفال الفترات المحاسبية (Period Lock)', 'Accounting period closing and lock');
+  String get perm_accounting_period_lock_desc => _t('تحديد تاريخ إقفال الحسابات لمنع التعديل السابق', 'Set books closed date preventing past mutations');
+  String get perm_settings_manage_name => _t('تعديل بيانات المنشأة والإعدادات العامة', 'Business profile and general settings');
+  String get perm_settings_manage_desc => _t('تغيير اسم المنشأة، الشعار، والخيارات العامة', 'Update store profile, branding, and global settings');
+  String get perm_payment_methods_manage_name => _t('إدارة طرق الدفع والحسابات', 'Manage payment methods');
+  String get perm_payment_methods_manage_desc => _t('تفعيل وإضافة طرق دفع نقدية أو بنكية مخصصة', 'Configure payment methods and bank options');
+  String get perm_tax_profiles_manage_name => _t('إدارة الملفات الضريبية ونسب الضريبة', 'Manage tax profiles');
+  String get perm_tax_profiles_manage_desc => _t('إنشاء وتعديل ملفات ونسب ضريبة القيمة المضافة', 'Configure tax profiles and VAT rates');
+  String get perm_audit_view_name => _t('الاطلاع على سجل النشاط والرقابة (Audit Trail)', 'View activity and audit trail');
+  String get perm_audit_view_desc => _t('تصفح سجل العمليات وسلسلة التحقق الرقمية', 'Review system activity log and tamper-evident chain');
+  String get perm_users_manage_name => _t('إدارة المستخدمين وكلمات المرور', 'Manage users and credentials');
+  String get perm_users_manage_desc => _t('إضافة موظفين، تعيين الأدوار، وإعادة ضبط كلمات المرور', 'Create users, assign roles, and reset credentials');
+  String get perm_roles_manage_name => _t('إدارة الأدوار ومصفوفة الصلاحيات', 'Manage roles and permission matrix');
+  String get perm_roles_manage_desc => _t('إنشاء أدوار مخصصة وتعديل صلاحيات الأدوار', 'Create custom roles and customize permissions');
+  String get perm_license_manage_name => _t('إدارة الترخيص والتفعيل (Pro Activation)', 'License and Pro subscription management');
+  String get perm_license_manage_desc => _t('إدخال مفاتيح التفعيل وإدارة ترخيص التطبيق', 'Activate license keys and manage subscription');
+
+  String permissionName(String key) {
+    switch (key) {
+      case 'sales.view':
+        return perm_sales_view_name;
+      case 'sales.create':
+        return perm_sales_create_name;
+      case 'sales.edit':
+        return perm_sales_edit_name;
+      case 'sales.edit_price':
+        return perm_sales_edit_price_name;
+      case 'sales.edit_discount':
+        return perm_sales_edit_discount_name;
+      case 'sales.cancel':
+        return perm_sales_cancel_name;
+      case 'sales.delete':
+        return perm_sales_delete_name;
+      case 'sales.refund':
+        return perm_sales_refund_name;
+      case 'purchases.view':
+        return perm_purchases_view_name;
+      case 'purchases.create':
+        return perm_purchases_create_name;
+      case 'purchases.edit':
+        return perm_purchases_edit_name;
+      case 'purchases.cancel':
+        return perm_purchases_cancel_name;
+      case 'purchases.delete':
+        return perm_purchases_delete_name;
+      case 'payments.record':
+        return perm_payments_record_name;
+      case 'vouchers.create':
+        return perm_vouchers_create_name;
+      case 'expenses.view':
+        return perm_expenses_view_name;
+      case 'stock.adjust':
+        return perm_stock_adjust_name;
+      case 'stock.view_cost':
+        return perm_stock_view_cost_name;
+      case 'stocktake.manage':
+        return perm_stocktake_manage_name;
+      case 'stocktake.finalize':
+        return perm_stocktake_finalize_name;
+      case 'products.view':
+        return perm_products_view_name;
+      case 'products.manage':
+        return perm_products_manage_name;
+      case 'products.delete':
+        return perm_products_delete_name;
+      case 'products.view_cost':
+        return perm_products_view_cost_name;
+      case 'products.view_wholesale':
+        return perm_products_view_wholesale_name;
+      case 'pricing.manage':
+        return perm_pricing_manage_name;
+      case 'pricing.rates':
+        return perm_pricing_rates_name;
+      case 'contacts.view':
+        return perm_contacts_view_name;
+      case 'contacts.manage':
+        return perm_contacts_manage_name;
+      case 'contacts.delete':
+        return perm_contacts_delete_name;
+      case 'contacts.view_balances':
+        return perm_contacts_view_balances_name;
+      case 'dashboard.view_totals':
+        return perm_dashboard_view_totals_name;
+      case 'reports.view_sales':
+        return perm_reports_view_sales_name;
+      case 'reports.view_purchases':
+        return perm_reports_view_purchases_name;
+      case 'reports.view_receivables':
+        return perm_reports_view_receivables_name;
+      case 'reports.view_inventory_cost':
+        return perm_reports_view_inventory_cost_name;
+      case 'reports.view_financials':
+        return perm_reports_view_financials_name;
+      case 'reports.export_pdf':
+        return perm_reports_export_pdf_name;
+      case 'data.export_csv':
+        return perm_data_export_csv_name;
+      case 'data.import_csv':
+        return perm_data_import_csv_name;
+      case 'backup.create':
+        return perm_backup_create_name;
+      case 'backup.restore':
+        return perm_backup_restore_name;
+      case 'system.repair':
+        return perm_system_repair_name;
+      case 'accounting.period_lock':
+        return perm_accounting_period_lock_name;
+      case 'settings.manage':
+        return perm_settings_manage_name;
+      case 'payment_methods.manage':
+        return perm_payment_methods_manage_name;
+      case 'tax_profiles.manage':
+        return perm_tax_profiles_manage_name;
+      case 'audit.view':
+        return perm_audit_view_name;
+      case 'users.manage':
+        return perm_users_manage_name;
+      case 'roles.manage':
+        return perm_roles_manage_name;
+      case 'license.manage':
+        return perm_license_manage_name;
+      default:
+        return accessGenericPermission;
+    }
+  }
+
+  String permissionDescription(String key) {
+    switch (key) {
+      case 'sales.view':
+        return perm_sales_view_desc;
+      case 'sales.create':
+        return perm_sales_create_desc;
+      case 'sales.edit':
+        return perm_sales_edit_desc;
+      case 'sales.edit_price':
+        return perm_sales_edit_price_desc;
+      case 'sales.edit_discount':
+        return perm_sales_edit_discount_desc;
+      case 'sales.cancel':
+        return perm_sales_cancel_desc;
+      case 'sales.delete':
+        return perm_sales_delete_desc;
+      case 'sales.refund':
+        return perm_sales_refund_desc;
+      case 'purchases.view':
+        return perm_purchases_view_desc;
+      case 'purchases.create':
+        return perm_purchases_create_desc;
+      case 'purchases.edit':
+        return perm_purchases_edit_desc;
+      case 'purchases.cancel':
+        return perm_purchases_cancel_desc;
+      case 'purchases.delete':
+        return perm_purchases_delete_desc;
+      case 'payments.record':
+        return perm_payments_record_desc;
+      case 'vouchers.create':
+        return perm_vouchers_create_desc;
+      case 'expenses.view':
+        return perm_expenses_view_desc;
+      case 'stock.adjust':
+        return perm_stock_adjust_desc;
+      case 'stock.view_cost':
+        return perm_stock_view_cost_desc;
+      case 'stocktake.manage':
+        return perm_stocktake_manage_desc;
+      case 'stocktake.finalize':
+        return perm_stocktake_finalize_desc;
+      case 'products.view':
+        return perm_products_view_desc;
+      case 'products.manage':
+        return perm_products_manage_desc;
+      case 'products.delete':
+        return perm_products_delete_desc;
+      case 'products.view_cost':
+        return perm_products_view_cost_desc;
+      case 'products.view_wholesale':
+        return perm_products_view_wholesale_desc;
+      case 'pricing.manage':
+        return perm_pricing_manage_desc;
+      case 'pricing.rates':
+        return perm_pricing_rates_desc;
+      case 'contacts.view':
+        return perm_contacts_view_desc;
+      case 'contacts.manage':
+        return perm_contacts_manage_desc;
+      case 'contacts.delete':
+        return perm_contacts_delete_desc;
+      case 'contacts.view_balances':
+        return perm_contacts_view_balances_desc;
+      case 'dashboard.view_totals':
+        return perm_dashboard_view_totals_desc;
+      case 'reports.view_sales':
+        return perm_reports_view_sales_desc;
+      case 'reports.view_purchases':
+        return perm_reports_view_purchases_desc;
+      case 'reports.view_receivables':
+        return perm_reports_view_receivables_desc;
+      case 'reports.view_inventory_cost':
+        return perm_reports_view_inventory_cost_desc;
+      case 'reports.view_financials':
+        return perm_reports_view_financials_desc;
+      case 'reports.export_pdf':
+        return perm_reports_export_pdf_desc;
+      case 'data.export_csv':
+        return perm_data_export_csv_desc;
+      case 'data.import_csv':
+        return perm_data_import_csv_desc;
+      case 'backup.create':
+        return perm_backup_create_desc;
+      case 'backup.restore':
+        return perm_backup_restore_desc;
+      case 'system.repair':
+        return perm_system_repair_desc;
+      case 'accounting.period_lock':
+        return perm_accounting_period_lock_desc;
+      case 'settings.manage':
+        return perm_settings_manage_desc;
+      case 'payment_methods.manage':
+        return perm_payment_methods_manage_desc;
+      case 'tax_profiles.manage':
+        return perm_tax_profiles_manage_desc;
+      case 'audit.view':
+        return perm_audit_view_desc;
+      case 'users.manage':
+        return perm_users_manage_desc;
+      case 'roles.manage':
+        return perm_roles_manage_desc;
+      case 'license.manage':
+        return perm_license_manage_desc;
+      default:
+        return '';
+    }
+  }
+
+  // ========== ACCESS CONTROL & ERRORS ==========
+  String get accessDeniedTitle => _t('غير مصرح بالدخول', 'Access Denied');
+  String accessDeniedScreenBody(String screen) => _t(
+    'لا تملك الصلاحية اللازمة لفتح هذه الشاشة ($screen).',
+    'You do not have permission to open this screen ($screen).',
+  );
+  String accessDeniedActionBody(String action) => _t(
+    'لا تملك الصلاحية اللازمة لتنفيذ هذا الإجراء ($action).',
+    'You do not have permission to perform this action ($action).',
+  );
+  String accessDeniedMissingPerm(String permission) => _t(
+    'الصلاحية المطلوبة: $permission.',
+    'Required permission: $permission.',
+  );
+  String get accessDeniedOwnerOnlyHint => _t(
+    'هذه الميزة مقتصرة حصرياً على مالك النظام. راجع مالك المتجر إذا كنت بحاجة للوصول.',
+    'This feature is restricted to the system Owner. Contact the store owner if you need access.',
+  );
+  String get accessDeniedDelegateHint => _t(
+    'يمكنك طلب منح هذه الصلاحية من مالك النظام أو مدير الصلاحيات.',
+    'You can request this permission from the system Owner or an administrator.',
+  );
+  String get accessDeniedLockedHint => _t(
+    'الجلسة مقفلة. يرجى إدخال رمز PIN أو تسجيل الدخول للمتابعة.',
+    'Session is locked. Please enter your PIN or sign in to continue.',
+  );
+  String get accessDeniedBack => _t('العودة', 'Go Back');
+  String get accessDeniedGoToLock =>
+      _t('التبديل إلى شاشة القفل', 'Switch to Lock Screen');
+  String get accessGenericPermission =>
+      _t('صلاحية غير محددة', 'unspecified permission');
+  String get accessGenericAction => _t('هذا الإجراء', 'this action');
+  String get accessGenericScreen => _t('هذه الشاشة', 'this screen');
+
+  String get errUnauthenticated =>
+      _t('يجب تسجيل الدخول للمتابعة', 'Please sign in to continue');
+  String get errSessionLocked =>
+      _t('الجلسة مقفلة، يرجى إدخال رمز PIN', 'Session is locked, please enter PIN');
+  String get errOwnerOnly => _t(
+    'هذا الإجراء مقتصر حصرياً على مالك النظام',
+    'Restricted to the system Owner',
+  );
+  String get errTargetIsOwner => _t(
+    'لا يمكن تعديل أو إدارة حساب المالك',
+    'Cannot modify or manage the Owner account',
+  );
+  String get errTargetIsPeerOrSuperior => _t(
+    'لا يمكن تعديل مستخدم يملك رتبة إدارية مماثلة أو أعلى',
+    'Cannot modify a user with equal or higher admin privileges',
+  );
+  String get errTargetHasPermissionsActorLacks => _t(
+    'لا يمكن تعديل مستخدم يملك صلاحيات لا تملكها',
+    'Cannot modify a user holding permissions you lack',
+  );
+  String get errAssignRoleWithUnheldPermissions => _t(
+    'لا يمكن إسناد دور يحتوي على صلاحيات لا تملكها',
+    'Cannot assign a role containing permissions you lack',
+  );
+  String get errGrantUnheldPermission =>
+      _t('لا يمكن منح صلاحية لا تملكها', 'Cannot grant a permission you lack');
+  String get errEditRoleWithUnheldPermissions => _t(
+    'لا يمكن تعديل دور يحتوي على صلاحيات لا تملكها',
+    'Cannot modify a role containing permissions you lack',
+  );
+  String get errEditOwnRole => _t(
+    'لا يمكن تعديل الدور الخاص بك لتجنب تصعيد الصلاحيات',
+    'Cannot modify your own role',
+  );
+  String get errChangeOwnRole =>
+      _t('لا يمكن تغيير دورك بنفسك', 'Cannot change your own role');
+  String get errChangeOwnActiveStatus =>
+      _t('لا يمكن تعطيل حسابك بنفسك', 'Cannot deactivate your own account');
+  String get errCreateOwner => _t(
+    'لا يمكن إنشاء حساب مالك إضافي',
+    'Cannot create an additional Owner account',
+  );
+  String get errDeleteSystemRole =>
+      _t('لا يمكن حذف أدوار النظام الأساسية', 'Cannot delete system roles');
+  String get errRoleInUse => _t(
+    'لا يمكن حذف الدور لأنه مستخدم من قبل مستخدمين نشطين',
+    'Cannot delete role because it is assigned to active users',
+  );
+  String get errSelfCredentialRequiresCurrentSecret => _t(
+    'يجب إدخال كلمة المرور أو رمز PIN الحالي لتعديل بيانات الدخول',
+    'Current password or PIN is required to change credentials',
+  );
+  String get errUsernameRequired =>
+      _t('اسم المستخدم مطلوب', 'Username is required');
+  String get errDisplayNameRequired =>
+      _t('الاسم الظاهر مطلوب', 'Display name is required');
+  String get errUsernameTaken => _t(
+    'اسم المستخدم مسجل مسبقاً، يرجى اختيار اسم آخر',
+    'Username is already taken',
+  );
+  String get errUsernameInvalid => _t(
+    'اسم المستخدم غير صالح (3-32 حرفاً إنجليزياً أو أرقام أو _ - .)',
+    'Username is invalid (3–32 letters, digits, _, -, .)',
+  );
+  String get errPasswordTooShort => _t(
+    'كلمة المرور يجب أن تتكون من 6 أحرف على الأقل',
+    'Password must be at least 6 characters',
+  );
+  String get errPasswordsMismatch =>
+      _t('كلمتا المرور غير متطابقتين', 'Passwords do not match');
+  String get errPinInvalid => _t(
+    'رمز PIN يجب أن يتكون من 4 إلى 8 أرقام',
+    'PIN must be 4 to 8 digits',
+  );
+  String get errRoleNotFound =>
+      _t('الدور المحدد غير موجود', 'Selected role not found');
+  String get errUserNotFound =>
+      _t('المستخدم غير موجود', 'User not found');
+  String get errUserDisabled => _t(
+    'تم تعطيل هذا الحساب، راجع مالك النظام',
+    'Account disabled, contact store owner',
+  );
+  String errAccountLocked(String duration) => _t(
+    'الحساب مقفل مؤقتاً، يرجى المحاولة بعد $duration',
+    'Account locked temporarily, try again after $duration',
+  );
+  String errDeviceThrottled(String duration) => _t(
+    'تم تجاوز المحاولات المسموحة على هذا الجهاز، انتظر $duration',
+    'Device throttled, wait $duration',
+  );
+  String get errNoPasswordSet => _t(
+    'لم يتم تعيين كلمة مرور لهذا الحساب',
+    'No password configured for this account',
+  );
+  String get errNoPinSet => _t(
+    'لم يتم تعيين رمز PIN لهذا الحساب',
+    'No PIN configured for this account',
+  );
+  String get errWrongPassword =>
+      _t('كلمة المرور غير صحيحة', 'Incorrect password');
+  String get errWrongPin => _t('رمز PIN غير صحيح', 'Incorrect PIN');
+  String get errWrongCurrentPassword =>
+      _t('كلمة المرور الحالية غير صحيحة', 'Current password is incorrect');
+  String get errWrongCurrentSecret => _t(
+    'كلمة المرور أو رمز PIN الحالي غير صحيح',
+    'Current password or PIN is incorrect',
+  );
+  String get errRecoveryCodeInvalid =>
+      _t('رمز الاسترداد غير صالح', 'Recovery code is invalid');
+  String errRecoveryLocked(String duration) => _t(
+    'الاسترداد مقفل مؤقتاً لكثرة المحاولات، انتظر $duration',
+    'Recovery locked temporarily, wait $duration',
+  );
+  String get errOwnerCannotBeDisabled =>
+      _t('لا يمكن تعطيل حساب المالك', 'Owner account cannot be disabled');
+  String get errOwnerUsernameImmutable => _t(
+    'اسم مستخدم المالك ثابت ولا يمكن تغييره',
+    'Owner username cannot be changed',
+  );
+  String get errOwnerRoleImmutable => _t(
+    'دور المالك ثابت ولا يمكن تغييره',
+    'Owner role cannot be changed',
+  );
+  String get errUndeclaredScreen => _t(
+    'الشاشة المطلوبة غير معتمدة أمنياً',
+    'Requested screen is not registered in security policy',
+  );
+  String get errMultiUserDisableOwnerOnly => _t(
+    'لا يمكن إلغاء تعدد المستخدمين إلا بواسطة المالك',
+    'Multi-user mode can only be disabled by the Owner',
+  );
+  String get errNoActiveOwner => _t(
+    'لا يوجد حساب مالك نشط في النظام',
+    'No active Owner account in the system',
+  );
+  String get errRoleNameRequired =>
+      _t('اسم الدور مطلوب', 'Role name is required');
+  String get errUnexpected => _t(
+    'حدث خطأ غير متوقع، يرجى المحاولة مجدداً',
+    'An unexpected error occurred, please try again',
+  );
+  String get actorSystem => _t('النظام', 'System');
+  String get actorUnauthenticated => _t('غير مسجل', 'Unauthenticated');
+  String get actorOwner => _t('المالك', 'Owner');
+
+  // Additional Access screen & audit keys
+  String get auditFilterAll => _t('الكل', 'All');
+  String get auditFilterSecurity => _t('الأمان والحماية', 'Security');
+  String get auditFilterLogins => _t('الدخول والخروج', 'Logins');
+  String get auditFilterChanges => _t('التعديلات', 'Changes');
+  String auditVerifiedEntries(int count) =>
+      _t('$count سجل موثق', '$count verified entries');
+  String auditBrokenAtId(int id) =>
+      _t('تم اكتشاف الخلل عند السجل رقم $id', 'Chain broken at entry #$id');
+  String get auditUnknownTime => _t('وقت غير معروف', 'Unknown time');
+
+  String get ownerPinHelper => _t(
+        'اختياري: رمز PIN للدخول السريع من شاشة البيع بدون إدخال كلمة المرور كاملة',
+        'Optional: PIN for quick unlocking without entering full password',
+      );
+  String get securingAccount =>
+      _t('جاري تأمين الحساب...', 'Securing account...');
+  String get accessBack => _t('رجوع', 'Back');
+  String get cancelSetup => _t('إلغاء الإعداد', 'Cancel Setup');
+  String get cancelSetupConfirm => _t(
+        'هل أنت متأكد من إلغاء الإعداد؟ سيتم تجاهل رمز الاسترداد الذي تم إنشاؤه.',
+        'Are you sure you want to cancel setup? The generated recovery code will be discarded.',
+      );
+  String get ownerRole => _t('المالك', 'Owner');
+  String get securityInitFailedTitle =>
+      _t('تعذر التحقق من إعدادات الأمان', 'Cannot verify security settings');
+  String get securityInitFailedBody => _t(
+        'فشلت قراءة إعدادات الأمان. تم إبقاء التطبيق مقفلاً لحماية البيانات.',
+        'Failed to read security configuration. Kept locked to protect data.',
+      );
+  String disableUserConfirm(String name) =>
+      _t('تعطيل المستخدم: $name؟', 'Disable user: $name?');
+  String get ownerUsernameImmutable => _t(
+        'اسم مستخدم المالك ثابت ولا يمكن تعديله',
+        'Owner username is immutable',
+      );
+  String get usernameMinLength => _t(
+        'اسم المستخدم يجب أن لا يقل عن 3 أحرف',
+        'Username must be at least 3 characters',
+      );
+  String get passwordMinLength => _t(
+        'كلمة المرور يجب أن لا تقل عن 6 أحرف',
+        'Password must be at least 6 characters',
+      );
+  String get pinDigitsCount => _t(
+        'رمز PIN يجب أن يتكون من 4 إلى 6 أرقام',
+        'PIN must be 4 to 6 digits',
+      );
+  String get noCustomOverrides =>
+      _t('بدون استثناءات مخصصة', 'No custom overrides');
+  String customPermissionsCount(int count) =>
+      _t('$count صلاحيات مخصصة', '$count custom permissions');
+
+  String get disableMultiUserOwnerOnly => _t(
+        'فقط المالك يمكنه تعطيل وضع تعدد المستخدمين',
+        'Only the Owner can disable multi-user mode',
+      );
+  String get disableMultiUserConfirmMsg => _t(
+        'يتطلب تعطيل وضع تعدد المستخدمين تأكيد كلمة مرور المالك لحماية بيانات المتجر.',
+        'Disabling multi-user mode requires confirming the Owner password.',
+      );
+  String get disableMultiUserDialogMsg => _t(
+        'هل أنت متأكد من رغبتك في تعطيل وضع تعدد المستخدمين والعودة لنمط المستخدم الفردي؟',
+        'Are you sure you want to disable multi-user mode and return to single-user mode?',
+      );
+  String get disableMultiUserSuccess => _t(
+        'تم تعطيل وضع تعدد المستخدمين بنجاح',
+        'Multi-user mode disabled successfully',
+      );
+  String get searchUser => _t('بحث عن مستخدم...', 'Search user...');
+  String get multiUserActiveBanner => _t(
+        'وضع تعدد المستخدمين مفعل. يمكنك الآن إضافة كاشير أو محاسب أو مدير لتوزيع المهام بأمان.',
+        'Multi-User Mode is active. Add cashiers or managers to safely delegate store operations.',
+      );
+  String userLockedUntilBadge(String time) =>
+      _t('معلق حتى $time', 'Locked until $time');
+  String get noPinBadge => _t('بدون PIN', 'No PIN');
+  String get unlockUserAction => _t('إلغاء قفل الحساب', 'Unlock account');
+  String unlockUserConfirm(String name) => _t(
+        'هل أنت متأكد من إلغاء قفل حساب $name وإعادة تصفير محاولات الدخول الفاشلة؟',
+        'Are you sure you want to unlock $name and reset failed login attempts?',
+      );
+  String get userUnlockedSuccess =>
+      _t('تم إلغاء قفل الحساب بنجاح', 'User account unlocked successfully');
+  String get currentPasswordLabel =>
+      _t('كلمة المرور الحالية', 'Current Password');
+  String get currentPasswordHelper => _t(
+        'مطلوبة لتأكيد تغيير كلمة المرور أو رمز PIN الخاص بك',
+        'Required to confirm changing your own password or PIN',
+      );
+  String get cannotEditHeldPermissionsHelper => _t(
+        'لا يمكنك تعديل صلاحيات لا تملكها',
+        'Cannot modify permissions you do not hold',
+      );
+  String get discardAction => _t('تجاهل', 'Discard');
+  String get recoveryLeaveBlocked => _t(
+        'يجب تدوين رمز الاسترداد وتأكيده قبل مغادرة الشاشة',
+        'You must write down and confirm the recovery code before leaving',
+      );
+  String get enterPasswordToSignIn =>
+      _t('الدخول بكلمة المرور', 'Sign in with password');
+  String get passwordRequired =>
+      _t('كلمة المرور مطلوبة', 'Password is required');
+  String get signingIn => _t('جاري التحقق...', 'Verifying...');
+  String get stepPassword => _t('كلمة المرور', 'Password');
+  String get stepRecoveryCode => _t('رمز الاسترداد', 'Recovery Code');
+
+  // Role templates (A8)
+  String get roleOwner_name => _t('المالك', 'Owner');
+  String get roleOwner_desc => _t(
+    'مالك النظام بجميع الصلاحيات',
+    'System Owner with full access',
+  );
+  String get roleTemplate_salesperson_name => _t('بائع', 'Salesperson');
+  String get roleTemplate_salesperson_desc => _t(
+    'إصدار الفواتير، التحصيل، وعرض العملاء والمنتجات',
+    'Invoicing, payments, and browsing customers and products',
+  );
+  String get roleTemplate_inventory_name =>
+      _t('مسؤول مخزون', 'Inventory Manager');
+  String get roleTemplate_inventory_desc => _t(
+    'إدارة المنتجات، تسوية المخزون، والجرد والمشتريات',
+    'Product management, stock adjustments, stocktake, and purchases',
+  );
+  String get roleTemplate_accountant_name => _t('محاسب', 'Accountant');
+  String get roleTemplate_accountant_desc => _t(
+    'التقارير المالية، السندات، الحسابات، وإقفال الفترات',
+    'Financial reports, vouchers, ledger, and period closing',
+  );
+  String get roleTemplate_manager_name => _t('مدير فرع', 'Branch Manager');
+  String get roleTemplate_manager_desc => _t(
+    'إدارة العمليات اليومية والتقارير والأسعار مع استثناء صلاحيات النظام الحساسة',
+    'Daily operations, reports, and pricing excluding sensitive system permissions',
+  );
+
+    bool get isArabic => langCode == 'ar';
 
   String _t(String ar, String en) => langCode == 'ar' ? ar : en;
 

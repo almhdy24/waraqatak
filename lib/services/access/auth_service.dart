@@ -5,7 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
+import 'access_error.dart';
 import 'access_guard.dart';
+
+export 'access_error.dart' show AuthException;
 import 'access_policy.dart';
 import 'audit_service.dart';
 import 'permission_service.dart';
@@ -232,8 +235,9 @@ class AuthService {
     if (isDeviceThrottled) {
       final rem = _deviceThrottledUntil!.difference(DateTime.now());
       throw AuthException(
-        'تم تجاوز محاولات الدخول على هذا الجهاز. حاول بعد ${rem.inSeconds + 1} ثانية',
-        'Too many failed attempts on this device. Try again in ${rem.inSeconds + 1}s',
+        AccessErrorCode.deviceThrottled,
+        args: {'duration': rem},
+        debugMessage: 'Too many failed attempts on this device',
       );
     }
     final db = executor ?? await DatabaseHelper.instance.database;
@@ -245,30 +249,34 @@ class AuthService {
     );
 
     if (rows.isEmpty) {
-      throw const AuthException('المستخدم غير موجود', 'User not found');
+      throw const AuthException(
+        AccessErrorCode.userNotFound,
+        debugMessage: 'User not found',
+      );
     }
 
     final user = AppUser.fromMap(rows.first);
 
     if (!user.isActive) {
       throw const AuthException(
-        'هذا الحساب معطل حالياً',
-        'This account is currently disabled',
+        AccessErrorCode.userDisabled,
+        debugMessage: 'This account is currently disabled',
       );
     }
 
     if (user.isLocked) {
       final rem = user.lockedUntil!.difference(DateTime.now());
       throw AuthException(
-        'الحساب مقفل مؤقتاً. حاول بعد ${rem.inSeconds + 1} ثانية',
-        'Account is temporarily locked. Try again in ${rem.inSeconds + 1}s',
+        AccessErrorCode.accountLocked,
+        args: {'duration': rem},
+        debugMessage: 'Account is temporarily locked',
       );
     }
 
     if (!user.hasPassword) {
       throw const AuthException(
-        'لم يتم تعيين كلمة مرور لهذا الحساب',
-        'No password configured for this user',
+        AccessErrorCode.noPasswordSet,
+        debugMessage: 'No password configured for this user',
       );
     }
 
@@ -282,8 +290,8 @@ class AuthService {
       recordDeviceFailure();
       await _recordFailedAttempt(user, db);
       throw const AuthException(
-        'كلمة المرور غير صحيحة',
-        'Incorrect password',
+        AccessErrorCode.wrongPassword,
+        debugMessage: 'Incorrect password',
       );
     }
 
@@ -306,8 +314,9 @@ class AuthService {
     if (isDeviceThrottled) {
       final rem = _deviceThrottledUntil!.difference(DateTime.now());
       throw AuthException(
-        'تم تجاوز محاولات الدخول على هذا الجهاز. حاول بعد ${rem.inSeconds + 1} ثانية',
-        'Too many failed attempts on this device. Try again in ${rem.inSeconds + 1}s',
+        AccessErrorCode.deviceThrottled,
+        args: {'duration': rem},
+        debugMessage: 'Too many failed attempts on this device',
       );
     }
     final db = executor ?? await DatabaseHelper.instance.database;
@@ -319,30 +328,34 @@ class AuthService {
     );
 
     if (rows.isEmpty) {
-      throw const AuthException('المستخدم غير موجود', 'User not found');
+      throw const AuthException(
+        AccessErrorCode.userNotFound,
+        debugMessage: 'User not found',
+      );
     }
 
     final user = AppUser.fromMap(rows.first);
 
     if (!user.isActive) {
       throw const AuthException(
-        'هذا الحساب معطل حالياً',
-        'This account is currently disabled',
+        AccessErrorCode.userDisabled,
+        debugMessage: 'This account is currently disabled',
       );
     }
 
     if (user.isLocked) {
       final rem = user.lockedUntil!.difference(DateTime.now());
       throw AuthException(
-        'الحساب مقفل مؤقتاً. حاول بعد ${rem.inSeconds + 1} ثانية',
-        'Account is temporarily locked. Try again in ${rem.inSeconds + 1}s',
+        AccessErrorCode.accountLocked,
+        args: {'duration': rem},
+        debugMessage: 'Account is temporarily locked',
       );
     }
 
     if (!user.hasPin) {
       throw const AuthException(
-        'لم يتم تعيين رمز PIN لهذا الحساب',
-        'No PIN configured for this user',
+        AccessErrorCode.noPinSet,
+        debugMessage: 'No PIN configured for this user',
       );
     }
 
@@ -356,8 +369,8 @@ class AuthService {
       recordDeviceFailure();
       await _recordFailedAttempt(user, db);
       throw const AuthException(
-        'رمز PIN غير صحيح',
-        'Incorrect PIN',
+        AccessErrorCode.wrongPin,
+        debugMessage: 'Incorrect PIN',
       );
     }
 
@@ -405,8 +418,8 @@ class AuthService {
   }) async {
     if (!isValidPassword(newPassword)) {
       throw const AuthException(
-        'كلمة المرور يجب أن لا تقل عن 6 أحرف',
-        'Password must be at least 6 characters',
+        AccessErrorCode.passwordTooShort,
+        debugMessage: 'Password must be at least 6 characters',
       );
     }
     final db = executor ?? await DatabaseHelper.instance.database;
@@ -428,21 +441,24 @@ class AuthService {
       final effectiveActor = actor ?? SessionManager.instance.currentUser;
       if (effectiveActor == null) {
         throw const AuthException(
-          'غير مصرح: يجب تسجيل الدخول',
-          'Unauthorized: session is not authenticated',
+          AccessErrorCode.unauthenticated,
+          debugMessage: 'Unauthorized: session is not authenticated',
         );
       }
 
       if (targetUser == null) {
-        throw const AuthException('المستخدم غير موجود', 'User not found');
+        throw const AuthException(
+          AccessErrorCode.userNotFound,
+          debugMessage: 'User not found',
+        );
       }
 
       if (effectiveActor.id == targetUser.id) {
         if (targetUser.hasPassword) {
           if (currentPassword == null || currentPassword.isEmpty) {
             throw const AuthException(
-              'يجب إدخال كلمة المرور الحالية لتغيير كلمة المرور',
-              'Current password required to change password',
+              AccessErrorCode.selfCredentialRequiresCurrentSecret,
+              debugMessage: 'Current password required to change password',
             );
           }
           final verified = await verifyPassword(
@@ -452,8 +468,8 @@ class AuthService {
           );
           if (!verified) {
             throw const AuthException(
-              'كلمة المرور الحالية غير صحيحة',
-              'Incorrect current password',
+              AccessErrorCode.wrongCurrentPassword,
+              debugMessage: 'Incorrect current password',
             );
           }
         }
@@ -481,11 +497,15 @@ class AuthService {
               'actor_username': effectiveActor.username,
               'target_user_id': targetUser.id,
               'target_username': targetUser.username,
-              'decision': policy.decision.name,
-              'reason': policy.reasonEn,
+              'decision': policy.decision?.name,
+              'reason': policy.debugReason,
             }),
           );
-          throw AuthException(policy.reasonAr, policy.reasonEn);
+          throw AuthException(
+            policy.decision ?? AccessErrorCode.missingPermission,
+            permissionKey: policy.permissionKey,
+            debugMessage: policy.debugReason,
+          );
         }
       }
     }
@@ -521,8 +541,8 @@ class AuthService {
   }) async {
     if (!isValidPin(newPin)) {
       throw const AuthException(
-        'رمز PIN يجب أن يتكون من 4 إلى 6 أرقام',
-        'PIN must be 4 to 6 digits',
+        AccessErrorCode.pinInvalid,
+        debugMessage: 'PIN must be 4 to 8 digits',
       );
     }
     final db = executor ?? await DatabaseHelper.instance.database;
@@ -544,21 +564,24 @@ class AuthService {
       final effectiveActor = actor ?? SessionManager.instance.currentUser;
       if (effectiveActor == null) {
         throw const AuthException(
-          'غير مصرح: يجب تسجيل الدخول',
-          'Unauthorized: session is not authenticated',
+          AccessErrorCode.unauthenticated,
+          debugMessage: 'Unauthorized: session is not authenticated',
         );
       }
 
       if (targetUser == null) {
-        throw const AuthException('المستخدم غير موجود', 'User not found');
+        throw const AuthException(
+          AccessErrorCode.userNotFound,
+          debugMessage: 'User not found',
+        );
       }
 
       if (effectiveActor.id == targetUser.id) {
         if (targetUser.hasPin) {
           if (currentPinOrPassword == null || currentPinOrPassword.isEmpty) {
             throw const AuthException(
-              'يجب إدخال رمز المرور أو كلمة المرور الحالية',
-              'Current PIN or password required',
+              AccessErrorCode.selfCredentialRequiresCurrentSecret,
+              debugMessage: 'Current PIN or password required',
             );
           }
           bool verified = false;
@@ -579,8 +602,8 @@ class AuthService {
           }
           if (!verified) {
             throw const AuthException(
-              'رمز المرور أو كلمة المرور الحالية غير صحيحة',
-              'Incorrect current PIN or password',
+              AccessErrorCode.wrongCurrentSecret,
+              debugMessage: 'Incorrect current PIN or password',
             );
           }
         }
@@ -608,11 +631,15 @@ class AuthService {
               'actor_username': effectiveActor.username,
               'target_user_id': targetUser.id,
               'target_username': targetUser.username,
-              'decision': policy.decision.name,
-              'reason': policy.reasonEn,
+              'decision': policy.decision?.name,
+              'reason': policy.debugReason,
             }),
           );
-          throw AuthException(policy.reasonAr, policy.reasonEn);
+          throw AuthException(
+            policy.decision ?? AccessErrorCode.missingPermission,
+            permissionKey: policy.permissionKey,
+            debugMessage: policy.debugReason,
+          );
         }
       }
     }
@@ -673,14 +700,4 @@ class AuthService {
   }
 }
 
-class AuthException implements Exception {
-  final String messageAr;
-  final String messageEn;
 
-  const AuthException(this.messageAr, this.messageEn);
-
-  String message(bool isArabic) => isArabic ? messageAr : messageEn;
-
-  @override
-  String toString() => messageEn;
-}

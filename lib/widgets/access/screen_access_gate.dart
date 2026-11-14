@@ -1,13 +1,19 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
+import '../../services/access/access_error.dart';
+import '../../services/access/access_policy.dart';
+import '../../services/access/audit_service.dart';
 import '../../services/access/screen_access_policy.dart';
 import '../../services/access/session_manager.dart';
+import 'access_denied_view.dart';
 
 /// Screen-level security gate wrapping protected screen bodies.
 ///
 /// If authorized, renders [child].
-/// If unauthorized, intercepts rendering with [AccessDeniedScaffold].
-class ScreenAccessGate extends StatelessWidget {
+/// If unauthorized, intercepts rendering with [AccessDeniedView].
+class ScreenAccessGate extends StatefulWidget {
   final Type screenType;
   final Widget child;
 
@@ -18,92 +24,62 @@ class ScreenAccessGate extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (!SessionManager.instance.isMultiUserEnabled) {
-      return child;
-    }
-
-    final decision = ScreenAccessPolicy.evaluate(screenType);
-    if (decision.isAllowed) {
-      return child;
-    }
-
-    return AccessDeniedScaffold(
-      screenType: screenType,
-      reasonAr: decision.reasonAr,
-      reasonEn: decision.reasonEn,
-    );
-  }
+  State<ScreenAccessGate> createState() => _ScreenAccessGateState();
 }
 
-/// Standalone scaffold rendered when a user attempts to enter an unauthorized screen.
-class AccessDeniedScaffold extends StatelessWidget {
-  final Type screenType;
-  final String? reasonAr;
-  final String? reasonEn;
+class _ScreenAccessGateState extends State<ScreenAccessGate> {
+  AccessErrorCode? _lastLoggedDecision;
 
-  const AccessDeniedScaffold({
-    super.key,
-    required this.screenType,
-    this.reasonAr,
-    this.reasonEn,
-  });
+  void _logDenialIfNeeded(PolicyResult decision) {
+    if (!decision.isAllowed &&
+        decision.decision != null &&
+        _lastLoggedDecision != decision.decision) {
+      _lastLoggedDecision = decision.decision;
+      DatabaseHelper.instance.database.then((db) {
+        AuditService.instance
+            .logEvent(
+              db,
+              'privilege_escalation_denied',
+              entityType: 'screen',
+              details: jsonEncode({
+                'screen': widget.screenType.toString(),
+                'decision': decision.decision?.name,
+                'permissionKey': decision.permissionKey,
+                'reason': decision.debugReason,
+              }),
+            )
+            .catchError((_) {});
+      }).catchError((_) {});
+    } else if (decision.isAllowed) {
+      _lastLoggedDecision = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final cs = Theme.of(context).colorScheme;
-    final message = l10n.isArabic
-        ? (reasonAr ?? 'لا تملك الصلاحية للوصول إلى هذه الصفحة')
-        : (reasonEn ?? 'You lack the required permission to access this page');
+    if (!SessionManager.instance.isMultiUserEnabled) {
+      return widget.child;
+    }
 
+    final decision = ScreenAccessPolicy.evaluate(widget.screenType);
+    if (decision.isAllowed) {
+      _lastLoggedDecision = null;
+      return widget.child;
+    }
+
+    _logDenialIfNeeded(decision);
+
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.isArabic ? 'غير مصرح' : 'Access Denied'),
+        title: Text(l10n.accessDeniedTitle),
         centerTitle: true,
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.lock_person_outlined,
-                size: 72,
-                color: cs.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                l10n.isArabic ? 'صلاحية غير كافية' : 'Insufficient Permissions',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: cs.error,
-                    ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: cs.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.arrow_back),
-                label: Text(l10n.isArabic ? 'رجوع' : 'Go Back'),
-                onPressed: () {
-                  if (Navigator.canPop(context)) {
-                    Navigator.pop(context);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
+      body: AccessDeniedView(
+        screenType: widget.screenType,
+        decision: decision.decision ?? AccessErrorCode.missingPermission,
+        permissionKey: decision.permissionKey,
+        debugReason: decision.debugReason,
       ),
     );
   }

@@ -16,6 +16,7 @@ import 'package:warqatek/screens/license_screen.dart';
 import 'package:warqatek/screens/tax_profiles_screen.dart';
 import 'package:warqatek/services/access/access_admin_service.dart';
 import 'package:warqatek/services/access/access_guard.dart';
+import 'package:warqatek/services/access/access_error.dart';
 import 'package:warqatek/services/access/access_policy.dart';
 import 'package:warqatek/services/access/access_seeder.dart';
 import 'package:warqatek/services/access/audit_service.dart';
@@ -222,8 +223,8 @@ void main() {
         permissions: cashierPermissions,
       );
       expect(rogueResult.isAllowed, isFalse);
-      expect(rogueResult.decision, PolicyDecision.deniedMissingPermission);
-      expect(rogueResult.reasonEn, contains('Undeclared screen security policy'));
+      expect(rogueResult.decision, AccessErrorCode.missingPermission);
+      expect(rogueResult.debugReason, contains('Undeclared screen security policy'));
     });
 
     test('Attack 3: Cashier attempts to alter business info, prices, stock, or tax profiles', () async {

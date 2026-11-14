@@ -4,7 +4,7 @@ import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
 import '../../database/access_dao.dart';
 import '../../database/database_helper.dart';
 import '../../models/app_user.dart';
-import 'access_guard.dart';
+import 'access_error.dart';
 import 'audit_service.dart';
 import 'permission_registry.dart';
 
@@ -33,7 +33,7 @@ class SessionManager extends ChangeNotifier {
     id: AccessDao.ownerUserId,
     workspaceId: AccessDao.defaultWorkspaceId,
     username: 'owner',
-    displayName: 'المالك',
+    displayName: 'owner',
     roleId: AccessDao.ownerRoleId,
     isOwner: true,
     isActive: true,
@@ -140,7 +140,10 @@ class SessionManager extends ChangeNotifier {
   /// On enable, loads the real Owner user and establishes session without lock bounce.
   Future<void> setMultiUserEnabled(bool enabled) async {
     if (!enabled && _isMultiUserEnabled && !isOwnerSession) {
-      throw const PermissionDeniedException('owner_only: disable_multi_user');
+      throw const PermissionDeniedException.withCode(
+        AccessErrorCode.multiUserDisableOwnerOnly,
+        debugMessage: 'owner_only: disable_multi_user',
+      );
     }
     final db = await DatabaseHelper.instance.database;
 
@@ -233,7 +236,10 @@ class SessionManager extends ChangeNotifier {
   /// Sets auto-lock duration in minutes (0 = disabled).
   Future<void> setAutoLockMinutes(int minutes) async {
     if (isMultiUserEnabled && !isOwnerSession) {
-      throw const PermissionDeniedException('owner_only: auto_lock_minutes');
+      throw const PermissionDeniedException.withCode(
+        AccessErrorCode.ownerOnly,
+        debugMessage: 'owner_only: auto_lock_minutes',
+      );
     }
     final db = await DatabaseHelper.instance.database;
     await db.rawInsert('''

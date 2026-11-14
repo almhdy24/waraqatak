@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../localization/app_localizations.dart';
 
 /// Reusable global PIN Keypad widget enforced to LTR layout (1 at top-left).
 ///
@@ -415,10 +416,11 @@ class _PinEntryDialogState extends State<PinEntryDialog> {
 
     if (!mounted) return;
     _shakeKey.currentState?.shake();
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _hasError = true;
       _verifying = false;
-      _errorMessage = 'رمز PIN غير صحيح';
+      _errorMessage = l10n.invalidPin;
     });
     await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) {
@@ -512,8 +514,8 @@ class WesternPinInputFormatter extends TextInputFormatter {
   const WesternPinInputFormatter({this.maxLength = 6});
 
   static String normalizeDigits(String text) {
-    const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
-    const persian = '۰۱۲۳۴۵۶۷۸۹';
+    const arabicIndic = '\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669';
+    const persian = '\u06f0\u06f1\u06f2\u06f3\u06f4\u06f5\u06f6\u06f7\u06f8\u06f9';
     final sb = StringBuffer();
     for (final rune in text.runes) {
       final ch = String.fromCharCode(rune);

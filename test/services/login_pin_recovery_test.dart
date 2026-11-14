@@ -6,6 +6,7 @@ import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/models/app_user.dart';
 import 'package:warqatek/services/access/access_admin_service.dart';
 import 'package:warqatek/services/access/access_seeder.dart';
+import 'package:warqatek/services/access/access_error.dart';
 import 'package:warqatek/services/access/audit_service.dart';
 import 'package:warqatek/services/access/auth_service.dart';
 import 'package:warqatek/services/access/recovery_service.dart';
@@ -221,7 +222,7 @@ void main() {
           newPassword: 'ValidPassword123',
           executor: db,
         ),
-        throwsA(predicate((e) => e is AuthException && e.messageEn.contains('locked temporarily'))),
+        throwsA(predicate((e) => e is AuthException && e.code == AccessErrorCode.recoveryLocked)),
       );
     });
   });

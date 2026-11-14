@@ -4,6 +4,7 @@ import '../../localization/app_localizations.dart';
 import '../../models/role.dart';
 import '../../services/access/access_admin_service.dart';
 import '../../services/access/access_guard.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
 import '../../widgets/app_confirm_dialog.dart';
@@ -112,18 +113,11 @@ class _RolesScreenState extends State<RolesScreen> {
                             }
 
                             if (ctx.mounted) Navigator.pop(ctx, true);
-                          } on AdminException catch (e) {
-                            if (ctx.mounted) {
-                              AppSnackBar.show(ctx, e.message(l10n.isArabic),
-                                  severity: AppSnackBarSeverity.error);
-                            }
-                          } catch (_) {
+                          } catch (e) {
                             if (ctx.mounted) {
                               AppSnackBar.show(
                                 ctx,
-                                l10n.isArabic
-                                    ? 'فشل حفظ الدور'
-                                    : 'Failed to save role',
+                                friendlyError(l10n, e),
                                 severity: AppSnackBarSeverity.error,
                               );
                             }
@@ -193,7 +187,7 @@ class _RolesScreenState extends State<RolesScreen> {
                         ),
                         child: ExpansionTile(
                           title: Text(
-                            g.key.label(l10n.isArabic),
+                            g.key.localizedLabel(l10n),
                             style:
                                 const TextStyle(fontWeight: FontWeight.bold),
                           ),
@@ -210,7 +204,7 @@ class _RolesScreenState extends State<RolesScreen> {
 
                             return CheckboxListTile(
                               title: Text(
-                                perm.name(l10n.isArabic),
+                                perm.localizedName(l10n),
                                 style: const TextStyle(fontSize: 14),
                               ),
                               subtitle: Text(
@@ -264,16 +258,11 @@ class _RolesScreenState extends State<RolesScreen> {
       try {
         await AccessAdminService.instance.deleteRole(roleId: role.id);
         _load();
-      } on AdminException catch (e) {
-        if (mounted) {
-          AppSnackBar.show(context, e.message(l10n.isArabic),
-              severity: AppSnackBarSeverity.error);
-        }
-      } catch (_) {
+      } catch (e) {
         if (mounted) {
           AppSnackBar.show(
             context,
-            l10n.isArabic ? 'فشل حذف الدور' : 'Failed to delete role',
+            friendlyError(l10n, e),
             severity: AppSnackBarSeverity.error,
           );
         }

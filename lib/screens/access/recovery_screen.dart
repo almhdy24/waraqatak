@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../localization/app_localizations.dart';
-import '../../services/access/auth_service.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/recovery_service.dart';
 import '../../services/access/session_manager.dart';
@@ -60,20 +60,12 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
         _recoveryResult = result;
         _newRecoveryCode = result.newRecoveryCode;
       });
-    } on AuthException catch (e) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
       AppSnackBar.show(
         context,
-        e.message(l10n.isArabic),
-        severity: AppSnackBarSeverity.error,
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      AppSnackBar.show(
-        context,
-        l10n.invalidRecoveryCode,
+        friendlyError(l10n, e),
         severity: AppSnackBarSeverity.error,
       );
     }

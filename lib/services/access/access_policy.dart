@@ -1,53 +1,33 @@
 import '../../models/app_user.dart';
 import '../../models/role.dart';
+import 'access_error.dart';
 import 'permission_registry.dart';
-
-/// Policy decisions and reason codes for granular authorization decisions.
-enum PolicyDecision {
-  allow,
-  deniedOwnerOnly,
-  deniedTargetIsOwner,
-  deniedTargetIsPeerOrSuperior,
-  deniedTargetHasPermissionsActorLacks,
-  deniedAssignRoleWithUnheldPermissions,
-  deniedGrantUnheldPermission,
-  deniedEditRoleWithUnheldPermissions,
-  deniedEditOwnRole,
-  deniedChangeOwnRole,
-  deniedChangeOwnActiveStatus,
-  deniedCreateOwner,
-  deniedDeleteSystemRole,
-  deniedRoleInUse,
-  deniedMissingPermission,
-  deniedSelfCredentialChangeRequiresCurrentSecret,
-  deniedUnauthenticated,
-}
 
 /// Result of evaluating an [AccessPolicy] rule.
 class PolicyResult {
   final bool isAllowed;
-  final PolicyDecision decision;
-  final String reasonAr;
-  final String reasonEn;
+  final AccessErrorCode? decision;
+  final String? permissionKey;
+  final String debugReason;
 
   const PolicyResult.allow()
       : isAllowed = true,
-        decision = PolicyDecision.allow,
-        reasonAr = '',
-        reasonEn = '';
+        decision = null,
+        permissionKey = null,
+        debugReason = '';
 
-  const PolicyResult.deny(this.decision, this.reasonAr, this.reasonEn)
-      : isAllowed = false;
-
-  String reason(bool isArabic) => isArabic ? reasonAr : reasonEn;
+  const PolicyResult.deny(
+    AccessErrorCode this.decision,
+    this.debugReason, {
+    this.permissionKey,
+  }) : isAllowed = false;
 
   @override
   String toString() => isAllowed
       ? 'PolicyResult.allow'
-      : 'PolicyResult.deny($decision: $reasonEn)';
+      : 'PolicyResult.deny($decision: $debugReason)';
 }
 
-/// Pure, unit-testable service implementing Waraqatak Privilege Hierarchy (H1–H4).
 abstract final class AccessPolicy {
   /// Keys that are strictly restricted to the system Owner and can never be
   /// granted to any other user or role (H1).
@@ -82,8 +62,7 @@ abstract final class AccessPolicy {
 
     if (!actorPermissions.contains(PermissionRegistry.usersManage)) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'لا تملك صلاحية إدارة المستخدمين',
+        AccessErrorCode.missingPermission,
         'Missing users.manage permission',
       );
     }
@@ -91,8 +70,7 @@ abstract final class AccessPolicy {
     // A non-owner delegate cannot view or inspect the Owner account
     if (target.isOwner) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetIsOwner,
-        'لا يمكن للمفوض عرض أو إدارة حساب المالك',
+        AccessErrorCode.targetIsOwner,
         'Delegates cannot view or manage the Owner account',
       );
     }
@@ -102,8 +80,7 @@ abstract final class AccessPolicy {
         targetPermissions.intersection(privilegedKeys).isNotEmpty;
     if (targetHasPrivileged) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetIsPeerOrSuperior,
-        'لا يمكن تعديل أو إدارة مستخدم يملك صلاحيات إدارية مماثلة أو عليا',
+        AccessErrorCode.targetIsPeerOrSuperior,
         'Cannot manage peer or superior administrative users',
       );
     }
@@ -112,8 +89,7 @@ abstract final class AccessPolicy {
     final unheld = targetPermissions.difference(actorPermissions);
     if (unheld.isNotEmpty) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetHasPermissionsActorLacks,
-        'لا يمكن إدارة مستخدم يملك صلاحيات لا تملكها',
+        AccessErrorCode.targetHasPermissionsActorLacks,
         'Cannot manage user possessing permissions you lack',
       );
     }
@@ -133,8 +109,7 @@ abstract final class AccessPolicy {
     // Target is Owner: blocked for everyone except the Owner themselves
     if (target.isOwner) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetIsOwner,
-        'حساب المالك محمي ولا يمكن تعديله إلا بواسطة المالك نفسه',
+        AccessErrorCode.targetIsOwner,
         'The Owner account is protected and can only be modified by the Owner',
       );
     }
@@ -147,8 +122,7 @@ abstract final class AccessPolicy {
     // Must have users.manage
     if (!actorPermissions.contains(PermissionRegistry.usersManage)) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'لا تملك صلاحية إدارة المستخدمين',
+        AccessErrorCode.missingPermission,
         'Missing users.manage permission',
       );
     }
@@ -158,8 +132,7 @@ abstract final class AccessPolicy {
         targetPermissions.intersection(privilegedKeys).isNotEmpty;
     if (targetHasPrivileged) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetIsPeerOrSuperior,
-        'لا يمكن تعديل مستخدم يملك صلاحيات إدارية مماثلة أو عليا',
+        AccessErrorCode.targetIsPeerOrSuperior,
         'Cannot edit peer or superior administrative users',
       );
     }
@@ -168,8 +141,7 @@ abstract final class AccessPolicy {
     final unheld = targetPermissions.difference(actorPermissions);
     if (unheld.isNotEmpty) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetHasPermissionsActorLacks,
-        'لا يمكن تعديل مستخدم يملك صلاحيات لا تملكها',
+        AccessErrorCode.targetHasPermissionsActorLacks,
         'Cannot edit user possessing permissions you lack',
       );
     }
@@ -189,8 +161,7 @@ abstract final class AccessPolicy {
     // Owner credentials can NEVER be reset by a delegate
     if (target.isOwner) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetIsOwner,
-        'لا يمكن إعادة تعيين بيانات اعتماد المالك من قبل أي مستخدم آخر',
+        AccessErrorCode.targetIsOwner,
         'Owner credentials cannot be reset by another user',
       );
     }
@@ -217,16 +188,14 @@ abstract final class AccessPolicy {
   }) {
     if (target.isOwner) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedTargetIsOwner,
-        'لا يمكن تعطيل حساب المالك',
+        AccessErrorCode.targetIsOwner,
         'Cannot disable the Owner account',
       );
     }
 
     if (actor.id == target.id) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedChangeOwnActiveStatus,
-        'لا يمكنك تعطيل حسابك الخاص',
+        AccessErrorCode.changeOwnActiveStatus,
         'Cannot disable your own account',
       );
     }
@@ -251,16 +220,14 @@ abstract final class AccessPolicy {
     // Non-owner cannot assign Owner role or create an Owner
     if (role.isSystem || role.id == 'role-owner') {
       return const PolicyResult.deny(
-        PolicyDecision.deniedCreateOwner,
-        'لا يمكن تعيين دور المالك أو أدوار النظام',
+        AccessErrorCode.createOwner,
         'Cannot assign Owner or system roles',
       );
     }
 
     if (!actorPermissions.contains(PermissionRegistry.usersManage)) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'لا تملك صلاحية إدارة المستخدمين',
+        AccessErrorCode.missingPermission,
         'Missing users.manage permission',
       );
     }
@@ -270,8 +237,7 @@ abstract final class AccessPolicy {
         rolePermissions.intersection(ownerOnlyKeys).isNotEmpty;
     if (containsOwnerOnly) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedOwnerOnly,
-        'هذا الدور يحتوي على صلاحيات مقتصرة حصرياً على المالك',
+        AccessErrorCode.ownerOnly,
         'This role contains OWNER_ONLY permissions',
       );
     }
@@ -280,8 +246,7 @@ abstract final class AccessPolicy {
     final unheld = rolePermissions.difference(actorPermissions);
     if (unheld.isNotEmpty) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedAssignRoleWithUnheldPermissions,
-        'لا يمكن تعيين دور يحتوي على صلاحيات لا تملكها بنفسك',
+        AccessErrorCode.assignRoleWithUnheldPermissions,
         'Cannot assign role granting permissions you do not possess',
       );
     }
@@ -298,26 +263,26 @@ abstract final class AccessPolicy {
     if (actor.isOwner) return const PolicyResult.allow();
 
     if (isOwnerOnly(permissionKey)) {
-      return const PolicyResult.deny(
-        PolicyDecision.deniedOwnerOnly,
-        'هذه الصلاحية مقتصرة حصرياً على المالك ولا يمكن منحها',
+      return PolicyResult.deny(
+        AccessErrorCode.ownerOnly,
         'This permission is strictly OWNER_ONLY and cannot be granted',
+        permissionKey: permissionKey,
       );
     }
 
     if (!actorPermissions.contains(PermissionRegistry.usersManage)) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'لا تملك صلاحية إدارة المستخدمين',
+        AccessErrorCode.missingPermission,
         'Missing users.manage permission',
+        permissionKey: PermissionRegistry.usersManage,
       );
     }
 
     if (!actorPermissions.contains(permissionKey)) {
-      return const PolicyResult.deny(
-        PolicyDecision.deniedGrantUnheldPermission,
-        'لا يمكنك منح صلاحية لا تملكها بنفسك',
+      return PolicyResult.deny(
+        AccessErrorCode.grantUnheldPermission,
         'Cannot grant a permission you do not possess',
+        permissionKey: permissionKey,
       );
     }
 
@@ -335,16 +300,14 @@ abstract final class AccessPolicy {
 
     if (role.isSystem || role.id == 'role-owner') {
       return const PolicyResult.deny(
-        PolicyDecision.deniedDeleteSystemRole,
-        'لا يمكن تعديل أدوار النظام المحمية',
+        AccessErrorCode.deleteSystemRole,
         'Cannot modify protected system roles',
       );
     }
 
     if (!actorPermissions.contains(PermissionRegistry.rolesManage)) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'لا تملك صلاحية إدارة الأدوار',
+        AccessErrorCode.missingPermission,
         'Missing roles.manage permission',
       );
     }
@@ -352,8 +315,7 @@ abstract final class AccessPolicy {
     // Cannot edit the role currently assigned to actor
     if (actor.roleId == role.id) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedEditOwnRole,
-        'لا يمكنك تعديل الدور المعين لحسابك الخاص',
+        AccessErrorCode.editOwnRole,
         'Cannot edit the role assigned to yourself',
       );
     }
@@ -363,8 +325,7 @@ abstract final class AccessPolicy {
         rolePermissions.intersection(ownerOnlyKeys).isNotEmpty;
     if (containsOwnerOnly) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedOwnerOnly,
-        'لا يمكن إضافة صلاحيات مقتصرة على المالك للأدوار',
+        AccessErrorCode.ownerOnly,
         'Cannot add OWNER_ONLY permissions to roles',
       );
     }
@@ -373,8 +334,7 @@ abstract final class AccessPolicy {
     final unheld = rolePermissions.difference(actorPermissions);
     if (unheld.isNotEmpty) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedEditRoleWithUnheldPermissions,
-        'لا يمكنك تعديل دور يحتوي على صلاحيات لا تملكها',
+        AccessErrorCode.editRoleWithUnheldPermissions,
         'Cannot edit role containing permissions you lack',
       );
     }
@@ -392,16 +352,14 @@ abstract final class AccessPolicy {
   }) {
     if (role.isSystem || role.id == 'role-owner') {
       return const PolicyResult.deny(
-        PolicyDecision.deniedDeleteSystemRole,
-        'لا يمكن حذف أدوار النظام الأساسية',
+        AccessErrorCode.deleteSystemRole,
         'Cannot delete core system roles',
       );
     }
 
     if (assignedUsersCount > 0) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedRoleInUse,
-        'لا يمكن حذف الدور وهو معين لمستخدمين حاليين',
+        AccessErrorCode.roleInUse,
         'Cannot delete role while assigned to active users',
       );
     }
@@ -421,10 +379,9 @@ abstract final class AccessPolicy {
   }) {
     if (actor.id == target.id) return const PolicyResult.allow();
     return const PolicyResult.deny(
-      PolicyDecision.deniedMissingPermission,
-      'لا يمكنك تعديل الاسم التعريفي لمستخدم آخر عبر الخدمة الذاتية',
-      'Cannot change display name of another user via self-service',
-    );
+        AccessErrorCode.missingPermission,
+        'Cannot change display name of another user via self-service',
+      );
   }
 
   /// Asserts whether [actor] can change their own password (H4).
@@ -435,15 +392,13 @@ abstract final class AccessPolicy {
   }) {
     if (actor.id != target.id) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'تغيير كلمة المرور الذاتية ينطبق فقط على الحساب الشخصي',
+        AccessErrorCode.missingPermission,
         'Self password change applies only to own account',
       );
     }
     if (!currentPasswordVerified) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedSelfCredentialChangeRequiresCurrentSecret,
-        'يجب إدخال كلمة المرور الحالية لتغيير كلمة المرور',
+        AccessErrorCode.selfCredentialRequiresCurrentSecret,
         'Current password required to change password',
       );
     }
@@ -458,15 +413,13 @@ abstract final class AccessPolicy {
   }) {
     if (actor.id != target.id) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedMissingPermission,
-        'تغيير رمز المرور الذاتي ينطبق فقط على الحساب الشخصي',
+        AccessErrorCode.missingPermission,
         'Self PIN change applies only to own account',
       );
     }
     if (!currentPinOrPasswordVerified) {
       return const PolicyResult.deny(
-        PolicyDecision.deniedSelfCredentialChangeRequiresCurrentSecret,
-        'يجب إدخال رمز المرور أو كلمة المرور الحالية لتغيير رمز المرور',
+        AccessErrorCode.selfCredentialRequiresCurrentSecret,
         'Current PIN or password required to change PIN',
       );
     }

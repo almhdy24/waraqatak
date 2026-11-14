@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
 import '../../services/access/access_admin_service.dart';
+import '../../services/access/access_error.dart';
 import '../../services/access/access_guard.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
 import '../../widgets/app_empty_state.dart';
@@ -121,9 +123,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
       if (!SessionManager.instance.isOwnerSession) {
         AppSnackBar.show(
           context,
-          l10n.isArabic
-              ? 'فقط المالك يمكنه تعطيل وضع تعدد المستخدمين'
-              : 'Only the Owner can disable multi-user mode',
+          l10n.disableMultiUserOwnerOnly,
           severity: AppSnackBarSeverity.error,
         );
         return;
@@ -132,10 +132,8 @@ class _UsersListScreenState extends State<UsersListScreen> {
       // Sensitive action re-auth gate
       final reauthed = await SensitiveActionGate.reauthenticate(
         context,
-        title: l10n.isArabic ? 'تعطيل وضع تعدد المستخدمين' : 'Disable Multi-User Mode',
-        message: l10n.isArabic
-            ? 'يتطلب تعطيل وضع تعدد المستخدمين تأكيد كلمة مرور المالك لحماية بيانات المتجر.'
-            : 'Disabling multi-user mode requires confirming the Owner password.',
+        title: l10n.disableMultiUserButton,
+        message: l10n.disableMultiUserConfirmMsg,
         requireOwner: true,
       );
       if (!reauthed || !mounted) return;
@@ -144,11 +142,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(l10n.disableMultiUserButton),
-          content: Text(
-            l10n.isArabic
-                ? 'هل أنت متأكد من رغبتك في تعطيل وضع تعدد المستخدمين والعودة لنمط المستخدم الفردي؟'
-                : 'Are you sure you want to disable multi-user mode and return to single-user mode?',
-          ),
+          content: Text(l10n.disableMultiUserDialogMsg),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -157,7 +151,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(l10n.isArabic ? 'تعطيل' : 'Disable'),
+              child: Text(l10n.disableAction),
             ),
           ],
         ),
@@ -169,15 +163,13 @@ class _UsersListScreenState extends State<UsersListScreen> {
           if (mounted) {
             AppSnackBar.show(
               context,
-              l10n.isArabic
-                  ? 'تم تعطيل وضع تعدد المستخدمين بنجاح'
-                  : 'Multi-user mode disabled successfully',
+              l10n.disableMultiUserSuccess,
             );
             _load();
           }
         } catch (e) {
           if (!mounted) return;
-          AppSnackBar.show(context, e.toString(), severity: AppSnackBarSeverity.error);
+          AppSnackBar.show(context, friendlyError(l10n, e), severity: AppSnackBarSeverity.error);
         }
       }
     } else {
@@ -221,7 +213,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
                   controller: _searchCtrl,
                   autofocus: true,
                   decoration: InputDecoration(
-                    hintText: l10n.isArabic ? 'بحث عن مستخدم...' : 'Search user...',
+                    hintText: l10n.searchUser,
                     border: InputBorder.none,
                     hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
                   ),
@@ -232,7 +224,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
             if (isMultiUser) ...[
               IconButton(
                 icon: Icon(_isSearching ? Icons.close : Icons.search),
-                tooltip: _isSearching ? l10n.cancel : (l10n.isArabic ? 'بحث' : 'Search'),
+                tooltip: _isSearching ? l10n.cancel : l10n.search,
                 onPressed: () {
                   setState(() {
                     if (_isSearching) {
@@ -248,7 +240,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
               if (canManageRoles)
                 IconButton(
                   icon: const Icon(Icons.admin_panel_settings_outlined),
-                  tooltip: l10n.isArabic ? 'الأدوار والصلحيات' : 'Roles & Permissions',
+                  tooltip: l10n.rolesAndPermissions,
                   onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const RolesScreen()),
@@ -374,9 +366,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Text(
-                                          l10n.isArabic
-                                              ? 'وضع تعدد المستخدمين مفعل. يمكنك الآن إضافة كاشير أو محاسب أو مدير لتوزيع المهام بأمان.'
-                                              : 'Multi-User Mode is active. Add cashiers or managers to safely delegate store operations.',
+                                          l10n.multiUserActiveBanner,
                                           style: TextStyle(
                                             fontSize: 13,
                                             color: cs.onSurface,
@@ -515,9 +505,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
                                     if (user.isOwner && !isOwnerSession) {
                                       AppSnackBar.show(
                                         context,
-                                        l10n.isArabic
-                                            ? 'حساب المالك محمي ولا يمكن تعديله إلا بواسطة المالك'
-                                            : 'The Owner account is protected and can only be modified by the Owner',
+                                        localizeAccessError(l10n, AccessErrorCode.targetIsOwner),
                                         severity: AppSnackBarSeverity.error,
                                       );
                                       return;
@@ -529,9 +517,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
                                     if (!isOwnerSession && !isSelf && !canManage) {
                                       AppSnackBar.show(
                                         context,
-                                        l10n.isArabic
-                                            ? 'لا تملك صلاحية إدارة المستخدمين'
-                                            : 'Missing users.manage permission',
+                                        localizeAccessError(l10n, AccessErrorCode.missingPermission, permissionKey: PermissionRegistry.usersManage),
                                         severity: AppSnackBarSeverity.error,
                                       );
                                       return;

@@ -4,7 +4,7 @@ import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
 import '../../models/role.dart';
 import '../../services/access/access_admin_service.dart';
-import '../../services/access/access_guard.dart';
+import '../../services/access/access_messages.dart';
 import '../../services/access/auth_service.dart';
 import '../../services/access/permission_registry.dart';
 import '../../services/access/session_manager.dart';
@@ -118,28 +118,12 @@ class _UserFormScreenState extends State<UserFormScreen> {
       if (!mounted) return;
       AppSnackBar.show(context, l10n.savedSuccessfully);
       Navigator.pop(context, true);
-    } on AdminException catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      AppSnackBar.show(context, e.message(l10n.isArabic), severity: AppSnackBarSeverity.error);
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      AppSnackBar.show(context, e.message(l10n.isArabic), severity: AppSnackBarSeverity.error);
-    } on PermissionDeniedException catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      AppSnackBar.show(
-        context,
-        l10n.isArabic ? 'غير مصرح: نقص في الصلاحيات' : 'Unauthorized: missing permission (${e.permissionKey})',
-        severity: AppSnackBarSeverity.error,
-      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
       AppSnackBar.show(
         context,
-        l10n.isArabic ? 'حدث خطأ أثناء الحفظ' : 'An error occurred while saving',
+        friendlyError(l10n, e),
         severity: AppSnackBarSeverity.error,
       );
     }
@@ -152,7 +136,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
     final confirmed = await AppConfirmDialog.show(
       context,
       title: l10n.disableAction,
-      message: '${l10n.disableAction}: ${widget.user!.displayName}؟',
+      message: l10n.disableUserConfirm(widget.user!.displayName),
       confirmLabel: l10n.disableAction,
       isDestructive: true,
     );
@@ -166,14 +150,11 @@ class _UserFormScreenState extends State<UserFormScreen> {
         if (!mounted) return;
         AppSnackBar.show(context, l10n.savedSuccessfully);
         Navigator.pop(context, true);
-      } on AdminException catch (e) {
-        if (!mounted) return;
-        AppSnackBar.show(context, e.message(l10n.isArabic), severity: AppSnackBarSeverity.error);
-      } catch (_) {
+      } catch (e) {
         if (!mounted) return;
         AppSnackBar.show(
           context,
-          l10n.isArabic ? 'فشل تعطيل الحساب' : 'Failed to deactivate account',
+          friendlyError(l10n, e),
           severity: AppSnackBarSeverity.error,
         );
       }
@@ -236,7 +217,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
                       ),
                       child: ExpansionTile(
                         title: Text(
-                          groupEntry.key.label(l10n.isArabic),
+                          groupEntry.key.localizedLabel(l10n),
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
@@ -248,7 +229,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
 
                           return ListTile(
                             title: Text(
-                              permItem.name(l10n.isArabic),
+                              permItem.localizedName(l10n),
                               style: const TextStyle(fontSize: 14),
                             ),
                             subtitle: Text(
@@ -356,18 +337,13 @@ class _UserFormScreenState extends State<UserFormScreen> {
                         labelText: l10n.username,
                         prefixIcon: const Icon(Icons.person_outline),
                         border: const OutlineInputBorder(),
-                        helperText: _isOwner
-                            ? (l10n.isArabic
-                                ? 'اسم مستخدم المالك ثابت ولا يمكن تعديله'
-                                : 'Owner username is immutable')
-                            : null,
+                        helperText: _isOwner ? l10n.ownerUsernameImmutable : null,
                       ),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return l10n.required;
-                        if (v.trim().length < 3) {
-                          return l10n.isArabic
-                              ? 'اسم المستخدم يجب أن لا يقل عن 3 أحرف'
-                              : 'Username must be at least 3 characters';
+                        final trimmed = v.trim();
+                        if (trimmed.length < 3 || trimmed.length > 32 || !RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(trimmed)) {
+                          return l10n.errUsernameInvalid;
                         }
                         return null;
                       },
@@ -425,14 +401,10 @@ class _UserFormScreenState extends State<UserFormScreen> {
                       ),
                       validator: (v) {
                         if (_isNew && (v == null || v.length < 6)) {
-                          return l10n.isArabic
-                              ? 'كلمة المرور يجب أن لا تقل عن 6 أحرف'
-                              : 'Password must be at least 6 characters';
+                          return l10n.passwordMinLength;
                         }
                         if (!_isNew && v != null && v.isNotEmpty && v.length < 6) {
-                          return l10n.isArabic
-                              ? 'كلمة المرور يجب أن لا تقل عن 6 أحرف'
-                              : 'Password must be at least 6 characters';
+                          return l10n.passwordMinLength;
                         }
                         return null;
                       },
@@ -453,9 +425,7 @@ class _UserFormScreenState extends State<UserFormScreen> {
                       ),
                       validator: (v) {
                         if (v != null && v.trim().isNotEmpty && !AuthService.isValidPin(v.trim())) {
-                          return l10n.isArabic
-                              ? 'رمز PIN يجب أن يتكون من 4 إلى 6 أرقام'
-                              : 'PIN must be 4 to 6 digits';
+                          return l10n.pinDigitsCount;
                         }
                         return null;
                       },
@@ -473,8 +443,8 @@ class _UserFormScreenState extends State<UserFormScreen> {
                           title: Text(l10n.permissionOverrides),
                           subtitle: Text(
                             _overrides.isEmpty
-                                ? (l10n.isArabic ? 'بدون استثناءات مخصصة' : 'No custom overrides')
-                                : '${_overrides.length} ${l10n.isArabic ? "صلاحيات مخصصة" : "custom permissions"}',
+                                ? l10n.noCustomOverrides
+                                : l10n.customPermissionsCount(_overrides.length),
                           ),
                           trailing: const Icon(Icons.chevron_right),
                           onTap: _showOverridesSheet,

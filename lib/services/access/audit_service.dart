@@ -134,7 +134,7 @@ class AuditService {
     const entityType = 'system';
     const details = 'v29_genesis_anchor';
     const userId = 'system';
-    const userName = 'النظام';
+    const userName = 'system';
     const prev = genesisHash;
 
     final hash = await computeHash(
@@ -234,13 +234,13 @@ class AuditService {
       userName = explicitUserName;
     } else if (AccessGuard.isSystemContext) {
       userId = 'system';
-      userName = 'النظام';
+      userName = 'system';
     } else {
       final session = SessionManager.instance;
       if (session.isMultiUserEnabled) {
         if (session.isLocked || session.currentUser == null) {
           userId = 'unauthenticated';
-          userName = 'غير مسجل';
+          userName = 'unauthenticated';
         } else {
           userId = session.currentUser!.id;
           userName = session.currentUser!.displayName;
@@ -252,7 +252,7 @@ class AuditService {
           userName = user.displayName;
         } else {
           userId = AccessDao.ownerUserId;
-          userName = 'المالك';
+          userName = 'owner';
         }
       }
     }

@@ -20,17 +20,18 @@ abstract final class AccessContext {
     return session.currentUser?.id ?? AccessDao.ownerUserId;
   }
 
-  /// Returns current caller's display name.
+  /// Returns current caller's display name or neutral identifier.
   static String get currentUserName {
-    if (AccessGuard.isSystemContext) return 'النظام';
+    if (AccessGuard.isSystemContext) return 'system';
     final session = SessionManager.instance;
     if (session.isMultiUserEnabled) {
       if (session.isLocked || session.currentUser == null) {
-        return 'غير مسجل';
+        return 'unauthenticated';
       }
       return session.currentUser!.displayName;
     }
-    return session.currentUser?.displayName ?? 'المالك';
+    final name = session.currentUser?.displayName;
+    return (name != null && name.isNotEmpty) ? name : 'owner';
   }
 
   /// Returns current origin device ID.
