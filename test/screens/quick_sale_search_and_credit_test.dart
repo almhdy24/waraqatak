@@ -202,6 +202,9 @@ void main() {
 
       // Count still 3
       expect(find.text(l10n.posItemsCount('3')), findsOneWidget);
+
+      // Drain AppSnackBar dismiss timer
+      await tester.pump(const Duration(seconds: 4));
     },
   );
 
@@ -250,6 +253,9 @@ void main() {
         // Toast shown: requires customer
         expect(find.text(l10n.customerRequiredForCreditSale), findsOneWidget);
       }
+
+      // Drain AppSnackBar dismiss timer
+      await tester.pump(const Duration(seconds: 4));
     },
   );
 }

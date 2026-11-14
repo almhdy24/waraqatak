@@ -260,7 +260,14 @@ void main() {
       );
       final customer = (await db.getContactById(contactId))!;
 
-      final cart = PosCart()..add(pen, quantity: 1); // 500
+      final bookId = await ProductService.createProduct(
+        name: 'دفتر 1',
+        salePrice: 500,
+        stockQuantity: 100,
+      );
+      final book = (await db.getProductById(bookId))!;
+
+      final cart = PosCart()..add(book, quantity: 1); // 500
       final docId = await DocumentService.createDocument(
         type: 'invoice',
         business: business.copyWith(taxesEnabled: false),
@@ -303,7 +310,14 @@ void main() {
       );
       final customer = (await db.getContactById(contactId))!;
 
-      final cart = PosCart()..add(pen, quantity: 1); // 500
+      final bookId = await ProductService.createProduct(
+        name: 'دفتر 2',
+        salePrice: 500,
+        stockQuantity: 100,
+      );
+      final book = (await db.getProductById(bookId))!;
+
+      final cart = PosCart()..add(book, quantity: 1); // 500
       final docId = await DocumentService.createDocument(
         type: 'invoice',
         business: business.copyWith(taxesEnabled: false),

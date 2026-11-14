@@ -138,7 +138,13 @@ void main() {
       // Now verify ActionChip exists with full balance label
       expect(find.byType(ActionChip), findsOneWidget);
       expect(find.textContaining(l10n.voucherPayFullBalance), findsOneWidget);
-      expect(find.textContaining('3,500'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ActionChip),
+          matching: find.textContaining('3,500'),
+        ),
+        findsOneWidget,
+      );
 
       // Tap the ActionChip to populate the amount field
       await tester.tap(find.byType(ActionChip));
