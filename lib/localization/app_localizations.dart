@@ -3937,4 +3937,13 @@ class AppLocalizations {
     'لا يمكن حذف منتج مستخدم في مستندات. يمكنك تعطيله بدلاً من ذلك.',
     'A product used in documents can\'t be deleted. You can deactivate it instead.',
   );
+  String get customerRequiredForCreditSale => _t(
+    'يجب اختيار عميل للمبيعات الآجلة.',
+    'Customer selection is required for credit sales.',
+  );
+  String get voucherPayFullBalance =>
+      _t('سداد كامل الرصيد', 'Pay Full Balance');
+  String get exact => _t('المبلغ تماماً', 'Exact');
+  String get selectCustomer => _t('اختيار عميل', 'Select Customer');
+  String get clear => _t('مسح', 'Clear');
 }

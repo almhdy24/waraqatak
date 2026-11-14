@@ -7,8 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/models/business.dart';
+import 'package:warqatek/models/contact.dart';
 import 'package:warqatek/models/document_status.dart';
 import 'package:warqatek/models/product.dart';
+import 'package:warqatek/screens/quick_sale_screen.dart';
 import 'package:warqatek/services/document_service.dart';
 import 'package:warqatek/services/pos_cart.dart';
 import 'package:warqatek/services/product_service.dart';
@@ -244,4 +246,150 @@ void main() {
       expect(movements.single.quantity, closeTo(-1.25, 0.0001));
     },
   );
+
+  test(
+    'credit sale: partial payment with customer records upfront payment and remaining balance',
+    () async {
+      final db = DatabaseHelper.instance;
+      final contactId = await db.insertContact(
+        const Contact(
+          name: 'العميل محمد',
+          phone: '0912345678',
+          type: 'customer',
+        ),
+      );
+      final customer = (await db.getContactById(contactId))!;
+
+      final cart = PosCart()..add(pen, quantity: 1); // 500
+      final docId = await DocumentService.createDocument(
+        type: 'invoice',
+        business: business.copyWith(taxesEnabled: false),
+        items: cart.toItemInputs(),
+        discount: 0,
+        paid: 200, // partial payment
+        date: DateTime.now(),
+        paymentMethod: 'cash',
+        contact: customer,
+      );
+
+      final inv = (await db.getDocumentById(docId))!;
+      expect(inv.status, DocumentStatus.partiallyPaid);
+      expect(inv.total, 500);
+      expect(inv.paid, 200);
+      expect(inv.remaining, 300);
+      expect(inv.contactId, contactId);
+
+      final payments = await db.getDocumentPayments(docId);
+      expect(payments, hasLength(1));
+      expect(payments.single.amount, 200);
+      expect(payments.single.paymentMethod, 'cash');
+
+      // Customer outstanding balance should be 300
+      final outstanding = await db.getContactOutstanding(contactId, 'invoice');
+      expect(outstanding, 300);
+    },
+  );
+
+  test(
+    'credit sale: zero payment with customer creates unpaid invoice',
+    () async {
+      final db = DatabaseHelper.instance;
+      final contactId = await db.insertContact(
+        const Contact(
+          name: 'العميل علي',
+          phone: '0998877665',
+          type: 'customer',
+        ),
+      );
+      final customer = (await db.getContactById(contactId))!;
+
+      final cart = PosCart()..add(pen, quantity: 1); // 500
+      final docId = await DocumentService.createDocument(
+        type: 'invoice',
+        business: business.copyWith(taxesEnabled: false),
+        items: cart.toItemInputs(),
+        discount: 0,
+        paid: 0, // zero payment (on account)
+        date: DateTime.now(),
+        contact: customer,
+      );
+
+      final inv = (await db.getDocumentById(docId))!;
+      expect(inv.status, DocumentStatus.issued);
+      expect(inv.total, 500);
+      expect(inv.paid, 0);
+      expect(inv.remaining, 500);
+      expect(inv.contactId, contactId);
+
+      final payments = await db.getDocumentPayments(docId);
+      expect(payments, isEmpty);
+
+      // Customer outstanding balance should be 500
+      final outstanding = await db.getContactOutstanding(contactId, 'invoice');
+      expect(outstanding, 500);
+    },
+  );
+
+  group('Smart cash suggestions', () {
+    test('exact amount is always first suggestion', () {
+      final suggestions = QuickSaleScreen.computeCashSuggestions(
+        total: 1250,
+        decimalDigits: 0,
+      );
+      expect(suggestions.first, 1250);
+    });
+
+    test(
+      'rounded denominations 500, 1000, 5000, 10000 are produced in order',
+      () {
+        final suggestions = QuickSaleScreen.computeCashSuggestions(
+          total: 1250,
+          decimalDigits: 0,
+        );
+        expect(suggestions, equals([1250.0, 1500.0, 2000.0, 5000.0]));
+      },
+    );
+
+    test('duplicates are eliminated', () {
+      final suggestions = QuickSaleScreen.computeCashSuggestions(
+        total: 7500,
+        decimalDigits: 0,
+      );
+      // next multiple of 500 is 8000, next of 1000 is 8000 (duplicate eliminated)
+      // next multiple of 5000 is 10000, next of 10000 is 10000 (duplicate eliminated)
+      expect(suggestions, equals([7500.0, 8000.0, 10000.0]));
+      expect(suggestions.toSet().length, equals(suggestions.length));
+    });
+
+    test(
+      'small totals with decimal digits use natural currency denominations',
+      () {
+        final suggestions = QuickSaleScreen.computeCashSuggestions(
+          total: 15.5,
+          decimalDigits: 2,
+        );
+        expect(suggestions.first, 15.5);
+        expect(suggestions, equals([15.5, 16.0, 20.0, 50.0]));
+      },
+    );
+
+    test('displays up to four suggestions maximum', () {
+      final suggestions = QuickSaleScreen.computeCashSuggestions(
+        total: 250,
+        decimalDigits: 0,
+      );
+      expect(suggestions.length, lessThanOrEqualTo(4));
+    });
+
+    test('returns empty suggestions for zero or negative total', () {
+      expect(
+        QuickSaleScreen.computeCashSuggestions(total: 0, decimalDigits: 2),
+        isEmpty,
+      );
+      expect(
+        QuickSaleScreen.computeCashSuggestions(total: -50, decimalDigits: 2),
+        isEmpty,
+      );
+    });
+  });
 }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
@@ -26,6 +28,7 @@ import '../services/product_service.dart';
 import '../utils/arabic_search_utils.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../utils/money_utils.dart';
 import '../utils/number_input.dart';
 import '../utils/quick_sale_settings.dart';
 import '../widgets/amount_field.dart';
@@ -35,6 +38,7 @@ import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/pos_product_tile.dart';
 import 'barcode_scanner_screen.dart';
 import 'document_detail_screen.dart';
@@ -45,6 +49,41 @@ import 'document_detail_screen.dart';
 /// reports work exactly as for invoices created from the invoice screen).
 class QuickSaleScreen extends StatefulWidget {
   const QuickSaleScreen({super.key});
+
+  /// Computes dynamic smart cash suggestions:
+  /// - Exact total
+  /// - Convenient rounded amounts using denominations [500, 1000, 5000, 10000]
+  ///   (or [1, 5, 10, 20, 50, 100] for decimal currencies with total < 100)
+  /// - Distinct / deduplicated
+  /// - Up to 4 suggestions
+  static List<double> computeCashSuggestions({
+    required double total,
+    required int decimalDigits,
+    List<int> denominations = const [500, 1000, 5000, 10000],
+  }) {
+    if (total <= 0) return const [];
+    final results = <double>{};
+    final exact = MoneyUtils.round(total, decimalDigits);
+    results.add(exact);
+
+    final List<num> effectiveDenominations;
+    if (total < 100 && decimalDigits > 0) {
+      effectiveDenominations = const [1, 5, 10, 20, 50, 100];
+    } else {
+      effectiveDenominations = denominations;
+    }
+
+    for (final d in effectiveDenominations) {
+      if (d <= 0) continue;
+      final multiple = ((total / d).floor() + 1) * d.toDouble();
+      if (multiple > total) {
+        results.add(MoneyUtils.round(multiple, decimalDigits));
+      }
+    }
+
+    final sorted = results.toList()..sort();
+    return sorted.take(4).toList();
+  }
 
   @override
   State<QuickSaleScreen> createState() => _QuickSaleScreenState();
@@ -399,19 +438,119 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     _addByCode(code, l10n);
   }
 
-  /// Search field "enter": an exact barcode/code match goes to the cart.
+  /// Search field "enter": prioritized match goes to cart.
+  /// 1. Exact barcode match.
+  /// 2. Exact product code match.
+  /// 3. If exactly one filtered product remains, add it.
+  /// 4. If multiple results remain, preserve the results for manual selection.
+  /// 5. Show product-not-found message only when no matching result exists.
   void _addByCode(String code, AppLocalizations l10n) {
-    final c = code.trim().toLowerCase();
-    final match = _products.where(
-      (p) => p.barcode?.toLowerCase() == c || p.code?.toLowerCase() == c,
+    final raw = code.trim();
+    if (raw.isEmpty) return;
+    final lower = raw.toLowerCase();
+
+    // 1. Exact barcode match
+    final barcodeMatch = _products.where(
+      (p) => p.barcode != null && p.barcode!.trim().toLowerCase() == lower,
     );
-    if (match.isEmpty) {
-      _toast(l10n.posProductNotFound);
+    if (barcodeMatch.isNotEmpty) {
+      _addProduct(barcodeMatch.first);
+      _searchCtrl.clear();
+      setState(() => _query = '');
+      FocusScope.of(context).unfocus();
       return;
     }
-    _addProduct(match.first);
-    _searchCtrl.clear();
-    setState(() => _query = '');
+
+    // 2. Exact product code match
+    final codeMatch = _products.where(
+      (p) => p.code != null && p.code!.trim().toLowerCase() == lower,
+    );
+    if (codeMatch.isNotEmpty) {
+      _addProduct(codeMatch.first);
+      _searchCtrl.clear();
+      setState(() => _query = '');
+      FocusScope.of(context).unfocus();
+      return;
+    }
+
+    // 3. If exactly one filtered product remains, add it
+    final filtered = _filtered;
+    if (filtered.length == 1) {
+      _addProduct(filtered.first);
+      _searchCtrl.clear();
+      setState(() => _query = '');
+      FocusScope.of(context).unfocus();
+      return;
+    }
+
+    // 4. If multiple results remain, preserve results for manual selection
+    if (filtered.length > 1) {
+      FocusScope.of(context).unfocus();
+      return;
+    }
+
+    // 5. Show product-not-found message only when no matching result exists
+    _toast(l10n.posProductNotFound);
+  }
+
+  Future<void> _selectCustomer(
+    AppLocalizations l10n, [
+    VoidCallback? refresh,
+  ]) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 8,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.customer,
+                style: Theme.of(
+                  ctx,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ContactAutocompleteField(
+                initialContact: _cart.customer,
+                label: l10n.customer,
+                type: 'customer',
+                onContactChanged: (contact) {
+                  setState(() {
+                    _cart.setCustomer(contact);
+                  });
+                  refresh?.call();
+                  Navigator.pop(ctx);
+                },
+              ),
+              if (_cart.customer != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _cart.setCustomer(null);
+                    });
+                    refresh?.call();
+                    Navigator.pop(ctx);
+                  },
+                  icon: const Icon(Icons.person_remove_outlined),
+                  label: Text(l10n.clear),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<bool> _onWillPop() async {
@@ -443,6 +582,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   void _resetSale() {
     setState(() {
       _cart.clear();
+      _cart.setCustomer(null);
       _discountCtrl.clear();
       _receivedCtrl.clear();
     });
@@ -454,30 +594,51 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     if (_saving || _cart.isEmpty || business == null || _method == null) return;
     final total = _totals.total;
     final received = NumberInput.parse(_receivedCtrl.text);
-    if (received != null && received > 0 && received < total) {
-      _toast(l10n.posReceivedLessThanTotal);
+
+    // Credit sales validation:
+    final isPartialOrZero = received != null && received < total;
+    if (isPartialOrZero && _cart.customer == null) {
+      _toast(l10n.customerRequiredForCreditSale);
       return;
     }
 
     setState(() => _saving = true);
     try {
+      final double actualPaid;
+      final String? payNowMethod;
+      final String? paymentMethod;
+
+      if (received == null || received >= total) {
+        // Full settlement
+        actualPaid = 0;
+        payNowMethod = _method;
+        paymentMethod = null;
+      } else {
+        // Credit sale: partial or unpaid
+        actualPaid = math.max(0.0, received);
+        payNowMethod = null;
+        paymentMethod = actualPaid > 0 ? _method : null;
+      }
+
       final docId = await DocumentService.createDocument(
         type: 'invoice',
         business: business,
         items: _cart.toItemInputs(),
         discount: _cart.discount,
+        paid: actualPaid,
         date: DateTime.now(),
-        payNowMethod: _method,
+        payNowMethod: payNowMethod,
+        paymentMethod: paymentMethod,
         contact: _cart.customer,
       );
       if (!mounted) return;
-      final change = received == null
-          ? 0.0
-          : PosCart.changeFor(
+      final change = (received != null && received > total)
+          ? PosCart.changeFor(
               total: total,
               received: received,
               decimalDigits: _cart.decimalDigits,
-            );
+            )
+          : 0.0;
       HapticFeedback.mediumImpact();
       if (MediaQuery.sizeOf(context).width < 840) {
         Navigator.of(
@@ -607,7 +768,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         : Icons.image_not_supported_outlined,
                   ),
                   onPressed: () {
-                    QuickSaleSettings.instance.setShowProductImages(!showImages);
+                    QuickSaleSettings.instance.setShowProductImages(
+                      !showImages,
+                    );
                   },
                 );
               },
@@ -1129,6 +1292,10 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final change = received == null
         ? 0.0
         : PosCart.changeFor(total: t.total, received: received);
+    final suggestions = QuickSaleScreen.computeCashSuggestions(
+      total: t.total,
+      decimalDigits: _cart.decimalDigits,
+    );
 
     if (_cart.isEmpty) {
       return Center(
@@ -1152,6 +1319,35 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: InputChip(
+                    avatar: Icon(
+                      _cart.customer != null
+                          ? Icons.person
+                          : Icons.person_add_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      _cart.customer?.name ?? l10n.selectCustomer,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    selected: _cart.customer != null,
+                    onPressed: () => _selectCustomer(l10n, refresh),
+                    onDeleted: _cart.customer != null
+                        ? () => update(() => _cart.setCustomer(null))
+                        : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         if (WholesaleFeature.isEnabledForBusiness(_business))
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -1237,7 +1433,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     child: AmountField(
                       controller: _receivedCtrl,
                       maxDecimals: 4,
-                      showMultipliers: true,
+                      showMultipliers: false,
                       decoration: InputDecoration(
                         labelText: l10n.posAmountReceived,
                         isDense: true,
@@ -1247,6 +1443,29 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   ),
                 ],
               ),
+              if (suggestions.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: suggestions.map((s) {
+                      final isExact = (s - t.total).abs() < 0.0001;
+                      return ActionChip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                          isExact ? '${_fmt(s)} (${l10n.exact})' : _fmt(s),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () => update(() {
+                          _receivedCtrl.text = NumberInput.formatForInput(s);
+                        }),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               if (_methods.isNotEmpty)
                 Wrap(
@@ -1272,6 +1491,14 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   l10n.posChange,
                   _fmt(change),
                   color: AppDesignTokens.semanticSuccess(context),
+                ),
+              if (received != null &&
+                  received < t.total &&
+                  _cart.customer != null)
+                _totalRow(
+                  l10n.remaining,
+                  _fmt(t.total - received),
+                  color: Theme.of(context).colorScheme.error,
                 ),
               const SizedBox(height: 10),
               SizedBox(

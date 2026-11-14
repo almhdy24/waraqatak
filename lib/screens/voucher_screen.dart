@@ -502,6 +502,28 @@ class _VoucherScreenState extends State<VoucherScreen> {
                             return null;
                           },
                         ),
+                        if (_selectedContact != null &&
+                            _outstandingBalance != null &&
+                            _outstandingBalance! > 0) ...[
+                          const SizedBox(height: 8),
+                          ActionChip(
+                            avatar: const Icon(
+                              Icons.check_circle_outline,
+                              size: 16,
+                            ),
+                            label: Text(
+                              '${l10n.voucherPayFullBalance} (${_formatAmount(_outstandingBalance!, Currency.decimalDigitsForCode(_business?.currencyCode))} ${Currency.symbolForCode(_business?.currencyCode ?? 'SDG')})',
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _amountController.text =
+                                    NumberInput.formatForInput(
+                                      _outstandingBalance!,
+                                    );
+                              });
+                            },
+                          ),
+                        ],
                         if (_selectedContact != null) ...[
                           const SizedBox(height: 8),
                           Text(
