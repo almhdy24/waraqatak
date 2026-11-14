@@ -50,11 +50,9 @@ class ProductImageThumbnail extends StatelessWidget {
       final thumbPath = ImageStorageService.thumbPathFor(imagePath);
       final mainPath = ImageStorageService.resolve(imagePath);
 
-      String? targetPath;
-      if (thumbPath != null && File(thumbPath).existsSync()) {
-        targetPath = thumbPath;
-      } else if (mainPath != null) {
-        targetPath = mainPath;
+      // C1 & C4: Check path nullness/resolution only, zero sync IO in build
+      final targetPath = thumbPath ?? mainPath;
+      if (mainPath != null) {
         // A2: Lazy backfill in background without blocking UI
         ImageStorageService.requestThumbnailBackfill(imagePath);
       }

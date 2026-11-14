@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
@@ -1117,7 +1118,7 @@ class BackupService {
 
         await db.update(
           'products',
-          {'image_path': imagePath},
+          {'image_path': p.basename(imagePath)},
           where: 'id = ?',
           whereArgs: [productId],
         );

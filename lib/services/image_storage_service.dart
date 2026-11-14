@@ -160,9 +160,9 @@ class ImageStorageService {
   /// Inspects magic bytes and returns format identifier ('jpeg', 'png', 'webp')
   /// or null if unsupported.
   static String? detectImageFormat(Uint8List bytes) {
-    if (bytes.length < 4) return null;
-    // JPEG: FF D8 FF
-    if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+    if (bytes.length < 2) return null;
+    // JPEG: FF D8
+    if (bytes[0] == 0xFF && bytes[1] == 0xD8) {
       return 'jpeg';
     }
     // PNG: 89 50 4E 47
@@ -630,7 +630,7 @@ class ImageStorageService {
           // Best effort
         }
 
-        return filename;
+        return destPath;
       } finally {
         await _deleteIfExists(tempPath);
       }

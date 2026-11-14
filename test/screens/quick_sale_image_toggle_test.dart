@@ -78,7 +78,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      for (var i = 0; i < 20 && find.byType(PosProductTile).evaluate().isEmpty; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
 
       // Verify toggle button icon indicates images ON
       expect(find.byIcon(Icons.image_outlined), findsOneWidget);
@@ -92,7 +95,8 @@ void main() {
 
       // 1. Add 1 item to cart by tapping the tile
       await tester.tap(find.byType(PosProductTile).first);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
       // Verify cart has 1 item
       final l10n = AppLocalizations.of(tester.element(find.byType(QuickSaleScreen)));
@@ -101,12 +105,14 @@ void main() {
       // 2. Type search query in search field
       final searchField = find.byType(TextField).first;
       await tester.enterText(searchField, 'تجريبي');
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('تجريبي'), findsOneWidget);
 
       // 3. Tap toggle button in AppBar
       await tester.tap(find.byIcon(Icons.image_outlined));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
       // Verify QuickSaleSettings.instance.showProductImages flipped to false
       expect(QuickSaleSettings.instance.showProductImages, isFalse);
@@ -126,7 +132,8 @@ void main() {
 
       // 4. Tap toggle button again -> flips back to true
       await tester.tap(find.byIcon(Icons.image_not_supported_outlined));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
       expect(QuickSaleSettings.instance.showProductImages, isTrue);
       expect(find.byIcon(Icons.image_outlined), findsOneWidget);

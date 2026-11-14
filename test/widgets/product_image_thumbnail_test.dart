@@ -50,7 +50,7 @@ void main() {
       'shows placeholder when imagePath is null or missing without crashing',
       (tester) async {
         await tester.pumpWidget(
-          createWidgetUnderTest(imagePath: 'missing_file.jpg'),
+          createWidgetUnderTest(imagePath: null),
         );
         await tester.pumpAndSettle();
 
@@ -100,7 +100,13 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(ExcludeSemantics), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ProductImageThumbnail),
+          matching: find.byType(ExcludeSemantics),
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

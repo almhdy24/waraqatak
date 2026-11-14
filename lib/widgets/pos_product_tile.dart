@@ -71,40 +71,42 @@ class PosProductTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  product.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: soldOut ? cs.onSurfaceVariant : null,
-                  ),
-                ),
-              ),
-              if (cartQuantity > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
                   child: Text(
-                    FormatUtils.formatQuantity(cartQuantity),
+                    product.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: cs.onPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w700,
+                      color: soldOut ? cs.onSurfaceVariant : null,
                     ),
                   ),
                 ),
-            ],
+                if (cartQuantity > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      FormatUtils.formatQuantity(cartQuantity),
+                      style: TextStyle(
+                        color: cs.onPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           Column(
@@ -113,6 +115,8 @@ class PosProductTile extends StatelessWidget {
             children: [
               Text(
                 displayPrice,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: cs.primary,
@@ -121,6 +125,8 @@ class PosProductTile extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 stockText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11.5,
                   color: soldOut ? cs.error : cs.onSurfaceVariant,
@@ -138,101 +144,104 @@ class PosProductTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Stack(
-                alignment: AlignmentDirectional.topEnd,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      height: 100,
-                      width: double.infinity,
-                      child: Opacity(
-                        opacity: (soldOut || blocked) ? 0.4 : 1.0,
-                        child: ProductImageThumbnail(
-                          imagePath: product.imagePath,
-                          isService: product.isService,
-                          size: 100,
-                          enableFullScreen: false,
-                          heroTag: null,
-                          excludeSemantics: true,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Stack(
+                  alignment: AlignmentDirectional.topEnd,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        height: 84,
+                        width: double.infinity,
+                        child: Opacity(
+                          opacity: (soldOut || blocked) ? 0.4 : 1.0,
+                          child: ProductImageThumbnail(
+                            imagePath: product.imagePath,
+                            isService: product.isService,
+                            size: 84,
+                            enableFullScreen: false,
+                            heroTag: null,
+                            excludeSemantics: true,
+                          ),
                         ),
                       ),
+                    ),
+                    if (soldOut || blocked)
+                      Positioned.fill(
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.errorContainer.withValues(alpha: 0.85),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              l10n.outOfStock,
+                              style: TextStyle(
+                                color: cs.onErrorContainer,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (cartQuantity > 0)
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Semantics(
+                          label: l10n.posItemsCount(
+                            FormatUtils.formatQuantity(cartQuantity),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.primary,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.2),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              FormatUtils.formatQuantity(cartQuantity),
+                              style: TextStyle(
+                                color: cs.onPrimary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Expanded(
+                  child: Text(
+                    product.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: soldOut ? cs.onSurfaceVariant : null,
                     ),
                   ),
-                  if (soldOut || blocked)
-                    Positioned.fill(
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cs.errorContainer.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            l10n.outOfStock,
-                            style: TextStyle(
-                              color: cs.onErrorContainer,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (cartQuantity > 0)
-                    Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Semantics(
-                        label: l10n.posItemsCount(
-                          FormatUtils.formatQuantity(cartQuantity),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            FormatUtils.formatQuantity(cartQuantity),
-                            style: TextStyle(
-                              color: cs.onPrimary,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                product.name,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: soldOut ? cs.onSurfaceVariant : null,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           Column(
@@ -241,6 +250,8 @@ class PosProductTile extends StatelessWidget {
             children: [
               Text(
                 displayPrice,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: cs.primary,
@@ -249,6 +260,8 @@ class PosProductTile extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 stockText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11.5,
                   color: soldOut ? cs.error : cs.onSurfaceVariant,

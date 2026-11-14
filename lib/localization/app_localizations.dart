@@ -3921,7 +3921,7 @@ class AppLocalizations {
   String get imageInvalid =>
       _t('الصورة غير صالحة أو تالفة.', 'The image is invalid or corrupted.');
   String get imageTooLarge =>
-      _t('حجم الصورة كبير جدًا.', 'The image is too large.');
+      _t('حجم الصورة كبير جداً.', 'The image is too large.');
   String get imageDiskFull => _t(
     'لا توجد مساحة كافية لحفظ الصورة.',
     'Not enough storage space to save the image.',

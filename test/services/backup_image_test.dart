@@ -191,7 +191,7 @@ void main() {
     test('corrupted base64 for one product does not block others', () async {
       // Build a product_images map with one invalid and one valid entry.
       final src = File('${tempDir.path}/good.jpg')
-        ..writeAsBytesSync([0xAA, 0xBB, 0xCC]);
+        ..writeAsBytesSync([0xFF, 0xD8, 0xAA, 0xBB, 0xCC]);
       final goodB64 = await ImageStorageService.imageToBase64(src.path);
 
       final productImages = {'1': '!!!INVALID!!!', '2': goodB64!};
