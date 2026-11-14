@@ -14,6 +14,7 @@ import 'services/accounting/journal_backfill_service.dart';
 import 'services/analytics/analytics_service.dart';
 import 'services/app_diagnostics_service.dart';
 import 'services/app_update_service.dart';
+import 'services/image_storage_service.dart';
 import 'services/license_service.dart';
 import 'screens/splash_screen.dart';
 import 'theme.dart';
@@ -71,6 +72,7 @@ Future<void> main() async {
       await AppDiagnosticsService.instance.init();
       await SessionManager.instance.init();
       await QuickSaleSettings.instance.load(prefs);
+      await ImageStorageService.init();
       final lang = prefs.getString('language') ?? 'ar';
       final themeMode = ThemeModeScope.decode(prefs.getString('theme_mode'));
       runApp(WarqatekApp(initialLanguage: lang, initialThemeMode: themeMode));

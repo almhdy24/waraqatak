@@ -99,6 +99,9 @@ void main() {
   }
 
   Future<void> pumpQuickSale(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
     QuickSaleSettings.instance.setShowProductImagesForTesting(false);
     await tester.pumpWidget(buildApp());
     await tester.pump();

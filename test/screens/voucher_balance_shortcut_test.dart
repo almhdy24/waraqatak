@@ -151,10 +151,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Verify amount controller is populated with 3500
+      // Verify amount controller is populated with 3,500
       final amountField = find.byType(AmountField);
       expect(amountField, findsOneWidget);
-      expect(find.text('3500'), findsOneWidget);
+      expect(find.text(NumberInput.formatForInput(3500)), findsOneWidget);
 
       // Switch to customer with 0 debt
       await tester.enterText(contactInput, 'عميل مسدد');
