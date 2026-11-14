@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:warqatek/models/product.dart';
+import 'package:warqatek/services/product_service.dart';
 
 void main() {
   // ── Product model ────────────────────────────────────────────
@@ -105,6 +106,15 @@ void main() {
       // Historical snapshot remains unchanged
       expect(capturedPrice, 100.0);
       expect(capturedPrice, isNot(equals(updated.salePrice)));
+    });
+  });
+
+  group('ProductService exceptions', () {
+    test('ProductInUseException carries productId and message', () {
+      const ex = ProductInUseException(42, 'Product is referenced');
+      expect(ex.productId, equals(42));
+      expect(ex.message, contains('referenced'));
+      expect(ex.toString(), contains('42'));
     });
   });
 }

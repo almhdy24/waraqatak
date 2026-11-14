@@ -6,7 +6,6 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
-import '../services/image_storage_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import 'barcode_scanner_screen.dart';
@@ -196,8 +195,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
     if (confirmed && mounted) {
       try {
-        await DatabaseHelper.instance.deleteProduct(product.id!);
-        await ImageStorageService.deleteImage(product.imagePath);
+        await ProductService.deleteProduct(product.id!);
         if (!mounted) return;
         AppSnackBar.show(
           context,
@@ -205,6 +203,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
           severity: AppSnackBarSeverity.success,
         );
         _load();
+      } on ProductInUseException {
+        if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          l10n.errProductInUse,
+          severity: AppSnackBarSeverity.error,
+        );
       } catch (e) {
         if (!mounted) return;
         AppSnackBar.show(

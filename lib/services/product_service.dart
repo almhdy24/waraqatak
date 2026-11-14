@@ -1,6 +1,19 @@
 import '../database/database_helper.dart';
 import '../models/product.dart';
+import '../models/product_unit.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'image_storage_service.dart';
+
+/// Thrown when attempting to delete a product referenced in transactions or documents.
+class ProductInUseException implements Exception {
+  final int productId;
+  final String? message;
+  const ProductInUseException(this.productId, [this.message]);
+
+  @override
+  String toString() => 'ProductInUseException($productId, $message)';
+}
 
 class ProductService {
   static Future<int> createProduct({
@@ -43,17 +56,54 @@ class ProductService {
   }
 
   static Future<void> updateProduct(Product product) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
     final updated = product.copyWith(updatedAt: DateTime.now());
     await DatabaseHelper.instance.updateProduct(updated);
   }
 
+  /// Authoritative entry point for saving a product and its units,
+  /// safely deleting any replaced image only after the save transaction commits.
+  static Future<int> saveProductWithUnits({
+    required Product product,
+    List<ProductUnit> units = const [],
+    String? oldImagePathToDelete,
+    bool allowClearReferencePricing = false,
+  }) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
+    final id = await DatabaseHelper.instance.saveProductWithUnits(
+      product,
+      units,
+      allowClearReferencePricing: allowClearReferencePricing,
+    );
+
+    // B6: Delete replaced old image only after the save succeeded
+    if (oldImagePathToDelete != null &&
+        oldImagePathToDelete.isNotEmpty &&
+        oldImagePathToDelete != product.imagePath) {
+      await ImageStorageService.deleteImage(oldImagePathToDelete);
+    }
+
+    return id;
+  }
+
   static Future<void> deleteProduct(int id) async {
+    AccessGuard.require(PermissionRegistry.productsDelete);
+    final isReferenced = await DatabaseHelper.instance.isProductReferenced(id);
+    if (isReferenced) {
+      throw ProductInUseException(
+        id,
+        'Cannot delete product referenced in documents',
+      );
+    }
     final product = await DatabaseHelper.instance.getProductById(id);
     await DatabaseHelper.instance.deleteProduct(id);
-    await ImageStorageService.deleteImage(product?.imagePath);
+    if (product?.imagePath != null) {
+      await ImageStorageService.deleteImage(product!.imagePath);
+    }
   }
 
   static Future<void> setActive(int id, {required bool active}) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
     await DatabaseHelper.instance.setProductActive(id, active: active);
   }
 
@@ -77,11 +127,17 @@ class ProductService {
     return DatabaseHelper.instance.getProductCategories();
   }
 
-  static Future<List<Product>> searchProducts(String query, {int? limit}) async {
+  static Future<List<Product>> searchProducts(
+    String query, {
+    int? limit,
+  }) async {
     return DatabaseHelper.instance.searchProducts(query, limit: limit);
   }
 
-  static Future<List<Product>> searchActive(String query, {int limit = 10}) async {
+  static Future<List<Product>> searchActive(
+    String query, {
+    int limit = 10,
+  }) async {
     return DatabaseHelper.instance.searchActiveProducts(query, limit: limit);
   }
 

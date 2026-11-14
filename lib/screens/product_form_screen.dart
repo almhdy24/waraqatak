@@ -258,9 +258,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     // Only discard an unsaved temporary selection.
     // Never delete the persisted image before the DB save succeeds.
-    if (previous != null &&
-        previous != original &&
-        previous != newPath) {
+    if (previous != null && previous != original && previous != newPath) {
       unawaited(ImageStorageService.deleteImage(previous));
     }
   }
@@ -621,16 +619,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           ReferenceCurrencyFeature.isAvailable &&
           widget.product?.priceCurrency != null &&
           _priceCurrency == null;
-      final id = await DatabaseHelper.instance.saveProductWithUnits(
-        product,
-        _productUnits,
+      final id = await ProductService.saveProductWithUnits(
+        product: product,
+        units: _productUnits,
+        oldImagePathToDelete: widget.product?.imagePath,
         allowClearReferencePricing: allowClear,
       );
       _imageSaved = true;
-      final originalImage = widget.product?.imagePath;
-      if (originalImage != null && originalImage != _imagePath) {
-        await ImageStorageService.deleteImage(originalImage);
-      }
 
       try {
         AnalyticsService.instance.track(AnalyticsEvent.productSaved, {
@@ -952,7 +947,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         ),
       );
       if (deactivate == true && mounted) {
-        await DatabaseHelper.instance.setProductActive(id, active: false);
+        await ProductService.setActive(id, active: false);
         if (!mounted) return;
         AppSnackBar.show(context, l10n.productDeactivated);
         Navigator.pop(context, true);
@@ -971,11 +966,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     if (confirmed && mounted) {
       try {
-        final imagePath = widget.product?.imagePath;
-        await DatabaseHelper.instance.deleteProduct(id);
-        await ImageStorageService.deleteImage(imagePath);
+        await ProductService.deleteProduct(id);
         if (!mounted) return;
         Navigator.pop(context, true);
+      } on ProductInUseException {
+        if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          l10n.errProductInUse,
+          severity: AppSnackBarSeverity.error,
+        );
       } catch (e) {
         if (!mounted) return;
         AppSnackBar.show(
