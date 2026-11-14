@@ -10,6 +10,7 @@ import '../../services/analytics/analytics_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 import '../../widgets/access/pin_keypad.dart';
+import '../../widgets/access/screen_access_gate.dart';
 
 class MultiUserWizardScreen extends StatefulWidget {
   const MultiUserWizardScreen({super.key});
@@ -92,22 +93,25 @@ class _MultiUserWizardScreenState extends State<MultiUserWizardScreen> {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.setupOwnerCredentials)),
-      body: ResponsiveCenter(
-        maxWidth: 480,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Stepper progress indicator
-              _buildStepIndicator(l10n, cs),
-              const SizedBox(height: 24),
-              _currentStep == 0
-                  ? _buildStep1(l10n, cs)
-                  : _buildStep2(l10n, cs),
-            ],
+    return ScreenAccessGate(
+      screenType: MultiUserWizardScreen,
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.setupOwnerCredentials)),
+        body: ResponsiveCenter(
+          maxWidth: 480,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Stepper progress indicator
+                _buildStepIndicator(l10n, cs),
+                const SizedBox(height: 24),
+                _currentStep == 0
+                    ? _buildStep1(l10n, cs)
+                    : _buildStep2(l10n, cs),
+              ],
+            ),
           ),
         ),
       ),

@@ -9,6 +9,30 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/responsive.dart';
 import '../../widgets/access/pin_keypad.dart';
 
+class RecoveryCodeInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Strip everything except alphanumeric
+    var raw = newValue.text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    if (raw.startsWith('RC')) {
+      raw = raw.substring(2);
+    }
+    final buffer = StringBuffer('RC');
+    for (var i = 0; i < raw.length && i < 12; i++) {
+      if (i % 4 == 0) buffer.write('-');
+      buffer.write(raw[i]);
+    }
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
+
 class RecoveryScreen extends StatefulWidget {
   const RecoveryScreen({super.key});
 
@@ -20,17 +44,40 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _codeCtrl = TextEditingController();
   final _newPasswordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
   final _newPinCtrl = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   bool _loading = false;
   bool _savedCodeConfirmed = false;
+  int _remainingAttempts = 5;
   String? _newRecoveryCode;
   RecoveryResult? _recoveryResult;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUnacknowledgedCode();
+  }
+
+  Future<void> _checkUnacknowledgedCode() async {
+    final unack = await RecoveryService.instance.getUnacknowledgedRecoveryCode();
+    final rem = await RecoveryService.instance.getRemainingRecoveryAttempts();
+    if (mounted) {
+      setState(() {
+        if (unack != null) {
+          _newRecoveryCode = unack;
+        }
+        _remainingAttempts = rem;
+      });
+    }
+  }
 
   @override
   void dispose() {
     _codeCtrl.dispose();
     _newPasswordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     _newPinCtrl.dispose();
     super.dispose();
   }
@@ -47,8 +94,7 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       final newPin = _newPinCtrl.text.trim();
 
       // Atomically reset password, rotate recovery code, and obtain updated owner
-      final result =
-          await RecoveryService.instance.recoverOwnerCredentials(
+      final result = await RecoveryService.instance.recoverOwnerCredentials(
         recoveryCode: code,
         newPassword: newPass,
         newPin: newPin.isNotEmpty ? newPin : null,
@@ -62,7 +108,12 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      final rem = await RecoveryService.instance.getRemainingRecoveryAttempts();
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _remainingAttempts = rem;
+      });
       AppSnackBar.show(
         context,
         friendlyError(l10n, e),
@@ -77,93 +128,111 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
     final cs = Theme.of(context).colorScheme;
 
     if (_newRecoveryCode != null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(l10n.recoveryCodeTitle),
-          automaticallyImplyLeading: false,
-        ),
-        body: ResponsiveCenter(
-          maxWidth: 460,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle_outline_rounded,
-                    size: 64, color: cs.primary),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.recoverySuccess,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: cs.primary.withValues(alpha: 0.5)),
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) {
+            AppSnackBar.show(
+              context,
+              l10n.recoveryLeaveBlocked,
+              severity: AppSnackBarSeverity.warning,
+            );
+          }
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(l10n.recoveryCodeTitle),
+            automaticallyImplyLeading: false,
+          ),
+          body: ResponsiveCenter(
+            maxWidth: 460,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_outline_rounded,
+                      size: 64, color: cs.primary),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.recoverySuccess,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: SelectableText(
-                          _newRecoveryCode!,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cs.primary.withValues(alpha: 0.5)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: SelectableText(
+                            _newRecoveryCode!,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.copy_rounded),
-                        tooltip: l10n.copy,
-                        onPressed: () {
-                          Clipboard.setData(
-                              ClipboardData(text: _newRecoveryCode!));
-                          AppSnackBar.show(context, l10n.copiedToClipboard);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.recoveryCodeWarning,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: cs.error, fontSize: 13),
-                ),
-                const SizedBox(height: 24),
-                CheckboxListTile(
-                  value: _savedCodeConfirmed,
-                  title: Text(
-                    l10n.recoveryCodeSavedConfirm,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                        IconButton(
+                          icon: const Icon(Icons.copy_rounded),
+                          tooltip: l10n.copy,
+                          onPressed: () {
+                            Clipboard.setData(
+                                ClipboardData(text: _newRecoveryCode!));
+                            AppSnackBar.show(context, l10n.copiedToClipboard);
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  contentPadding: EdgeInsets.zero,
-                  onChanged: (v) =>
-                      setState(() => _savedCodeConfirmed = v ?? false),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: _savedCodeConfirmed && _recoveryResult != null
-                      ? () {
-                          SessionManager.instance.unlock(
-                            _recoveryResult!.ownerUser,
-                            PermissionRegistry.allKeys,
-                          );
-                          Navigator.pop(context, true);
-                        }
-                      : null,
-                  child: Text(l10n.unlock),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.recoveryCodeWarning,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: cs.error, fontSize: 13),
+                  ),
+                  const SizedBox(height: 24),
+                  CheckboxListTile(
+                    value: _savedCodeConfirmed,
+                    title: Text(
+                      l10n.recoveryCodeSavedConfirm,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) =>
+                        setState(() => _savedCodeConfirmed = v ?? false),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _savedCodeConfirmed
+                        ? () async {
+                            final nav = Navigator.of(context);
+                            await RecoveryService.instance.acknowledgeRecoveryCode();
+                            if (_recoveryResult != null) {
+                              SessionManager.instance.unlock(
+                                _recoveryResult!.ownerUser,
+                                PermissionRegistry.allKeys,
+                              );
+                            }
+                            if (mounted) {
+                              nav.pop(true);
+                            }
+                          }
+                        : null,
+                    child: Text(l10n.unlock),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -200,11 +269,13 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
                 const SizedBox(height: 24),
                 TextFormField(
                   controller: _codeCtrl,
+                  inputFormatters: [RecoveryCodeInputFormatter()],
                   decoration: InputDecoration(
                     labelText: l10n.recoveryCodeInputLabel,
                     hintText: 'RC-XXXX-XXXX-XXXX',
                     border: const OutlineInputBorder(),
                     prefixIcon: const Icon(Icons.key_outlined),
+                    helperText: l10n.errAttemptsRemaining(_remainingAttempts),
                   ),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) {
@@ -232,6 +303,29 @@ class _RecoveryScreenState extends State<RecoveryScreen> {
                   validator: (v) {
                     if (v == null || v.length < 6) {
                       return l10n.invalidPasswordLength;
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _confirmPasswordCtrl,
+                  obscureText: _obscureConfirm,
+                  decoration: InputDecoration(
+                    labelText: l10n.confirmPasswordLabel,
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_reset_outlined),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscureConfirm
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                      onPressed: () =>
+                          setState(() => _obscureConfirm = !_obscureConfirm),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (v != _newPasswordCtrl.text) {
+                      return l10n.errPasswordsMismatch;
                     }
                     return null;
                   },

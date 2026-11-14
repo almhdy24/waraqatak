@@ -16,11 +16,13 @@ import 'access_denied_view.dart';
 class ScreenAccessGate extends StatefulWidget {
   final Type screenType;
   final Widget child;
+  final bool? allowOverride;
 
   const ScreenAccessGate({
     super.key,
     required this.screenType,
     required this.child,
+    this.allowOverride,
   });
 
   @override
@@ -57,7 +59,7 @@ class _ScreenAccessGateState extends State<ScreenAccessGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (!SessionManager.instance.isMultiUserEnabled) {
+    if (!SessionManager.instance.isMultiUserEnabled || widget.allowOverride == true) {
       return widget.child;
     }
 

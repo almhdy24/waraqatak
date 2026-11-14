@@ -3340,6 +3340,10 @@ class AppLocalizations {
     'الحساب مقفل مؤقتاً، يرجى المحاولة بعد $duration',
     'Account locked temporarily, try again after $duration',
   );
+  String errAttemptsRemaining(int count) => _t(
+    'متبقي $count محاولات قبل تعليق الحساب',
+    '$count attempts remaining before temporary lockout',
+  );
   String errDeviceThrottled(String duration) => _t(
     'تم تجاوز المحاولات المسموحة على هذا الجهاز، انتظر $duration',
     'Device throttled, wait $duration',

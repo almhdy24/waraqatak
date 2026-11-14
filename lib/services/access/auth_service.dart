@@ -89,17 +89,11 @@ class AuthService {
   /// Gets cached calibrated iterations, reads from `app_settings`, or benchmarks and persists.
   Future<int> getOrCalibrateIterations([DatabaseExecutor? executor]) async {
     if (testingIterations != null) return testingIterations!;
-    final db = executor ?? await DatabaseHelper.instance.database;
-
     if (_calibratedIterations != null) {
-      try {
-        await db.rawInsert('''
-          INSERT INTO app_settings (key, value) VALUES ('kdf_calibrated_iterations', ?)
-          ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        ''', [_calibratedIterations!.toString()]);
-      } catch (_) {}
       return _calibratedIterations!;
     }
+
+    final db = executor ?? await DatabaseHelper.instance.database;
 
     try {
       final rows = await db.query(
@@ -219,7 +213,7 @@ class AuthService {
   /// 10+ failures: 900s (15 min) — capped at 300s (5 min) for Owner (E7)
   static Duration getLockoutDuration(int failedAttempts, {bool isOwner = false}) {
     if (failedAttempts < 5) return Duration.zero;
-    final exp = failedAttempts - 5;
+    final exp = (failedAttempts - 5).clamp(0, 10);
     final seconds = 30 * (1 << exp);
     final maxSec = isOwner ? 300 : 900;
     return Duration(seconds: min(seconds, maxSec));
@@ -406,6 +400,31 @@ class AuthService {
       iterations: user.kdfIterations,
     );
     return constantTimeEquals(computed, user.passwordHash!);
+  }
+
+  /// Verifies [pin] against the stored hash for [userId].
+  Future<bool> verifyPin(
+    String userId,
+    String pin, {
+    DatabaseExecutor? executor,
+  }) async {
+    final db = executor ?? await DatabaseHelper.instance.database;
+    final rows = await db.query(
+      'users',
+      where: 'id = ?',
+      whereArgs: [userId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return false;
+    final user = AppUser.fromMap(rows.first);
+    if (!user.hasPin) return false;
+
+    final computed = await hashSecret(
+      pin,
+      user.pinSalt!,
+      iterations: user.kdfIterations,
+    );
+    return constantTimeEquals(computed, user.pinHash!);
   }
 
   /// Updates or sets password for [userId].

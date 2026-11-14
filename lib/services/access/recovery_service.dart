@@ -247,6 +247,12 @@ class RecoveryService {
       final newRecoveryCode = generateRecoveryCode();
       await saveRecoveryCode(newRecoveryCode, executor: txn, iterations: iter);
 
+      // Persist unacknowledged recovery code flag (C6)
+      await txn.rawInsert('''
+        INSERT INTO app_settings (key, value) VALUES ('owner_recovery_code_unacknowledged', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      ''', [newRecoveryCode]);
+
       // Log audit event
       try {
         await AuditService.instance.logEvent(
@@ -292,5 +298,65 @@ class RecoveryService {
       executor: executor,
     );
     return result.newRecoveryCode;
+  }
+
+  /// Checks if there is an unacknowledged recovery code from a previous rotation (C6).
+  Future<bool> isRecoveryCodeUnacknowledged([DatabaseExecutor? executor]) async {
+    final db = executor ?? await DatabaseHelper.instance.database;
+    try {
+      final rows = await db.query(
+        'app_settings',
+        where: "key = 'owner_recovery_code_unacknowledged'",
+        limit: 1,
+      );
+      if (rows.isEmpty) return false;
+      final val = rows.first['value'] as String?;
+      return val != null && val.isNotEmpty && val != '0';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Returns the unacknowledged recovery code if present (C6).
+  Future<String?> getUnacknowledgedRecoveryCode([DatabaseExecutor? executor]) async {
+    final db = executor ?? await DatabaseHelper.instance.database;
+    try {
+      final rows = await db.query(
+        'app_settings',
+        where: "key = 'owner_recovery_code_unacknowledged'",
+        limit: 1,
+      );
+      if (rows.isEmpty) return null;
+      return rows.first['value'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clears the unacknowledged recovery code flag once acknowledged by Owner (C6).
+  Future<void> acknowledgeRecoveryCode([DatabaseExecutor? executor]) async {
+    final db = executor ?? await DatabaseHelper.instance.database;
+    try {
+      await db.delete(
+        'app_settings',
+        where: "key = 'owner_recovery_code_unacknowledged'",
+      );
+    } catch (_) {}
+  }
+
+  /// Returns remaining failed recovery attempts before temporary lockout (D7).
+  Future<int> getRemainingRecoveryAttempts([DatabaseExecutor? executor]) async {
+    final db = executor ?? await DatabaseHelper.instance.database;
+    try {
+      final rows = await db.query(
+        'app_settings',
+        where: "key = 'owner_recovery_failed_attempts'",
+        limit: 1,
+      );
+      final failed = int.tryParse(rows.firstOrNull?['value'] as String? ?? '0') ?? 0;
+      return (5 - failed).clamp(0, 5);
+    } catch (_) {
+      return 5;
+    }
   }
 }

@@ -63,7 +63,7 @@ class AuditService {
     return _cachedDeviceId!;
   }
 
-  /// Formats the audit payload string for hashing.
+  /// Formats the audit payload string for hashing (v2 includes userName for tamper proofing - C10).
   String formatPayload({
     required String action,
     String? entityType,
@@ -71,9 +71,24 @@ class AuditService {
     String? details,
     required String timestamp,
     required String userId,
+    String? userName,
     required String deviceId,
     required String prevHash,
   }) {
+    if (userName != null) {
+      return [
+        'v2',
+        action,
+        entityType ?? '',
+        entityId?.toString() ?? '',
+        details ?? '',
+        timestamp,
+        userId,
+        userName,
+        deviceId,
+        prevHash,
+      ].join('|');
+    }
     return [
       action,
       entityType ?? '',
@@ -94,6 +109,7 @@ class AuditService {
     String? details,
     required String timestamp,
     required String userId,
+    String? userName,
     required String deviceId,
     required String prevHash,
   }) async {
@@ -104,6 +120,7 @@ class AuditService {
       details: details,
       timestamp: timestamp,
       userId: userId,
+      userName: userName,
       deviceId: deviceId,
       prevHash: prevHash,
     );
@@ -179,6 +196,7 @@ class AuditService {
 
   /// Logs an event into the tamper-evident audit chain.
   /// Execution is serialized to prevent hash chain forks from concurrent calls (D7).
+  /// Reentrant calls inside a transaction do not wait on the outer lock to avoid deadlocks (C9).
   Future<void> logEvent(
     DatabaseExecutor db,
     String action, {
@@ -188,6 +206,18 @@ class AuditService {
     String? userId,
     String? userName,
   }) {
+    if (db is Transaction || db.runtimeType.toString().toLowerCase().contains('transaction')) {
+      return _logEventInternal(
+        db,
+        action,
+        entityType: entityType,
+        entityId: entityId,
+        details: details,
+        explicitUserId: userId,
+        explicitUserName: userName,
+      );
+    }
+
     final next = _chainLock.then((_) => _logEventInternal(
       db,
       action,
@@ -259,7 +289,7 @@ class AuditService {
 
     final now = DateTime.now().toIso8601String();
 
-    // 3. Compute hash
+    // 3. Compute hash (includes userName for tamper protection - C10)
     final hash = await computeHash(
       action: action,
       entityType: entityType,
@@ -267,6 +297,7 @@ class AuditService {
       details: details,
       timestamp: now,
       userId: userId,
+      userName: userName,
       deviceId: deviceId,
       prevHash: prevHash,
     );
@@ -314,7 +345,7 @@ class AuditService {
     while (true) {
       final rows = await executor.rawQuery('''
         SELECT id, action, entity_type, entity_id, details, timestamp,
-               user_id, device_id, prev_hash, hash
+               user_id, user_name, device_id, prev_hash, hash
         FROM audit_log
         WHERE hash IS NOT NULL AND id > ?
         ORDER BY id ASC
@@ -332,11 +363,21 @@ class AuditService {
         final details = row['details'] as String?;
         final timestamp = (row['timestamp'] as String?) ?? '';
         final userId = (row['user_id'] as String?) ?? '';
+        final userName = row['user_name'] as String?;
         final deviceId = (row['device_id'] as String?) ?? '';
         final prevHash = (row['prev_hash'] as String?) ?? '';
         final storedHash = (row['hash'] as String?) ?? '';
 
         if (action == 'audit_chain_genesis') {
+          // Accept only the first audit_chain_genesis row. Treat any later one as tampering (C10)
+          if (verifiedCount > 0) {
+            return AuditVerificationResult(
+              isValid: false,
+              verifiedCount: verifiedCount,
+              brokenAtId: id,
+              error: 'Forged genesis anchor detected at row $id',
+            );
+          }
           expectedPrevHash = prevHash;
         }
 
@@ -350,24 +391,45 @@ class AuditService {
           );
         }
 
-        final computed = await computeHash(
+        // Try v2 hash with userName first (C10)
+        final computedV2 = await computeHash(
           action: action,
           entityType: entityType,
           entityId: entityId,
           details: details,
           timestamp: timestamp,
           userId: userId,
+          userName: userName,
           deviceId: deviceId,
           prevHash: prevHash,
         );
 
-        if (storedHash != computed) {
+        bool hashValid = (storedHash == computedV2);
+        if (!hashValid) {
+          // Backward compatibility: try legacy v1 hash without userName
+          final computedV1 = await computeHash(
+            action: action,
+            entityType: entityType,
+            entityId: entityId,
+            details: details,
+            timestamp: timestamp,
+            userId: userId,
+            userName: null,
+            deviceId: deviceId,
+            prevHash: prevHash,
+          );
+          if (storedHash == computedV1) {
+            hashValid = true;
+          }
+        }
+
+        if (!hashValid) {
           return AuditVerificationResult(
             isValid: false,
             verifiedCount: verifiedCount,
             brokenAtId: id,
             error:
-                'hash mismatch: expected computed $computed but stored was $storedHash',
+                'hash mismatch: stored was $storedHash at row $id',
           );
         }
 

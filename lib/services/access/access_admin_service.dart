@@ -170,10 +170,12 @@ class AccessAdminService {
     final trimmedUsername = username.trim();
     final trimmedDisplayName = displayName.trim();
 
-    if (trimmedUsername.isEmpty) {
+    if (trimmedUsername.length < 3 ||
+        trimmedUsername.length > 32 ||
+        !RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(trimmedUsername)) {
       throw const AdminException(
-        AccessErrorCode.usernameRequired,
-        debugMessage: 'Username is required',
+        AccessErrorCode.usernameInvalid,
+        debugMessage: 'Username must be 3-32 characters of [a-zA-Z0-9._-]',
       );
     }
     if (trimmedDisplayName.isEmpty) {
@@ -490,6 +492,10 @@ class AccessAdminService {
     }
 
     // 5. Validate and hash credentials if provided
+    final targetIterations = targetUser.kdfIterations > 0
+        ? targetUser.kdfIterations
+        : await AuthService.instance.getOrCalibrateIterations(database);
+
     String? newPasswordHash;
     String? newPasswordSalt;
     if (newPassword != null && newPassword.isNotEmpty) {
@@ -502,22 +508,22 @@ class AccessAdminService {
       // If self change, verify current password
       if (effectiveActor.id == targetUser.id && targetUser.hasPassword) {
         if (currentPassword == null || currentPassword.isEmpty) {
-            throw const AdminException(
-              AccessErrorCode.selfCredentialRequiresCurrentSecret,
-              debugMessage: 'Current password required',
-            );
-          }
+          throw const AdminException(
+            AccessErrorCode.selfCredentialRequiresCurrentSecret,
+            debugMessage: 'Current password required',
+          );
+        }
         final verified = await AuthService.instance.verifyPassword(
           targetUser.id,
           currentPassword,
           executor: database,
         );
         if (!verified) {
-            throw const AdminException(
-              AccessErrorCode.wrongCurrentPassword,
-              debugMessage: 'Incorrect current password',
-            );
-          }
+          throw const AdminException(
+            AccessErrorCode.wrongCurrentPassword,
+            debugMessage: 'Incorrect current password',
+          );
+        }
       } else if (effectiveActor.id != targetUser.id) {
         final credCheck = AccessPolicy.canResetCredentials(
           actor: effectiveActor,
@@ -534,15 +540,19 @@ class AccessAdminService {
             policy: credCheck,
           );
           throw AdminException(
-          credCheck.decision ?? AccessErrorCode.unexpected,
-          permissionKey: credCheck.permissionKey,
-          debugMessage: credCheck.debugReason,
-        );
+            credCheck.decision ?? AccessErrorCode.unexpected,
+            permissionKey: credCheck.permissionKey,
+            debugMessage: credCheck.debugReason,
+          );
         }
       }
 
       newPasswordSalt = AuthService.instance.generateSalt();
-      newPasswordHash = await AuthService.instance.hashSecret(newPassword, newPasswordSalt);
+      newPasswordHash = await AuthService.instance.hashSecret(
+        newPassword,
+        newPasswordSalt,
+        iterations: targetIterations,
+      );
     }
 
     String? newPinHash;
@@ -554,13 +564,82 @@ class AccessAdminService {
           debugMessage: 'PIN must be 4 to 8 digits',
         );
       }
+
+      // If self change, enforce canChangeOwnPin
+      if (effectiveActor.id == targetUser.id) {
+        bool currentSecretVerified = false;
+        if (!targetUser.hasPassword && !targetUser.hasPin) {
+          currentSecretVerified = true;
+        } else if (currentPassword != null && currentPassword.isNotEmpty) {
+          if (targetUser.hasPassword) {
+            currentSecretVerified = await AuthService.instance.verifyPassword(
+              targetUser.id,
+              currentPassword,
+              executor: database,
+            );
+          }
+          if (!currentSecretVerified && targetUser.hasPin) {
+            currentSecretVerified = await AuthService.instance.verifyPin(
+              targetUser.id,
+              currentPassword,
+              executor: database,
+            );
+          }
+        }
+
+        final pinCheck = AccessPolicy.canChangeOwnPin(
+          actor: effectiveActor,
+          target: targetUser,
+          currentPinOrPasswordVerified: currentSecretVerified,
+        );
+        if (!pinCheck.isAllowed) {
+          await _auditEscalation(
+            database,
+            action: 'updateUser.canChangeOwnPin',
+            actor: effectiveActor,
+            targetUsername: targetUser.username,
+            policy: pinCheck,
+          );
+          throw AdminException(
+            pinCheck.decision ?? AccessErrorCode.selfCredentialRequiresCurrentSecret,
+            debugMessage: pinCheck.debugReason,
+          );
+        }
+      } else {
+        final credCheck = AccessPolicy.canResetCredentials(
+          actor: effectiveActor,
+          target: targetUser,
+          actorPermissions: actorPerms,
+          targetPermissions: targetPerms,
+        );
+        if (!credCheck.isAllowed) {
+          await _auditEscalation(
+            database,
+            action: 'updateUser.resetPin',
+            actor: effectiveActor,
+            targetUsername: targetUser.username,
+            policy: credCheck,
+          );
+          throw AdminException(
+            credCheck.decision ?? AccessErrorCode.unexpected,
+            permissionKey: credCheck.permissionKey,
+            debugMessage: credCheck.debugReason,
+          );
+        }
+      }
+
       newPinSalt = AuthService.instance.generateSalt();
-      newPinHash = await AuthService.instance.hashSecret(newPin.trim(), newPinSalt);
+      newPinHash = await AuthService.instance.hashSecret(
+        newPin.trim(),
+        newPinSalt,
+        iterations: targetIterations,
+      );
     }
 
-    // 6. Check overrides
+    // 6. Check overrides (Self-edit must NOT touch overrides - C4)
     Map<String, String>? sanitizedOverrides;
-    if (overrides != null && !targetUser.isOwner) {
+    final isSelf = effectiveActor.id == targetUser.id;
+    if (overrides != null && !targetUser.isOwner && !isSelf) {
       sanitizedOverrides = {};
       for (final entry in overrides.entries) {
         final key = entry.key;
@@ -582,10 +661,10 @@ class AccessAdminService {
               policy: grantCheck,
             );
             throw AdminException(
-          grantCheck.decision ?? AccessErrorCode.unexpected,
-          permissionKey: grantCheck.permissionKey,
-          debugMessage: grantCheck.debugReason,
-        );
+              grantCheck.decision ?? AccessErrorCode.unexpected,
+              permissionKey: grantCheck.permissionKey,
+              debugMessage: grantCheck.debugReason,
+            );
           }
         }
         sanitizedOverrides[key] = effect;
@@ -600,16 +679,24 @@ class AccessAdminService {
     if (displayName != null && displayName.trim().isNotEmpty) {
       updates['display_name'] = displayName.trim();
     }
-    if (username != null && !targetUser.isOwner) {
+    if (username != null && !targetUser.isOwner && !isSelf) {
       final trimmedU = username.trim();
       if (trimmedU.isNotEmpty && trimmedU != targetUser.username) {
+        if (trimmedU.length < 3 ||
+            trimmedU.length > 32 ||
+            !RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(trimmedU)) {
+          throw const AdminException(
+            AccessErrorCode.usernameInvalid,
+            debugMessage: 'Username must be 3-32 characters of [a-zA-Z0-9._-]',
+          );
+        }
         updates['username'] = trimmedU;
       }
     }
-    if (roleId != null && !targetUser.isOwner) {
+    if (roleId != null && !targetUser.isOwner && !isSelf) {
       updates['role_id'] = roleId;
     }
-    if (isActive != null && !targetUser.isOwner) {
+    if (isActive != null && !targetUser.isOwner && !isSelf) {
       updates['is_active'] = isActive ? 1 : 0;
     }
     if (newPasswordHash != null) {
@@ -621,8 +708,11 @@ class AccessAdminService {
       updates['pin_hash'] = newPinHash;
       updates['pin_salt'] = newPinSalt;
     }
+    if (targetUser.kdfIterations <= 0) {
+      updates['kdf_iterations'] = targetIterations;
+    }
 
-    final overridesToApply = sanitizedOverrides;
+    final overridesToApply = isSelf ? null : sanitizedOverrides;
 
     late final AppUser updatedUser;
     await database.transaction((txn) async {
@@ -691,6 +781,81 @@ class AccessAdminService {
       userId: userId,
       isActive: isActive,
       db: db,
+    );
+  }
+
+  /// Owner-initiated unlock of a locked-out user (C11).
+  /// Resets `failed_attempts` and `locked_until`, audited as `user_unlocked`.
+  Future<void> unlockUser(
+    String userId, {
+    AppUser? actor,
+    DatabaseExecutor? executor,
+  }) async {
+    final effectiveActor = _resolveActor(actor);
+    final db = executor ?? await DatabaseHelper.instance.database;
+
+    final targetRows = await db.query(
+      'users',
+      where: 'id = ?',
+      whereArgs: [userId],
+      limit: 1,
+    );
+    if (targetRows.isEmpty) {
+      throw const AdminException(
+        AccessErrorCode.userNotFound,
+        debugMessage: 'User not found',
+      );
+    }
+    final targetUser = AppUser.fromMap(targetRows.first);
+
+    final actorPerms = await PermissionService.instance
+        .getEffectivePermissions(effectiveActor, executor: db);
+    final targetPerms = await PermissionService.instance
+        .getEffectivePermissions(targetUser, executor: db);
+
+    final policy = AccessPolicy.canEditUser(
+      actor: effectiveActor,
+      target: targetUser,
+      actorPermissions: actorPerms,
+      targetPermissions: targetPerms,
+    );
+    if (!policy.isAllowed) {
+      await _auditEscalation(
+        db,
+        action: 'unlockUser',
+        actor: effectiveActor,
+        targetUsername: targetUser.username,
+        policy: policy,
+      );
+      throw AdminException(
+        policy.decision ?? AccessErrorCode.unexpected,
+        permissionKey: policy.permissionKey,
+        debugMessage: policy.debugReason,
+      );
+    }
+
+    final now = DateTime.now().toIso8601String();
+    await db.update(
+      'users',
+      {
+        'failed_attempts': 0,
+        'locked_until': null,
+        'updated_at': now,
+      },
+      where: 'id = ?',
+      whereArgs: [userId],
+    );
+
+    await AuditService.instance.logEvent(
+      db,
+      'user_unlocked',
+      entityType: 'user',
+      entityId: int.tryParse(userId),
+      details: jsonEncode({
+        'target_user_id': userId,
+        'target_username': targetUser.username,
+        'unlocked_by': effectiveActor.username,
+      }),
     );
   }
 

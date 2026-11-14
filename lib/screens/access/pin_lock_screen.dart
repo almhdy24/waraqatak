@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
+import '../../services/access/access_admin_service.dart';
 import '../../services/access/access_messages.dart';
 import '../../services/access/auth_service.dart';
 import '../../services/access/permission_registry.dart';
@@ -21,16 +22,17 @@ class PinLockScreen extends StatefulWidget {
 }
 
 class _PinLockScreenState extends State<PinLockScreen> {
-  final _shakeKey = GlobalKey<ShakeWidgetState>();
   List<AppUser> _users = [];
-  Map<String, String> _roleNames = {};
   AppUser? _selectedUser;
+  Map<String, String> _roleNames = {};
   String _enteredPin = '';
   bool _loading = true;
   bool _submitting = false;
   bool _hasError = false;
   int _lockoutRemainingSeconds = 0;
   Timer? _lockoutTimer;
+
+  final GlobalKey<ShakeWidgetState> _shakeKey = GlobalKey<ShakeWidgetState>();
 
   @override
   void initState() {
@@ -45,6 +47,9 @@ class _PinLockScreenState extends State<PinLockScreen> {
   }
 
   Future<void> _loadUsers() async {
+    setState(() => _loading = true);
+    final l10n = AppLocalizations.of(context);
+
     try {
       final db = await DatabaseHelper.instance.database;
       final rows = await db.query(
@@ -54,32 +59,51 @@ class _PinLockScreenState extends State<PinLockScreen> {
       );
       final users = rows.map((r) => AppUser.fromMap(r)).toList();
 
-      // Load role names for chips
-      final roleRows = await db.query('roles');
-      final roleNames = {
-        for (final r in roleRows) r['id'] as String: r['name'] as String,
-      };
+      final roles = await AccessAdminService.instance.getRoles(executor: db);
+      final roleNames = <String, String>{};
+      for (final r in roles) {
+        roleNames[r.id] = localizedRoleName(l10n, r.id, r.name);
+      }
 
       if (!mounted) return;
       setState(() {
         _users = users;
         _roleNames = roleNames;
-        // Default to current user or Owner
-        final currentId = SessionManager.instance.currentUser?.id;
-        _selectedUser = users.firstWhere(
-          (u) => u.id == currentId,
-          orElse: () => users.firstWhere(
-            (u) => u.isOwner,
-            orElse: () => users.first,
-          ),
-        );
+        final current = SessionManager.instance.currentUser;
+        if (current != null) {
+          _selectedUser = users.firstWhere(
+            (u) => u.id == current.id,
+            orElse: () => users.firstOrNull ?? current,
+          );
+        } else {
+          _selectedUser = users.firstOrNull;
+        }
         _loading = false;
       });
+
       _checkLockout();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _reloadSelectedUser() async {
+    final user = _selectedUser;
+    if (user == null) return;
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final rows = await db.query('users', where: 'id = ?', whereArgs: [user.id], limit: 1);
+      if (rows.isNotEmpty && mounted) {
+        final reloaded = AppUser.fromMap(rows.first);
+        setState(() {
+          _selectedUser = reloaded;
+          final idx = _users.indexWhere((u) => u.id == user.id);
+          if (idx != -1) _users[idx] = reloaded;
+        });
+      }
+    } catch (_) {}
+    if (mounted) _checkLockout();
   }
 
   void _checkLockout() {
@@ -114,6 +138,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
       if (_lockoutRemainingSeconds <= 1) {
         timer.cancel();
         setState(() => _lockoutRemainingSeconds = 0);
+        _reloadSelectedUser();
       } else {
         setState(() => _lockoutRemainingSeconds--);
       }
@@ -121,22 +146,24 @@ class _PinLockScreenState extends State<PinLockScreen> {
   }
 
   void _onDigitPress(String digit) {
-    if (_submitting || _lockoutRemainingSeconds > 0 || _enteredPin.length >= 6) return;
+    if (_enteredPin.length >= 6 || _submitting || _lockoutRemainingSeconds > 0) return;
     setState(() {
       _enteredPin += digit;
     });
   }
 
   void _onBackspace() {
-    if (_submitting || _enteredPin.isEmpty) return;
+    if (_enteredPin.isEmpty || _submitting || _lockoutRemainingSeconds > 0) return;
     setState(() {
       _enteredPin = _enteredPin.substring(0, _enteredPin.length - 1);
     });
   }
 
   void _onClear() {
-    if (_submitting) return;
-    setState(() => _enteredPin = '');
+    if (_submitting || _lockoutRemainingSeconds > 0) return;
+    setState(() {
+      _enteredPin = '';
+    });
   }
 
   Future<void> _tryUnlock() async {
@@ -162,6 +189,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
       if (!mounted) return;
       _shakeKey.currentState?.shake();
       setState(() {
+        _enteredPin = ''; // Clear immediately (D4)
         _hasError = true;
         _submitting = false;
       });
@@ -170,39 +198,35 @@ class _PinLockScreenState extends State<PinLockScreen> {
         friendlyError(l10n, e),
         severity: AppSnackBarSeverity.error,
       );
+      await _reloadSelectedUser(); // Reload user row to update failed attempts / lockout (C7)
       await Future.delayed(const Duration(milliseconds: 300));
       if (mounted) {
-        setState(() {
-          _enteredPin = '';
-          _hasError = false;
-        });
-        _checkLockout();
+        setState(() => _hasError = false);
       }
     } catch (e) {
       if (!mounted) return;
       _shakeKey.currentState?.shake();
       setState(() {
+        _enteredPin = ''; // Clear immediately (D4)
         _hasError = true;
         _submitting = false;
       });
       AppSnackBar.show(
         context,
-        l10n.invalidPin,
+        friendlyError(l10n, e),
         severity: AppSnackBarSeverity.error,
       );
+      await _reloadSelectedUser();
       await Future.delayed(const Duration(milliseconds: 300));
       if (mounted) {
-        setState(() {
-          _enteredPin = '';
-          _hasError = false;
-        });
-        _checkLockout();
+        setState(() => _hasError = false);
       }
     }
   }
 
   void _showUserPicker() {
     if (_users.length <= 1) return;
+
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
@@ -210,9 +234,9 @@ class _PinLockScreenState extends State<PinLockScreen> {
       context: context,
       backgroundColor: cs.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) {
+      builder: (context) {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
@@ -256,20 +280,29 @@ class _PinLockScreenState extends State<PinLockScreen> {
                         title: Text(
                           u.displayName,
                           style: TextStyle(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
-                        subtitle: Text('@${u.username} • $roleName'),
+                        subtitle: Text(
+                          '@${u.username} • $roleName',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
                         trailing: isSelected
                             ? Icon(Icons.check_circle_rounded, color: cs.primary)
                             : null,
                         onTap: () {
-                          Navigator.pop(ctx);
-                          setState(() {
-                            _selectedUser = u;
-                            _enteredPin = '';
-                          });
-                          _checkLockout();
+                          Navigator.pop(context);
+                          if (!isSelected) {
+                            setState(() {
+                              _selectedUser = u;
+                              _enteredPin = '';
+                              _hasError = false;
+                            });
+                            _checkLockout();
+                          }
                         },
                       );
                     },
@@ -290,9 +323,12 @@ class _PinLockScreenState extends State<PinLockScreen> {
 
     final passwordCtrl = TextEditingController();
     bool obscure = true;
+    bool dialogLoading = false;
+    String? dialogError;
 
-    final success = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDlgState) => AlertDialog(
           title: Text(l10n.loginWithPassword),
@@ -309,9 +345,11 @@ class _PinLockScreenState extends State<PinLockScreen> {
                 controller: passwordCtrl,
                 obscureText: obscure,
                 autofocus: true,
+                enabled: !dialogLoading,
                 decoration: InputDecoration(
                   labelText: l10n.password,
                   border: const OutlineInputBorder(),
+                  errorText: dialogError,
                   suffixIcon: IconButton(
                     icon: Icon(
                       obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
@@ -319,58 +357,65 @@ class _PinLockScreenState extends State<PinLockScreen> {
                     onPressed: () => setDlgState(() => obscure = !obscure),
                   ),
                 ),
-                onSubmitted: (_) => Navigator.pop(ctx, true),
+                onChanged: (_) {
+                  if (dialogError != null) {
+                    setDlgState(() => dialogError = null);
+                  } else {
+                    setDlgState(() {});
+                  }
+                },
               ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: dialogLoading ? null : () => Navigator.pop(ctx),
               child: Text(l10n.cancel),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(l10n.unlock),
+              onPressed: (dialogLoading || passwordCtrl.text.trim().isEmpty)
+                  ? null
+                  : () async {
+                      setDlgState(() {
+                        dialogLoading = true;
+                        dialogError = null;
+                      });
+
+                      try {
+                        final authenticatedUser = await AuthService.instance.authenticateWithPassword(
+                          user.username,
+                          passwordCtrl.text,
+                        );
+                        final permissions = authenticatedUser.isOwner
+                            ? PermissionRegistry.allKeys
+                            : await PermissionService.instance.getEffectivePermissions(authenticatedUser);
+
+                        if (!ctx.mounted) return;
+                        Navigator.pop(ctx);
+
+                        if (!mounted) return;
+                        SessionManager.instance.unlock(authenticatedUser, permissions);
+                      } catch (e) {
+                        await _reloadSelectedUser();
+                        setDlgState(() {
+                          dialogLoading = false;
+                          dialogError = friendlyError(l10n, e);
+                        });
+                      }
+                    },
+              child: dialogLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(l10n.unlock),
             ),
           ],
         ),
       ),
     );
-
-    if (success == true && mounted) {
-      try {
-        final authenticatedUser = await AuthService.instance.authenticateWithPassword(
-          user.username,
-          passwordCtrl.text,
-        );
-        final permissions = authenticatedUser.isOwner
-            ? PermissionRegistry.allKeys
-            : await PermissionService.instance.getEffectivePermissions(authenticatedUser);
-
-        if (!mounted) return;
-        SessionManager.instance.unlock(authenticatedUser, permissions);
-      } on AuthException catch (e) {
-        if (!mounted) return;
-        _checkLockout();
-        AppSnackBar.show(
-          context,
-          friendlyError(l10n, e),
-          severity: AppSnackBarSeverity.error,
-        );
-      } catch (e) {
-        if (!mounted) return;
-        _checkLockout();
-        AppSnackBar.show(
-          context,
-          l10n.invalidCredentials,
-          severity: AppSnackBarSeverity.error,
-        );
-      } finally {
-        passwordCtrl.dispose();
-      }
-    } else {
-      passwordCtrl.dispose();
-    }
+    passwordCtrl.dispose();
   }
 
   @override
@@ -385,12 +430,12 @@ class _PinLockScreenState extends State<PinLockScreen> {
     }
 
     if (SessionManager.instance.isSecurityUnverified) {
-      return PopScope(
-        canPop: false,
-        child: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -431,6 +476,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
     final roleName = user != null
         ? (_roleNames[user.roleId] ?? (user.isOwner ? l10n.ownerRole : user.roleId))
         : '';
+    final hasNoPin = user != null && !user.hasPin;
 
     return PopScope(
       canPop: false,
@@ -442,24 +488,9 @@ class _PinLockScreenState extends State<PinLockScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
                 children: [
-                  const SizedBox(height: 12),
-                  // Lock Icon Badge
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer.withValues(alpha: 0.4),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.lock_rounded, size: 36, color: cs.primary),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    l10n.enterPin,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
                   const SizedBox(height: 16),
 
-                  // Enhanced User Switcher Card
+                  // User Selector Badge
                   if (user != null)
                     InkWell(
                       borderRadius: BorderRadius.circular(16),
@@ -474,24 +505,24 @@ class _PinLockScreenState extends State<PinLockScreen> {
                           ),
                         ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             CircleAvatar(
-                              radius: 20,
+                              radius: 18,
                               backgroundColor: user.isOwner
                                   ? cs.primaryContainer
-                                  : cs.surfaceContainerHigh,
+                                  : cs.surfaceContainerHighest,
                               child: Icon(
-                                user.isOwner ? Icons.shield_rounded : Icons.person_rounded,
+                                user.isOwner ? Icons.shield_rounded : Icons.person_outline,
                                 size: 20,
-                                color: user.isOwner
-                                    ? cs.onPrimaryContainer
-                                    : cs.onSurfaceVariant,
+                                color: user.isOwner ? cs.onPrimaryContainer : cs.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 12),
-                            Expanded(
+                            Flexible(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
                                     user.displayName,
@@ -578,58 +609,103 @@ class _PinLockScreenState extends State<PinLockScreen> {
                       ),
                     ),
 
-                  // Direction-safe PIN dots with shake container
-                  ShakeWidget(
-                    key: _shakeKey,
-                    child: PinDotsView(
-                      length: _enteredPin.length,
-                      maxDigits: 6,
-                      hasError: _hasError,
+                  // Remaining attempts helper (D2)
+                  if (_lockoutRemainingSeconds == 0 && user != null && user.failedAttempts > 0 && user.failedAttempts < 5)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        l10n.errAttemptsRemaining(5 - user.failedAttempts),
+                        style: TextStyle(
+                          color: cs.error,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
 
-                  const Spacer(),
-
-                  // Global LTR Keypad
-                  PinKeypad(
-                    enabled: !_submitting && _lockoutRemainingSeconds == 0,
-                    onDigit: _onDigitPress,
-                    onBackspace: _onBackspace,
-                    onClear: _onClear,
-                    leftAction: PinKeypadConfirmButton(
-                      active: _enteredPin.length >= 4 && _lockoutRemainingSeconds == 0,
-                      semanticsLabel: l10n.confirmAction,
-                      onTap: (_enteredPin.length >= 4 && !_submitting && _lockoutRemainingSeconds == 0)
-                          ? _tryUnlock
-                          : null,
+                  // If user has NO PIN set, show errNoPinSet and primary password button (D1)
+                  if (hasNoPin)
+                    Expanded(
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.lock_outline, size: 56, color: cs.onSurfaceVariant),
+                            const SizedBox(height: 16),
+                            Text(
+                              l10n.errNoPinSet,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            FilledButton.icon(
+                              icon: const Icon(Icons.password_outlined),
+                              label: Text(l10n.enterPasswordToSignIn),
+                              onPressed: _showPasswordLoginDialog,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else ...[
+                    // Direction-safe PIN dots with shake container
+                    ShakeWidget(
+                      key: _shakeKey,
+                      child: PinDotsView(
+                        length: _enteredPin.length,
+                        maxDigits: 6,
+                        hasError: _hasError,
+                      ),
                     ),
-                  ),
 
-                  const Spacer(),
+                    const Spacer(),
+
+                    // Global LTR Keypad
+                    PinKeypad(
+                      enabled: !_submitting && _lockoutRemainingSeconds == 0,
+                      onDigit: _onDigitPress,
+                      onBackspace: _onBackspace,
+                      onClear: _onClear,
+                      leftAction: PinKeypadConfirmButton(
+                        active: _enteredPin.length >= 4 && _lockoutRemainingSeconds == 0,
+                        semanticsLabel: l10n.confirmAction,
+                        onTap: (_enteredPin.length >= 4 && !_submitting && _lockoutRemainingSeconds == 0)
+                            ? _tryUnlock
+                            : null,
+                      ),
+                    ),
+
+                    const Spacer(),
+                  ],
 
                   // Actions: Password Login & Recovery
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TextButton.icon(
-                        icon: const Icon(Icons.password_outlined, size: 18),
-                        label: Text(l10n.loginWithPassword),
-                        onPressed: _showPasswordLoginDialog,
-                      ),
-                      if (_selectedUser?.isOwner == true) ...[
-                        const Text(' • '),
-                        TextButton(
-                          child: Text(l10n.forgotPassword),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const RecoveryScreen(),
+                  if (!hasNoPin)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.password_outlined, size: 18),
+                          label: Text(l10n.loginWithPassword),
+                          onPressed: _showPasswordLoginDialog,
+                        ),
+                        if (_selectedUser?.isOwner == true) ...[
+                          const Text(' • '),
+                          TextButton(
+                            child: Text(l10n.forgotPassword),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RecoveryScreen(),
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
                   const SizedBox(height: 8),
                 ],
               ),
