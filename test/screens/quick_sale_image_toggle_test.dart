@@ -18,7 +18,7 @@ import 'package:warqatek/widgets/pos_product_tile.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late Database db;
+  late Directory tempDir;
 
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -26,12 +26,12 @@ void main() {
     SessionManager.instance.setMultiUserEnabledForTesting(false);
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
-    final dir = await getDatabasesPath();
-    final f = File('$dir/warqatek_free.db');
-    if (f.existsSync()) f.deleteSync();
+    tempDir = Directory.systemTemp.createTempSync('quick_sale_ui_test_');
+    await databaseFactory.setDatabasesPath(tempDir.path);
+    await DatabaseHelper.instance.closeDatabase();
 
     final helper = DatabaseHelper.instance;
-    db = await helper.database;
+    await helper.database;
     await helper.insertBusiness(
       const Business(
         name: 'متجر الاختبار',
@@ -55,7 +55,10 @@ void main() {
   });
 
   tearDownAll(() async {
-    await db.close();
+    try {
+      await DatabaseHelper.instance.closeDatabase();
+      if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+    } catch (_) {}
   });
 
   testWidgets(
@@ -82,6 +85,9 @@ void main() {
       );
       await tester.pump();
       for (var i = 0; i < 20 && find.byType(PosProductTile).evaluate().isEmpty; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 60)),
+        );
         await tester.pump(const Duration(milliseconds: 100));
       }
 

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -59,9 +60,13 @@ void main() {
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('backup_image_test_');
     PathProviderPlatform.instance = _MockPathProvider(tempDir);
+    final imagesDir = Directory(p.join(tempDir.path, 'product_images'));
+    await imagesDir.create(recursive: true);
+    ImageStorageService.setCachedDirForTesting(imagesDir.path);
   });
 
   tearDown(() async {
+    ImageStorageService.setCachedDirForTesting(null);
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
 
