@@ -3088,7 +3088,7 @@ class AppLocalizations {
     'View wholesale tier prices and minimum quantities',
   );
   String get perm_pricing_manage_name =>
-      _t('إدارة التسعير الشامل (Bulk Pricing)', 'Bulk pricing management');
+      _t('إدارة التسعير الشامل', 'Bulk pricing management');
   String get perm_pricing_manage_desc => _t(
     'تطبيق زيادات أو تخفيضات جماعية على أسعار الأصناف',
     'Apply bulk price adjustments across catalog',
@@ -3176,7 +3176,7 @@ class AppLocalizations {
     'Print or share business reports as PDF documents',
   );
   String get perm_data_export_csv_name =>
-      _t('تصدير البيانات إلى ملفات CSV / Excel', 'Export data to CSV / Excel');
+      _t('تصدير البيانات إلى ملفات CSV', 'Export data to CSV / Excel');
   String get perm_data_export_csv_desc => _t(
     'تصدير قائمة الأصناف والبيانات إلى ملفات خارجية',
     'Export catalog and records to external spreadsheets',
@@ -3188,7 +3188,7 @@ class AppLocalizations {
     'Batch import products and prices from CSV',
   );
   String get perm_backup_create_name =>
-      _t('إنشاء نسخة احتياطية (.waraq)', 'Create database backup (.waraq)');
+      _t('إنشاء نسخة احتياطية', 'Create database backup (.waraq)');
   String get perm_backup_create_desc => _t(
     'تصدير نسخة احتياطية محلية أو إلى Google Drive',
     'Generate encrypted or local backup archives',
@@ -3210,7 +3210,7 @@ class AppLocalizations {
     'Run database health diagnostics and repair scripts',
   );
   String get perm_accounting_period_lock_name => _t(
-    'إقفال الفترات المحاسبية (Period Lock)',
+    'إقفال الفترات المحاسبية',
     'Accounting period closing and lock',
   );
   String get perm_accounting_period_lock_desc => _t(
@@ -3238,7 +3238,7 @@ class AppLocalizations {
     'Configure tax profiles and VAT rates',
   );
   String get perm_audit_view_name => _t(
-    'الاطلاع على سجل النشاط والرقابة (Audit Trail)',
+    'الاطلاع على سجل النشاط والرقابة',
     'View activity and audit trail',
   );
   String get perm_audit_view_desc => _t(
@@ -3260,7 +3260,7 @@ class AppLocalizations {
     'Create custom roles and customize permissions',
   );
   String get perm_license_manage_name => _t(
-    'إدارة الترخيص والتفعيل (Pro Activation)',
+    'إدارة الترخيص والتفعيل',
     'License and Pro subscription management',
   );
   String get perm_license_manage_desc => _t(
