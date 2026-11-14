@@ -35,12 +35,14 @@ import '../services/access/access_context.dart';
 import '../services/access/access_guard.dart';
 import '../services/access/audit_service.dart';
 import '../services/access/permission_registry.dart';
+import '../models/digital_seal.dart';
+import '../services/digital_seal_storage_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 31;
+  static const int dbVersion = 32;
 
   static Database? _database;
 
@@ -692,6 +694,10 @@ class DatabaseHelper {
 
     if (version >= 30) {
       await AccessDao.createSecurityTriggers(db);
+    }
+
+    if (version >= 32) {
+      await _createDigitalSealsTables(db);
     }
   }
 
@@ -1543,6 +1549,86 @@ class DatabaseHelper {
         await db.execute('ALTER TABLE products ADD COLUMN image_path TEXT');
       }
     }
+
+    if (oldVersion < 32 && newVersion >= 32) {
+      await _upgradeToDigitalSealsSchema(db);
+    }
+  }
+
+  static Future<void> _createDigitalSealsTables(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS digital_assets (
+        id TEXT PRIMARY KEY,
+        business_id INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        format TEXT NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        bytes_length INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (business_id) REFERENCES businesses (id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_digital_assets_business ON digital_assets(business_id)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS business_seal_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        business_id INTEGER NOT NULL,
+        seal_type TEXT NOT NULL,
+        asset_id TEXT,
+        is_enabled INTEGER NOT NULL DEFAULT 0,
+        start_ratio REAL NOT NULL,
+        top_ratio REAL NOT NULL,
+        width_ratio REAL NOT NULL,
+        aspect_ratio REAL NOT NULL DEFAULT 1.0,
+        opacity REAL NOT NULL,
+        page_rule TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(business_id, seal_type),
+        FOREIGN KEY (business_id) REFERENCES businesses (id),
+        FOREIGN KEY (asset_id) REFERENCES digital_assets (id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_business_seal_configs_business ON business_seal_configs(business_id)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS document_seal_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL UNIQUE,
+        business_id INTEGER NOT NULL,
+        snapshot_data TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE,
+        FOREIGN KEY (business_id) REFERENCES businesses (id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_document_seal_snapshots_doc ON document_seal_snapshots(document_id)',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS document_seal_snapshot_assets (
+        snapshot_id INTEGER NOT NULL,
+        asset_id TEXT NOT NULL,
+        PRIMARY KEY (snapshot_id, asset_id),
+        FOREIGN KEY (snapshot_id) REFERENCES document_seal_snapshots (id) ON DELETE CASCADE,
+        FOREIGN KEY (asset_id) REFERENCES digital_assets (id)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_snapshot_assets_asset ON document_seal_snapshot_assets(asset_id)',
+    );
+  }
+
+  static Future<void> _upgradeToDigitalSealsSchema(DatabaseExecutor db) async {
+    await _createDigitalSealsTables(db);
   }
 
   static Future<void> _upgradeToReferenceCurrencySchema(
@@ -2674,6 +2760,268 @@ class DatabaseHelper {
       map['updated_by'] = AccessContext.currentUserId;
       return txn.update('businesses', map, where: 'id = ?', whereArgs: [b.id]);
     });
+  }
+
+  // ========== Digital Seals (Stamps & Signatures) ==========
+
+  Future<void> insertDigitalAsset(
+    DigitalSealAsset asset, {
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    await exec.insert(
+      'digital_assets',
+      asset.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<DigitalSealAsset?> getDigitalAsset(
+    String id, {
+    int? businessId,
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    final whereClause = businessId != null
+        ? 'id = ? AND business_id = ?'
+        : 'id = ?';
+    final whereArgs = businessId != null ? [id, businessId] : [id];
+    final rows = await exec.query(
+      'digital_assets',
+      where: whereClause,
+      whereArgs: whereArgs,
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return DigitalSealAsset.fromMap(rows.first);
+  }
+
+  Future<List<DigitalSealAsset>> getDigitalAssetsForBusiness(
+    int businessId, {
+    SealType? type,
+    bool includeDeleted = false,
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    String where = 'business_id = ?';
+    final args = <dynamic>[businessId];
+    if (type != null) {
+      where += ' AND type = ?';
+      args.add(type.name);
+    }
+    if (!includeDeleted) {
+      where += ' AND is_deleted = 0';
+    }
+    final rows = await exec.query(
+      'digital_assets',
+      where: where,
+      whereArgs: args,
+      orderBy: 'created_at DESC',
+    );
+    return rows.map((r) => DigitalSealAsset.fromMap(r)).toList();
+  }
+
+  Future<void> softDeleteDigitalAsset(
+    String id, {
+    required int businessId,
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    await exec.update(
+      'digital_assets',
+      {'is_deleted': 1},
+      where: 'id = ? AND business_id = ?',
+      whereArgs: [id, businessId],
+    );
+  }
+
+  Future<DigitalSealConfig?> getBusinessSealConfig(
+    int businessId,
+    SealType type, {
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    final rows = await exec.query(
+      'business_seal_configs',
+      where: 'business_id = ? AND seal_type = ?',
+      whereArgs: [businessId, type.name],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return DigitalSealConfig.fromMap(rows.first, type);
+  }
+
+  Future<void> saveBusinessSealConfig(
+    int businessId,
+    DigitalSealConfig config, {
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    if (config.assetId != null && config.assetId!.isNotEmpty) {
+      final assetRows = await exec.query(
+        'digital_assets',
+        columns: ['id'],
+        where: 'id = ? AND business_id = ?',
+        whereArgs: [config.assetId, businessId],
+        limit: 1,
+      );
+      if (assetRows.isEmpty) {
+        throw ArgumentError(
+          'Security violation: Asset (${config.assetId}) does not belong to business ($businessId).',
+        );
+      }
+    }
+
+    final map = config.toMap();
+    map['business_id'] = businessId;
+    map['updated_at'] = DateTime.now().toIso8601String();
+
+    await exec.insert(
+      'business_seal_configs',
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<DocumentSealSnapshot?> getDocumentSealSnapshot(
+    int documentId, {
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    final rows = await exec.query(
+      'document_seal_snapshots',
+      where: 'document_id = ?',
+      whereArgs: [documentId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return DocumentSealSnapshot.fromRow(rows.first);
+  }
+
+  Future<void> captureDocumentSealSnapshotTxn(
+    DatabaseExecutor txn, {
+    required int documentId,
+    required int businessId,
+  }) async {
+    final existing = await txn.query(
+      'document_seal_snapshots',
+      columns: ['id'],
+      where: 'document_id = ?',
+      whereArgs: [documentId],
+      limit: 1,
+    );
+    if (existing.isNotEmpty) {
+      return; // Immutable: never overwrite historical snapshot
+    }
+
+    final configs = await txn.query(
+      'business_seal_configs',
+      where: 'business_id = ? AND is_enabled = 1 AND asset_id IS NOT NULL',
+      whereArgs: [businessId],
+    );
+
+    DigitalSealConfig? stampConfig;
+    DigitalSealConfig? sigConfig;
+    final referencedAssetIds = <String>[];
+
+    for (final row in configs) {
+      final typeStr = row['seal_type'] as String?;
+      final assetId = row['asset_id'] as String?;
+      if (assetId == null || assetId.isEmpty) continue;
+
+      final assetRows = await txn.query(
+        'digital_assets',
+        columns: ['id', 'aspect_ratio', 'width', 'height'],
+        where: 'id = ? AND business_id = ?',
+        whereArgs: [assetId, businessId],
+        limit: 1,
+      );
+      if (assetRows.isEmpty) continue;
+
+      final config = DigitalSealConfig.fromMap(row);
+      if (typeStr == SealType.stamp.name) {
+        stampConfig = config;
+        referencedAssetIds.add(assetId);
+      } else if (typeStr == SealType.signature.name) {
+        sigConfig = config;
+        referencedAssetIds.add(assetId);
+      }
+    }
+
+    if (stampConfig == null && sigConfig == null) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final snapshotJson = DocumentSealSnapshot.serializeData(
+      businessId: businessId,
+      issuedAt: now,
+      stamp: stampConfig,
+      signature: sigConfig,
+    );
+
+    final snapshotId = await txn.insert('document_seal_snapshots', {
+      'document_id': documentId,
+      'business_id': businessId,
+      'snapshot_data': snapshotJson,
+      'created_at': now.toIso8601String(),
+    });
+
+    for (final assetId in referencedAssetIds) {
+      await txn.insert('document_seal_snapshot_assets', {
+        'snapshot_id': snapshotId,
+        'asset_id': assetId,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  Future<int> cleanupUnreferencedAssets({
+    int? businessId,
+    DatabaseExecutor? txn,
+  }) async {
+    final exec = txn ?? (await database);
+    String where = 'is_deleted = 1';
+    final args = <dynamic>[];
+    if (businessId != null) {
+      where += ' AND business_id = ?';
+      args.add(businessId);
+    }
+
+    final candidates = await exec.query(
+      'digital_assets',
+      columns: ['id', 'filename'],
+      where: where,
+      whereArgs: args.isEmpty ? null : args,
+    );
+
+    int deletedCount = 0;
+    for (final c in candidates) {
+      final assetId = c['id'] as String;
+      final filename = c['filename'] as String;
+
+      final configRefRows = await exec.rawQuery(
+        'SELECT COUNT(*) as c FROM business_seal_configs WHERE asset_id = ?',
+        [assetId],
+      );
+      final configRefs = Sqflite.firstIntValue(configRefRows) ?? 0;
+      if (configRefs > 0) continue;
+
+      final snapshotRefRows = await exec.rawQuery(
+        'SELECT COUNT(*) as c FROM document_seal_snapshot_assets WHERE asset_id = ?',
+        [assetId],
+      );
+      final snapshotRefs = Sqflite.firstIntValue(snapshotRefRows) ?? 0;
+      if (snapshotRefs > 0) continue;
+
+      await DigitalSealStorageService.deleteAssetFile(filename);
+      await exec.delete(
+        'digital_assets',
+        where: 'id = ?',
+        whereArgs: [assetId],
+      );
+      deletedCount++;
+    }
+    return deletedCount;
   }
 
   // ========== Contacts ==========
@@ -3906,6 +4254,17 @@ class DatabaseHelper {
         }
       }
       await JournalWriter.postDocumentIssued(txn, insertedDoc, persistedItems);
+
+      if (!isDraft) {
+        final businessId = bRows.isNotEmpty
+            ? (bRows.first['id'] as int? ?? 1)
+            : 1;
+        await captureDocumentSealSnapshotTxn(
+          txn,
+          documentId: docId,
+          businessId: businessId,
+        );
+      }
 
       return docId;
     });
@@ -6854,6 +7213,15 @@ class DatabaseHelper {
       );
       final persistedItems = itemRows.map(DocumentItem.fromMap).toList();
       await JournalWriter.postDocumentIssued(txn, updatedDoc, persistedItems);
+
+      final businessId = bRows.isNotEmpty
+          ? (bRows.first['id'] as int? ?? 1)
+          : 1;
+      await captureDocumentSealSnapshotTxn(
+        txn,
+        documentId: id,
+        businessId: businessId,
+      );
     });
   }
 
@@ -6971,6 +7339,17 @@ class DatabaseHelper {
             'base_quantity': item['base_quantity'] ?? item['quantity'],
           });
         }
+      }
+
+      if (newStatus == DocumentStatus.issued) {
+        final businessId = bRows.isNotEmpty
+            ? (bRows.first['id'] as int? ?? 1)
+            : 1;
+        await captureDocumentSealSnapshotTxn(
+          txn,
+          documentId: newId,
+          businessId: businessId,
+        );
       }
 
       return newId;

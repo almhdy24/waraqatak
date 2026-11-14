@@ -8,6 +8,8 @@ import '../models/contact.dart';
 import '../models/customer_statement.dart';
 import '../models/document.dart';
 import '../models/document_item.dart';
+import '../models/digital_seal.dart';
+import '../database/database_helper.dart';
 import '../utils/pdf_settings.dart';
 import '../utils/print_settings.dart';
 import 'pdf/pdf_customer_statement_builder.dart';
@@ -26,9 +28,21 @@ class PdfService {
     Document? relatedDocument,
     PaperSize? paperSize,
     PdfStyleSettings? style,
+    DocumentSealSnapshot? sealSnapshot,
+    (DigitalSealConfig? stamp, DigitalSealConfig? signature)?
+    activeSealsPreview,
   }) async {
     final size = paperSize ?? await PrintSettings.getDefaultSize();
     final pdfStyle = style ?? await PdfSettings.load();
+    DocumentSealSnapshot? resolvedSnapshot = sealSnapshot;
+    if (resolvedSnapshot == null &&
+        activeSealsPreview == null &&
+        doc.id != null) {
+      try {
+        resolvedSnapshot = await DatabaseHelper.instance
+            .getDocumentSealSnapshot(doc.id!);
+      } catch (_) {}
+    }
     return PdfDocumentBuilder.build(
       doc: doc,
       business: business,
@@ -38,6 +52,8 @@ class PdfService {
       relatedDocument: relatedDocument,
       paperSize: size,
       style: pdfStyle,
+      sealSnapshot: resolvedSnapshot,
+      activeSealsPreview: activeSealsPreview,
     );
   }
 
@@ -49,6 +65,7 @@ class PdfService {
     required AppLocalizations l10n,
     Document? relatedDocument,
     PaperSize? paperSize,
+    DocumentSealSnapshot? sealSnapshot,
   }) async {
     final bytes = await generateDocumentPdf(
       doc: doc,
@@ -58,6 +75,7 @@ class PdfService {
       l10n: l10n,
       relatedDocument: relatedDocument,
       paperSize: paperSize,
+      sealSnapshot: sealSnapshot,
     );
     await SharePlus.instance.share(
       ShareParams(
@@ -66,10 +84,9 @@ class PdfService {
       ),
     );
     try {
-      AnalyticsService.instance.track(
-        AnalyticsEvent.pdfShared,
-        {'kind': 'document'},
-      );
+      AnalyticsService.instance.track(AnalyticsEvent.pdfShared, {
+        'kind': 'document',
+      });
     } catch (_) {}
   }
 
@@ -114,8 +131,9 @@ class PdfService {
       statement.currencySymbol,
     );
 
-    final fileName = 'statement_${statement.contact.name}_${DateFormat('yyyyMMdd').format(statement.to)}.pdf'
-        .replaceAll(RegExp(r'\s+'), '_');
+    final fileName =
+        'statement_${statement.contact.name}_${DateFormat('yyyyMMdd').format(statement.to)}.pdf'
+            .replaceAll(RegExp(r'\s+'), '_');
 
     await SharePlus.instance.share(
       ShareParams(
@@ -125,10 +143,9 @@ class PdfService {
       ),
     );
     try {
-      AnalyticsService.instance.track(
-        AnalyticsEvent.pdfShared,
-        {'kind': 'statement'},
-      );
+      AnalyticsService.instance.track(AnalyticsEvent.pdfShared, {
+        'kind': 'statement',
+      });
     } catch (_) {}
   }
 
@@ -158,18 +175,16 @@ class PdfService {
       l10n: l10n,
       data: data,
     );
-    final safeName = (fileName ?? '${data.title}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf')
-        .replaceAll(RegExp(r'\s+'), '_');
+    final safeName =
+        (fileName ??
+                '${data.title}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf')
+            .replaceAll(RegExp(r'\s+'), '_');
 
-    await Printing.layoutPdf(
-      onLayout: (format) async => bytes,
-      name: safeName,
-    );
+    await Printing.layoutPdf(onLayout: (format) async => bytes, name: safeName);
     try {
-      AnalyticsService.instance.track(
-        AnalyticsEvent.pdfShared,
-        {'kind': 'report'},
-      );
+      AnalyticsService.instance.track(AnalyticsEvent.pdfShared, {
+        'kind': 'report',
+      });
     } catch (_) {}
   }
 }

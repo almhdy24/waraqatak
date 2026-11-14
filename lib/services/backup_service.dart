@@ -16,6 +16,7 @@ import 'accounting/journal_backfill_service.dart';
 import 'analytics/analytics_service.dart';
 import 'backup_encryption_service.dart';
 import 'image_storage_service.dart';
+import 'digital_seal_storage_service.dart';
 
 class BackupService {
   static const String backupExtension = 'waraq';
@@ -543,6 +544,18 @@ class BackupService {
       if (await tableExists('exchange_rates')) {
         await txn.delete('exchange_rates');
       }
+      if (await tableExists('document_seal_snapshot_assets')) {
+        await txn.delete('document_seal_snapshot_assets');
+      }
+      if (await tableExists('document_seal_snapshots')) {
+        await txn.delete('document_seal_snapshots');
+      }
+      if (await tableExists('business_seal_configs')) {
+        await txn.delete('business_seal_configs');
+      }
+      if (await tableExists('digital_assets')) {
+        await txn.delete('digital_assets');
+      }
       await txn.delete('document_payments');
       await txn.delete('document_items');
       await txn.delete('stocktake_items');
@@ -731,6 +744,45 @@ class BackupService {
         }
       }
 
+      if (await tableExists('digital_assets') &&
+          data.containsKey('digital_assets') &&
+          data['digital_assets'] is List) {
+        final cols = await getTableCols('digital_assets');
+        for (final row in _convertRows(data['digital_assets'])) {
+          await txn.insert('digital_assets', sanitizeRow(row, cols));
+        }
+      }
+
+      if (await tableExists('business_seal_configs') &&
+          data.containsKey('business_seal_configs') &&
+          data['business_seal_configs'] is List) {
+        final cols = await getTableCols('business_seal_configs');
+        for (final row in _convertRows(data['business_seal_configs'])) {
+          await txn.insert('business_seal_configs', sanitizeRow(row, cols));
+        }
+      }
+
+      if (await tableExists('document_seal_snapshots') &&
+          data.containsKey('document_seal_snapshots') &&
+          data['document_seal_snapshots'] is List) {
+        final cols = await getTableCols('document_seal_snapshots');
+        for (final row in _convertRows(data['document_seal_snapshots'])) {
+          await txn.insert('document_seal_snapshots', sanitizeRow(row, cols));
+        }
+      }
+
+      if (await tableExists('document_seal_snapshot_assets') &&
+          data.containsKey('document_seal_snapshot_assets') &&
+          data['document_seal_snapshot_assets'] is List) {
+        final cols = await getTableCols('document_seal_snapshot_assets');
+        for (final row in _convertRows(data['document_seal_snapshot_assets'])) {
+          await txn.insert(
+            'document_seal_snapshot_assets',
+            sanitizeRow(row, cols),
+          );
+        }
+      }
+
       await DatabaseHelper.backfillCurrencyLockIfNeeded(txn);
 
       await DatabaseHelper.instance.logAuditEvent(
@@ -753,6 +805,7 @@ class BackupService {
 
     await _restoreLogoIfNeeded(jsonMap);
     await _restoreProductImagesIfNeeded(jsonMap);
+    await _restoreDigitalAssetsIfNeeded(jsonMap);
     await DatabaseHelper.instance.logAuditEvent(
       'backup_restored',
       details:
@@ -871,9 +924,9 @@ class BackupService {
       return <String, List<Map<String, Object?>>>{
         'businesses': await txn.query('businesses'),
         'contacts': await txn.query('contacts'),
-        'products': (await txn.query('products'))
-            .map((row) => Map<String, Object?>.from(row))
-            .toList(),
+        'products': (await txn.query(
+          'products',
+        )).map((row) => Map<String, Object?>.from(row)).toList(),
         'product_units': await txn.query('product_units'),
         'documents': await txn.query('documents'),
         'document_items': await txn.query('document_items'),
@@ -890,6 +943,12 @@ class BackupService {
         'journal_lines': await txn.query('journal_lines'),
         'app_settings': await txn.query('app_settings'),
         'exchange_rates': await txn.query('exchange_rates'),
+        'digital_assets': await txn.query('digital_assets'),
+        'business_seal_configs': await txn.query('business_seal_configs'),
+        'document_seal_snapshots': await txn.query('document_seal_snapshots'),
+        'document_seal_snapshot_assets': await txn.query(
+          'document_seal_snapshot_assets',
+        ),
       };
     });
 
@@ -922,6 +981,21 @@ class BackupService {
       }
     }
 
+    // Collect digital seal assets as base64, keyed by asset id string.
+    final digitalAssets = <String, String>{};
+    if (snapshot.containsKey('digital_assets')) {
+      for (final row in snapshot['digital_assets']!) {
+        final id = row['id']?.toString();
+        final filename = row['filename']?.toString();
+        if (id != null && filename != null && filename.isNotEmpty) {
+          final bytes = await DigitalSealStorageService.getAssetBytes(filename);
+          if (bytes != null && bytes.isNotEmpty) {
+            digitalAssets[id] = base64Encode(bytes);
+          }
+        }
+      }
+    }
+
     // Device-local paths are not portable. The image bytes are stored
     // separately in assets.product_images.
     for (final row in snapshot['products']!) {
@@ -937,6 +1011,7 @@ class BackupService {
       'assets': {
         'logo_base64': logoBase64,
         'product_images': productImages.isEmpty ? null : productImages,
+        'digital_assets': digitalAssets.isEmpty ? null : digitalAssets,
       },
     };
 
@@ -1048,6 +1123,47 @@ class BackupService {
         );
       } catch (_) {
         // Never fail restore due to a single product image error.
+      }
+    }
+  }
+
+  // ============================================================
+  // RESTORE DIGITAL SEAL ASSETS
+  // ============================================================
+
+  static Future<void> _restoreDigitalAssetsIfNeeded(
+    Map<String, dynamic> jsonMap,
+  ) async {
+    final assets = jsonMap['assets'];
+    if (assets is! Map<String, dynamic>) return;
+    final digitalAssets = assets['digital_assets'];
+    if (digitalAssets is! Map<String, dynamic>) return;
+    if (digitalAssets.isEmpty) return;
+
+    final db = await DatabaseHelper.instance.database;
+
+    for (final entry in digitalAssets.entries) {
+      final assetId = entry.key;
+      final b64 = entry.value;
+      if (b64 is! String || b64.isEmpty) continue;
+
+      try {
+        final rows = await db.query(
+          'digital_assets',
+          columns: ['filename'],
+          where: 'id = ?',
+          whereArgs: [assetId],
+          limit: 1,
+        );
+        if (rows.isEmpty) continue;
+        final filename = rows.first['filename'] as String;
+
+        await DigitalSealStorageService.restoreAssetFromBase64(
+          filename: filename,
+          base64Data: b64,
+        );
+      } catch (_) {
+        // Never fail restore due to a single digital seal error.
       }
     }
   }

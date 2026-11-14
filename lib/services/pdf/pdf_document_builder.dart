@@ -9,10 +9,14 @@ import '../../models/business.dart';
 import '../../models/contact.dart';
 import '../../models/document.dart';
 import '../../models/document_item.dart';
+import '../../models/digital_seal.dart';
+import '../../database/database_helper.dart';
 import '../../utils/currency_utils.dart';
 import '../../utils/format_utils.dart';
 import '../../utils/pdf_settings.dart';
 import '../../utils/print_settings.dart';
+import '../digital_seal_storage_service.dart';
+import '../seal_geometry_engine.dart';
 import 'pdf_customer_builder.dart';
 import 'pdf_fonts.dart';
 import 'pdf_header_builder.dart';
@@ -31,10 +35,15 @@ class PdfDocumentBuilder {
     Document? relatedDocument,
     PaperSize paperSize = PaperSize.a4,
     PdfStyleSettings style = const PdfStyleSettings(),
+    DocumentSealSnapshot? sealSnapshot,
+    (DigitalSealConfig? stamp, DigitalSealConfig? signature)?
+    activeSealsPreview,
   }) async {
     final theme = PdfTheme.fromSettings(style);
     // Load fonts once regardless of paper size
-    final regularFontData = await rootBundle.load('assets/fonts/Tajawal-Regular.ttf');
+    final regularFontData = await rootBundle.load(
+      'assets/fonts/Tajawal-Regular.ttf',
+    );
     final boldFontData = await rootBundle.load('assets/fonts/Tajawal-Bold.ttf');
     final regular = ArabicTtfFont(regularFontData);
     final bold = ArabicTtfFont(boldFontData);
@@ -51,8 +60,73 @@ class PdfDocumentBuilder {
     }
 
     final paymentMethodLabel = doc.paymentMethod != null
-        ? await CurrencyUtils.resolvePaymentMethodLabel(doc.paymentMethod!, l10n)
+        ? await CurrencyUtils.resolvePaymentMethodLabel(
+            doc.paymentMethod!,
+            l10n,
+          )
         : '';
+
+    // Resolve digital seals: from snapshot if available, or preview if in design screen
+    DigitalSealConfig? effectiveStamp;
+    DigitalSealConfig? effectiveSignature;
+    pw.MemoryImage? stampImage;
+    pw.MemoryImage? signatureImage;
+
+    DocumentSealSnapshot? snapshot = sealSnapshot;
+    if (snapshot == null && doc.id != null && doc.id! > 0) {
+      try {
+        snapshot = await DatabaseHelper.instance.getDocumentSealSnapshot(
+          doc.id!,
+        );
+      } catch (_) {}
+    }
+
+    if (snapshot != null) {
+      effectiveStamp = snapshot.stamp;
+      effectiveSignature = snapshot.signature;
+    } else if (activeSealsPreview != null) {
+      effectiveStamp = activeSealsPreview.$1;
+      effectiveSignature = activeSealsPreview.$2;
+    }
+
+    final businessId = business.id ?? 1;
+    if (effectiveStamp != null &&
+        effectiveStamp.isEnabled &&
+        effectiveStamp.assetId != null) {
+      try {
+        final asset = await DatabaseHelper.instance.getDigitalAsset(
+          effectiveStamp.assetId!,
+          businessId: businessId,
+        );
+        if (asset != null) {
+          final bytes = await DigitalSealStorageService.getAssetBytes(
+            asset.filename,
+          );
+          if (bytes != null && bytes.isNotEmpty) {
+            stampImage = pw.MemoryImage(bytes);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (effectiveSignature != null &&
+        effectiveSignature.isEnabled &&
+        effectiveSignature.assetId != null) {
+      try {
+        final asset = await DatabaseHelper.instance.getDigitalAsset(
+          effectiveSignature.assetId!,
+          businessId: businessId,
+        );
+        if (asset != null) {
+          final bytes = await DigitalSealStorageService.getAssetBytes(
+            asset.filename,
+          );
+          if (bytes != null && bytes.isNotEmpty) {
+            signatureImage = pw.MemoryImage(bytes);
+          }
+        }
+      } catch (_) {}
+    }
 
     if (paperSize == PaperSize.thermal80mm) {
       return _buildThermal(
@@ -66,6 +140,10 @@ class PdfDocumentBuilder {
         bold: bold,
         logoImage: logoImage,
         theme: theme,
+        effectiveStamp: effectiveStamp,
+        effectiveSignature: effectiveSignature,
+        stampImage: stampImage,
+        signatureImage: signatureImage,
       );
     }
 
@@ -82,6 +160,10 @@ class PdfDocumentBuilder {
       paperSize: paperSize,
       theme: theme,
       paymentMethodLabel: paymentMethodLabel,
+      effectiveStamp: effectiveStamp,
+      effectiveSignature: effectiveSignature,
+      stampImage: stampImage,
+      signatureImage: signatureImage,
     );
   }
 
@@ -98,6 +180,10 @@ class PdfDocumentBuilder {
     PaperSize paperSize = PaperSize.a4,
     required PdfTheme theme,
     String paymentMethodLabel = '',
+    DigitalSealConfig? effectiveStamp,
+    DigitalSealConfig? effectiveSignature,
+    pw.MemoryImage? stampImage,
+    pw.MemoryImage? signatureImage,
   }) async {
     final pdf = pw.Document();
     final style = theme.style;
@@ -113,16 +199,36 @@ class PdfDocumentBuilder {
     final currency = doc.currencyCode;
     final legalFooter = business.legalFooter?.trim() ?? '';
     final footerText = style.footerText.trim();
-    final hasFooter = legalFooter.isNotEmpty ||
+    final hasFooter =
+        legalFooter.isNotEmpty ||
         footerText.isNotEmpty ||
         style.showPageNumbers;
 
+    final availableWidth = pageFormat.width - (margin * 2);
+    final availableHeight = pageFormat.height - (margin * 2);
+
+    final pageTheme = pw.PageTheme(
+      pageFormat: pageFormat,
+      margin: pw.EdgeInsets.all(margin),
+      theme: _pageTheme(regular, bold, rtl: isArabic),
+      textDirection: textDir,
+      buildForeground: (effectiveStamp != null || effectiveSignature != null)
+          ? (context) => _buildSealsForeground(
+              context: context,
+              availableWidth: availableWidth,
+              availableHeight: availableHeight,
+              isArabic: isArabic,
+              stamp: effectiveStamp,
+              signature: effectiveSignature,
+              stampImage: stampImage,
+              signatureImage: signatureImage,
+            )
+          : null,
+    );
+
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: pageFormat,
-        margin: pw.EdgeInsets.all(margin),
-        textDirection: textDir,
-        theme: _pageTheme(regular, bold, rtl: isArabic),
+        pageTheme: pageTheme,
         header: (context) => context.pageNumber == 1
             ? PdfHeaderBuilder.build(
                 business: business,
@@ -136,13 +242,13 @@ class PdfDocumentBuilder {
             : pw.SizedBox(),
         footer: hasFooter
             ? (context) => _buildFooter(
-                  context: context,
-                  theme: theme,
-                  regular: regular,
-                  textDir: textDir,
-                  legalFooter: legalFooter,
-                  footerText: footerText,
-                )
+                context: context,
+                theme: theme,
+                regular: regular,
+                textDir: textDir,
+                legalFooter: legalFooter,
+                footerText: footerText,
+              )
             : null,
         build: (context) => [
           pw.SizedBox(height: 12),
@@ -215,7 +321,9 @@ class PdfDocumentBuilder {
               isArabic: isArabic,
               valueDirection: pw.TextDirection.ltr,
             ),
-          if (doc.type == 'invoice' && relatedDocument != null && relatedDocument.type == 'quotation')
+          if (doc.type == 'invoice' &&
+              relatedDocument != null &&
+              relatedDocument.type == 'quotation')
             _buildInfoRow(
               label: l10n.sourceQuotation,
               value: relatedDocument.documentNumber,
@@ -270,16 +378,16 @@ class PdfDocumentBuilder {
           pw.SizedBox(height: 16),
 
           // Notes
-          if (style.showNotes && doc.notes != null && doc.notes!.isNotEmpty) ...[
+          if (style.showNotes &&
+              doc.notes != null &&
+              doc.notes!.isNotEmpty) ...[
             pw.Directionality(
-              textDirection:
-                  isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr,
+              textDirection: isArabic
+                  ? pw.TextDirection.rtl
+                  : pw.TextDirection.ltr,
               child: pw.Text(
                 '${l10n.notes}:',
-                style: pw.TextStyle(
-                  font: bold,
-                  color: theme.primaryColor,
-                ),
+                style: pw.TextStyle(font: bold, color: theme.primaryColor),
               ),
             ),
             pw.SizedBox(height: 4),
@@ -314,13 +422,17 @@ class PdfDocumentBuilder {
   /// whose tail extends past the glyph box (final/isolated ر، ا…) eat the
   /// gap to the next word ("متجرالنيل"). Wider spaces keep Arabic words
   /// visibly separated. LTR documents are unaffected and keep normal spacing.
-  static pw.ThemeData _pageTheme(pw.Font regular, pw.Font bold,
-      {required bool rtl}) {
+  static pw.ThemeData _pageTheme(
+    pw.Font regular,
+    pw.Font bold, {
+    required bool rtl,
+  }) {
     final base = pw.ThemeData.withFont(base: regular, bold: bold);
     if (!rtl) return base;
     return base.copyWith(
-      defaultTextStyle: base.defaultTextStyle
-          .copyWith(wordSpacing: PdfTextUtils.rtlWordSpacing),
+      defaultTextStyle: base.defaultTextStyle.copyWith(
+        wordSpacing: PdfTextUtils.rtlWordSpacing,
+      ),
     );
   }
 
@@ -338,11 +450,11 @@ class PdfDocumentBuilder {
       color: theme.mutedTextColor,
     );
     pw.Widget line(String text) => pw.Directionality(
-          textDirection: text.isEmpty
-              ? textDir
-              : PdfTextUtils.detectDirection(text),
-          child: pw.Text(text, style: style, textAlign: pw.TextAlign.center),
-        );
+      textDirection: text.isEmpty
+          ? textDir
+          : PdfTextUtils.detectDirection(text),
+      child: pw.Text(text, style: style, textAlign: pw.TextAlign.center),
+    );
     return pw.Container(
       width: double.infinity,
       margin: const pw.EdgeInsets.only(top: 10),
@@ -377,31 +489,29 @@ class PdfDocumentBuilder {
     required pw.TextDirection textDir,
   }) {
     pw.Widget box(String label) => pw.Expanded(
-          child: pw.Column(
-            children: [
-              pw.Container(
-                height: 0.8,
-                margin: const pw.EdgeInsets.symmetric(horizontal: 18),
-                color: theme.textColor,
-              ),
-              pw.SizedBox(height: 4),
-              pw.Directionality(
-                textDirection: textDir,
-                child: pw.Text(
-                  label,
-                  style: pw.TextStyle(
-                    font: regular,
-                    fontSize: theme.fs(10),
-                    color: theme.mutedTextColor,
-                  ),
-                ),
-              ),
-            ],
+      child: pw.Column(
+        children: [
+          pw.Container(
+            height: 0.8,
+            margin: const pw.EdgeInsets.symmetric(horizontal: 18),
+            color: theme.textColor,
           ),
-        );
-    return pw.Row(
-      children: [box(l10n.pdfSignature), box(l10n.pdfStamp)],
+          pw.SizedBox(height: 4),
+          pw.Directionality(
+            textDirection: textDir,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(
+                font: regular,
+                fontSize: theme.fs(10),
+                color: theme.mutedTextColor,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
+    return pw.Row(children: [box(l10n.pdfSignature), box(l10n.pdfStamp)]);
   }
 
   static pw.Widget _buildInfoRow({
@@ -413,8 +523,9 @@ class PdfDocumentBuilder {
     required bool isArabic,
     pw.TextDirection? valueDirection,
   }) {
-    final labelDirection =
-        isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+    final labelDirection = isArabic
+        ? pw.TextDirection.rtl
+        : pw.TextDirection.ltr;
     final actualValueDirection =
         valueDirection ?? PdfTextUtils.detectDirection(value);
 
@@ -427,11 +538,7 @@ class PdfDocumentBuilder {
             textDirection: labelDirection,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(
-                font: bold,
-                fontSize: 12,
-                color: textColor,
-              ),
+              style: pw.TextStyle(font: bold, fontSize: 12, color: textColor),
             ),
           ),
           pw.SizedBox(width: 4),
@@ -455,14 +562,91 @@ class PdfDocumentBuilder {
 
   static String _documentTypeLabel(String type, AppLocalizations l10n) {
     return switch (type) {
-      'invoice'         => l10n.invoice,
-      'purchase'        => l10n.purchase,
-      'quotation'       => l10n.quotation,
+      'invoice' => l10n.invoice,
+      'purchase' => l10n.purchase,
+      'quotation' => l10n.quotation,
       'payment_receipt' => l10n.paymentReceipt,
       'expense_voucher' => l10n.expenseVoucher,
-      'custom'          => l10n.customDocument,
-      _                 => l10n.documents,
+      'custom' => l10n.customDocument,
+      _ => l10n.documents,
     };
+  }
+
+  static pw.Widget _buildSealsForeground({
+    required pw.Context context,
+    required double availableWidth,
+    required double availableHeight,
+    required bool isArabic,
+    DigitalSealConfig? stamp,
+    DigitalSealConfig? signature,
+    pw.MemoryImage? stampImage,
+    pw.MemoryImage? signatureImage,
+  }) {
+    final widgets = <pw.Widget>[];
+
+    bool shouldRenderOnPage(SealPageRule rule) => switch (rule) {
+      SealPageRule.lastPage => context.pageNumber == context.pagesCount,
+      SealPageRule.firstPage => context.pageNumber == 1,
+      SealPageRule.allPages => true,
+    };
+
+    if (stamp != null &&
+        stamp.isEnabled &&
+        stampImage != null &&
+        shouldRenderOnPage(stamp.pageRule)) {
+      final box = SealGeometryEngine.resolve(
+        config: stamp,
+        containerWidth: availableWidth,
+        containerHeight: availableHeight,
+        isRtl: isArabic,
+      );
+      widgets.add(
+        pw.PositionedDirectional(
+          start: box.start,
+          top: box.top,
+          child: pw.SizedBox(
+            width: box.width,
+            height: box.height,
+            child: pw.Opacity(
+              opacity: stamp.opacity,
+              child: pw.Image(stampImage, fit: pw.BoxFit.contain),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (signature != null &&
+        signature.isEnabled &&
+        signatureImage != null &&
+        shouldRenderOnPage(signature.pageRule)) {
+      final box = SealGeometryEngine.resolve(
+        config: signature,
+        containerWidth: availableWidth,
+        containerHeight: availableHeight,
+        isRtl: isArabic,
+      );
+      widgets.add(
+        pw.PositionedDirectional(
+          start: box.start,
+          top: box.top,
+          child: pw.SizedBox(
+            width: box.width,
+            height: box.height,
+            child: pw.Opacity(
+              opacity: signature.opacity,
+              child: pw.Image(signatureImage, fit: pw.BoxFit.contain),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (widgets.isEmpty) {
+      return pw.SizedBox();
+    }
+
+    return pw.Stack(fit: pw.StackFit.expand, children: widgets);
   }
 
   // ==================== Thermal 80mm layout ====================
@@ -478,6 +662,10 @@ class PdfDocumentBuilder {
     required pw.Font bold,
     pw.MemoryImage? logoImage,
     required PdfTheme theme,
+    DigitalSealConfig? effectiveStamp,
+    DigitalSealConfig? effectiveSignature,
+    pw.MemoryImage? stampImage,
+    pw.MemoryImage? signatureImage,
   }) async {
     final pdf = pw.Document();
     final isArabic = l10n.langCode == 'ar';
@@ -487,82 +675,179 @@ class PdfDocumentBuilder {
     const double fontSize = 10;
     const double smallSize = 9;
 
-    pw.Widget txt(String s, {bool isBold = false, double size = fontSize, pw.TextAlign align = pw.TextAlign.start}) {
+    pw.Widget txt(
+      String s, {
+      bool isBold = false,
+      double size = fontSize,
+      pw.TextAlign align = pw.TextAlign.start,
+    }) {
       return pw.Directionality(
         textDirection: s.isEmpty ? textDir : PdfTextUtils.detectDirection(s),
-        child: pw.Text(s,
-            textAlign: align,
-            style: pw.TextStyle(font: isBold ? bold : regular, fontSize: size, color: theme.textColor)),
+        child: pw.Text(
+          s,
+          textAlign: align,
+          style: pw.TextStyle(
+            font: isBold ? bold : regular,
+            fontSize: size,
+            color: theme.textColor,
+          ),
+        ),
       );
     }
 
     // A drawn rule: Tajawal has no box-drawing glyphs (a run of '─' printed
     // as placeholder boxes).
     pw.Widget divider() => pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 5),
-          child: pw.Container(height: 0.8, color: PdfColors.grey600),
-        );
+      padding: const pw.EdgeInsets.symmetric(vertical: 5),
+      child: pw.Container(height: 0.8, color: PdfColors.grey600),
+    );
 
     final widgets = <pw.Widget>[];
 
     // Header
-    widgets.add(pw.Center(child: txt(business.name, isBold: true, size: 13, align: pw.TextAlign.center)));
+    widgets.add(
+      pw.Center(
+        child: txt(
+          business.name,
+          isBold: true,
+          size: 13,
+          align: pw.TextAlign.center,
+        ),
+      ),
+    );
     if (business.phone.isNotEmpty) {
-      widgets.add(pw.Center(child: txt(business.phone, size: smallSize, align: pw.TextAlign.center)));
+      widgets.add(
+        pw.Center(
+          child: txt(
+            business.phone,
+            size: smallSize,
+            align: pw.TextAlign.center,
+          ),
+        ),
+      );
     }
     if (business.address.isNotEmpty) {
-      widgets.add(pw.Center(
-          child: pw.Directionality(textDirection: textDir,
-              child: pw.Text(business.address, textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(font: regular, fontSize: smallSize, color: theme.textColor)))));
+      widgets.add(
+        pw.Center(
+          child: pw.Directionality(
+            textDirection: textDir,
+            child: pw.Text(
+              business.address,
+              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(
+                font: regular,
+                fontSize: smallSize,
+                color: theme.textColor,
+              ),
+            ),
+          ),
+        ),
+      );
     }
     widgets.add(divider());
 
     // Doc info
-    widgets.add(pw.Center(child: txt(_documentTypeLabel(doc.type, l10n), isBold: true, size: 12, align: pw.TextAlign.center)));
-    widgets.add(txt('${l10n.documentNumber}: ${doc.documentNumber}', size: smallSize));
-    widgets.add(txt('${l10n.date}: ${DateFormat('dd/MM/yyyy').format(doc.date)}', size: smallSize));
+    widgets.add(
+      pw.Center(
+        child: txt(
+          _documentTypeLabel(doc.type, l10n),
+          isBold: true,
+          size: 12,
+          align: pw.TextAlign.center,
+        ),
+      ),
+    );
+    widgets.add(
+      txt('${l10n.documentNumber}: ${doc.documentNumber}', size: smallSize),
+    );
+    widgets.add(
+      txt(
+        '${l10n.date}: ${DateFormat('dd/MM/yyyy').format(doc.date)}',
+        size: smallSize,
+      ),
+    );
 
     // Contact
     final contactName = contact?.name ?? doc.recipientName;
     if (contactName != null && contactName.isNotEmpty) {
-      widgets.add(pw.Directionality(textDirection: textDir,
-          child: pw.Text('${l10n.customerOrParty}: $contactName',
-              style: pw.TextStyle(font: regular, fontSize: smallSize, color: theme.textColor))));
+      widgets.add(
+        pw.Directionality(
+          textDirection: textDir,
+          child: pw.Text(
+            '${l10n.customerOrParty}: $contactName',
+            style: pw.TextStyle(
+              font: regular,
+              fontSize: smallSize,
+              color: theme.textColor,
+            ),
+          ),
+        ),
+      );
     }
     widgets.add(divider());
 
     // Items
     for (final item in items) {
-      widgets.add(pw.Directionality(textDirection: textDir,
-          child: pw.Text(item.description,
-              style: pw.TextStyle(font: bold, fontSize: fontSize, color: theme.textColor))));
+      widgets.add(
+        pw.Directionality(
+          textDirection: textDir,
+          child: pw.Text(
+            item.description,
+            style: pw.TextStyle(
+              font: bold,
+              fontSize: fontSize,
+              color: theme.textColor,
+            ),
+          ),
+        ),
+      );
       final lineTotal = item.quantity * item.price;
       final unitSuffix = item.saleUnit != null && item.saleUnit!.isNotEmpty
           ? ' ${item.saleUnit}'
           : '';
-      widgets.add(pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          txt('${FormatUtils.formatQuantity(item.quantity)}$unitSuffix × ${numFmt.format(item.price)}', size: smallSize),
-          txt('${numFmt.format(lineTotal)} $currency', size: smallSize),
-        ],
-      ));
+      widgets.add(
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            txt(
+              '${FormatUtils.formatQuantity(item.quantity)}$unitSuffix × ${numFmt.format(item.price)}',
+              size: smallSize,
+            ),
+            txt('${numFmt.format(lineTotal)} $currency', size: smallSize),
+          ],
+        ),
+      );
       widgets.add(pw.SizedBox(height: 2));
     }
     widgets.add(divider());
 
     // Totals
     void totRow(String label, double value, {bool emph = false}) {
-      widgets.add(pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Directionality(textDirection: textDir,
-              child: pw.Text(label, style: pw.TextStyle(font: emph ? bold : regular, fontSize: fontSize))),
-          pw.Text('${numFmt.format(value)} $currency',
-              style: pw.TextStyle(font: emph ? bold : regular, fontSize: fontSize, color: emph ? theme.primaryColor : theme.textColor)),
-        ],
-      ));
+      widgets.add(
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Directionality(
+              textDirection: textDir,
+              child: pw.Text(
+                label,
+                style: pw.TextStyle(
+                  font: emph ? bold : regular,
+                  fontSize: fontSize,
+                ),
+              ),
+            ),
+            pw.Text(
+              '${numFmt.format(value)} $currency',
+              style: pw.TextStyle(
+                font: emph ? bold : regular,
+                fontSize: fontSize,
+                color: emph ? theme.primaryColor : theme.textColor,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     if (doc.discount > 0) totRow(l10n.discount, doc.discount);
@@ -579,10 +864,69 @@ class PdfDocumentBuilder {
     // Notes
     if (theme.style.showNotes && doc.notes != null && doc.notes!.isNotEmpty) {
       widgets.add(divider());
-      widgets.add(pw.Directionality(textDirection: textDir,
-          child: pw.Text('${l10n.notes}: ${doc.notes!}',
-              style: pw.TextStyle(font: regular, fontSize: smallSize, color: theme.textColor))));
+      widgets.add(
+        pw.Directionality(
+          textDirection: textDir,
+          child: pw.Text(
+            '${l10n.notes}: ${doc.notes!}',
+            style: pw.TextStyle(
+              font: regular,
+              fontSize: smallSize,
+              color: theme.textColor,
+            ),
+          ),
+        ),
+      );
     }
+
+    // Digital seals on thermal receipts (sequential footer elements)
+    if (effectiveStamp != null &&
+        effectiveStamp.isEnabled &&
+        stampImage != null) {
+      widgets.add(divider());
+      const maxThermalWidth = 140.0;
+      final thermalWidth = (80 * PdfPageFormat.mm * effectiveStamp.widthRatio)
+          .clamp(40.0, maxThermalWidth);
+      final aspect = effectiveStamp.aspectRatio > 0
+          ? effectiveStamp.aspectRatio
+          : 1.0;
+      widgets.add(
+        pw.Center(
+          child: pw.Container(
+            width: thermalWidth,
+            height: thermalWidth / aspect,
+            child: pw.Image(stampImage, fit: pw.BoxFit.contain),
+          ),
+        ),
+      );
+      widgets.add(pw.SizedBox(height: 4));
+    }
+
+    if (effectiveSignature != null &&
+        effectiveSignature.isEnabled &&
+        signatureImage != null) {
+      widgets.add(divider());
+      const maxThermalWidth = 150.0;
+      final thermalWidth =
+          (80 * PdfPageFormat.mm * effectiveSignature.widthRatio).clamp(
+            40.0,
+            maxThermalWidth,
+          );
+      final aspect = effectiveSignature.aspectRatio > 0
+          ? effectiveSignature.aspectRatio
+          : 1.0;
+      widgets.add(
+        pw.Center(
+          child: pw.Container(
+            width: thermalWidth,
+            height: thermalWidth / aspect,
+            child: pw.Image(signatureImage, fit: pw.BoxFit.contain),
+          ),
+        ),
+      );
+      widgets.add(pw.SizedBox(height: 4));
+    }
+
     final thermalFooter = [
       theme.style.footerText.trim(),
       business.legalFooter?.trim() ?? '',
@@ -590,21 +934,27 @@ class PdfDocumentBuilder {
     if (thermalFooter.isNotEmpty) {
       widgets.add(divider());
       for (final t in thermalFooter) {
-        widgets.add(pw.Center(child: txt(t, size: smallSize, align: pw.TextAlign.center)));
+        widgets.add(
+          pw.Center(
+            child: txt(t, size: smallSize, align: pw.TextAlign.center),
+          ),
+        );
       }
     }
     widgets.add(pw.SizedBox(height: 8));
 
-    pdf.addPage(pw.Page(
-      pageFormat: PrintSettings.pageFormatFor(PaperSize.thermal80mm),
-      // RTL so label/amount rows read right-to-left on Arabic receipts.
-      textDirection: textDir,
-      theme: _pageTheme(regular, bold, rtl: isArabic),
-      build: (ctx) => pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: widgets,
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PrintSettings.pageFormatFor(PaperSize.thermal80mm),
+        // RTL so label/amount rows read right-to-left on Arabic receipts.
+        textDirection: textDir,
+        theme: _pageTheme(regular, bold, rtl: isArabic),
+        build: (ctx) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: widgets,
+        ),
       ),
-    ));
+    );
 
     return pdf.save();
   }
