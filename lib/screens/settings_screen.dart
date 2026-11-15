@@ -17,6 +17,7 @@ import 'about_screen.dart';
 import 'business_setup_screen.dart';
 import 'database_diagnostic_screen.dart';
 import 'google_drive_backup_screen.dart';
+import 'main_shell.dart';
 import 'license_screen.dart';
 import 'financial_settings_screen.dart';
 import 'exchange_rates_screen.dart';
@@ -29,11 +30,12 @@ import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
+import '../services/access/access_guard.dart';
 import '../services/access/permission_registry.dart';
 import '../services/access/session_manager.dart';
 import '../services/analytics/analytics_service.dart';
-import '../services/backup_encryption_service.dart';
 import '../services/feature_access.dart';
+import '../services/google_drive_backup_service.dart';
 import '../widgets/access/permission_gate.dart';
 import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/pro_upgrade_sheet.dart';
@@ -49,10 +51,14 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   EntitlementState? _entitlement;
-  bool _errorReportingConsent = true;
-  bool _analyticsConsent = true;
+  late bool _errorReportingConsent =
+      AnalyticsService.instance.isErrorReportingEnabled;
+  late bool _analyticsConsent = AnalyticsService.instance.isUsageEnabled;
   bool _wholesalePricingEnabled = false;
   DateTime? _booksClosedThrough;
+  DateTime? _lastBackupTime;
+  String? _googleAccountEmail;
+  bool _isRestoring = false;
 
   @override
   void initState() {
@@ -61,6 +67,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadConsent();
     _loadWholesaleStatus();
     _loadBooksClosedThrough();
+    _loadBackupInfo();
+  }
+
+  Future<void> _loadBackupInfo() async {
+    final t = await BackupService.getLastBackupTime();
+    String? email;
+    try {
+      final signedIn = await GoogleDriveBackupService.instance.isSignedIn();
+      if (signedIn) {
+        email = GoogleDriveBackupService.instance.currentUserEmail;
+      }
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _lastBackupTime = t;
+        _googleAccountEmail = email;
+      });
+    }
   }
 
   Future<void> _loadWholesaleStatus() async {
@@ -76,6 +100,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadBooksClosedThrough() async {
     final d = await DatabaseHelper.instance.getBooksClosedThrough();
     if (mounted) setState(() => _booksClosedThrough = d);
+  }
+
+  Widget _buildBackupStatusTile(
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme cs,
+  ) {
+    final hasRecentBackup =
+        _lastBackupTime != null &&
+        DateTime.now().difference(_lastBackupTime!).inDays < 7;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: hasRecentBackup
+            ? cs.surfaceContainerHighest.withValues(alpha: 0.3)
+            : cs.errorContainer.withValues(alpha: 0.2),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                hasRecentBackup
+                    ? Icons.check_circle_outline
+                    : Icons.warning_amber_rounded,
+                size: 16,
+                color: hasRecentBackup ? cs.primary : cs.error,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _lastBackupTime != null
+                      ? l10n.lastBackupDate(
+                          AppDateUtils.formatDateTime(_lastBackupTime!),
+                        )
+                      : l10n.noBackupYet,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: hasRecentBackup ? cs.onSurface : cs.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (!hasRecentBackup) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.backupReminder7Days,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: cs.onErrorContainer,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _loadConsent() async {
@@ -143,6 +227,362 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final provider = LanguageProvider.of(context);
     final themeScope = ThemeModeScope.of(context);
     final cs = Theme.of(context).colorScheme;
+    final chevronIcon = AppIcons.chevronForward(context);
+    final canManageSettings = AccessGuard.can(
+      PermissionRegistry.settingsManage,
+    );
+    final canPricingRates = AccessGuard.can(PermissionRegistry.pricingRates);
+    final canPaymentMethods = AccessGuard.can(
+      PermissionRegistry.paymentMethodsManage,
+    );
+    final canPeriodLock = AccessGuard.can(
+      PermissionRegistry.accountingPeriodLock,
+    );
+    final canUsersManage = AccessGuard.can(PermissionRegistry.usersManage);
+    final canBackupCreate = AccessGuard.can(PermissionRegistry.backupCreate);
+    final isOwner = SessionManager.instance.isOwnerSession;
+
+    final businessTiles = <Widget>[
+      if (canManageSettings)
+        ListTile(
+          leading: const Icon(Icons.business_outlined),
+          title: Text(l10n.businessData),
+          trailing: Icon(chevronIcon),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const BusinessSetupScreen()),
+          ),
+        ),
+      if (canManageSettings)
+        ListTile(
+          leading: const Icon(Icons.account_balance_outlined),
+          title: Text(l10n.financialSettings),
+          subtitle: Text(l10n.financialSettingsDesc),
+          trailing: Icon(chevronIcon),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const FinancialSettingsScreen()),
+          ),
+        ),
+      if (canPricingRates)
+        ListTile(
+          leading: const Icon(Icons.currency_exchange_outlined),
+          title: Text(l10n.exchangeRates),
+          subtitle: Text(l10n.exchangeRatesDesc),
+          trailing: ReferenceCurrencyFeature.isAvailable
+              ? Icon(chevronIcon)
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ProBadge(),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.lock_outline, size: 20),
+                  ],
+                ),
+          onTap: () {
+            if (ReferenceCurrencyFeature.isAvailable) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ExchangeRatesScreen()),
+              );
+            } else {
+              ProUpgradeSheet.show(context, feature: Feature.referenceCurrency);
+            }
+          },
+        ),
+      if (canPaymentMethods)
+        ListTile(
+          leading: const Icon(Icons.payment_outlined),
+          title: Text(l10n.paymentMethods),
+          subtitle: Text(l10n.configurePaymentMethods),
+          trailing: Icon(chevronIcon),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PaymentMethodsScreen()),
+          ),
+        ),
+      if (canPeriodLock)
+        ListTile(
+          leading: const Icon(Icons.lock_clock_outlined),
+          title: Text(l10n.periodLockSection),
+          subtitle: Text(
+            _booksClosedThrough != null
+                ? '${l10n.periodLockClosedThrough}: ${AppDateUtils.formatDate(_booksClosedThrough)}'
+                : l10n.periodLockSectionDesc,
+          ),
+          trailing: Icon(chevronIcon),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PeriodClosingScreen()),
+            );
+            if (mounted) _loadBooksClosedThrough();
+          },
+        ),
+      if (canManageSettings)
+        ListTile(
+          leading: const Icon(Icons.picture_as_pdf_outlined),
+          title: Text(l10n.pdfCustomize),
+          subtitle: Text(l10n.pdfCustomizeDesc),
+          trailing: Icon(chevronIcon),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PdfCustomizeScreen()),
+          ),
+        ),
+      if (canManageSettings)
+        WholesaleFeature.isAvailable
+            ? SwitchListTile(
+                secondary: const Icon(Icons.storefront_outlined),
+                title: Text(l10n.wholesalePricing),
+                subtitle: Text(l10n.wholesalePricingDesc),
+                value: _wholesalePricingEnabled,
+                onChanged: (v) async {
+                  if (!v && _wholesalePricingEnabled) {
+                    final proceed = await AppConfirmDialog.show(
+                      context,
+                      title: l10n.wholesalePricing,
+                      message: l10n.wholesalePricingDisableWarning,
+                      confirmLabel: l10n.disableAction,
+                      isDestructive: false,
+                    );
+                    if (!proceed) return;
+                  }
+                  if (!mounted) return;
+                  try {
+                    final b = await DatabaseHelper.instance.getFirstBusiness();
+                    if (b != null) {
+                      await DatabaseHelper.instance.updateBusiness(
+                        b.copyWith(wholesalePricingEnabled: v),
+                      );
+                    }
+                    if (mounted) {
+                      setState(() => _wholesalePricingEnabled = v);
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      AppSnackBar.show(
+                        this.context,
+                        '${l10n.operationFailed}: $e',
+                        severity: AppSnackBarSeverity.error,
+                      );
+                    }
+                  }
+                },
+              )
+            : ListTile(
+                leading: const Icon(Icons.storefront_outlined),
+                title: Text(l10n.wholesalePricing),
+                subtitle: Text(l10n.wholesalePricingDesc),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ProBadge(),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.lock_outline, size: 20),
+                  ],
+                ),
+                onTap: () => ProUpgradeSheet.show(
+                  context,
+                  feature: Feature.wholesalePricing,
+                ),
+              ),
+      if (canUsersManage)
+        ListTile(
+          leading: const Icon(Icons.manage_accounts_outlined),
+          title: Text(l10n.usersAndPermissions),
+          subtitle: Text(l10n.usersAndPermissionsDesc),
+          trailing: Icon(chevronIcon),
+          onTap: _openUsersAndPermissions,
+        ),
+    ];
+
+    final dataTiles = <Widget>[
+      _buildBackupStatusTile(context, l10n, cs),
+      if (canBackupCreate)
+        ListTile(
+          leading: const Icon(Icons.save_outlined),
+          title: Text(l10n.saveBackupTo),
+          onTap: () async {
+            final password = await BackupPasswordCreateDialog.show(context);
+            if (password == null) return;
+            if (!context.mounted) return;
+
+            if (password.isNotEmpty) {
+              final saved = await BackupProgressDialog.show(
+                context,
+                title: l10n.saveBackupTo,
+                message: l10n.backupEncrypting,
+                operation: (isCancelled) =>
+                    BackupService.createBackupUserChosen(
+                      password: password,
+                      isCancelled: isCancelled,
+                    ),
+              );
+              if (context.mounted && saved) {
+                await _loadBackupInfo();
+                if (context.mounted) {
+                  AppSnackBar.show(
+                    context,
+                    l10n.backupSavedTo,
+                    severity: AppSnackBarSeverity.success,
+                  );
+                }
+              }
+            } else {
+              try {
+                final saved = await BackupService.createBackupUserChosen();
+                if (context.mounted && saved) {
+                  await _loadBackupInfo();
+                  if (context.mounted) {
+                    AppSnackBar.show(
+                      context,
+                      l10n.backupSavedTo,
+                      severity: AppSnackBarSeverity.success,
+                    );
+                  }
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  AppSnackBar.show(
+                    context,
+                    l10n.backupSaveFailed,
+                    severity: AppSnackBarSeverity.error,
+                  );
+                }
+              }
+            }
+          },
+        ),
+      if (isOwner)
+        ListTile(
+          leading: const Icon(Icons.restore),
+          title: Text(l10n.restore),
+          onTap: () async {
+            if (_isRestoring) return;
+            final confirmed = await AppConfirmDialog.show(
+              context,
+              title: l10n.confirmRestore,
+              message: l10n.restoreWarning,
+              confirmLabel: l10n.restore,
+              cancelLabel: l10n.cancel,
+              isDestructive: true,
+            );
+            if (confirmed != true || !context.mounted) return;
+
+            final authed = await SensitiveActionGate.reauthenticate(
+              context,
+              title: l10n.confirmRestore,
+              message: l10n.restoreWarning,
+              requireOwner: true,
+            );
+            if (!authed || !context.mounted) return;
+
+            setState(() => _isRestoring = true);
+            try {
+              final success = await BackupService.restoreBackup(
+                context: context,
+              );
+              if (context.mounted && success) {
+                MainShell.triggerGlobalRefresh();
+                await _loadBackupInfo();
+                if (context.mounted) {
+                  AppSnackBar.show(
+                    context,
+                    l10n.operationSuccessful,
+                    severity: AppSnackBarSeverity.success,
+                  );
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              }
+            } on BackupUnsupportedVersionException {
+              if (context.mounted) {
+                AppSnackBar.show(
+                  context,
+                  l10n.backupUpdateRequired,
+                  severity: AppSnackBarSeverity.error,
+                );
+              }
+            } on BackupDecryptionException {
+              if (context.mounted) {
+                AppSnackBar.show(
+                  context,
+                  l10n.backupIncorrectPassword,
+                  severity: AppSnackBarSeverity.error,
+                );
+              }
+            } on BackupCorruptedFileException {
+              if (context.mounted) {
+                AppSnackBar.show(
+                  context,
+                  l10n.backupCorrupted,
+                  severity: AppSnackBarSeverity.error,
+                );
+              }
+            } on BackupInvalidFormatException {
+              if (context.mounted) {
+                AppSnackBar.show(
+                  context,
+                  l10n.backupInvalidFormat,
+                  severity: AppSnackBarSeverity.error,
+                );
+              }
+            } on BackupIntegrityException {
+              if (context.mounted) {
+                AppSnackBar.show(
+                  context,
+                  l10n.backupIntegrityFailed,
+                  severity: AppSnackBarSeverity.error,
+                );
+              }
+            } catch (_) {
+              if (context.mounted) {
+                AppSnackBar.show(
+                  context,
+                  l10n.operationFailed,
+                  severity: AppSnackBarSeverity.error,
+                );
+              }
+            } finally {
+              if (mounted) {
+                setState(() => _isRestoring = false);
+              }
+            }
+          },
+        ),
+      if (isOwner)
+        ListTile(
+          leading: const Icon(Icons.cloud_sync_outlined),
+          title: Text(l10n.googleDriveTitle),
+          subtitle: Text(
+            _googleAccountEmail != null && _googleAccountEmail!.isNotEmpty
+                ? '${l10n.googleDriveSubtitle} • $_googleAccountEmail'
+                : l10n.googleDriveSubtitle,
+          ),
+          trailing: Icon(chevronIcon),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const GoogleDriveBackupScreen(),
+              ),
+            );
+            if (mounted) _loadBackupInfo();
+          },
+        ),
+      if (isOwner)
+        ListTile(
+          leading: const Icon(Icons.health_and_safety_outlined),
+          title: Text(l10n.databaseDiagnosticsTitle),
+          subtitle: Text(l10n.databaseDiagnosticsSubtitle),
+          trailing: Icon(chevronIcon),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const DatabaseDiagnosticScreen()),
+          ),
+        ),
+    ];
+
     Widget section(String title) => Padding(
       padding: const EdgeInsetsDirectional.fromSTEB(20, 20, 20, 6),
       child: Text(
@@ -154,8 +594,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-
-    final chevronIcon = AppIcons.chevronForward(context);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings), centerTitle: true),
@@ -195,256 +633,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       context,
                       MaterialPageRoute(builder: (_) => const LicenseScreen()),
                     );
-                    _loadEntitlement();
+                    if (mounted) _loadEntitlement();
                   },
                 ),
               ),
             ),
 
-            section(l10n.settingsSectionBusiness),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    AppDesignTokens.cardRadius,
+            if (businessTiles.isNotEmpty) ...[
+              section(l10n.settingsSectionBusiness),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.cardRadius,
+                    ),
+                    side: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.7),
+                    ),
                   ),
-                  side: BorderSide(
-                    color: cs.outlineVariant.withValues(alpha: 0.7),
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < businessTiles.length; i++) ...[
+                        businessTiles[i],
+                        if (i < businessTiles.length - 1)
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                      ],
+                    ],
                   ),
-                ),
-                child: Column(
-                  children: [
-                    PermissionGate(
-                      permission: PermissionRegistry.settingsManage,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.business_outlined),
-                            title: Text(l10n.businessData),
-                            trailing: Icon(chevronIcon),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const BusinessSetupScreen(),
-                              ),
-                            ),
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      permission: PermissionRegistry.settingsManage,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.account_balance_outlined),
-                            title: Text(l10n.financialSettings),
-                            subtitle: Text(l10n.financialSettingsDesc),
-                            trailing: Icon(chevronIcon),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const FinancialSettingsScreen(),
-                              ),
-                            ),
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      permission: PermissionRegistry.pricingRates,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.currency_exchange_outlined),
-                            title: Text(l10n.exchangeRates),
-                            subtitle: Text(l10n.exchangeRatesDesc),
-                            trailing: ReferenceCurrencyFeature.isAvailable
-                                ? Icon(chevronIcon)
-                                : Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const ProBadge(),
-                                      const SizedBox(width: 8),
-                                      const Icon(Icons.lock_outline, size: 20),
-                                    ],
-                                  ),
-                            onTap: () {
-                              if (ReferenceCurrencyFeature.isAvailable) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const ExchangeRatesScreen(),
-                                  ),
-                                );
-                              } else {
-                                ProUpgradeSheet.show(
-                                  context,
-                                  feature: Feature.referenceCurrency,
-                                );
-                              }
-                            },
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      permission: PermissionRegistry.paymentMethodsManage,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.payment_outlined),
-                            title: Text(l10n.paymentMethods),
-                            subtitle: Text(l10n.configurePaymentMethods),
-                            trailing: Icon(chevronIcon),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const PaymentMethodsScreen(),
-                              ),
-                            ),
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      permission: PermissionRegistry.accountingPeriodLock,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.lock_clock_outlined),
-                            title: Text(l10n.periodLockSection),
-                            subtitle: Text(
-                              _booksClosedThrough != null
-                                  ? '${l10n.periodLockClosedThrough}: ${AppDateUtils.formatDate(_booksClosedThrough)}'
-                                  : l10n.periodLockSectionDesc,
-                            ),
-                            trailing: Icon(chevronIcon),
-                            onTap: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const PeriodClosingScreen(),
-                                ),
-                              );
-                              // Refresh date in case the user changed it
-                              _loadBooksClosedThrough();
-                            },
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      permission: PermissionRegistry.settingsManage,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.picture_as_pdf_outlined),
-                            title: Text(l10n.pdfCustomize),
-                            subtitle: Text(l10n.pdfCustomizeDesc),
-                            trailing: Icon(chevronIcon),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const PdfCustomizeScreen(),
-                              ),
-                            ),
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      permission: PermissionRegistry.settingsManage,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          WholesaleFeature.isAvailable
-                              ? SwitchListTile(
-                                  secondary:
-                                      const Icon(Icons.storefront_outlined),
-                                  title: Text(l10n.wholesalePricing),
-                                  subtitle: Text(l10n.wholesalePricingDesc),
-                                  value: _wholesalePricingEnabled,
-                                  onChanged: (v) async {
-                                    if (!v && _wholesalePricingEnabled) {
-                                      final proceed =
-                                          await AppConfirmDialog.show(
-                                            context,
-                                            title: l10n.wholesalePricing,
-                                            message:
-                                                l10n
-                                                    .wholesalePricingDisableWarning,
-                                            confirmLabel: l10n.disableAction,
-                                            isDestructive: false,
-                                          );
-                                      if (!proceed) return;
-                                    }
-                                    if (!mounted) return;
-                                    setState(
-                                      () => _wholesalePricingEnabled = v,
-                                    );
-                                    final b = await DatabaseHelper.instance
-                                        .getFirstBusiness();
-                                    if (b != null) {
-                                      await DatabaseHelper.instance
-                                          .updateBusiness(
-                                            b.copyWith(
-                                              wholesalePricingEnabled: v,
-                                            ),
-                                          );
-                                    }
-                                  },
-                                )
-                              : ListTile(
-                                  leading:
-                                      const Icon(Icons.storefront_outlined),
-                                  title: Text(l10n.wholesalePricing),
-                                  subtitle: Text(l10n.wholesalePricingDesc),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const ProBadge(),
-                                      const SizedBox(width: 8),
-                                      const Icon(Icons.lock_outline, size: 20),
-                                    ],
-                                  ),
-                                  onTap: () => ProUpgradeSheet.show(
-                                    context,
-                                    feature: Feature.wholesalePricing,
-                                  ),
-                                ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      permission: PermissionRegistry.usersManage,
-                      child: ListTile(
-                        leading: const Icon(Icons.manage_accounts_outlined),
-                        title: Text(l10n.usersAndPermissions),
-                        subtitle: Text(l10n.usersAndPermissionsDesc),
-                        trailing: Icon(chevronIcon),
-                        onTap: _openUsersAndPermissions,
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ),
+            ],
 
             section(l10n.settingsSectionAppearance),
             Padding(
@@ -527,194 +747,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            section(l10n.settingsSectionData),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    AppDesignTokens.cardRadius,
+            if (dataTiles.isNotEmpty) ...[
+              section(l10n.settingsSectionData),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.cardRadius,
+                    ),
+                    side: BorderSide(
+                      color: cs.outlineVariant.withValues(alpha: 0.7),
+                    ),
                   ),
-                  side: BorderSide(
-                    color: cs.outlineVariant.withValues(alpha: 0.7),
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < dataTiles.length; i++) ...[
+                        dataTiles[i],
+                        if (i < dataTiles.length - 1)
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                      ],
+                    ],
                   ),
-                ),
-                child: Column(
-                  children: [
-                    PermissionGate(
-                      permission: PermissionRegistry.backupCreate,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.save_outlined),
-                            title: Text(l10n.saveBackupTo),
-                            onTap: () async {
-                              final password = await BackupPasswordCreateDialog.show(
-                                context,
-                              );
-                              if (password == null) return;
-                              if (!context.mounted) return;
-
-                              if (password.isNotEmpty) {
-                                final saved = await BackupProgressDialog.show(
-                                  context,
-                                  title: l10n.saveBackupTo,
-                                  message: l10n.backupEncrypting,
-                                  operation: (isCancelled) =>
-                                      BackupService.createBackupUserChosen(
-                                        password: password,
-                                        isCancelled: isCancelled,
-                                      ),
-                                );
-                                if (context.mounted && saved) {
-                                  AppSnackBar.show(
-                                    context,
-                                    l10n.backupSavedTo,
-                                    severity: AppSnackBarSeverity.success,
-                                  );
-                                }
-                              } else {
-                                try {
-                                  final saved =
-                                      await BackupService.createBackupUserChosen();
-                                  if (context.mounted && saved) {
-                                    AppSnackBar.show(
-                                      context,
-                                      l10n.backupSavedTo,
-                                      severity: AppSnackBarSeverity.success,
-                                    );
-                                  }
-                                } catch (_) {
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      l10n.backupSaveFailed,
-                                      severity: AppSnackBarSeverity.error,
-                                    );
-                                  }
-                                }
-                              }
-                            },
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      isOwnerOnly: true,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.restore),
-                            title: Text(l10n.restore),
-                            onTap: () async {
-                              final confirmed = await AppConfirmDialog.show(
-                                context,
-                                title: l10n.confirmRestore,
-                                message: l10n.restoreWarning,
-                                confirmLabel: l10n.restore,
-                                cancelLabel: l10n.cancel,
-                                isDestructive: true,
-                              );
-                              if (confirmed != true || !context.mounted) return;
-
-                              final authed = await SensitiveActionGate.reauthenticate(
-                                context,
-                                title: l10n.confirmRestore,
-                                message: l10n.restoreWarning,
-                                requireOwner: true,
-                              );
-                              if (!authed || !context.mounted) return;
-
-                              try {
-                                final success = await BackupService.restoreBackup(
-                                  context: context,
-                                );
-                                  if (context.mounted && success) {
-                                    AppSnackBar.show(
-                                      context,
-                                      l10n.operationSuccessful,
-                                      severity: AppSnackBarSeverity.success,
-                                    );
-                                    // Return to home and reload data
-                                    Navigator.of(
-                                      context,
-                                    ).popUntil((route) => route.isFirst);
-                                  }
-                                } on BackupUnsupportedVersionException {
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      l10n.backupUpdateRequired,
-                                      severity: AppSnackBarSeverity.error,
-                                    );
-                                  }
-                                } on BackupDecryptionException {
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      l10n.backupIncorrectPassword,
-                                      severity: AppSnackBarSeverity.error,
-                                    );
-                                  }
-                                } catch (_) {
-                                  if (context.mounted) {
-                                    AppSnackBar.show(
-                                      context,
-                                      l10n.operationFailed,
-                                      severity: AppSnackBarSeverity.error,
-                                    );
-                                  }
-                                }
-                            },
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      isOwnerOnly: true,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.cloud_sync_outlined),
-                            title: Text(l10n.googleDriveTitle),
-                            subtitle: Text(l10n.googleDriveSubtitle),
-                            trailing: Icon(chevronIcon),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const GoogleDriveBackupScreen(),
-                              ),
-                            ),
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                        ],
-                      ),
-                    ),
-                    PermissionGate(
-                      isOwnerOnly: true,
-                      child: ListTile(
-                        leading: const Icon(Icons.health_and_safety_outlined),
-                        title: Text(l10n.databaseDiagnosticsTitle),
-                        subtitle: Text(l10n.databaseDiagnosticsSubtitle),
-                        trailing: Icon(chevronIcon),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const DatabaseDiagnosticScreen(),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ),
+            ],
 
             section(l10n.settingsSectionSupport),
             Padding(
@@ -742,7 +800,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             subtitle: Text(l10n.analyticsConsentDesc),
                             value: _analyticsConsent,
                             onChanged: (val) async {
-                              await AnalyticsService.instance.setUsageEnabled(val);
+                              await AnalyticsService.instance.setUsageEnabled(
+                                val,
+                              );
                               if (mounted) {
                                 setState(() => _analyticsConsent = val);
                               }
@@ -757,7 +817,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onChanged: (val) async {
                               await AnalyticsService.instance
                                   .setErrorReportingEnabled(val);
-                              await AppDiagnosticsService.instance.setConsent(val);
+                              await AppDiagnosticsService.instance.setConsent(
+                                val,
+                              );
                               if (mounted) {
                                 setState(() => _errorReportingConsent = val);
                               }
@@ -767,7 +829,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                     ),
-                    const Divider(height: 1, indent: 16, endIndent: 16),
                     ListTile(
                       leading: const Icon(Icons.help_outline),
                       title: Text(l10n.helpCenter),
@@ -836,8 +897,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 /// Profile card displaying current user information and a logout button.
 /// Visible ONLY when Multi-User mode is ON.
-class CurrentUserProfileCard extends StatelessWidget {
+class CurrentUserProfileCard extends StatefulWidget {
   const CurrentUserProfileCard({super.key});
+
+  @override
+  State<CurrentUserProfileCard> createState() => _CurrentUserProfileCardState();
+}
+
+class _CurrentUserProfileCardState extends State<CurrentUserProfileCard> {
+  String? _customRoleName;
+  String? _resolvedRoleId;
+
+  void _resolveRole(String roleId) {
+    if (_resolvedRoleId == roleId) return;
+    _resolvedRoleId = roleId;
+    DatabaseHelper.instance.database
+        .then((db) {
+          db
+              .query(
+                'roles',
+                columns: ['name'],
+                where: 'id = ?',
+                whereArgs: [roleId],
+                limit: 1,
+              )
+              .then((rows) {
+                if (rows.isNotEmpty && mounted) {
+                  setState(
+                    () => _customRoleName = rows.first['name'] as String?,
+                  );
+                }
+              })
+              .catchError((_) {});
+        })
+        .catchError((_) {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -857,15 +951,24 @@ class CurrentUserProfileCard extends StatelessWidget {
         final l10n = AppLocalizations.of(context);
         final cs = Theme.of(context).colorScheme;
 
-        final roleName = user.isOwner
+        String roleName = user.isOwner
             ? (l10n.isArabic ? 'المالك' : 'Owner')
             : (user.roleId == 'role-template-admin'
-                ? (l10n.isArabic ? 'مدير النظام' : 'Administrator')
-                : (user.roleId == 'role-template-salesperson'
-                    ? (l10n.isArabic ? 'بائع' : 'Salesperson')
-                    : (user.roleId == 'role-template-accountant'
-                        ? (l10n.isArabic ? 'محاسب' : 'Accountant')
-                        : user.roleId)));
+                  ? (l10n.isArabic ? 'مدير النظام' : 'Administrator')
+                  : (user.roleId == 'role-template-salesperson'
+                        ? l10n.roleTemplate_salesperson_name
+                        : (user.roleId == 'role-template-inventory'
+                              ? l10n.roleTemplate_inventory_name
+                              : (user.roleId == 'role-template-accountant'
+                                    ? l10n.roleTemplate_accountant_name
+                                    : (user.roleId == 'role-template-manager'
+                                          ? l10n.roleTemplate_manager_name
+                                          : (_customRoleName ??
+                                                user.roleId))))));
+
+        if (!user.isOwner && !user.roleId.startsWith('role-template-')) {
+          _resolveRole(user.roleId);
+        }
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -873,9 +976,7 @@ class CurrentUserProfileCard extends StatelessWidget {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
-              side: BorderSide(
-                color: cs.outlineVariant.withValues(alpha: 0.7),
-              ),
+              side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.7)),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -965,7 +1066,7 @@ class CurrentUserProfileCard extends StatelessWidget {
       icon: Icons.logout_rounded,
     );
 
-    if (confirmed) {
+    if (confirmed && context.mounted) {
       await SessionManager.instance.logout();
     }
   }

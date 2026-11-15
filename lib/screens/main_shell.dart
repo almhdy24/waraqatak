@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
 import '../services/access/session_manager.dart';
@@ -15,6 +16,14 @@ import 'settings_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
+
+  /// Global notifier to trigger a full refresh across all tabs and session state.
+  static final ValueNotifier<int> globalRefreshNotifier = ValueNotifier<int>(0);
+
+  /// Triggers a full refresh of all IndexedStack screens, data tokens, and session state.
+  static void triggerGlobalRefresh() {
+    globalRefreshNotifier.value++;
+  }
 
   @override
   State<MainShell> createState() => _MainShellState();
@@ -42,9 +51,21 @@ class _MainShellState extends State<MainShell> {
     });
   }
 
+  void _handleGlobalRefresh() {
+    if (!mounted) return;
+    unawaited(SessionManager.instance.retryInit());
+    setState(() {
+      _documentsRefreshToken++;
+      _customersRefreshToken++;
+      _productsRefreshToken++;
+    });
+    _homeKey.currentState?.reload();
+  }
+
   @override
   void initState() {
     super.initState();
+    MainShell.globalRefreshNotifier.addListener(_handleGlobalRefresh);
     _homeKey = GlobalKey<HomeScreenState>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -66,6 +87,12 @@ class _MainShellState extends State<MainShell> {
         } catch (_) {}
       }
     });
+  }
+
+  @override
+  void dispose() {
+    MainShell.globalRefreshNotifier.removeListener(_handleGlobalRefresh);
+    super.dispose();
   }
 
   void _select(int i) {

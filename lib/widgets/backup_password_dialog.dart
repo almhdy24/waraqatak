@@ -58,10 +58,12 @@ class _BackupPasswordCreateDialogState
       return;
     }
 
-    final normalized =
-        BackupEncryptionService.normalizePassword(_passwordController.text);
-    final normalizedConfirm =
-        BackupEncryptionService.normalizePassword(_confirmController.text);
+    final normalized = BackupEncryptionService.normalizePassword(
+      _passwordController.text,
+    );
+    final normalizedConfirm = BackupEncryptionService.normalizePassword(
+      _confirmController.text,
+    );
 
     if (normalized.isEmpty) {
       setState(() => _errorMessage = l10n.backupPasswordRequired);
@@ -243,10 +245,7 @@ class _BackupPasswordCreateDialogState
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.15),
                   borderRadius: AppDesignTokens.br8,
-                  border: Border.all(
-                    color: Colors.amber.shade700,
-                    width: 1,
-                  ),
+                  border: Border.all(color: Colors.amber.shade700, width: 1),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,10 +307,7 @@ class _BackupPasswordCreateDialogState
 class BackupPasswordPromptDialog extends StatefulWidget {
   final List<int> encryptedBytes;
 
-  const BackupPasswordPromptDialog({
-    super.key,
-    required this.encryptedBytes,
-  });
+  const BackupPasswordPromptDialog({super.key, required this.encryptedBytes});
 
   static Future<String?> show(
     BuildContext context, {
@@ -430,11 +426,7 @@ class _BackupPasswordPromptDialogState
       actionsPadding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       title: Row(
         children: [
-          Icon(
-            Icons.lock_outline,
-            color: theme.colorScheme.primary,
-            size: 26,
-          ),
+          Icon(Icons.lock_outline, color: theme.colorScheme.primary, size: 26),
           const SizedBox(width: AppDesignTokens.space12),
           Expanded(
             child: Text(
@@ -504,10 +496,7 @@ class _BackupPasswordPromptDialogState
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   const SizedBox(width: AppDesignTokens.space12),
-                  Text(
-                    l10n.backupDecrypting,
-                    style: theme.textTheme.bodySmall,
-                  ),
+                  Text(l10n.backupDecrypting, style: theme.textTheme.bodySmall),
                 ],
               ),
               if (_showSlowNotice) ...[
@@ -575,15 +564,26 @@ class BackupProgressDialog extends StatefulWidget {
     required String message,
     required Future<bool> Function(bool Function() isCancelled) operation,
   }) async {
+    Object? thrownError;
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => BackupProgressDialog(
         title: title,
         message: message,
-        operation: operation,
+        operation: (isCancelled) async {
+          try {
+            return await operation(isCancelled);
+          } catch (e) {
+            thrownError = e;
+            rethrow;
+          }
+        },
       ),
     );
+    if (thrownError != null) {
+      throw thrownError!;
+    }
     return result ?? false;
   }
 

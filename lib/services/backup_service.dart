@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart' as fss;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -11,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_helper.dart';
+import '../localization/app_localizations.dart';
 import '../widgets/backup_password_dialog.dart';
 import 'access/access_guard.dart';
 import 'access/permission_registry.dart';
@@ -20,14 +23,171 @@ import 'backup_encryption_service.dart';
 import 'image_storage_service.dart';
 import 'digital_seal_storage_service.dart';
 
+export 'backup_encryption_service.dart'
+    show
+        BackupException,
+        BackupEncryptionException,
+        BackupKeyPersistenceException,
+        BackupDecryptionException,
+        BackupUnsupportedVersionException,
+        BackupCorruptedFileException,
+        BackupEncryptionVerificationException,
+        BackupInvalidFormatException,
+        BackupIntegrityException;
+
 class BackupService {
-  static const String settingLastBackupAt = 'last_backup_timestamp';
   static const String backupExtension = 'waraq';
   static const int currentBackupVersion = 6;
   static const String appId = 'warqatek';
+  static const String settingLastBackupAt = 'last_backup_timestamp';
+
+  static const Set<String> _sensitiveSettingsKeys = {
+    'multi_user_enabled',
+    'auto_lock_minutes',
+    'workspace_id',
+    'kdf_calibrated_iterations',
+    'owner_recovery_code_hash',
+    'owner_recovery_code_salt',
+    'owner_recovery_code_iterations',
+    'owner_recovery_locked_until',
+    'owner_recovery_failed_attempts',
+    'owner_recovery_code_unacknowledged',
+    'owner_recovery_hash',
+    'owner_recovery_salt',
+    'last_active_user_id',
+  };
 
   @visibleForTesting
   static Future<String> Function()? safetyBackupOverride;
+
+  static const String _safetyBackupStorageKey = 'warqatek_safety_backup_key';
+  static const fss.FlutterSecureStorage _secureStorage =
+      fss.FlutterSecureStorage(
+        aOptions: fss.AndroidOptions(resetOnError: false),
+      );
+
+  static String? _cachedSafetyKey;
+  static bool _isRestoreInProgress = false;
+
+  @visibleForTesting
+  static String? safetyKeyOverride;
+
+  @visibleForTesting
+  static fss.FlutterSecureStorage? secureStorageOverride;
+
+  @visibleForTesting
+  static void resetSafetyKeyCacheForTesting() {
+    _cachedSafetyKey = null;
+    safetyKeyOverride = null;
+    secureStorageOverride = null;
+    _isRestoreInProgress = false;
+  }
+
+  /// Retrieves or generates an authoritative AES-256 key for internal restore safety backups.
+  /// The key is stored in platform secure storage (Android Keystore / iOS Keychain).
+  ///
+  /// FAILS CLOSED: Never creates or returns an ephemeral key if secure storage persistence
+  /// fails or cannot be verified. All reads and writes are verified via read-back.
+  ///
+  /// If [forceStorageVerification] is true (e.g. before creating a new safety backup),
+  /// any existing [_cachedSafetyKey] is verified against durable secure storage to ensure
+  /// the key has not been invalidated or removed mid-session.
+  static Future<String> getSafetyKey({
+    bool forceStorageVerification = false,
+  }) async {
+    if (safetyKeyOverride != null) return safetyKeyOverride!;
+
+    final storage = secureStorageOverride ?? _secureStorage;
+
+    if (_cachedSafetyKey != null) {
+      if (!forceStorageVerification) {
+        return _cachedSafetyKey!;
+      }
+      // Verify cached key is still durably present and intact in secure storage
+      final String? stored;
+      try {
+        stored = await storage.read(key: _safetyBackupStorageKey);
+      } catch (e) {
+        _cachedSafetyKey = null;
+        throw BackupKeyPersistenceException(
+          'Failed to access secure storage to verify safety backup key: $e',
+        );
+      }
+      if (stored == null) {
+        _cachedSafetyKey = null;
+        throw const BackupKeyPersistenceException(
+          'Safety backup key in secure storage was removed or invalidated',
+        );
+      }
+      if (stored != _cachedSafetyKey) {
+        _cachedSafetyKey = null;
+        throw const BackupKeyPersistenceException(
+          'Safety backup key in secure storage does not match cached key',
+        );
+      }
+      if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(stored)) {
+        _cachedSafetyKey = null;
+        throw const BackupKeyPersistenceException(
+          'Existing safety backup key in secure storage is malformed',
+        );
+      }
+      return _cachedSafetyKey!;
+    }
+
+    // 1. Read existing key from durable secure storage
+    final String? stored;
+    try {
+      stored = await storage.read(key: _safetyBackupStorageKey);
+    } catch (e) {
+      throw BackupKeyPersistenceException(
+        'Failed to access secure storage for safety backup key: $e',
+      );
+    }
+
+    // 2. If an existing key is present, validate its format
+    if (stored != null) {
+      if (!RegExp(r'^[0-9a-fA-F]{64}$').hasMatch(stored)) {
+        throw const BackupKeyPersistenceException(
+          'Existing safety backup key in secure storage is malformed',
+        );
+      }
+      _cachedSafetyKey = stored;
+      return stored;
+    }
+
+    // 3. Generate new 256-bit cryptographically secure key (64 hex characters)
+    final rand = math.Random.secure();
+    final bytes = List<int>.generate(32, (_) => rand.nextInt(256));
+    final newKey = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+
+    // 4. Persist to secure storage
+    try {
+      await storage.write(key: _safetyBackupStorageKey, value: newKey);
+    } catch (e) {
+      throw BackupKeyPersistenceException(
+        'Failed to persist safety backup key to secure storage: $e',
+      );
+    }
+
+    // 5. Read back and verify exact persistence before caching or using
+    final String? readBack;
+    try {
+      readBack = await storage.read(key: _safetyBackupStorageKey);
+    } catch (e) {
+      throw BackupKeyPersistenceException(
+        'Failed to read back safety backup key from secure storage: $e',
+      );
+    }
+
+    if (readBack != newKey) {
+      throw const BackupKeyPersistenceException(
+        'Safety backup key persistence verification failed (read-back mismatch)',
+      );
+    }
+
+    _cachedSafetyKey = newKey;
+    return newKey;
+  }
 
   @visibleForTesting
   static Directory Function()? backupDirectoryOverride;
@@ -76,35 +236,45 @@ class BackupService {
   // SHARE BACKUP
   // ============================================================
 
+  /// Shares an exported backup file via system share sheet.
+  /// Also available as [shareBackup].
   static Future<void> createBackup({String? password}) async {
     AccessGuard.require(PermissionRegistry.backupCreate);
+    await cleanupTemporaryBackups();
+
     final jsonStr = await _buildBackupJson();
     final dir = await getTemporaryDirectory();
-    // clean old share files
-    try {
-      for (final e in dir.listSync()) {
-        if (e is File &&
-            e.uri.pathSegments.last.startsWith('warqatek_share_')) {
-          await e.delete();
-        }
-      }
-    } catch (_) {}
     final name =
         'warqatek_share_${DateTime.now().millisecondsSinceEpoch}.$backupExtension';
     final file = File('${dir.path}/$name');
-    if (password != null && password.isNotEmpty) {
-      final enc = await BackupEncryptionService.encryptJson(
-        jsonStr: jsonStr,
-        password: password,
+
+    try {
+      if (password != null && password.isNotEmpty) {
+        final enc = await BackupEncryptionService.encryptJson(
+          jsonStr: jsonStr,
+          password: password,
+        );
+        await file.writeAsBytes(enc, flush: true);
+      } else {
+        await file.writeAsString(jsonStr, encoding: utf8, flush: true);
+      }
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(file.path)], subject: 'Warqatek Backup'),
       );
-      await file.writeAsBytes(enc, flush: true);
-    } else {
-      await file.writeAsString(jsonStr, encoding: utf8, flush: true);
+      await recordBackupSuccess();
+    } catch (e) {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (_) {}
+      rethrow;
     }
-    await SharePlus.instance.share(
-      ShareParams(files: [XFile(file.path)], subject: 'Warqatek Backup'),
-    );
   }
+
+  /// Alias for [createBackup] to share backup files.
+  static Future<void> shareBackup({String? password}) =>
+      createBackup(password: password);
 
   // ============================================================
   // SAVE LOCAL BACKUP (App Documents Directory)
@@ -114,6 +284,7 @@ class BackupService {
     String? password,
     String? targetPath,
   }) async {
+    AccessGuard.require(PermissionRegistry.backupCreate);
     final jsonStr = buildBackupJsonOverride != null
         ? await buildBackupJsonOverride!()
         : await _buildBackupJson();
@@ -138,7 +309,7 @@ class BackupService {
         );
         await tempFile.writeAsBytes(encryptedBytes, flush: true);
 
-        // Verify non-empty and decryptable/parsable header
+        // Verify non-empty and matching encrypted bytes written
         final readBackBytes = await tempFile.readAsBytes();
         if (readBackBytes.isEmpty) {
           throw const FileSystemException('Created backup is empty');
@@ -148,10 +319,23 @@ class BackupService {
             'Created backup missing valid encryption header',
           );
         }
-        await BackupEncryptionService.decryptJson(
-          encryptedBytes: readBackBytes,
-          password: password,
-        );
+        if (readBackBytes.length != encryptedBytes.length) {
+          throw const FileSystemException(
+            'Created backup byte length mismatch on disk',
+          );
+        }
+        bool match = true;
+        for (int i = 0; i < 32 && i < readBackBytes.length; i++) {
+          if (readBackBytes[i] != encryptedBytes[i]) {
+            match = false;
+            break;
+          }
+        }
+        if (!match) {
+          throw const FileSystemException(
+            'Created backup header byte mismatch on disk',
+          );
+        }
       } else {
         await tempFile.writeAsString(jsonStr, encoding: utf8, flush: true);
 
@@ -174,6 +358,8 @@ class BackupService {
       }
 
       await tempFile.rename(targetFile.path);
+      await pruneLocalBackups(preservePath: targetFile.path);
+      await recordBackupSuccess();
       try {
         AnalyticsService.instance.track(AnalyticsEvent.backupCreated, {
           'destination': 'local',
@@ -248,14 +434,29 @@ class BackupService {
     final tempFile = File('${directory.path}/$tempName');
 
     try {
-      await tempFile.writeAsString(jsonStr, encoding: utf8, flush: true);
+      final key = await getSafetyKey(forceStorageVerification: true);
+      final encryptedBytes = await BackupEncryptionService.encryptJson(
+        jsonStr: jsonStr,
+        password: key,
+        iterations: BackupEncryptionService.minIterations,
+      );
+      await tempFile.writeAsBytes(encryptedBytes, flush: true);
 
       // Validate the safety backup immediately from disk
       final readBackBytes = await tempFile.readAsBytes();
       if (readBackBytes.isEmpty) {
         throw const FileSystemException('Created safety backup is empty');
       }
-      final decoded = jsonDecode(utf8.decode(readBackBytes));
+      if (!BackupEncryptionService.isEncrypted(readBackBytes)) {
+        throw const FormatException(
+          'Created safety backup missing encryption header',
+        );
+      }
+      final decryptedJson = await BackupEncryptionService.decryptJson(
+        encryptedBytes: readBackBytes,
+        password: key,
+      );
+      final decoded = jsonDecode(decryptedJson);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Created safety backup has invalid format');
       }
@@ -365,9 +566,203 @@ class BackupService {
           // Best-effort cleanup; never throw
         }
       }
+
+      // Safe cleanup of app-owned legacy plaintext safety backups created by previous versions
+      for (final file in kept) {
+        if (preservePath != null && file.path == preservePath) continue;
+        try {
+          if (await file.exists()) {
+            final headerBytes = await file.openRead(0, 16).first;
+            if (!BackupEncryptionService.isEncrypted(headerBytes)) {
+              await file.delete();
+            }
+          }
+        } catch (_) {}
+      }
     } catch (_) {
       // Pruning failure must never fail restore or repair
     }
+  }
+
+  // ============================================================
+  // TEMPORARY BACKUP CLEANUP
+  // ============================================================
+
+  /// Cleans up stale app-owned temporary backup files from the cache directory
+  /// and temporary staging files from the documents directory.
+  ///
+  /// Safeguards:
+  /// - Age-based check: only deletes files older than [maxAge] (default: 1 hour).
+  /// - Strict ownership check: only matches app-owned patterns (`warqatek_share_*`,
+  ///   `drive_restore_*`, `*.tmp`, `.*.tmp`, `warqatek_safety_pre_restore_*.tmp`).
+  /// - NEVER touches user-chosen backups (`warqatek_backup_*`).
+  /// - NEVER deletes [activeSafetyPath] (the safety backup for an active restore/rollback).
+  /// - NEVER touches unrelated cache or document files.
+  static Future<void> cleanupTemporaryBackups({
+    Duration maxAge = const Duration(hours: 1),
+    String? activeSafetyPath,
+    Directory? tempDirOverride,
+    Directory? backupDirOverride,
+  }) async {
+    final now = DateTime.now();
+
+    // 1. Clean stale temporary share/restore files from cache/temporary directory
+    try {
+      final tempDir = tempDirOverride ?? await getTemporaryDirectory();
+      if (await tempDir.exists()) {
+        final entities = await tempDir.list().toList();
+        for (final entity in entities) {
+          if (entity is! File) continue;
+          final name = entity.uri.pathSegments.isNotEmpty
+              ? entity.uri.pathSegments.last
+              : '';
+
+          final isAppTemp =
+              name.startsWith('warqatek_share_') ||
+              name.startsWith('drive_restore_') ||
+              (name.startsWith('warqatek_') && name.endsWith('.tmp')) ||
+              (name.startsWith('.') &&
+                  name.contains('warqatek_') &&
+                  name.endsWith('.tmp'));
+          if (!isAppTemp) continue;
+
+          if (activeSafetyPath != null && entity.path == activeSafetyPath) {
+            continue;
+          }
+
+          try {
+            final mtime = await entity.lastModified();
+            if (now.difference(mtime) >= maxAge) {
+              await entity.delete();
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    // 2. Clean stale temporary staging files from documents backup directory
+    try {
+      final docDir = backupDirOverride ?? await _getBackupDirectory();
+      if (await docDir.exists()) {
+        final entities = await docDir.list().toList();
+        for (final entity in entities) {
+          if (entity is! File) continue;
+          final name = entity.uri.pathSegments.isNotEmpty
+              ? entity.uri.pathSegments.last
+              : '';
+
+          final isStagingTmp =
+              (name.startsWith('warqatek_') && name.endsWith('.tmp')) ||
+              (name.startsWith('.') &&
+                  name.contains('warqatek_') &&
+                  name.endsWith('.tmp'));
+          if (!isStagingTmp) continue;
+
+          if (activeSafetyPath != null && entity.path == activeSafetyPath) {
+            continue;
+          }
+
+          try {
+            final mtime = await entity.lastModified();
+            if (now.difference(mtime) >= maxAge) {
+              await entity.delete();
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Prunes old user-created local backups, keeping at most the newest 7.
+  static Future<void> pruneLocalBackups({String? preservePath}) async {
+    try {
+      final directory = await _getBackupDirectory();
+      if (!await directory.exists()) return;
+
+      final entities = await directory.list().toList();
+      final backupFiles = <File>[];
+
+      for (final entity in entities) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.isNotEmpty
+            ? entity.uri.pathSegments.last
+            : '';
+
+        final isUserBackup =
+            name.startsWith('warqatek_backup_') &&
+            name.endsWith('.$backupExtension');
+        if (!isUserBackup) continue;
+
+        if (preservePath != null && entity.path == preservePath) continue;
+
+        backupFiles.add(entity);
+      }
+
+      final filesWithTime = <({File file, DateTime mtime})>[];
+      for (final file in backupFiles) {
+        try {
+          final mtime = await file.lastModified();
+          filesWithTime.add((file: file, mtime: mtime));
+        } catch (_) {
+          filesWithTime.add((
+            file: file,
+            mtime: DateTime.fromMillisecondsSinceEpoch(0),
+          ));
+        }
+      }
+      filesWithTime.sort((a, b) => b.mtime.compareTo(a.mtime));
+
+      for (final item in filesWithTime.skip(7)) {
+        try {
+          if (await item.file.exists()) {
+            await item.file.delete();
+          }
+        } catch (_) {}
+      }
+    } catch (_) {
+      // Best-effort pruning; never throw
+    }
+  }
+
+  /// Records the timestamp of a successful backup creation in settings and preferences.
+  static Future<void> recordBackupSuccess() async {
+    final nowIso = DateTime.now().toIso8601String();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(settingLastBackupAt, nowIso);
+    } catch (_) {}
+    try {
+      final db = await DatabaseHelper.instance.database;
+      await db.insert('app_settings', {
+        'key': settingLastBackupAt,
+        'value': nowIso,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (_) {}
+  }
+
+  /// Returns the DateTime of the latest successful backup, if any.
+  static Future<DateTime?> getLastBackupTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final prefVal = prefs.getString(settingLastBackupAt);
+      if (prefVal != null && prefVal.isNotEmpty) {
+        return DateTime.tryParse(prefVal);
+      }
+      final db = await DatabaseHelper.instance.database;
+      final rows = await db.query(
+        'app_settings',
+        where: 'key = ?',
+        whereArgs: [settingLastBackupAt],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        final val = rows.first['value']?.toString();
+        if (val != null && val.isNotEmpty) {
+          return DateTime.tryParse(val);
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   // ============================================================
@@ -404,6 +799,7 @@ class BackupService {
 
     final success = uri != null;
     if (success) {
+      await recordBackupSuccess();
       try {
         AnalyticsService.instance.track(AnalyticsEvent.backupCreated, {
           'destination': 'user_chosen',
@@ -431,7 +827,7 @@ class BackupService {
 
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) {
-      throw Exception('Empty backup file');
+      throw const BackupCorruptedFileException('Empty backup file');
     }
 
     String jsonStr;
@@ -465,10 +861,11 @@ class BackupService {
     try {
       final decoded = jsonDecode(jsonStr);
       if (decoded is! Map<String, dynamic>) {
-        throw Exception('Invalid backup format');
+        throw const BackupInvalidFormatException('Invalid backup format');
       }
       jsonMap = decoded;
-    } catch (_) {
+    } catch (e) {
+      if (e is BackupException) rethrow;
       try {
         AnalyticsService.instance.track(AnalyticsEvent.backupRestored, {
           'ok': false,
@@ -478,7 +875,16 @@ class BackupService {
           'kind': 'format',
         });
       } catch (_) {}
-      throw Exception('Invalid backup file');
+      throw const BackupInvalidFormatException('Invalid backup file');
+    }
+
+    if (context != null && context.mounted) {
+      return await BackupProgressDialog.show(
+        context,
+        title: AppLocalizations.of(context).backupRestore,
+        message: AppLocalizations.of(context).backupDecrypting,
+        operation: (isCancelled) => restoreFromJsonMap(jsonMap),
+      );
     }
 
     return restoreFromJsonMap(jsonMap);
@@ -489,377 +895,445 @@ class BackupService {
   static Future<bool> restoreFromJsonMap(
     Map<String, dynamic> jsonMap, {
     bool createSafetyBackup = true,
+    bool isRollback = false,
   }) async {
     AccessGuard.require(PermissionRegistry.backupRestore);
     _validateBackup(jsonMap);
 
-    // Create and validate an automatic safety backup of the current database
-    // before touching any data. If this fails, restore aborts immediately.
+    if (_isRestoreInProgress && !isRollback) {
+      throw StateError('A restore operation is already in progress.');
+    }
+
+    final bool isOuter = !_isRestoreInProgress;
+    if (isOuter) {
+      _isRestoreInProgress = true;
+    }
+
     String? safetyPath;
-    if (createSafetyBackup) {
-      safetyPath = await BackupService.createSafetyBackup();
-      await DatabaseHelper.instance.logAuditEvent(
-        'pre_restore_safety_backup_created',
-        details: 'path=$safetyPath',
-      );
-    }
-
-    final data = jsonMap['data'] as Map<String, dynamic>;
-    final db = await DatabaseHelper.instance.database;
-
-    await db.transaction((txn) async {
-      Future<Set<String>> getTableCols(String table) async {
-        final info = await txn.rawQuery('PRAGMA table_info($table)');
-        return info.map((c) => c['name'] as String).toSet();
-      }
-
-      Future<bool> tableExists(String table) async {
-        final tables = await txn.rawQuery(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
-          [table],
-        );
-        return tables.isNotEmpty;
-      }
-
-      Map<String, dynamic> sanitizeRow(
-        Map<String, dynamic> row,
-        Set<String> cols,
-      ) => Map.fromEntries(row.entries.where((e) => cols.contains(e.key)));
-
-      if (await tableExists('journal_lines')) {
-        await txn.delete('journal_lines');
-      }
-      if (await tableExists('journal_entries')) {
-        await txn.delete('journal_entries');
-      }
-      if (await tableExists('accounts')) {
-        await txn.delete('accounts');
-      }
-      List<Map<String, dynamic>> savedAccessSettings = [];
-      if (await tableExists('app_settings')) {
-        savedAccessSettings = await txn.query(
-          'app_settings',
-          where:
-              "key IN ('multi_user_enabled', 'auto_lock_minutes', 'workspace_id', 'owner_recovery_hash', 'owner_recovery_salt')",
-        );
-        await txn.delete('app_settings');
-      }
-      if (await tableExists('exchange_rates')) {
-        await txn.delete('exchange_rates');
-      }
-      if (await tableExists('document_seal_snapshot_assets')) {
-        await txn.delete('document_seal_snapshot_assets');
-      }
-      if (await tableExists('document_seal_snapshots')) {
-        await txn.delete('document_seal_snapshots');
-      }
-      if (await tableExists('business_seal_configs')) {
-        await txn.delete('business_seal_configs');
-      }
-      if (await tableExists('digital_assets')) {
-        await txn.delete('digital_assets');
-      }
-      await txn.delete('document_payments');
-      await txn.delete('document_items');
-      await txn.delete('stocktake_items');
-      await txn.delete('stocktake_sessions');
-      await txn.delete('stock_movements');
-      await txn.delete('documents');
-      await txn.delete('contacts');
-      await txn.delete('product_units');
-      await txn.delete('products');
-      await txn.delete('businesses');
-      await txn.delete('document_counters');
-
-      final businessCols = await getTableCols('businesses');
-      final contactCols = await getTableCols('contacts');
-      final productCols = await getTableCols('products');
-      final docCols = await getTableCols('documents');
-      final itemCols = await getTableCols('document_items');
-      final counterCols = await getTableCols('document_counters');
-
-      for (final row in _convertRows(data['businesses'])) {
-        await txn.insert('businesses', sanitizeRow(row, businessCols));
-      }
-      for (final row in _convertRows(data['contacts'])) {
-        await txn.insert('contacts', sanitizeRow(row, contactCols));
-      }
-      for (final row in _convertRows(data['products'])) {
-        final productRow = Map<String, dynamic>.from(row)..remove('image_path');
-        await txn.insert('products', sanitizeRow(productRow, productCols));
-      }
-      if (data.containsKey('product_units') && data['product_units'] is List) {
-        final puCols = await getTableCols('product_units');
-        for (final row in _convertRows(data['product_units'])) {
-          await txn.insert('product_units', sanitizeRow(row, puCols));
-        }
-      }
-      if (data.containsKey('exchange_rates') &&
-          data['exchange_rates'] is List) {
-        final erCols = await getTableCols('exchange_rates');
-        for (final row in _convertRows(data['exchange_rates'])) {
-          await txn.insert('exchange_rates', sanitizeRow(row, erCols));
-        }
-      }
-
-      final docs = _convertRows(data['documents']);
-      for (final row in docs) {
-        final docRow = sanitizeRow(row, docCols);
-        docRow['related_document_id'] = null;
-        await txn.insert('documents', docRow);
-      }
-      for (final row in _convertRows(data['document_items'])) {
-        await txn.insert('document_items', sanitizeRow(row, itemCols));
-      }
-      for (final row in docs) {
-        final docId = row['id'];
-        final relatedId = row['related_document_id'];
-        if (docId != null && relatedId != null) {
-          await txn.update(
-            'documents',
-            {'related_document_id': relatedId},
-            where: 'id = ?',
-            whereArgs: [docId],
-          );
-        }
-      }
-      for (final row in _convertRows(data['document_counters'])) {
-        await txn.insert('document_counters', sanitizeRow(row, counterCols));
-      }
-      // document_payments is optional (absent in backups created before Phase 1)
-      if (data.containsKey('document_payments') &&
-          data['document_payments'] is List) {
-        final payCols = await getTableCols('document_payments');
-        for (final row in _convertRows(data['document_payments'])) {
-          await txn.insert('document_payments', sanitizeRow(row, payCols));
-        }
-      }
-      // stock_movements is optional (absent in backups created before Phase 3.4)
-      if (data.containsKey('stock_movements') &&
-          data['stock_movements'] is List) {
-        final smCols = await getTableCols('stock_movements');
-        for (final row in _convertRows(data['stock_movements'])) {
-          await txn.insert('stock_movements', sanitizeRow(row, smCols));
-        }
-      }
-      // tax_profiles is optional (absent in backups created before Phase 3.5)
-      if (data.containsKey('tax_profiles') && data['tax_profiles'] is List) {
-        await txn.delete('tax_profiles');
-        final taxCols = await getTableCols('tax_profiles');
-        for (final row in _convertRows(data['tax_profiles'])) {
-          await txn.insert('tax_profiles', sanitizeRow(row, taxCols));
-        }
-      }
-      // payment_methods is optional (absent in backups created before Phase 3.6)
-      if (data.containsKey('payment_methods') &&
-          data['payment_methods'] is List) {
-        await txn.delete('payment_methods');
-        final pmCols = await getTableCols('payment_methods');
-        for (final row in _convertRows(data['payment_methods'])) {
-          await txn.insert('payment_methods', sanitizeRow(row, pmCols));
-        }
-      }
-      // stocktake_sessions is optional (absent in backups created before v16)
-      if (data.containsKey('stocktake_sessions') &&
-          data['stocktake_sessions'] is List) {
-        final ssCols = await getTableCols('stocktake_sessions');
-        for (final row in _convertRows(data['stocktake_sessions'])) {
-          await txn.insert('stocktake_sessions', sanitizeRow(row, ssCols));
-        }
-      }
-      // stocktake_items is optional (absent in backups created before v16)
-      if (data.containsKey('stocktake_items') &&
-          data['stocktake_items'] is List) {
-        final siCols = await getTableCols('stocktake_items');
-        for (final row in _convertRows(data['stocktake_items'])) {
-          await txn.insert('stocktake_items', sanitizeRow(row, siCols));
-        }
-      }
-      // audit_log is protected by SQLite triggers, is tamper-evident and append-only.
-      // It is preserved locally and never wiped during restore (INV-15 / D7).
-
-      // Accounts: restore or re-seed
-      if (await tableExists('accounts')) {
-        if (data.containsKey('accounts') && data['accounts'] is List) {
-          final accCols = await getTableCols('accounts');
-          for (final row in _convertRows(data['accounts'])) {
-            await txn.insert(
-              'accounts',
-              sanitizeRow(row, accCols),
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          }
-        } else {
-          await DatabaseHelper.seedAccounts(txn);
-        }
-      }
-
-      // Settings: restore or re-seed
-      if (await tableExists('app_settings')) {
-        if (data.containsKey('app_settings') && data['app_settings'] is List) {
-          final setCols = await getTableCols('app_settings');
-          for (final row in _convertRows(data['app_settings'])) {
-            final sanitized = sanitizeRow(row, setCols);
-            // Invariant: after any restore, journal_reports_enabled is forced OFF
-            if (sanitized['key'] == 'journal_reports_enabled') {
-              sanitized['value'] = 'false';
-            }
-            await txn.insert(
-              'app_settings',
-              sanitized,
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          }
-        } else {
-          await DatabaseHelper.seedDefaultSettings(txn);
-        }
-        // Invariant: force journal_reports_enabled = false regardless of backup content
-        await txn.insert('app_settings', {
-          'key': 'journal_reports_enabled',
-          'value': 'false',
-        }, conflictAlgorithm: ConflictAlgorithm.replace);
-        // Restore preserved multi-user and access settings
-        for (final s in savedAccessSettings) {
-          await txn.insert(
-            'app_settings',
-            s,
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
-        }
-      }
-
-      // Journal entries & lines (Phase 1)
-      if (await tableExists('journal_entries') &&
-          data.containsKey('journal_entries') &&
-          data['journal_entries'] is List) {
-        final jeCols = await getTableCols('journal_entries');
-        for (final row in _convertRows(data['journal_entries'])) {
-          await txn.insert('journal_entries', sanitizeRow(row, jeCols));
-        }
-      }
-
-      if (await tableExists('journal_lines') &&
-          data.containsKey('journal_lines') &&
-          data['journal_lines'] is List) {
-        final jlCols = await getTableCols('journal_lines');
-        for (final row in _convertRows(data['journal_lines'])) {
-          await txn.insert('journal_lines', sanitizeRow(row, jlCols));
-        }
-      }
-
-      if (await tableExists('digital_assets') &&
-          data.containsKey('digital_assets') &&
-          data['digital_assets'] is List) {
-        final cols = await getTableCols('digital_assets');
-        for (final row in _convertRows(data['digital_assets'])) {
-          await txn.insert('digital_assets', sanitizeRow(row, cols));
-        }
-      }
-
-      if (await tableExists('business_seal_configs') &&
-          data.containsKey('business_seal_configs') &&
-          data['business_seal_configs'] is List) {
-        final cols = await getTableCols('business_seal_configs');
-        for (final row in _convertRows(data['business_seal_configs'])) {
-          await txn.insert('business_seal_configs', sanitizeRow(row, cols));
-        }
-      }
-
-      if (await tableExists('document_seal_snapshots') &&
-          data.containsKey('document_seal_snapshots') &&
-          data['document_seal_snapshots'] is List) {
-        final cols = await getTableCols('document_seal_snapshots');
-        for (final row in _convertRows(data['document_seal_snapshots'])) {
-          await txn.insert('document_seal_snapshots', sanitizeRow(row, cols));
-        }
-      }
-
-      if (await tableExists('document_seal_snapshot_assets') &&
-          data.containsKey('document_seal_snapshot_assets') &&
-          data['document_seal_snapshot_assets'] is List) {
-        final cols = await getTableCols('document_seal_snapshot_assets');
-        for (final row in _convertRows(data['document_seal_snapshot_assets'])) {
-          await txn.insert(
-            'document_seal_snapshot_assets',
-            sanitizeRow(row, cols),
-          );
-        }
-      }
-
-      await DatabaseHelper.backfillCurrencyLockIfNeeded(txn);
-
-      await DatabaseHelper.instance.logAuditEvent(
-        'backup_restored',
-        details: 'schema_version=${jsonMap['schema_version'] ?? 'unknown'}',
-        txn: txn,
-      );
-    });
-
-    // Verify database integrity post-restore
-    final integrity = await db.rawQuery('PRAGMA integrity_check');
-    final integrityResult = integrity.isNotEmpty
-        ? integrity.first.values.first?.toString()
-        : null;
-    if (integrityResult?.toLowerCase() != 'ok') {
-      throw StateError(
-        'Database integrity check failed post-restore: $integrityResult',
-      );
-    }
-
-    await _restoreLogoIfNeeded(jsonMap);
-    await _restoreProductImagesIfNeeded(jsonMap);
-    await _restoreDigitalAssetsIfNeeded(jsonMap);
-    await DatabaseHelper.instance.logAuditEvent(
-      'backup_restored',
-      details:
-          'version=${jsonMap['backup_version']} db=${jsonMap['database_version']}',
-    );
-
-    // If legacy backup lacked journal tables, invoke backfill
-    final isLegacy =
-        !data.containsKey('journal_entries') ||
-        data['journal_entries'] == null ||
-        (data['journal_entries'] as List).isEmpty;
-    if (isLegacy) {
-      if (onLegacyBackupRestored != null) {
-        try {
-          await onLegacyBackupRestored!();
-        } catch (_) {}
-      } else {
-        await JournalBackfillService.backfillIfNeeded();
-      }
-    } else {
-      // New backup includes journal: verify parity safely
-      try {
-        await JournalBackfillService.verifyParity();
-      } catch (e) {
-        await DatabaseHelper.instance.setSetting(
-          'journal_parity_failed_at',
-          DateTime.now().toIso8601String(),
-        );
-        await DatabaseHelper.instance.setSetting(
-          'journal_parity_failure_reason',
-          'Post-restore parity mismatch: $e',
-        );
-        await DatabaseHelper.instance.logAuditEvent(
-          'post_restore_parity_failed',
-          details: 'error=$e',
-        );
-      }
-    }
-
-    // Prune older safety backups beyond retention limits
-    if (createSafetyBackup) {
-      await pruneSafetyBackups(preservePath: safetyPath);
-    }
-
     try {
-      AnalyticsService.instance.track(AnalyticsEvent.backupRestored, {
-        'ok': true,
-      });
-    } catch (_) {}
+      // Create and validate an automatic safety backup of the current database
+      // before touching any data. If this fails, restore aborts immediately.
+      if (createSafetyBackup) {
+        safetyPath = await BackupService.createSafetyBackup();
+        await DatabaseHelper.instance.logAuditEvent(
+          'pre_restore_safety_backup_created',
+          details: 'path=$safetyPath',
+        );
+      }
 
-    return true;
+      final data = jsonMap['data'] as Map<String, dynamic>;
+      final db = await DatabaseHelper.instance.database;
+
+      await db.transaction((txn) async {
+        Future<Set<String>> getTableCols(String table) async {
+          final info = await txn.rawQuery('PRAGMA table_info($table)');
+          return info.map((c) => c['name'] as String).toSet();
+        }
+
+        Future<bool> tableExists(String table) async {
+          final tables = await txn.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+            [table],
+          );
+          return tables.isNotEmpty;
+        }
+
+        Map<String, dynamic> sanitizeRow(
+          Map<String, dynamic> row,
+          Set<String> cols,
+        ) => Map.fromEntries(row.entries.where((e) => cols.contains(e.key)));
+
+        if (await tableExists('journal_lines')) {
+          await txn.delete('journal_lines');
+        }
+        if (await tableExists('journal_entries')) {
+          await txn.delete('journal_entries');
+        }
+        if (await tableExists('accounts')) {
+          await txn.delete('accounts');
+        }
+        List<Map<String, dynamic>> savedAccessSettings = [];
+        if (await tableExists('app_settings')) {
+          savedAccessSettings = await txn.query(
+            'app_settings',
+            where:
+                "key IN (${_sensitiveSettingsKeys.map((k) => "'$k'").join(',')})",
+          );
+          await txn.delete('app_settings');
+        }
+        if (await tableExists('exchange_rates')) {
+          await txn.delete('exchange_rates');
+        }
+        if (await tableExists('document_seal_snapshot_assets')) {
+          await txn.delete('document_seal_snapshot_assets');
+        }
+        if (await tableExists('document_seal_snapshots')) {
+          await txn.delete('document_seal_snapshots');
+        }
+        if (await tableExists('business_seal_configs')) {
+          await txn.delete('business_seal_configs');
+        }
+        if (await tableExists('digital_assets')) {
+          await txn.delete('digital_assets');
+        }
+        await txn.delete('document_payments');
+        await txn.delete('document_items');
+        await txn.delete('stocktake_items');
+        await txn.delete('stocktake_sessions');
+        await txn.delete('stock_movements');
+        await txn.delete('documents');
+        await txn.delete('contacts');
+        await txn.delete('product_units');
+        await txn.delete('products');
+        await txn.delete('businesses');
+        await txn.delete('document_counters');
+
+        final businessCols = await getTableCols('businesses');
+        final contactCols = await getTableCols('contacts');
+        final productCols = await getTableCols('products');
+        final docCols = await getTableCols('documents');
+        final itemCols = await getTableCols('document_items');
+        final counterCols = await getTableCols('document_counters');
+
+        for (final row in _convertRows(data['businesses'])) {
+          await txn.insert('businesses', sanitizeRow(row, businessCols));
+        }
+        for (final row in _convertRows(data['contacts'])) {
+          await txn.insert('contacts', sanitizeRow(row, contactCols));
+        }
+        for (final row in _convertRows(data['products'])) {
+          final productRow = Map<String, dynamic>.from(row)
+            ..remove('image_path');
+          await txn.insert('products', sanitizeRow(productRow, productCols));
+        }
+        if (data.containsKey('product_units') &&
+            data['product_units'] is List) {
+          final puCols = await getTableCols('product_units');
+          for (final row in _convertRows(data['product_units'])) {
+            await txn.insert('product_units', sanitizeRow(row, puCols));
+          }
+        }
+        if (data.containsKey('exchange_rates') &&
+            data['exchange_rates'] is List) {
+          final erCols = await getTableCols('exchange_rates');
+          for (final row in _convertRows(data['exchange_rates'])) {
+            await txn.insert('exchange_rates', sanitizeRow(row, erCols));
+          }
+        }
+
+        final docs = _convertRows(data['documents']);
+        for (final row in docs) {
+          final docRow = sanitizeRow(row, docCols);
+          docRow['related_document_id'] = null;
+          await txn.insert('documents', docRow);
+        }
+        for (final row in _convertRows(data['document_items'])) {
+          await txn.insert('document_items', sanitizeRow(row, itemCols));
+        }
+        for (final row in docs) {
+          final docId = row['id'];
+          final relatedId = row['related_document_id'];
+          if (docId != null && relatedId != null) {
+            await txn.update(
+              'documents',
+              {'related_document_id': relatedId},
+              where: 'id = ?',
+              whereArgs: [docId],
+            );
+          }
+        }
+        for (final row in _convertRows(data['document_counters'])) {
+          await txn.insert('document_counters', sanitizeRow(row, counterCols));
+        }
+        // document_payments is optional (absent in backups created before Phase 1)
+        if (data.containsKey('document_payments') &&
+            data['document_payments'] is List) {
+          final payCols = await getTableCols('document_payments');
+          for (final row in _convertRows(data['document_payments'])) {
+            await txn.insert('document_payments', sanitizeRow(row, payCols));
+          }
+        }
+        // stock_movements is optional (absent in backups created before Phase 3.4)
+        if (data.containsKey('stock_movements') &&
+            data['stock_movements'] is List) {
+          final smCols = await getTableCols('stock_movements');
+          for (final row in _convertRows(data['stock_movements'])) {
+            await txn.insert('stock_movements', sanitizeRow(row, smCols));
+          }
+        }
+        // tax_profiles is optional (absent in backups created before Phase 3.5)
+        if (data.containsKey('tax_profiles') && data['tax_profiles'] is List) {
+          await txn.delete('tax_profiles');
+          final taxCols = await getTableCols('tax_profiles');
+          for (final row in _convertRows(data['tax_profiles'])) {
+            await txn.insert('tax_profiles', sanitizeRow(row, taxCols));
+          }
+        }
+        // payment_methods is optional (absent in backups created before Phase 3.6)
+        if (data.containsKey('payment_methods') &&
+            data['payment_methods'] is List) {
+          await txn.delete('payment_methods');
+          final pmCols = await getTableCols('payment_methods');
+          for (final row in _convertRows(data['payment_methods'])) {
+            await txn.insert('payment_methods', sanitizeRow(row, pmCols));
+          }
+        }
+        // stocktake_sessions is optional (absent in backups created before v16)
+        if (data.containsKey('stocktake_sessions') &&
+            data['stocktake_sessions'] is List) {
+          final ssCols = await getTableCols('stocktake_sessions');
+          for (final row in _convertRows(data['stocktake_sessions'])) {
+            await txn.insert('stocktake_sessions', sanitizeRow(row, ssCols));
+          }
+        }
+        // stocktake_items is optional (absent in backups created before v16)
+        if (data.containsKey('stocktake_items') &&
+            data['stocktake_items'] is List) {
+          final siCols = await getTableCols('stocktake_items');
+          for (final row in _convertRows(data['stocktake_items'])) {
+            await txn.insert('stocktake_items', sanitizeRow(row, siCols));
+          }
+        }
+        // audit_log is protected by SQLite triggers, is tamper-evident and append-only.
+        // It is preserved locally and never wiped during restore (INV-15 / D7).
+
+        // Accounts: restore or re-seed
+        if (await tableExists('accounts')) {
+          if (data.containsKey('accounts') && data['accounts'] is List) {
+            final accCols = await getTableCols('accounts');
+            for (final row in _convertRows(data['accounts'])) {
+              await txn.insert(
+                'accounts',
+                sanitizeRow(row, accCols),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            }
+          } else {
+            await DatabaseHelper.seedAccounts(txn);
+          }
+        }
+
+        // Settings: restore or re-seed
+        if (await tableExists('app_settings')) {
+          if (data.containsKey('app_settings') &&
+              data['app_settings'] is List) {
+            final setCols = await getTableCols('app_settings');
+            for (final row in _convertRows(data['app_settings'])) {
+              final sanitized = sanitizeRow(row, setCols);
+              final key = sanitized['key']?.toString();
+              // Never import security-sensitive access settings from backup
+              if (_sensitiveSettingsKeys.contains(key)) {
+                continue;
+              }
+              // Invariant: after any restore, journal_reports_enabled is forced OFF
+              if (key == 'journal_reports_enabled') {
+                sanitized['value'] = 'false';
+              }
+              await txn.insert(
+                'app_settings',
+                sanitized,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            }
+          } else {
+            await DatabaseHelper.seedDefaultSettings(txn);
+          }
+          // Invariant: force journal_reports_enabled = false regardless of backup content
+          await txn.insert('app_settings', {
+            'key': 'journal_reports_enabled',
+            'value': 'false',
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          // Restore preserved multi-user and access settings
+          if (savedAccessSettings.isNotEmpty) {
+            for (final s in savedAccessSettings) {
+              await txn.insert(
+                'app_settings',
+                s,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            }
+          } else {
+            // If no local access settings existed (e.g. clean install), ensure multi-user is disabled
+            await txn.insert('app_settings', {
+              'key': 'multi_user_enabled',
+              'value': '0',
+            }, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        }
+
+        // Journal entries & lines (Phase 1)
+        if (await tableExists('journal_entries') &&
+            data.containsKey('journal_entries') &&
+            data['journal_entries'] is List) {
+          final jeCols = await getTableCols('journal_entries');
+          for (final row in _convertRows(data['journal_entries'])) {
+            await txn.insert('journal_entries', sanitizeRow(row, jeCols));
+          }
+        }
+
+        if (await tableExists('journal_lines') &&
+            data.containsKey('journal_lines') &&
+            data['journal_lines'] is List) {
+          final jlCols = await getTableCols('journal_lines');
+          for (final row in _convertRows(data['journal_lines'])) {
+            await txn.insert('journal_lines', sanitizeRow(row, jlCols));
+          }
+        }
+
+        if (await tableExists('digital_assets') &&
+            data.containsKey('digital_assets') &&
+            data['digital_assets'] is List) {
+          final cols = await getTableCols('digital_assets');
+          for (final row in _convertRows(data['digital_assets'])) {
+            await txn.insert('digital_assets', sanitizeRow(row, cols));
+          }
+        }
+
+        if (await tableExists('business_seal_configs') &&
+            data.containsKey('business_seal_configs') &&
+            data['business_seal_configs'] is List) {
+          final cols = await getTableCols('business_seal_configs');
+          for (final row in _convertRows(data['business_seal_configs'])) {
+            await txn.insert('business_seal_configs', sanitizeRow(row, cols));
+          }
+        }
+
+        if (await tableExists('document_seal_snapshots') &&
+            data.containsKey('document_seal_snapshots') &&
+            data['document_seal_snapshots'] is List) {
+          final cols = await getTableCols('document_seal_snapshots');
+          for (final row in _convertRows(data['document_seal_snapshots'])) {
+            await txn.insert('document_seal_snapshots', sanitizeRow(row, cols));
+          }
+        }
+
+        if (await tableExists('document_seal_snapshot_assets') &&
+            data.containsKey('document_seal_snapshot_assets') &&
+            data['document_seal_snapshot_assets'] is List) {
+          final cols = await getTableCols('document_seal_snapshot_assets');
+          for (final row in _convertRows(
+            data['document_seal_snapshot_assets'],
+          )) {
+            await txn.insert(
+              'document_seal_snapshot_assets',
+              sanitizeRow(row, cols),
+            );
+          }
+        }
+
+        await DatabaseHelper.backfillCurrencyLockIfNeeded(txn);
+
+        await DatabaseHelper.instance.logAuditEvent(
+          'backup_restored',
+          details:
+              'version=${jsonMap['backup_version']} db=${jsonMap['database_version']} schema_version=${jsonMap['schema_version'] ?? 'unknown'}',
+          txn: txn,
+        );
+      });
+
+      // Verify database integrity post-restore
+      final integrity = await db.rawQuery('PRAGMA integrity_check');
+      final integrityResult = integrity.isNotEmpty
+          ? integrity.first.values.first?.toString()
+          : null;
+      if (integrityResult?.toLowerCase() != 'ok') {
+        throw BackupIntegrityException(
+          'Database integrity check failed post-restore: $integrityResult',
+        );
+      }
+
+      await _restoreLogoIfNeeded(jsonMap);
+      await _restoreProductImagesIfNeeded(jsonMap);
+      await _restoreDigitalAssetsIfNeeded(jsonMap);
+
+      // If legacy backup lacked journal tables, invoke backfill
+      final isLegacy =
+          !data.containsKey('journal_entries') ||
+          data['journal_entries'] == null ||
+          (data['journal_entries'] as List).isEmpty;
+      if (isLegacy) {
+        if (onLegacyBackupRestored != null) {
+          try {
+            await onLegacyBackupRestored!();
+          } catch (_) {}
+        } else {
+          await JournalBackfillService.backfillIfNeeded();
+        }
+      } else {
+        // New backup includes journal: verify parity safely
+        try {
+          await JournalBackfillService.verifyParity();
+        } catch (e) {
+          await DatabaseHelper.instance.setSetting(
+            'journal_parity_failed_at',
+            DateTime.now().toIso8601String(),
+          );
+          await DatabaseHelper.instance.setSetting(
+            'journal_parity_failure_reason',
+            'Post-restore parity mismatch: $e',
+          );
+          await DatabaseHelper.instance.logAuditEvent(
+            'post_restore_parity_failed',
+            details: 'error=$e',
+          );
+        }
+      }
+
+      // Prune older safety backups beyond retention limits and clean stale temporary backups
+      if (createSafetyBackup) {
+        await pruneSafetyBackups(preservePath: safetyPath);
+        await cleanupTemporaryBackups();
+      }
+
+      try {
+        AnalyticsService.instance.track(AnalyticsEvent.backupRestored, {
+          'ok': true,
+        });
+      } catch (_) {}
+
+      return true;
+    } catch (e) {
+      if (createSafetyBackup && safetyPath != null) {
+        try {
+          final safetyFile = File(safetyPath);
+          if (await safetyFile.exists()) {
+            final safetyBytes = await safetyFile.readAsBytes();
+            final String safetyJsonStr;
+            if (BackupEncryptionService.isEncrypted(safetyBytes)) {
+              final key = await getSafetyKey();
+              safetyJsonStr = await BackupEncryptionService.decryptJson(
+                encryptedBytes: safetyBytes,
+                password: key,
+              );
+            } else {
+              safetyJsonStr = utf8.decode(safetyBytes);
+            }
+            final safetyData =
+                jsonDecode(safetyJsonStr) as Map<String, dynamic>;
+            await restoreFromJsonMap(
+              safetyData,
+              createSafetyBackup: false,
+              isRollback: true,
+            );
+            await DatabaseHelper.instance.logAuditEvent(
+              'restore_safety_rollback_completed',
+              details: 'path=$safetyPath; reason=$e',
+            );
+          }
+        } catch (rollbackErr) {
+          await DatabaseHelper.instance.logAuditEvent(
+            'restore_safety_rollback_failed',
+            details: 'rollback_error=$rollbackErr; original_error=$e',
+          );
+        }
+      }
+      if (e is BackupException) rethrow;
+      throw BackupIntegrityException(e.toString());
+    } finally {
+      if (isOuter) {
+        _isRestoreInProgress = false;
+      }
+    }
   }
 
   // ============================================================
@@ -868,27 +1342,31 @@ class BackupService {
 
   static void _validateBackup(Map<String, dynamic> jsonMap) {
     if (jsonMap['app'] != appId) {
-      throw Exception('Not a Warqatek backup');
+      throw const BackupInvalidFormatException('Not a Warqatek backup');
     }
 
     final backupVersion = jsonMap['backup_version'];
     if (backupVersion is! int || backupVersion < 1) {
-      throw Exception('Unsupported backup version: $backupVersion');
+      throw BackupUnsupportedVersionException(
+        backupVersion is int ? backupVersion : 0,
+        'Unsupported backup version: $backupVersion',
+      );
     }
     if (backupVersion > currentBackupVersion) {
-      throw Exception(
+      throw BackupUnsupportedVersionException(
+        backupVersion,
         'Backup version $backupVersion requires a newer version of the application. Please update the app.',
       );
     }
 
     final data = jsonMap['data'];
     if (data is! Map<String, dynamic>) {
-      throw Exception('Invalid backup data');
+      throw const BackupInvalidFormatException('Invalid backup data');
     }
 
     for (final table in _requiredTables) {
       if (!data.containsKey(table) || data[table] is! List) {
-        throw Exception('Missing or invalid table: $table');
+        throw BackupInvalidFormatException('Missing or invalid table: $table');
       }
     }
   }
@@ -903,11 +1381,11 @@ class BackupService {
 
   static List<Map<String, dynamic>> _convertRows(dynamic value) {
     if (value is! List) {
-      throw Exception('Invalid row data');
+      throw const BackupInvalidFormatException('Invalid row data');
     }
     return value.map<Map<String, dynamic>>((row) {
       if (row is! Map) {
-        throw Exception('Invalid row entry');
+        throw const BackupInvalidFormatException('Invalid row entry');
       }
       return Map<String, dynamic>.from(row);
     }).toList();
@@ -940,11 +1418,13 @@ class BackupService {
         'payment_methods': await txn.query('payment_methods'),
         'stocktake_sessions': await txn.query('stocktake_sessions'),
         'stocktake_items': await txn.query('stocktake_items'),
-        'audit_log': await txn.query('audit_log'),
+        'audit_log': const <Map<String, Object?>>[],
         'accounts': await txn.query('accounts'),
         'journal_entries': await txn.query('journal_entries'),
         'journal_lines': await txn.query('journal_lines'),
-        'app_settings': await txn.query('app_settings'),
+        'app_settings': (await txn.query(
+          'app_settings',
+        )).where((r) => !_sensitiveSettingsKeys.contains(r['key'])).toList(),
         'exchange_rates': await txn.query('exchange_rates'),
         'digital_assets': await txn.query('digital_assets'),
         'business_seal_configs': await txn.query('business_seal_configs'),
@@ -1059,10 +1539,21 @@ class BackupService {
 
           final business = await DatabaseHelper.instance.getFirstBusiness();
           if (business != null) {
+            final oldLogoPath = business.logoPath;
             await DatabaseHelper.instance.updateBusiness(
               business.copyWith(logoPath: file.path),
             );
             restored = true;
+            if (oldLogoPath != null &&
+                oldLogoPath.isNotEmpty &&
+                oldLogoPath != file.path) {
+              try {
+                final oldFile = File(oldLogoPath);
+                if (await oldFile.exists()) {
+                  await oldFile.delete();
+                }
+              } catch (_) {}
+            }
           }
         } catch (_) {
           // Do not fail restore due to logo
@@ -1169,21 +1660,5 @@ class BackupService {
         // Never fail restore due to a single digital seal error.
       }
     }
-  }
-
-  /// Records the timestamp of a successful backup creation in settings and preferences.
-  static Future<void> recordBackupSuccess() async {
-    final nowIso = DateTime.now().toIso8601String();
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(settingLastBackupAt, nowIso);
-    } catch (_) {}
-    try {
-      final db = await DatabaseHelper.instance.database;
-      await db.insert('app_settings', {
-        'key': settingLastBackupAt,
-        'value': nowIso,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
-    } catch (_) {}
   }
 }

@@ -4964,6 +4964,7 @@ class DatabaseHelper {
             }
           } else {
             // User actively attempted to alter the paid amount.
+            AccessGuard.require(PermissionRegistry.paymentsRecord);
             if (isLedgerDiscrepant) {
               throw StateError(
                 'Cannot modify paid amount: document has discrepant payment records (document paid: $canonicalOldPaid, recorded payments: $totalExistingLedgerPaid). Please review payment records.',
@@ -6394,6 +6395,7 @@ class DatabaseHelper {
     String? paymentMethod,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.paymentsRecord);
     final db = await database;
     await db.transaction((txn) async {
       await assertPeriodOpen(DateTime.now(), txn: txn);
@@ -6486,6 +6488,7 @@ class DatabaseHelper {
     String? paymentMethod,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.paymentsRecord);
     final db = await database;
     return await db.transaction(
       (txn) => _recordPaymentTxn(
@@ -6718,6 +6721,7 @@ class DatabaseHelper {
     String? paymentMethod,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.paymentsRecord);
     final db = await database;
     return db.transaction((txn) async {
       final now = DateTime.now();
@@ -6980,6 +6984,20 @@ class DatabaseHelper {
 
       if (doc.status != DocumentStatus.draft) {
         throw StateError('Document is not a draft');
+      }
+
+      // Authoritative authorization check before any mutations or ledger postings
+      if (doc.type == 'purchase') {
+        AccessGuard.require(PermissionRegistry.purchasesCreate);
+      } else if (doc.type == 'payment_receipt' ||
+          doc.type == 'expense_voucher') {
+        AccessGuard.require(PermissionRegistry.vouchersCreate);
+      } else {
+        AccessGuard.require(PermissionRegistry.salesCreate);
+      }
+
+      if (doc.paid > 0 && (doc.type == 'invoice' || doc.type == 'purchase')) {
+        AccessGuard.require(PermissionRegistry.paymentsRecord);
       }
 
       await assertPeriodOpen(doc.date, txn: txn);
@@ -8504,6 +8522,7 @@ class DatabaseHelper {
     String? notes,
   }) async {
     AccessGuard.require(PermissionRegistry.stocktakeFinalize);
+    AccessGuard.require(PermissionRegistry.stockAdjust);
     final db = await database;
     return db.transaction((txn) async {
       await assertPeriodOpen(DateTime.now(), txn: txn);
@@ -8526,7 +8545,7 @@ class DatabaseHelper {
 
       final items = await txn.rawQuery(
         '''
-        SELECT si.*, p.stock_quantity AS current_stock, p.average_cost, p.cost_status, p.name AS product_name
+        SELECT si.*, p.stock_quantity AS current_stock, p.average_cost, p.cost_status, p.purchase_price, p.name AS product_name
         FROM stocktake_items si
         INNER JOIN products p ON p.id = si.product_id
         WHERE si.session_id = ?
@@ -8537,6 +8556,7 @@ class DatabaseHelper {
       int matchedCount = 0;
       int discrepantCount = 0;
       int adjustedCount = 0;
+      int interimConflictCount = 0;
       final now = DateTime.now();
 
       for (final row in items) {
@@ -8544,7 +8564,22 @@ class DatabaseHelper {
         final productId = row['product_id'] as int;
         final counted = (row['counted_quantity'] as num?)?.toDouble();
         final currentStock = (row['current_stock'] as num?)?.toDouble() ?? 0.0;
-        final avgCost = (row['average_cost'] as num?)?.toDouble();
+        final baselineQuantity =
+            (row['baseline_quantity'] as num?)?.toDouble() ?? currentStock;
+        final interimMovement = currentStock - baselineQuantity;
+        if (interimMovement.abs() > 0.0001) {
+          interimConflictCount++;
+        }
+        double? effectiveCost = (row['average_cost'] as num?)?.toDouble();
+        if (effectiveCost == null || effectiveCost <= 0) {
+          effectiveCost = (row['purchase_price'] as num?)?.toDouble();
+        }
+        if (effectiveCost == null || effectiveCost <= 0) {
+          effectiveCost = (row['unit_cost'] as num?)?.toDouble();
+        }
+        if (effectiveCost != null && effectiveCost <= 0) {
+          effectiveCost = null;
+        }
         final costStatus = (row['cost_status'] as String?) ?? 'unknown';
 
         if (counted == null) {
@@ -8561,8 +8596,8 @@ class DatabaseHelper {
           continue;
         }
 
-        final variance = counted - currentStock;
-        if (variance == 0) {
+        final countDiscrepancy = counted - baselineQuantity;
+        if (countDiscrepancy.abs() < 0.0001) {
           matchedCount++;
           await txn.update(
             'stocktake_items',
@@ -8578,21 +8613,28 @@ class DatabaseHelper {
           discrepantCount++;
           adjustedCount++;
 
-          // Atomically update product stock and record stock movement through single stock writer
-          final totalCost = avgCost != null ? (variance.abs() * avgCost) : null;
+          // Apply physical count discrepancy onto current live stock so intervening transactions are never discarded
+          final newStock = math.max(0.0, currentStock + countDiscrepancy);
+          final appliedDelta = newStock - currentStock;
+
+          final totalCost = effectiveCost != null
+              ? (appliedDelta.abs() * effectiveCost)
+              : null;
           await StockLedger.record(
             txn,
             productId: productId,
-            deltaQuantity: variance,
-            newStockQuantity: counted,
+            deltaQuantity: appliedDelta,
+            newStockQuantity: newStock,
             type: StockMovement.typeAdjustment,
-            unitCost: avgCost,
+            unitCost: effectiveCost,
             totalCost: totalCost,
             costStatus: costStatus,
             provenance: 'stocktake',
             date: now,
-            notes: 'تسوية جرد المخزون: ${session.sessionNumber}',
-            reason: variance > 0 ? 'count_gain' : 'count_loss',
+            notes: interimMovement.abs() > 0.0001
+                ? 'تسوية جرد المخزون: ${session.sessionNumber} (فارق: $countDiscrepancy, حركة بينية: $interimMovement)'
+                : 'تسوية جرد المخزون: ${session.sessionNumber}',
+            reason: appliedDelta > 0 ? 'count_gain' : 'count_loss',
           );
 
           // 3. Update stocktake item record
@@ -8600,8 +8642,8 @@ class DatabaseHelper {
             'stocktake_items',
             {
               'reconciled_system_quantity': currentStock,
-              'variance': variance,
-              'unit_cost': avgCost,
+              'variance': countDiscrepancy,
+              'unit_cost': effectiveCost,
               'status': StocktakeItem.statusReconciled,
             },
             where: 'id = ?',
@@ -8631,7 +8673,7 @@ class DatabaseHelper {
         entityType: 'stocktake_session',
         entityId: sessionId,
         details:
-            'session="${session.sessionNumber}" matched=$matchedCount discrepant=$discrepantCount adjusted=$adjustedCount',
+            'session="${session.sessionNumber}" matched=$matchedCount discrepant=$discrepantCount adjusted=$adjustedCount interimConflicts=$interimConflictCount',
         txn: txn,
       );
 
@@ -8640,6 +8682,7 @@ class DatabaseHelper {
         'discrepant': discrepantCount,
         'adjusted': adjustedCount,
         'session_number': session.sessionNumber,
+        'interim_conflicts': interimConflictCount,
       };
     });
   }

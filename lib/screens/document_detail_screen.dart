@@ -10,6 +10,8 @@ import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/document_payment.dart';
 import '../models/document_status.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 import '../services/document_service.dart';
 import '../services/pdf_service.dart';
 import '../models/payment_method.dart';
@@ -80,12 +82,16 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         return;
       }
 
-      final enabledMethods = await DatabaseHelper.instance.getEnabledPaymentMethods();
+      final enabledMethods = await DatabaseHelper.instance
+          .getEnabledPaymentMethods();
       final allMethods = await DatabaseHelper.instance.getPaymentMethods();
 
       final futures = await Future.wait([
         db.getFirstBusiness(),
-        if (doc.contactId != null) db.getContactById(doc.contactId!) else Future.value(null),
+        if (doc.contactId != null)
+          db.getContactById(doc.contactId!)
+        else
+          Future.value(null),
         db.getDocumentItems(doc.id!),
         db.getDocumentPayments(doc.id!),
         if (doc.relatedDocumentId != null)
@@ -100,7 +106,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
       Map<String, dynamic>? refundInfo;
       if (doc.status == DocumentStatus.cancelled && doc.paid > 0) {
-        refundInfo = await DocumentService.getLatestDocumentRefundStatus(doc.id!);
+        refundInfo = await DocumentService.getLatestDocumentRefundStatus(
+          doc.id!,
+        );
       }
 
       bool isAllocatedVoucher = false;
@@ -117,7 +125,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _items = (futures[2] as List).cast<DocumentItem>();
         _payments = (futures[3] as List).cast<DocumentPayment>();
         _relatedDocument = futures[4] as Document?;
-        _convertedInvoice = doc.type == 'quotation' ? futures[5] as Document? : null;
+        _convertedInvoice = doc.type == 'quotation'
+            ? futures[5] as Document?
+            : null;
         _enabledMethods = enabledMethods;
         _allMethods = allMethods;
         _refundStatusInfo = refundInfo;
@@ -184,20 +194,26 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
   Future<void> _delete() async {
     final l10n = AppLocalizations.of(context);
+    final isDraft = _document?.status == DocumentStatus.draft;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(l10n.confirmDelete),
-        content: Text(l10n.deleteDocumentMessage),
+        title: Text(isDraft ? l10n.deleteDraft : l10n.confirmDelete),
+        content: Text(
+          isDraft ? l10n.deleteDraftMessage : l10n.deleteDocumentMessage,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
             ),
-            child: Text(l10n.delete),
+            child: Text(isDraft ? l10n.deleteDraft : l10n.delete),
           ),
         ],
       ),
@@ -206,6 +222,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       try {
         await DatabaseHelper.instance.deleteDocument(_document!.id!);
         if (!mounted) return;
+        AppSnackBar.show(
+          context,
+          l10n.deletedSuccessfully,
+          severity: AppSnackBarSeverity.success,
+        );
         Navigator.pop(context, true);
       } catch (e) {
         if (!mounted) return;
@@ -239,9 +260,14 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(l10n.confirmCancel),
-          content: Text(isReceipt ? l10n.cancelReceiptMessage : l10n.cancelDocumentMessage),
+          content: Text(
+            isReceipt ? l10n.cancelReceiptMessage : l10n.cancelDocumentMessage,
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
             ElevatedButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: ElevatedButton.styleFrom(
@@ -264,11 +290,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         );
         if (!mounted) return;
         final msg = isReceipt ? l10n.paymentReversed : l10n.operationSuccessful;
-        AppSnackBar.show(
-          context,
-          msg,
-          severity: AppSnackBarSeverity.success,
-        );
+        AppSnackBar.show(context, msg, severity: AppSnackBarSeverity.success);
         _load();
       } catch (e) {
         if (!mounted) return;
@@ -337,7 +359,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         title: Text(l10n.convertToInvoice),
         content: Text(l10n.convertConfirmBody),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(l10n.convertToInvoice),
@@ -347,11 +372,15 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     );
     if (confirmed == true && mounted) {
       try {
-        final invoiceId = await DocumentService.convertQuotationToInvoice(_document!.id!);
+        final invoiceId = await DocumentService.convertQuotationToInvoice(
+          _document!.id!,
+        );
         if (!mounted) return;
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: invoiceId)),
+          MaterialPageRoute(
+            builder: (_) => DocumentDetailScreen(documentId: invoiceId),
+          ),
         ).then((_) => _load());
       } catch (e) {
         if (!mounted) return;
@@ -377,7 +406,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         onAction: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: newId)),
+            MaterialPageRoute(
+              builder: (_) => DocumentDetailScreen(documentId: newId),
+            ),
           );
         },
       );
@@ -395,8 +426,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final l10n = AppLocalizations.of(context);
     final doc = _document!;
     final amountController = TextEditingController(
-        text: NumberInput.formatForInput(doc.remaining, maxDecimals: 4));
-    String? selectedMethod = _enabledMethods.isNotEmpty ? _enabledMethods.first.key : null;
+      text: NumberInput.formatForInput(doc.remaining, maxDecimals: 4),
+    );
+    String? selectedMethod = _enabledMethods.isNotEmpty
+        ? _enabledMethods.first.key
+        : null;
 
     await showModalBottomSheet(
       context: context,
@@ -420,20 +454,59 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                   ),
                 ),
                 Padding(
-                  padding: EdgeInsets.fromLTRB(20, 16, 20,
-                      (MediaQuery.viewInsetsOf(ctx).bottom > 0
-                          ? MediaQuery.viewInsetsOf(ctx).bottom
-                          : MediaQuery.viewPaddingOf(ctx).bottom) + 24),
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    16,
+                    20,
+                    (MediaQuery.viewInsetsOf(ctx).bottom > 0
+                            ? MediaQuery.viewInsetsOf(ctx).bottom
+                            : MediaQuery.viewPaddingOf(ctx).bottom) +
+                        24,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(l10n.recordPayment,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 6),
                       Text(
-                        '${l10n.remaining}: ${_fmt.format(doc.remaining)} ${doc.currencySymbol}',
-                        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        l10n.recordPayment,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '${l10n.remaining}: ${_fmt.format(doc.remaining)} ${doc.currencySymbol}',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
+                            icon: const Icon(Icons.flash_on_rounded, size: 16),
+                            label: Text(l10n.voucherPayFullBalance),
+                            onPressed: () {
+                              setSheet(() {
+                                amountController.text =
+                                    NumberInput.formatForInput(
+                                      doc.remaining,
+                                      maxDecimals: 4,
+                                    );
+                              });
+                            },
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       AmountField(
@@ -442,7 +515,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         showMultipliers: true,
                         decoration: InputDecoration(
                           labelText: l10n.paymentAmountLabel,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           suffixText: doc.currencySymbol,
                         ),
                         autofocus: true,
@@ -456,7 +531,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                             return ChoiceChip(
                               label: Text(m.label(l10n.langCode)),
                               selected: selectedMethod == m.key,
-                              onSelected: (_) => setSheet(() => selectedMethod = m.key),
+                              onSelected: (_) =>
+                                  setSheet(() => selectedMethod = m.key),
                             );
                           }).toList(),
                         ),
@@ -464,9 +540,12 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       const SizedBox(height: 20),
                       FilledButton(
                         onPressed: () async {
-                          final amount = NumberInput.parse(amountController.text) ?? 0;
-                          final decimalDigits = Currency.decimalDigitsForCode(doc.currencyCode);
-                          if (amount <= 0 || MoneyUtils.isOverpayment(amount, doc.remaining, decimalDigits)) {
+                          final amount =
+                              NumberInput.parse(amountController.text) ?? 0;
+                          final decimalDigits = Currency.decimalDigitsForCode(
+                            doc.currencyCode,
+                          );
+                          if (amount <= 0) {
                             AppSnackBar.show(
                               context,
                               l10n.invalidAmount,
@@ -474,13 +553,28 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                             );
                             return;
                           }
+                          if (MoneyUtils.isOverpayment(
+                            amount,
+                            doc.remaining,
+                            decimalDigits,
+                          )) {
+                            AppSnackBar.show(
+                              context,
+                              l10n.voucherAmountExceedsOutstanding(
+                                _fmt.format(doc.remaining),
+                              ),
+                              severity: AppSnackBarSeverity.warning,
+                            );
+                            return;
+                          }
                           Navigator.pop(sheetCtx);
                           try {
-                            final receiptId = await DocumentService.recordPayment(
-                              documentId: doc.id!,
-                              amount: amount,
-                              paymentMethod: selectedMethod,
-                            );
+                            final receiptId =
+                                await DocumentService.recordPayment(
+                                  documentId: doc.id!,
+                                  amount: amount,
+                                  paymentMethod: selectedMethod,
+                                );
                             if (!mounted) return;
                             AppSnackBar.show(
                               context,
@@ -490,7 +584,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => DocumentDetailScreen(documentId: receiptId),
+                                    builder: (_) => DocumentDetailScreen(
+                                      documentId: receiptId,
+                                    ),
                                   ),
                                 );
                               },
@@ -529,41 +625,58 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     if (_error != null || _document == null || _business == null) {
       return Scaffold(
-        body: ResponsiveCenter(child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline,
-                  size: 48, color: Theme.of(context).colorScheme.error),
-              const SizedBox(height: 12),
-              Text(l10n.operationFailed),
-              const SizedBox(height: 12),
-              FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-            ],
+        body: ResponsiveCenter(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 12),
+                Text(l10n.operationFailed),
+                const SizedBox(height: 12),
+                FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
+              ],
+            ),
           ),
-        )),
+        ),
       );
     }
 
     final doc = _document!;
     final sym = doc.currencySymbol;
     final typeLabel = _typeLabel(doc.type, l10n);
-    final isCancelled   = doc.status == DocumentStatus.cancelled;
-    final isDraft       = doc.status == DocumentStatus.draft;
-    final isInvoice     = doc.type == 'invoice';
-    final isPurchase    = doc.type == 'purchase';
-    final isQuotation   = doc.type == 'quotation';
-    final isReceipt     = doc.type == 'payment_receipt';
-    final canRecordPay  = (isInvoice || isPurchase) &&
-        (doc.status == DocumentStatus.issued || doc.status == DocumentStatus.partiallyPaid);
-    final canIssue      = isDraft && (isInvoice || isQuotation || isPurchase);
-    final canConvert    = isQuotation && !isCancelled && _convertedInvoice == null;
-    final canCancel     = !isCancelled;
-    final canEdit       = !isCancelled && !_isAllocatedVoucher;
+    final isCancelled = doc.status == DocumentStatus.cancelled;
+    final isDraft = doc.status == DocumentStatus.draft;
+    final isInvoice = doc.type == 'invoice';
+    final isPurchase = doc.type == 'purchase';
+    final isQuotation = doc.type == 'quotation';
+    final isReceipt = doc.type == 'payment_receipt';
+    final canRecordPay =
+        (isInvoice || isPurchase) &&
+        (doc.status == DocumentStatus.issued ||
+            doc.status == DocumentStatus.partiallyPaid) &&
+        AccessGuard.can(PermissionRegistry.paymentsRecord);
+    final canIssue =
+        isDraft &&
+        (isInvoice || isQuotation || isPurchase) &&
+        (isPurchase
+            ? AccessGuard.can(PermissionRegistry.purchasesCreate)
+            : AccessGuard.can(PermissionRegistry.salesCreate)) &&
+        (doc.paid <= 0 || AccessGuard.can(PermissionRegistry.paymentsRecord));
+    final canConvert = isQuotation && !isCancelled && _convertedInvoice == null;
+    final canCancel = !isCancelled && !isDraft;
+    final canDelete = isDraft || isCancelled;
+    final canEdit = !isCancelled && !_isAllocatedVoucher;
 
     // FAB priority: record payment > issue > convert
     Widget? fab;
@@ -579,7 +692,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         heroTag: 'fab_issue',
         onPressed: _issueDocument,
         icon: const Icon(Icons.publish_rounded),
-        label: Text(isInvoice ? l10n.issueInvoice : (isPurchase ? l10n.finalizePurchase : l10n.issueDocument)),
+        label: Text(
+          isInvoice
+              ? l10n.issueInvoice
+              : (isPurchase ? l10n.finalizePurchase : l10n.issueDocument),
+        ),
       );
     } else if (canConvert) {
       fab = FloatingActionButton.extended(
@@ -601,7 +718,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
               tooltip: l10n.edit,
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => EditDocumentScreen(documentId: doc.id!)),
+                MaterialPageRoute(
+                  builder: (_) => EditDocumentScreen(documentId: doc.id!),
+                ),
               ).then((_) => _load()),
             ),
           IconButton(
@@ -623,360 +742,487 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'copy',
-                child: Row(children: [
-                  const Icon(Icons.copy_outlined, size: 20),
-                  const SizedBox(width: 10),
-                  Text(l10n.copyDocument),
-                ]),
+                child: Row(
+                  children: [
+                    const Icon(Icons.copy_outlined, size: 20),
+                    const SizedBox(width: 10),
+                    Text(l10n.copyDocument),
+                  ],
+                ),
               ),
               if (canCancel)
                 PopupMenuItem(
                   value: 'cancel',
-                  child: Row(children: [
-                    Icon(Icons.block_outlined, size: 20, color: Theme.of(context).colorScheme.error),
-                    const SizedBox(width: 10),
-                    Text(l10n.cancelDocument,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ]),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.block_outlined,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        l10n.cancelDocument,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Row(children: [
-                  Icon(Icons.delete_outline, size: 20, color: Theme.of(context).colorScheme.error),
-                  const SizedBox(width: 10),
-                  Text(l10n.delete,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                ]),
-              ),
+              if (canDelete)
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        isDraft ? l10n.deleteDraft : l10n.delete,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ],
       ),
       floatingActionButton: fab,
-      body: ResponsiveCenter(child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          if (_isAllocatedVoucher && !isCancelled) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant,
+      body: ResponsiveCenter(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            if (_isAllocatedVoucher && !isCancelled) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
                 ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.primary,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      l10n.isArabic
-                          ? 'لا يمكن تعديل سند تم تخصيصه. لتعديله، يرجى إلغاء السند وإصدار سند جديد.'
-                          : 'Allocated vouchers cannot be edited. Cancel and re-issue to modify.',
-                      style: const TextStyle(fontSize: 13),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        l10n.isArabic
+                            ? 'لا يمكن تعديل سند تم تخصيصه. لتعديله، يرجى إلغاء السند وإصدار سند جديد.'
+                            : 'Allocated vouchers cannot be edited. Cancel and re-issue to modify.',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-          if (isCancelled && doc.paid > 0 && (isInvoice || isPurchase)) ...[
-            _refundStatusCard(l10n, sym),
-            const SizedBox(height: 10),
-          ],
-
-          // ── Header card ──────────────────────────────────
-          _card(Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Expanded(
-                  child: Text(typeLabel,
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary)),
-                ),
-                StatusBadge(status: doc.status),
-              ]),
-              const SizedBox(height: 8),
-              _infoRow(l10n.date, _dateFmt.format(doc.date)),
-              if (isQuotation && doc.validUntil != null)
-                _infoRow(l10n.validUntil, _dateFmt.format(doc.validUntil!)),
-              if (isReceipt && doc.paymentMethod != null)
-                _infoRow(l10n.paymentMethod,
-                    _methodLabel(doc.paymentMethod!, l10n)),
             ],
-          )),
+            if (isCancelled && doc.paid > 0 && (isInvoice || isPurchase)) ...[
+              _refundStatusCard(l10n, sym),
+              const SizedBox(height: 10),
+            ],
 
-          // ── Relationship cards ───────────────────────────
-          if (isReceipt && _relatedDocument != null) ...[
-            const SizedBox(height: 10),
-            _relatedCard(
-              icon: Icons.receipt_long_rounded,
-              label: l10n.relatedInvoice,
-              docNumber: _relatedDocument!.documentNumber,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DocumentDetailScreen(documentId: _relatedDocument!.id!),
-                ),
-              ).then((_) => _load()),
-            ),
-          ],
-          if (isInvoice && _relatedDocument != null && _relatedDocument!.type == 'quotation') ...[
-            const SizedBox(height: 10),
-            _relatedCard(
-              icon: Icons.request_quote_rounded,
-              label: l10n.sourceQuotation,
-              docNumber: _relatedDocument!.documentNumber,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DocumentDetailScreen(documentId: _relatedDocument!.id!),
-                ),
-              ).then((_) => _load()),
-            ),
-          ],
-          if (isQuotation && _convertedInvoice != null) ...[
-            const SizedBox(height: 10),
-            _relatedCard(
-              icon: Icons.receipt_long_rounded,
-              label: l10n.convertedToInvoice,
-              docNumber: _convertedInvoice!.documentNumber,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => DocumentDetailScreen(documentId: _convertedInvoice!.id!),
-                ),
-              ).then((_) => _load()),
-            ),
-          ],
-
-          // ── Customer / Supplier card ────────────────────
-          if (_contact != null || doc.recipientName != null) ...[
-            const SizedBox(height: 10),
-            _card(InkWell(
-              onTap: _contact != null
-                  ? () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CustomerDetailScreen(contact: _contact!),
-                        ),
-                      ).then((_) => _load())
-                  : null,
-              borderRadius: BorderRadius.circular(12),
-              child: Column(
+            // ── Header card ──────────────────────────────────
+            _card(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
                       Expanded(
                         child: Text(
-                          doc.type == 'purchase' ? l10n.supplier : l10n.customerOrParty,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          typeLabel,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                         ),
                       ),
-                      if (_contact != null)
-                        Icon(
-                          AppIcons.chevronForward(context),
-                          size: 20,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                      StatusBadge(status: doc.status),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(_contact?.name ?? doc.recipientName ?? '',
-                      style: const TextStyle(fontSize: 15)),
-                  if ((_contact?.phone ?? doc.recipientPhone) != null)
-                    _infoRow(l10n.phone, _contact?.phone ?? doc.recipientPhone!),
-                  if (_contact?.address != null && _contact!.address!.isNotEmpty)
-                    _infoRow(l10n.address, _contact!.address!),
+                  _infoRow(l10n.date, _dateFmt.format(doc.date)),
+                  if (isQuotation && doc.validUntil != null)
+                    _infoRow(l10n.validUntil, _dateFmt.format(doc.validUntil!)),
+                  if (isReceipt && doc.paymentMethod != null)
+                    _infoRow(
+                      l10n.paymentMethod,
+                      _methodLabel(doc.paymentMethod!, l10n),
+                    ),
                 ],
               ),
-            )),
-          ],
+            ),
 
-          // ── Items card ───────────────────────────────────
-          if (_items.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _card(Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.items,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                ..._items.map((item) {
-                  final hasUnit = item.saleUnit != null && item.saleUnit!.trim().isNotEmpty;
-                  final qtyText = hasUnit
-                      ? '${_fmt.format(item.quantity)} ${item.saleUnit}'
-                      : _fmt.format(item.quantity);
-                  final tierText = item.pricingCategory == 'wholesale'
-                      ? l10n.itemTierWholesaleBadge
-                      : (item.pricingCategory == 'retail' ? l10n.itemTierRetailBadge : null);
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(item.description),
-                              if (tierText != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Text(
-                                    tierText,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: item.pricingCategory == 'wholesale'
-                                          ? Theme.of(context).colorScheme.primary
-                                          : Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '$qtyText × ${_fmt.format(item.price)}',
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-              ],
-            )),
-          ],
-
-          // ── Totals card ──────────────────────────────────
-          const SizedBox(height: 10),
-          _card(Column(
-            children: [
-              _totalRow(l10n.subtotal, doc.subtotal, sym),
-              if (doc.discount > 0) _totalRow(l10n.discount, doc.discount, sym),
-              if (doc.taxAmount > 0)
-                _totalRow('${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})', doc.taxAmount, sym),
-              _totalRow(l10n.total, doc.total, sym, bold: true),
-              if (isInvoice) ...[
-                _totalRow(l10n.paid, doc.paid, sym),
-                _totalRow(
-                  l10n.remaining,
-                  doc.remaining,
-                  sym,
-                  bold: true,
-                  color: doc.remaining > 0
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).colorScheme.secondary,
-                ),
-              ],
-              if (isReceipt)
-                _totalRow(l10n.amount, doc.total, sym, bold: true),
+            // ── Relationship cards ───────────────────────────
+            if (isReceipt && _relatedDocument != null) ...[
+              const SizedBox(height: 10),
+              _relatedCard(
+                icon: Icons.receipt_long_rounded,
+                label: l10n.relatedInvoice,
+                docNumber: _relatedDocument!.documentNumber,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        DocumentDetailScreen(documentId: _relatedDocument!.id!),
+                  ),
+                ).then((_) => _load()),
+              ),
             ],
-          )),
+            if (isInvoice &&
+                _relatedDocument != null &&
+                _relatedDocument!.type == 'quotation') ...[
+              const SizedBox(height: 10),
+              _relatedCard(
+                icon: Icons.request_quote_rounded,
+                label: l10n.sourceQuotation,
+                docNumber: _relatedDocument!.documentNumber,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        DocumentDetailScreen(documentId: _relatedDocument!.id!),
+                  ),
+                ).then((_) => _load()),
+              ),
+            ],
+            if (isQuotation && _convertedInvoice != null) ...[
+              const SizedBox(height: 10),
+              _relatedCard(
+                icon: Icons.receipt_long_rounded,
+                label: l10n.convertedToInvoice,
+                docNumber: _convertedInvoice!.documentNumber,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DocumentDetailScreen(
+                      documentId: _convertedInvoice!.id!,
+                    ),
+                  ),
+                ).then((_) => _load()),
+              ),
+            ],
 
-          // ── Notes card ───────────────────────────────────
-          if (doc.notes != null && doc.notes!.isNotEmpty && !isReceipt) ...[
-            const SizedBox(height: 10),
-            _card(Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.notes,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Text(doc.notes!),
-              ],
-            )),
-          ],
-
-          // ── Payment history card ──────────────────────────
-          if (isInvoice) ...[
-            const SizedBox(height: 10),
-            _card(Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.paymentHistory,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                if (_payments.isEmpty)
-                  Text(l10n.noPaymentsYet,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontSize: 13))
-                else
-                  ..._payments.map((p) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(_dateFmt.format(p.date),
-                                  style: TextStyle(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontSize: 12)),
-                              if (p.paymentMethod != null)
-                                Text(
-                                  _methodLabel(p.paymentMethod!, l10n),
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                ),
-                            ],
+            // ── Customer / Supplier card ────────────────────
+            if (_contact != null || doc.recipientName != null) ...[
+              const SizedBox(height: 10),
+              _card(
+                InkWell(
+                  onTap: _contact != null
+                      ? () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                CustomerDetailScreen(contact: _contact!),
                           ),
-                        ),
-                        Row(
-                          children: [
-                            Text(
-                              '${_fmt.format(p.amount)} $sym',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            if (p.receiptDocumentId != null) ...[
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => DocumentDetailScreen(
-                                      documentId: p.receiptDocumentId!,
-                                    ),
-                                  ),
-                                ).then((_) => _load()),
-                                child: Icon(
-                                  Icons.receipt_outlined,
-                                  size: 18,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
+                        ).then((_) => _load())
+                      : null,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              doc.type == 'purchase'
+                                  ? l10n.supplier
+                                  : l10n.customerOrParty,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
                               ),
-                            ],
+                            ),
+                          ),
+                          if (_contact != null)
+                            Icon(
+                              AppIcons.chevronForward(context),
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _contact?.name ?? doc.recipientName ?? '',
+                        style: const TextStyle(fontSize: 15),
+                      ),
+                      if ((_contact?.phone ?? doc.recipientPhone) != null)
+                        _infoRow(
+                          l10n.phone,
+                          _contact?.phone ?? doc.recipientPhone!,
+                        ),
+                      if (_contact?.address != null &&
+                          _contact!.address!.isNotEmpty)
+                        _infoRow(l10n.address, _contact!.address!),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
+            // ── Items card ───────────────────────────────────
+            if (_items.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _card(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.items,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ..._items.map((item) {
+                      final hasUnit =
+                          item.saleUnit != null &&
+                          item.saleUnit!.trim().isNotEmpty;
+                      final qtyText = hasUnit
+                          ? '${_fmt.format(item.quantity)} ${item.saleUnit}'
+                          : _fmt.format(item.quantity);
+                      final tierText = item.pricingCategory == 'wholesale'
+                          ? l10n.itemTierWholesaleBadge
+                          : (item.pricingCategory == 'retail'
+                                ? l10n.itemTierRetailBadge
+                                : null);
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(item.description),
+                                  if (tierText != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        tierText,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color:
+                                              item.pricingCategory ==
+                                                  'wholesale'
+                                              ? Theme.of(
+                                                  context,
+                                                ).colorScheme.primary
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '${_fmt.format(item.total)} $sym',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                Text(
+                                  '$qtyText × ${_fmt.format(item.price)}',
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
-                      ],
-                    ),
-                  )),
-              ],
-            )),
-          ],
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
 
-          if (fab != null) const SizedBox(height: 80),
-        ],
-      )),
+            // ── Totals card ──────────────────────────────────
+            const SizedBox(height: 10),
+            _card(
+              Column(
+                children: [
+                  _totalRow(l10n.subtotal, doc.subtotal, sym),
+                  if (doc.discount > 0)
+                    _totalRow(l10n.discount, doc.discount, sym),
+                  if (doc.taxAmount > 0)
+                    _totalRow(
+                      '${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})',
+                      doc.taxAmount,
+                      sym,
+                    ),
+                  _totalRow(l10n.total, doc.total, sym, bold: true),
+                  if (isInvoice || isPurchase) ...[
+                    _totalRow(l10n.paid, doc.paid, sym),
+                    _totalRow(
+                      l10n.remaining,
+                      doc.remaining,
+                      sym,
+                      bold: true,
+                      color: doc.remaining > 0
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.secondary,
+                    ),
+                  ],
+                  if (isReceipt)
+                    _totalRow(l10n.amount, doc.total, sym, bold: true),
+                ],
+              ),
+            ),
+
+            // ── Notes card ───────────────────────────────────
+            if (doc.notes != null && doc.notes!.isNotEmpty && !isReceipt) ...[
+              const SizedBox(height: 10),
+              _card(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.notes,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(doc.notes!),
+                  ],
+                ),
+              ),
+            ],
+
+            // ── Payment history card ──────────────────────────
+            if (isInvoice || isPurchase) ...[
+              const SizedBox(height: 10),
+              _card(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.paymentHistory,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_payments.isEmpty)
+                      Text(
+                        l10n.noPaymentsYet,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                      )
+                    else
+                      ..._payments.map(
+                        (p) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _dateFmt.format(p.date),
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    if (p.paymentMethod != null)
+                                      Text(
+                                        _methodLabel(p.paymentMethod!, l10n),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${_fmt.format(p.amount)} $sym',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (p.receiptDocumentId != null) ...[
+                                    const SizedBox(width: 8),
+                                    GestureDetector(
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => DocumentDetailScreen(
+                                            documentId: p.receiptDocumentId!,
+                                          ),
+                                        ),
+                                      ).then((_) => _load()),
+                                      child: Icon(
+                                        Icons.receipt_outlined,
+                                        size: 18,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+
+            if (fab != null) const SizedBox(height: 80),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1009,12 +1255,19 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.account_balance_wallet_outlined, size: 20, color: cs.primary),
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 20,
+                color: cs.primary,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   l10n.cancelledDocumentMoneyCardTitle,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               TextButton(
@@ -1035,10 +1288,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
             children: [
               Text(
                 l10n.refundStatusLabel,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1124,13 +1374,23 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: DefaultTextStyle.of(context).style.copyWith(fontSize: 14),
+                    style: DefaultTextStyle.of(
+                      context,
+                    ).style.copyWith(fontSize: 14),
                     children: [
-                      TextSpan(text: '$label: ',
-                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                      TextSpan(text: docNumber,
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, color: colors.primary)),
+                      TextSpan(
+                        text: '$label: ',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      TextSpan(
+                        text: docNumber,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: colors.primary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1161,8 +1421,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     );
   }
 
-  Widget _totalRow(String label, double value, String sym,
-      {bool bold = false, Color? color}) {
+  Widget _totalRow(
+    String label,
+    double value,
+    String sym, {
+    bool bold = false,
+    Color? color,
+  }) {
     final style = TextStyle(
       fontWeight: bold ? FontWeight.bold : FontWeight.normal,
       color: color ?? Theme.of(context).colorScheme.onSurface,
@@ -1181,13 +1446,13 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
   String _typeLabel(String type, AppLocalizations l10n) {
     return switch (type) {
-      'invoice'         => l10n.invoice,
-      'purchase'        => l10n.purchase,
-      'quotation'       => l10n.quotation,
+      'invoice' => l10n.invoice,
+      'purchase' => l10n.purchase,
+      'quotation' => l10n.quotation,
       'payment_receipt' => l10n.paymentReceipt,
       'expense_voucher' => l10n.expenseVoucher,
-      'custom'          => l10n.customDocument,
-      _                 => type,
+      'custom' => l10n.customDocument,
+      _ => type,
     };
   }
 }

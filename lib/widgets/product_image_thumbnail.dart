@@ -46,14 +46,21 @@ class ProductImageThumbnail extends StatelessWidget {
     Widget content;
 
     if (hasCandidate) {
-      // C1: Prefer thumbnail file when available, fallback to main file
+      // Prefer thumbnail file when available on disk, fallback to main file
       final thumbPath = ImageStorageService.thumbPathFor(imagePath);
       final mainPath = ImageStorageService.resolve(imagePath);
 
-      // C1 & C4: Check path nullness/resolution only, zero sync IO in build
-      final targetPath = thumbPath ?? mainPath;
+      final String? targetPath;
+      if (thumbPath != null && File(thumbPath).existsSync()) {
+        targetPath = thumbPath;
+      } else if (mainPath != null && File(mainPath).existsSync()) {
+        targetPath = mainPath;
+      } else {
+        targetPath = null;
+      }
+
       if (mainPath != null) {
-        // A2: Lazy backfill in background without blocking UI
+        // Lazy backfill in background without blocking UI
         ImageStorageService.requestThumbnailBackfill(imagePath);
       }
 
@@ -77,7 +84,22 @@ class ProductImageThumbnail extends StatelessWidget {
               child: child,
             );
           },
-          errorBuilder: (_, __, ___) => _iconFallback(cs),
+          errorBuilder: (_, __, ___) {
+            if (targetPath == thumbPath &&
+                mainPath != null &&
+                File(mainPath).existsSync()) {
+              return Image.file(
+                File(mainPath),
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.low,
+                cacheWidth: (size * pixelRatio).round(),
+                errorBuilder: (_, __, ___) => _iconFallback(cs),
+              );
+            }
+            return _iconFallback(cs);
+          },
         );
       } else {
         content = _iconFallback(cs);

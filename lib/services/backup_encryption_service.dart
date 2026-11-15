@@ -6,13 +6,25 @@ import 'package:cryptography/dart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
-/// Exceptions thrown during backup encryption and decryption.
-abstract class BackupEncryptionException implements Exception {
+/// Base class for all backup-related exceptions.
+abstract class BackupException implements Exception {
   final String message;
-  const BackupEncryptionException(this.message);
+  const BackupException(this.message);
 
   @override
   String toString() => message;
+}
+
+/// Exceptions thrown during backup encryption and decryption.
+abstract class BackupEncryptionException extends BackupException {
+  const BackupEncryptionException(super.message);
+}
+
+/// Thrown when persistent safety backup key retrieval, storage, or verification fails.
+class BackupKeyPersistenceException extends BackupEncryptionException {
+  const BackupKeyPersistenceException([
+    super.message = 'Failed to access or persist durable safety backup key',
+  ]);
 }
 
 /// Thrown when the password is incorrect or authentication tag verification fails.
@@ -42,6 +54,18 @@ class BackupCorruptedFileException extends BackupEncryptionException {
 class BackupEncryptionVerificationException extends BackupEncryptionException {
   const BackupEncryptionVerificationException([
     super.message = 'Backup encryption verification failed',
+  ]);
+}
+
+/// Thrown when backup structure or JSON schema is invalid or unrecognized.
+class BackupInvalidFormatException extends BackupException {
+  const BackupInvalidFormatException([super.message = 'Invalid backup format']);
+}
+
+/// Thrown when SQLite database integrity check fails post-restore.
+class BackupIntegrityException extends BackupException {
+  const BackupIntegrityException([
+    super.message = 'Database integrity check failed post-restore',
   ]);
 }
 
@@ -332,11 +356,7 @@ class BackupEncryptionService {
 
     output.setRange(0, headerLength, header);
     output.setRange(headerLength, headerLength + cipherText.length, cipherText);
-    output.setRange(
-      headerLength + cipherText.length,
-      totalLength,
-      macBytes,
-    );
+    output.setRange(headerLength + cipherText.length, totalLength, macBytes);
 
     // 6. In-memory round-trip self-check BEFORE returning
     try {
@@ -430,11 +450,7 @@ class BackupEncryptionService {
 
     // Decrypt and authenticate passing header as AAD
     final aesGcm = AesGcm.with256bits();
-    final secretBox = SecretBox(
-      cipherText,
-      nonce: nonce,
-      mac: Mac(macBytes),
-    );
+    final secretBox = SecretBox(cipherText, nonce: nonce, mac: Mac(macBytes));
 
     List<int> clearTextBytes;
     try {

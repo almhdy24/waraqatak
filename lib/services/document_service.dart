@@ -566,6 +566,7 @@ class DocumentService {
     String? paymentMethod,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.paymentsRecord);
     if (amount <= 0) {
       throw ArgumentError('Payment amount must be greater than zero');
     }
@@ -595,6 +596,7 @@ class DocumentService {
     String? paymentMethod,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.paymentsRecord);
     if (amount <= 0) {
       throw ArgumentError('Payment amount must be greater than zero');
     }
@@ -678,6 +680,24 @@ class DocumentService {
 
   /// Promotes a draft document to issued, deducting stock for invoices.
   static Future<void> issueDocument(int documentId, {bool? strictStock}) async {
+    final doc = await DatabaseHelper.instance.getDocumentById(documentId);
+    if (doc == null) throw StateError('Document not found');
+    if (doc.status != DocumentStatus.draft) {
+      throw StateError('Document is not a draft');
+    }
+
+    if (doc.type == 'purchase') {
+      AccessGuard.require(PermissionRegistry.purchasesCreate);
+    } else if (doc.type == 'payment_receipt' || doc.type == 'expense_voucher') {
+      AccessGuard.require(PermissionRegistry.vouchersCreate);
+    } else {
+      AccessGuard.require(PermissionRegistry.salesCreate);
+    }
+
+    if (doc.paid > 0 && (doc.type == 'invoice' || doc.type == 'purchase')) {
+      AccessGuard.require(PermissionRegistry.paymentsRecord);
+    }
+
     final bool enforceStock;
     if (strictStock != null) {
       enforceStock = strictStock;

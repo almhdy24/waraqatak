@@ -17,6 +17,7 @@ import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
+import '../widgets/app_date_picker.dart';
 
 enum VoucherType { paymentReceipt, expenseVoucher }
 
@@ -32,6 +33,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _reasonController = TextEditingController();
+  DateTime _voucherDate = DateTime.now();
   String _paymentMethod = 'cash';
   List<PaymentMethod> _enabledMethods = [];
   Business? _business;
@@ -168,7 +170,7 @@ class _VoucherScreenState extends State<VoucherScreen> {
     final hasSelectedContact = _selectedContact?.id != null;
     final hasTypedNameOnly = !hasSelectedContact && rawName.isNotEmpty;
 
-    if (hasTypedNameOnly) {
+    if (hasTypedNameOnly && isReceipt) {
       AppSnackBar.show(
         context,
         l10n.voucherNoOpenDocuments,
@@ -237,14 +239,22 @@ class _VoucherScreenState extends State<VoucherScreen> {
           );
         }
       } else {
+        String effectiveNotes = _reasonController.text.trim();
+        if (hasTypedNameOnly) {
+          final prefix = '${l10n.paidTo}: $rawName';
+          effectiveNotes = effectiveNotes.isEmpty
+              ? prefix
+              : '$prefix\n$effectiveNotes';
+        }
         final docId = await DocumentService.createDocument(
           type: isReceipt ? 'payment_receipt' : 'expense_voucher',
           business: _business!,
           contact: null,
+          recipientName: hasTypedNameOnly ? rawName : null,
           items: const [],
           paid: amount,
-          notes: _reasonController.text.trim(),
-          date: DateTime.now(),
+          notes: effectiveNotes,
+          date: _voucherDate,
           paymentMethod: _paymentMethod,
         );
         if (!mounted) return;
@@ -309,15 +319,39 @@ class _VoucherScreenState extends State<VoucherScreen> {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: isZero
-                  ? Theme.of(context).colorScheme.error
-                  : Theme.of(context).colorScheme.primary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: isZero
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+              if (!isZero)
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: const Icon(Icons.flash_on_rounded, size: 16),
+                  label: Text(l10n.voucherPayFullBalance),
+                  onPressed: () {
+                    setState(() {
+                      _amountController.text = NumberInput.formatForInput(
+                        balance,
+                        maxDecimals: 4,
+                      );
+                    });
+                  },
+                ),
+            ],
           ),
           if (isZero) ...[
             const SizedBox(height: 4),
@@ -380,6 +414,39 @@ class _VoucherScreenState extends State<VoucherScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      AppDesignTokens.cardRadius,
+                    ),
+                    side: BorderSide(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.calendar_today_outlined),
+                    title: Text(l10n.date),
+                    subtitle: Text(
+                      DateFormat('dd/MM/yyyy').format(_voucherDate),
+                    ),
+                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    onTap: () async {
+                      final picked = await AppDatePicker.show(
+                        context: context,
+                        initialDate: _voucherDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                      );
+                      if (picked != null) {
+                        setState(() => _voucherDate = picked);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -605,6 +672,57 @@ class _VoucherScreenState extends State<VoucherScreen> {
                             fontSize: 16,
                           ),
                         ),
+                        if (!isReceipt) ...[
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              ActionChip(
+                                label: Text(l10n.expenseRent),
+                                onPressed: () => setState(
+                                  () =>
+                                      _reasonController.text = l10n.expenseRent,
+                                ),
+                              ),
+                              ActionChip(
+                                label: Text(l10n.expenseElectricity),
+                                onPressed: () => setState(
+                                  () => _reasonController.text =
+                                      l10n.expenseElectricity,
+                                ),
+                              ),
+                              ActionChip(
+                                label: Text(l10n.expenseSalaries),
+                                onPressed: () => setState(
+                                  () => _reasonController.text =
+                                      l10n.expenseSalaries,
+                                ),
+                              ),
+                              ActionChip(
+                                label: Text(l10n.expenseTransport),
+                                onPressed: () => setState(
+                                  () => _reasonController.text =
+                                      l10n.expenseTransport,
+                                ),
+                              ),
+                              ActionChip(
+                                label: Text(l10n.expenseMaintenance),
+                                onPressed: () => setState(
+                                  () => _reasonController.text =
+                                      l10n.expenseMaintenance,
+                                ),
+                              ),
+                              ActionChip(
+                                label: Text(l10n.expenseOther),
+                                onPressed: () => setState(
+                                  () => _reasonController.text =
+                                      l10n.expenseOther,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _reasonController,

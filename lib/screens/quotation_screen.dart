@@ -18,6 +18,7 @@ import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
+import '../utils/date_format_utils.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
 
@@ -57,6 +58,8 @@ class _QuotationScreenState extends State<QuotationScreen> {
     super.initState();
     _loadBusiness();
     _addItem();
+    _discountController.addListener(() => setState(() {}));
+    _validityController.addListener(() => setState(() {}));
   }
 
   @override
@@ -502,17 +505,31 @@ class _QuotationScreenState extends State<QuotationScreen> {
                       : null,
                 ),
                 const SizedBox(height: 20),
-                AmountField(
-                  controller: _validityController,
-                  maxDecimals: 0,
-                  showMultipliers: false,
-                  decoration: InputDecoration(
-                    labelText: l10n.validityDays,
-                    prefixIcon: const Icon(
-                      Icons.calendar_month_outlined,
-                      size: 20,
-                    ),
-                  ),
+                Builder(
+                  builder: (ctx) {
+                    final days =
+                        NumberInput.parse(_validityController.text)?.toInt() ??
+                        7;
+                    final expiryDate = DateTime.now().add(Duration(days: days));
+                    return AmountField(
+                      controller: _validityController,
+                      maxDecimals: 0,
+                      showMultipliers: false,
+                      decoration: InputDecoration(
+                        labelText: l10n.validityDays,
+                        helperText:
+                            '${l10n.validUntil}: ${AppDateUtils.formatDate(expiryDate)}',
+                        helperStyle: TextStyle(
+                          color: Theme.of(ctx).colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.calendar_month_outlined,
+                          size: 20,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -523,29 +540,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
                   ),
                   maxLines: 2,
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton(
-                    onPressed: _saving ? null : () => _save(),
-                    child: _saving
-                        ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          )
-                        : Text(l10n.save),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _saving ? null : () => _save(isDraft: true),
-                  child: Text(l10n.saveDraft),
-                ),
+                const SizedBox(height: 32),
               ],
             ),
           ),

@@ -13,6 +13,7 @@ import '../services/feature_access.dart';
 import '../services/reference_pricing_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
+import '../utils/number_input.dart';
 import '../utils/reference_pricing_math.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
@@ -178,7 +179,9 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
 
   Future<void> _editRate(ExchangeRate entry) async {
     final l10n = AppLocalizations.of(context);
-    final rateCtrl = TextEditingController(text: entry.rate.toString());
+    final rateCtrl = TextEditingController(
+      text: NumberInput.formatForInput(entry.rate, maxDecimals: 6),
+    );
 
     final newRateStr = await showDialog<String>(
       context: context,

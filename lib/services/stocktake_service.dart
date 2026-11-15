@@ -1,5 +1,7 @@
 import '../database/database_helper.dart';
 import '../models/stocktake.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'analytics/analytics_service.dart';
 
 class StocktakeReviewItem {
@@ -48,6 +50,7 @@ class StocktakeService {
     String? categoryFilter,
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.stocktakeManage);
     return DatabaseHelper.instance.createStocktakeSession(
       categoryFilter: categoryFilter,
       notes: notes,
@@ -71,6 +74,13 @@ class StocktakeService {
     double? countedQuantity, {
     String? notes,
   }) async {
+    AccessGuard.require(PermissionRegistry.stocktakeManage);
+    if (countedQuantity != null &&
+        (countedQuantity.isNaN ||
+            countedQuantity.isInfinite ||
+            countedQuantity < 0)) {
+      throw ArgumentError('Invalid counted quantity: $countedQuantity');
+    }
     return DatabaseHelper.instance.updateStocktakeItemCount(
       itemId,
       countedQuantity,
@@ -89,6 +99,27 @@ class StocktakeService {
     final items = await DatabaseHelper.instance.getStocktakeItems(sessionId);
     final db = await DatabaseHelper.instance.database;
 
+    // Batch-fetch current stock balances and costs to eliminate N+1 queries
+    final productIds = items.map((it) => it.productId).toSet().toList();
+    final productMap = <int, Map<String, dynamic>>{};
+    const chunkSize = 500;
+    for (var i = 0; i < productIds.length; i += chunkSize) {
+      final chunk = productIds.sublist(
+        i,
+        i + chunkSize > productIds.length ? productIds.length : i + chunkSize,
+      );
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final rows = await db.query(
+        'products',
+        columns: ['id', 'stock_quantity', 'average_cost', 'purchase_price'],
+        where: 'id IN ($placeholders)',
+        whereArgs: chunk,
+      );
+      for (final r in rows) {
+        productMap[r['id'] as int] = r;
+      }
+    }
+
     final reviewItems = <StocktakeReviewItem>[];
     int counted = 0;
     int uncounted = 0;
@@ -98,21 +129,26 @@ class StocktakeService {
     double netValuation = 0.0;
 
     for (final it in items) {
-      // Query latest current stock from products
-      final prodRows = await db.query(
-        'products',
-        columns: ['stock_quantity', 'average_cost'],
-        where: 'id = ?',
-        whereArgs: [it.productId],
-        limit: 1,
-      );
-
-      final liveStock = prodRows.isNotEmpty
-          ? (prodRows.first['stock_quantity'] as num?)?.toDouble() ?? 0.0
+      final prod = productMap[it.productId];
+      final liveStock = prod != null
+          ? (prod['stock_quantity'] as num?)?.toDouble() ?? 0.0
           : it.baselineQuantity;
-      final avgCost = prodRows.isNotEmpty
-          ? (prodRows.first['average_cost'] as num?)?.toDouble()
-          : it.unitCost;
+
+      // Robust cost fallback: average_cost -> purchase_price -> item unitCost
+      double? effectiveCost = prod != null
+          ? (prod['average_cost'] as num?)?.toDouble()
+          : null;
+      if (effectiveCost == null || effectiveCost <= 0) {
+        effectiveCost = prod != null
+            ? (prod['purchase_price'] as num?)?.toDouble()
+            : null;
+      }
+      if (effectiveCost == null || effectiveCost <= 0) {
+        effectiveCost = it.unitCost;
+      }
+      if (effectiveCost != null && effectiveCost <= 0) {
+        effectiveCost = null;
+      }
 
       final hasInterim = (liveStock - it.baselineQuantity).abs() > 0.0001;
       if (hasInterim) anyInterimMovement = true;
@@ -131,7 +167,9 @@ class StocktakeService {
       } else {
         counted++;
         final variance = it.countedQuantity! - liveStock;
-        final valImpact = avgCost != null ? (variance * avgCost) : null;
+        final valImpact = effectiveCost != null
+            ? (variance * effectiveCost)
+            : null;
         if (valImpact != null) netValuation += valImpact;
 
         if (variance.abs() < 0.0001) {
@@ -172,6 +210,8 @@ class StocktakeService {
     if (!confirmed) {
       throw ArgumentError('Confirmation is required to finalize stocktake');
     }
+    AccessGuard.require(PermissionRegistry.stocktakeFinalize);
+    AccessGuard.require(PermissionRegistry.stockAdjust);
     final result = await DatabaseHelper.instance.finalizeStocktakeSession(
       sessionId,
       notes: notes,
@@ -183,6 +223,7 @@ class StocktakeService {
   }
 
   Future<void> cancelSession(int sessionId) async {
+    AccessGuard.require(PermissionRegistry.stocktakeManage);
     return DatabaseHelper.instance.cancelStocktakeSession(sessionId);
   }
 }

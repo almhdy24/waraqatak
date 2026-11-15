@@ -408,6 +408,24 @@ class AppLocalizations {
     'قد تستغرق هذه العملية دقيقة على الهواتف القديمة',
     'This operation may take up to a minute on older phones',
   );
+  String get backupInvalidFormat =>
+      _t('صيغة ملف النسخة الاحتياطية غير صالحة', 'Invalid backup file format');
+  String get backupIntegrityFailed => _t(
+    'فشل التحقق من سلامة البيانات بعد الاسترجاع وتمت استعادة النسخة السابقة',
+    'Database integrity check failed post-restore; previous state was restored',
+  );
+  String get backupUnencryptedCloudConfirm => _t(
+    'تحميل نسخة غير مشفرة إلى السحابة سيحفظ بيانات أعمالك على Google Drive دون حماية بكلمة مرور. هل ترغب في المتابعة بدون تشفير؟',
+    'Uploading an unencrypted backup to the cloud will store your business data on Google Drive without password protection. Do you wish to continue without encryption?',
+  );
+  String get backupReminder7Days => _t(
+    'تذكير: لم يتم إنشاء نسخة احتياطية منذ 7 أيام أو أكثر. يُوصى بأخذ نسخة لحماية بياناتك.',
+    'Reminder: No backup has been created for 7 days or more. It is recommended to create a backup to protect your data.',
+  );
+  String lastBackupDate(String date) =>
+      _t('آخر نسخة احتياطية: $date', 'Latest backup: $date');
+  String get noBackupYet =>
+      _t('لم يتم إنشاء أي نسخة احتياطية بعد', 'No backup created yet');
   String get continueAction => _t('متابعة', 'Continue');
 
   String get fromYourPhone => _t('من هاتفك', 'From your phone');
@@ -536,6 +554,9 @@ class AppLocalizations {
 
   // ========== DRAFT / ISSUE ==========
   String get saveDraft => _t('حفظ كمسودة', 'Save as Draft');
+  String get deleteDraft => _t('حذف المسودة', 'Delete Draft');
+  String get deleteDraftMessage =>
+      _t('هل تريد حذف هذه المسودة؟', 'Delete this draft?');
   String get issueDocument => _t('إصدار المستند', 'Issue Document');
   String get issueInvoice => _t('إصدار الفاتورة', 'Issue Invoice');
 
@@ -690,6 +711,11 @@ class AppLocalizations {
   String get adjustmentDelta =>
       _t('كمية التعديل (+ أو -)', 'Adjustment Delta (+ or -)');
   String get noMovements => _t('لا توجد حركات مخزون', 'No stock movements');
+  String get documentCancellation => _t('إلغاء مستند', 'Document Cancellation');
+  String showingMovementsLimit(int count) => _t(
+    'يتم عرض أول $count حركة فقط.',
+    'Showing first $count movements only.',
+  );
   String get lowStockAlert => _t('تنبيه مخزون منخفض', 'Low Stock Alert');
   String get insufficientStockFor =>
       _t('مخزون غير كافٍ لـ', 'Insufficient stock for');
@@ -1735,6 +1761,11 @@ class AppLocalizations {
   String get averageCost => _t('متوسط التكلفة', 'Average Cost');
   String get cogs => _t('تكلفة البضاعة المباعة', 'Cost of Goods Sold');
   String get profitMargin => _t('هامش الربح', 'Profit Margin');
+  String get profit => _t('الربح', 'Profit');
+  String get warningSalePriceBelowCost => _t(
+    'تحذير: سعر البيع أقل من سعر الشراء (التكلفة)',
+    'Warning: Selling price is below purchase cost',
+  );
   String get costIncomplete => _t('تكلفة غير مكتملة', 'Incomplete Cost');
   String get costReliable => _t('تكلفة موثوقة', 'Reliable Cost');
   String get reconcileCost => _t('تسوية التكلفة', 'Reconcile Cost');
@@ -2286,6 +2317,16 @@ class AppLocalizations {
     'لم يتم رفع أي نسخ احتياطية إلى Google Drive بعد.',
     'No backups have been uploaded to Google Drive yet.',
   );
+  String get googleDriveRetentionNote => _t(
+    'يحتفظ التطبيق بأحدث 7 نسخ سحابية تلقائياً، وتُحذف النسخ الأقدم لتوفير المساحة.',
+    'The app automatically keeps the latest 7 cloud backups; older backups are pruned.',
+  );
+  String get googleDriveMobileDataWarning => _t(
+    'قد يستهلك رفع أو تنزيل النسخ الاحتياطية بيانات الهاتف المحمول.',
+    'Uploading or downloading backups may consume mobile data.',
+  );
+  String get googleDriveEncryptedBadge => _t('مشفرة', 'Encrypted');
+  String get googleDriveUnencryptedBadge => _t('غير مشفرة', 'Unencrypted');
 
   // ========== ADVANCED REPAIR SYSTEM ==========
   String get repairSystemTitle =>
@@ -3947,6 +3988,20 @@ class AppLocalizations {
     'يجب اختيار عميل للمبيعات الآجلة.',
     'Customer selection is required for credit sales.',
   );
+  String get supplierRequiredForCreditPurchase => _t(
+    'يجب اختيار مورد للمشتريات الآجلة.',
+    'Supplier selection is required for credit purchases.',
+  );
+
+  // ========== EXPENSE CATEGORIES ==========
+  String get expenseRent => _t('إيجار', 'Rent');
+  String get expenseElectricity => _t('كهرباء', 'Electricity');
+  String get expenseSalaries => _t('رواتب', 'Salaries');
+  String get expenseTransport => _t('مواصلات', 'Transportation');
+  String get expenseMaintenance => _t('صيانة', 'Maintenance');
+  String get expenseOther => _t('أخرى', 'Other');
+
+  // ========== POS HOLD / RECALL & FILTERS ==========
   String get posHoldCart => _t('تعليق الفاتورة', 'Hold Cart');
   String get posHeldCarts => _t('الفواتير المعلقة', 'Held Carts');
   String get posCartHeldSuccess =>

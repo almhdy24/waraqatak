@@ -10,8 +10,11 @@ import '../services/backup_encryption_service.dart';
 import '../services/google_drive_backup_service.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/access/screen_access_gate.dart';
+import '../widgets/access/sensitive_action_gate.dart';
+import '../widgets/app_design_tokens.dart';
 import '../widgets/backup_password_dialog.dart';
 import '../widgets/responsive.dart';
+import 'main_shell.dart';
 
 class GoogleDriveBackupScreen extends StatefulWidget {
   const GoogleDriveBackupScreen({super.key});
@@ -133,7 +136,8 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     } catch (e) {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
-      final isCancellation = e is GoogleSignInException &&
+      final isCancellation =
+          e is GoogleSignInException &&
           e.code == GoogleSignInExceptionCode.canceled;
       setState(() {
         _statusMessage = isCancellation
@@ -182,9 +186,36 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     if (password == null || !mounted) return;
 
     final l10n = AppLocalizations.of(context);
+    if (password.isEmpty) {
+      final proceedUnencrypted = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: AppDesignTokens.br16),
+          title: Text(l10n.backupUnencryptedTitle),
+          content: Text(l10n.backupUnencryptedCloudConfirm),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.cancel),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(ctx).colorScheme.error,
+                foregroundColor: Theme.of(ctx).colorScheme.onError,
+              ),
+              child: Text(l10n.continueAction),
+            ),
+          ],
+        ),
+      );
+      if (proceedUnencrypted != true || !mounted) return;
+    }
+
     setState(() {
       _loading = true;
-      _statusMessage = l10n.googleDriveUploading;
+      _statusMessage =
+          '${l10n.googleDriveUploading}\n${l10n.googleDriveMobileDataWarning}';
       _isError = false;
     });
 
@@ -229,8 +260,70 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.googleDriveConfirmRestoreTitle),
-        content: Text(
-          '${l10n.googleDriveConfirmRestoreBody}\n\n${backup.name} (${backup.formattedSize})',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.googleDriveConfirmRestoreBody),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(ctx).colorScheme.outlineVariant,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    backup.name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${backup.formattedSize} • ${_dateFmt.format(backup.modifiedTime.toLocal())}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        backup.encrypted
+                            ? Icons.lock_outline
+                            : Icons.lock_open_outlined,
+                        size: 14,
+                        color: backup.encrypted
+                            ? Colors.green.shade700
+                            : Colors.amber.shade800,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        backup.encrypted
+                            ? l10n.googleDriveEncryptedBadge
+                            : l10n.googleDriveUnencryptedBadge,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: backup.encrypted
+                              ? Colors.green.shade700
+                              : Colors.amber.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -251,6 +344,14 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
 
     if (confirmed != true || !mounted) return;
 
+    final authed = await SensitiveActionGate.reauthenticate(
+      context,
+      title: l10n.confirmRestore,
+      message: l10n.restoreWarning,
+      requireOwner: true,
+    );
+    if (!authed || !mounted) return;
+
     setState(() {
       _loading = true;
       _statusMessage = l10n.googleDriveDownloading;
@@ -268,13 +369,11 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     });
 
     try {
-      final success = await _service.restoreFromDrive(
-        backup,
-        context: context,
-      );
+      final success = await _service.restoreFromDrive(backup, context: context);
       _slowTimer?.cancel();
       if (!mounted) return;
       if (success) {
+        MainShell.triggerGlobalRefresh();
         AppSnackBar.show(
           context,
           l10n.operationSuccessful,
@@ -308,20 +407,25 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
         _statusMessage = l10n.backupCorrupted;
         _isError = true;
       });
+    } on BackupInvalidFormatException {
+      _slowTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = l10n.backupInvalidFormat;
+        _isError = true;
+      });
+    } on BackupIntegrityException {
+      _slowTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = l10n.backupIntegrityFailed;
+        _isError = true;
+      });
     } catch (e) {
       _slowTimer?.cancel();
       if (!mounted) return;
-      final errStr = e.toString().toLowerCase();
-      final isFormatOrCorrupt = errStr.contains('backup') ||
-          errStr.contains('format') ||
-          errStr.contains('corrupt') ||
-          errStr.contains('invalid') ||
-          errStr.contains('table') ||
-          errStr.contains('version');
       setState(() {
-        _statusMessage = isFormatOrCorrupt
-            ? l10n.googleDriveErrorRestoreCorrupt
-            : _mapErrorToMessage(e, l10n);
+        _statusMessage = _mapErrorToMessage(e, l10n);
         _isError = true;
       });
     } finally {
@@ -391,345 +495,464 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     return ScreenAccessGate(
       screenType: GoogleDriveBackupScreen,
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.googleDriveTitle),
-        centerTitle: true,
-        actions: [
-          if (_signedIn)
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: l10n.googleDriveRefresh,
-              onPressed: _loading ? null : _fetchBackups,
-            ),
-        ],
-      ),
-      body: ResponsiveCenter(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Status and Account Card
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: cs.outlineVariant),
+        appBar: AppBar(
+          title: Text(l10n.googleDriveTitle),
+          centerTitle: true,
+          actions: [
+            if (_signedIn)
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: l10n.googleDriveRefresh,
+                onPressed: _loading ? null : _fetchBackups,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          backgroundColor: _signedIn
-                              ? cs.primaryContainer
-                              : cs.surfaceContainerHighest,
-                          child: Icon(
-                            _signedIn
-                                ? Icons.cloud_done_outlined
-                                : Icons.cloud_queue_outlined,
-                            color: _signedIn
-                                ? cs.onPrimaryContainer
-                                : cs.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _signedIn
-                                          ? (_userEmail ?? l10n.googleDriveTitle)
-                                          : l10n.googleDriveTitle,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _signedIn
-                                          ? Colors.green.withValues(alpha: 0.12)
-                                          : cs.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: _signedIn
-                                            ? Colors.green.withValues(alpha: 0.4)
-                                            : cs.outlineVariant,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _signedIn
-                                          ? l10n.googleDriveAccountConnected
-                                          : l10n.googleDriveAccountDisconnected,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: _signedIn
-                                            ? Colors.green.shade800
-                                            : cs.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                l10n.googleDriveSubtitle,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: cs.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    if (!_signedIn)
-                      FilledButton.icon(
-                        onPressed: _loading ? null : _signIn,
-                        icon: const Icon(Icons.login),
-                        label: Text(l10n.googleDriveConnect),
-                      )
-                    else
-                      LayoutBuilder(
-                        builder: (ctx, constraints) {
-                          final isNarrow = constraints.maxWidth < 340;
-                          if (isNarrow) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                FilledButton.icon(
-                                  onPressed: _loading ? null : _uploadBackup,
-                                  icon: const Icon(Icons.cloud_upload_outlined),
-                                  label: Text(l10n.googleDriveUploadNow),
-                                ),
-                                const SizedBox(height: 8),
-                                OutlinedButton.icon(
-                                  onPressed: _loading ? null : _signOut,
-                                  icon: const Icon(Icons.logout),
-                                  label: Text(l10n.googleDriveDisconnect),
-                                ),
-                              ],
-                            );
-                          }
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: _loading ? null : _signOut,
-                                  icon: const Icon(Icons.logout),
-                                  label: Text(l10n.googleDriveDisconnect),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: FilledButton.icon(
-                                  onPressed: _loading ? null : _uploadBackup,
-                                  icon: const Icon(Icons.cloud_upload_outlined),
-                                  label: Text(l10n.googleDriveUploadNow),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            if (_statusMessage != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _isError ? cs.errorContainer : cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _statusMessage!,
-                  style: TextStyle(
-                    color: _isError
-                        ? cs.onErrorContainer
-                        : cs.onPrimaryContainer,
-                    fontSize: 13,
+          ],
+        ),
+        body: ResponsiveCenter(
+          child: RefreshIndicator(
+            onRefresh: _fetchBackups,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: LinearProgressIndicator(),
                   ),
-                ),
-              ),
-            ],
 
-            const SizedBox(height: 20),
-
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_signedIn) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                child: Text(
-                  l10n.googleDriveBackupListHeader,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              if (_backups.isEmpty)
+                // Status and Account Card
                 Card(
                   elevation: 0,
-                  color: cs.surfaceContainerLowest,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: BorderSide(color: cs.outlineVariant),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 32,
-                    ),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.cloud_off_outlined,
-                            size: 48,
-                            color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            l10n.googleDriveNoBackups,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            l10n.googleDriveEmptySubtitle,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: cs.onSurfaceVariant,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else
-                ..._backups.map(
-                  (b) => Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: cs.outlineVariant),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      child: LayoutBuilder(
-                        builder: (ctx, constraints) {
-                          final isCompact = constraints.maxWidth < 340;
-                          return Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: cs.surfaceContainerHighest,
-                                child: Icon(
-                                  Icons.inventory_2_outlined,
-                                  color: cs.primary,
-                                  size: 18,
-                                ),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: _signedIn
+                                  ? cs.primaryContainer
+                                  : cs.surfaceContainerHighest,
+                              child: Icon(
+                                _signedIn
+                                    ? Icons.cloud_done_outlined
+                                    : Icons.cloud_queue_outlined,
+                                color: _signedIn
+                                    ? cs.onPrimaryContainer
+                                    : cs.onSurfaceVariant,
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Directionality(
-                                      textDirection: TextDirection.ltr,
-                                      child: Text(
-                                        b.name,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13.5,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _signedIn
+                                              ? (_userEmail ??
+                                                    l10n.googleDriveTitle)
+                                              : l10n.googleDriveTitle,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _signedIn
+                                              ? Colors.green.withValues(
+                                                  alpha: 0.12,
+                                                )
+                                              : cs.surfaceContainerHighest,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: _signedIn
+                                                ? Colors.green.withValues(
+                                                    alpha: 0.4,
+                                                  )
+                                                : cs.outlineVariant,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _signedIn
+                                              ? l10n.googleDriveAccountConnected
+                                              : l10n.googleDriveAccountDisconnected,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: _signedIn
+                                                ? Colors.green.shade800
+                                                : cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    l10n.googleDriveSubtitle,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: cs.onSurfaceVariant,
                                     ),
-                                    const SizedBox(height: 3),
-                                    Directionality(
-                                      textDirection: TextDirection.ltr,
-                                      child: Text(
-                                        '${b.formattedSize} • ${_dateFmt.format(b.modifiedTime.toLocal())}',
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          color: cs.onSurfaceVariant,
-                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (!_signedIn)
+                          FilledButton.icon(
+                            onPressed: _loading ? null : _signIn,
+                            icon: const Icon(Icons.login),
+                            label: Text(l10n.googleDriveConnect),
+                          )
+                        else
+                          LayoutBuilder(
+                            builder: (ctx, constraints) {
+                              final isNarrow = constraints.maxWidth < 340;
+                              if (isNarrow) {
+                                return Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    FilledButton.icon(
+                                      onPressed: _loading
+                                          ? null
+                                          : _uploadBackup,
+                                      icon: const Icon(
+                                        Icons.cloud_upload_outlined,
                                       ),
+                                      label: Text(l10n.googleDriveUploadNow),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: _loading ? null : _signOut,
+                                      icon: const Icon(Icons.logout),
+                                      label: Text(l10n.googleDriveDisconnect),
                                     ),
                                   ],
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              FilledButton.tonal(
-                                onPressed: _loading ? null : () => _confirmAndRestore(b),
-                                style: FilledButton.styleFrom(
-                                  visualDensity: VisualDensity.compact,
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: isCompact ? 8 : 12,
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: _loading ? null : _signOut,
+                                      icon: const Icon(Icons.logout),
+                                      label: Text(l10n.googleDriveDisconnect),
+                                    ),
                                   ),
-                                ),
-                                child: Text(l10n.restore),
-                              ),
-                              const SizedBox(width: 2),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.delete_outline,
-                                  color: cs.error,
-                                  size: 20,
-                                ),
-                                visualDensity: VisualDensity.compact,
-                                tooltip: l10n.googleDriveDeleteBackup,
-                                onPressed: _loading ? null : () => _confirmAndDelete(b),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: FilledButton.icon(
+                                      onPressed: _loading
+                                          ? null
+                                          : _uploadBackup,
+                                      icon: const Icon(
+                                        Icons.cloud_upload_outlined,
+                                      ),
+                                      label: Text(l10n.googleDriveUploadNow),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                      ],
                     ),
                   ),
                 ),
-            ],
-          ],
+
+                if (_statusMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _isError ? cs.errorContainer : cs.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _statusMessage!,
+                      style: TextStyle(
+                        color: _isError
+                            ? cs.onErrorContainer
+                            : cs.onPrimaryContainer,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+
+                if (_loading && _backups.isEmpty && _signedIn)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_signedIn) ...[
+                  // Retention policy explanation banner
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cs.outlineVariant),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 18, color: cs.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            l10n.googleDriveRetentionNote,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      l10n.googleDriveBackupListHeader,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  if (_backups.isEmpty)
+                    Card(
+                      elevation: 0,
+                      color: cs.surfaceContainerLowest,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: cs.outlineVariant),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 32,
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.cloud_off_outlined,
+                                size: 48,
+                                color: cs.onSurfaceVariant.withValues(
+                                  alpha: 0.6,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                l10n.googleDriveNoBackups,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                l10n.googleDriveEmptySubtitle,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    ..._backups.map(
+                      (b) => Card(
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: cs.outlineVariant),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: LayoutBuilder(
+                            builder: (ctx, constraints) {
+                              final isCompact = constraints.maxWidth < 340;
+                              return Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: cs.surfaceContainerHighest,
+                                    child: Icon(
+                                      Icons.inventory_2_outlined,
+                                      color: cs.primary,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Directionality(
+                                          textDirection: TextDirection.ltr,
+                                          child: Text(
+                                            b.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13.5,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Row(
+                                          children: [
+                                            Directionality(
+                                              textDirection: TextDirection.ltr,
+                                              child: Text(
+                                                '${b.formattedSize} • ${_dateFmt.format(b.modifiedTime.toLocal())}',
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  color: cs.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 5,
+                                                    vertical: 1,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: b.encrypted
+                                                    ? Colors.green.withValues(
+                                                        alpha: 0.12,
+                                                      )
+                                                    : Colors.amber.withValues(
+                                                        alpha: 0.12,
+                                                      ),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                b.encrypted
+                                                    ? l10n.googleDriveEncryptedBadge
+                                                    : l10n.googleDriveUnencryptedBadge,
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: b.encrypted
+                                                      ? Colors.green.shade800
+                                                      : Colors.amber.shade900,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  FilledButton.tonal(
+                                    onPressed: _loading
+                                        ? null
+                                        : () => _confirmAndRestore(b),
+                                    style: FilledButton.styleFrom(
+                                      visualDensity: VisualDensity.compact,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isCompact ? 8 : 12,
+                                      ),
+                                    ),
+                                    child: Text(l10n.restore),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  PopupMenuButton<String>(
+                                    icon: Icon(
+                                      Icons.more_vert,
+                                      color: cs.onSurfaceVariant,
+                                      size: 20,
+                                    ),
+                                    enabled: !_loading,
+                                    onSelected: (val) {
+                                      if (val == 'delete') {
+                                        _confirmAndDelete(b);
+                                      }
+                                    },
+                                    itemBuilder: (ctx) => [
+                                      PopupMenuItem(
+                                        value: 'delete',
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.delete_outline,
+                                              color: cs.error,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              l10n.googleDriveDeleteBackup,
+                                              style: TextStyle(
+                                                color: cs.error,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
-    ),
     );
   }
 }

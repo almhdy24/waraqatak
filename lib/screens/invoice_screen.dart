@@ -5,6 +5,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
+import '../models/payment_method.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../services/document_service.dart';
@@ -31,11 +32,17 @@ class InvoiceScreen extends StatefulWidget {
   State<InvoiceScreen> createState() => _InvoiceScreenState();
 }
 
+enum InvoicePaymentOption { fullyPaid, partial, credit }
+
 class _InvoiceScreenState extends State<InvoiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final _discountController = TextEditingController(text: '0');
   final _paidController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
+
+  InvoicePaymentOption _paymentOption = InvoicePaymentOption.fullyPaid;
+  String _paymentMethod = 'cash';
+  List<PaymentMethod> _enabledMethods = [];
 
   final List<TextEditingController> _descriptionControllers = [];
   final List<TextEditingController> _quantityControllers = [];
@@ -90,6 +97,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final profiles = await DatabaseHelper.instance.getTaxProfiles(
       activeOnly: true,
     );
+    final methods = await DatabaseHelper.instance.getEnabledPaymentMethods();
     if (!mounted) return;
     setState(() {
       _business = business;
@@ -97,6 +105,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         for (final p in profiles)
           if (p.id != null) p.id!: p.rate,
       };
+      _enabledMethods = methods;
+      if (methods.isNotEmpty && !methods.any((m) => m.key == _paymentMethod)) {
+        _paymentMethod = methods.first.key;
+      }
     });
   }
 
@@ -182,6 +194,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   }
 
   double get _paid {
+    if (_paymentOption == InvoicePaymentOption.fullyPaid) {
+      return _totals.total;
+    }
+    if (_paymentOption == InvoicePaymentOption.credit) {
+      return 0.0;
+    }
     return NumberInput.parse(_paidController.text) ?? 0;
   }
 
@@ -228,11 +246,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   Future<void> _save({bool isDraft = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_business == null) return;
+    final l10n = AppLocalizations.of(context);
 
     if (_descriptionControllers.isEmpty) {
       AppSnackBar.show(
         context,
-        AppLocalizations.of(context).pleaseAddItems,
+        l10n.pleaseAddItems,
         severity: AppSnackBarSeverity.warning,
       );
       return;
@@ -256,6 +275,28 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         }
       }
 
+      final totals = _totals;
+      final decimalDigits = Currency.decimalDigitsForCode(
+        _business?.currencyCode,
+      );
+      final remaining = MoneyUtils.calculateRemaining(
+        totals.total,
+        _paid,
+        decimalDigits,
+      );
+
+      if (!mounted) return;
+      if ((_paymentOption == InvoicePaymentOption.credit || remaining > 0) &&
+          _selectedContact == null &&
+          !isDraft) {
+        AppSnackBar.show(
+          context,
+          l10n.customerRequiredForCreditSale,
+          severity: AppSnackBarSeverity.warning,
+        );
+        return;
+      }
+
       final docId = await DocumentService.createDocument(
         type: 'invoice',
         business: _business!,
@@ -266,6 +307,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         notes: _notesController.text,
         date: DateTime.now(),
         isDraft: isDraft,
+        paymentMethod: _paymentOption == InvoicePaymentOption.credit
+            ? null
+            : _paymentMethod,
       );
 
       if (!mounted) return;
@@ -307,6 +351,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     final subtotal = totals.subtotal;
     final discount = _discount;
     final total = totals.total;
+
     final paid = _paid;
     final decimalDigits = Currency.decimalDigitsForCode(
       _business?.currencyCode,
@@ -536,6 +581,58 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                SegmentedButton<InvoicePaymentOption>(
+                  segments: [
+                    ButtonSegment(
+                      value: InvoicePaymentOption.fullyPaid,
+                      label: Text(
+                        l10n.paidStatus,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      icon: const Icon(Icons.check_circle_outline, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: InvoicePaymentOption.partial,
+                      label: Text(
+                        l10n.statusPartiallyPaid,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      icon: const Icon(Icons.pie_chart_outline, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: InvoicePaymentOption.credit,
+                      label: Text(
+                        l10n.unpaidStatus,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      icon: const Icon(Icons.hourglass_empty_rounded, size: 16),
+                    ),
+                  ],
+                  selected: {_paymentOption},
+                  onSelectionChanged: (set) {
+                    final opt = set.first;
+                    setState(() {
+                      _paymentOption = opt;
+                      if (opt == InvoicePaymentOption.fullyPaid) {
+                        _paidController.text = NumberInput.formatForInput(
+                          _totals.total,
+                          maxDecimals: 4,
+                        );
+                      } else if (opt == InvoicePaymentOption.credit) {
+                        _paidController.text = '0';
+                      } else if (opt == InvoicePaymentOption.partial) {
+                        if (_paidController.text == '0' ||
+                            _paidController.text.isEmpty) {
+                          _paidController.text = NumberInput.formatForInput(
+                            _totals.total,
+                            maxDecimals: 4,
+                          );
+                        }
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
                 AmountField(
                   controller: _discountController,
                   decoration: InputDecoration(
@@ -554,26 +651,52 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                     }
                   },
                 ),
-                const SizedBox(height: 12),
-                AmountField(
-                  controller: _paidController,
-                  decoration: InputDecoration(
-                    labelText: l10n.paid,
-                    prefixIcon: const Icon(Icons.payments_outlined, size: 20),
-                    helperText: l10n.remainingBalanceHelper,
+                if (_paymentOption == InvoicePaymentOption.partial) ...[
+                  const SizedBox(height: 12),
+                  AmountField(
+                    controller: _paidController,
+                    decoration: InputDecoration(
+                      labelText: l10n.paid,
+                      prefixIcon: const Icon(Icons.payments_outlined, size: 20),
+                      helperText: l10n.remainingBalanceHelper,
+                    ),
+                    textInputAction: TextInputAction.next,
+                    maxDecimals: 4,
+                    showMultipliers: true,
+                    onTap: () {
+                      if (_paidController.text.isNotEmpty) {
+                        _paidController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: _paidController.text.length,
+                        );
+                      }
+                    },
                   ),
-                  textInputAction: TextInputAction.next,
-                  maxDecimals: 4,
-                  showMultipliers: true,
-                  onTap: () {
-                    if (_paidController.text.isNotEmpty) {
-                      _paidController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: _paidController.text.length,
+                ],
+                if (_paymentOption != InvoicePaymentOption.credit &&
+                    _enabledMethods.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.paymentMethod,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _enabledMethods.map((m) {
+                      return ChoiceChip(
+                        label: Text(m.label(l10n.langCode)),
+                        selected: _paymentMethod == m.key,
+                        onSelected: (_) =>
+                            setState(() => _paymentMethod = m.key),
                       );
-                    }
-                  },
-                ),
+                    }).toList(),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _notesController,

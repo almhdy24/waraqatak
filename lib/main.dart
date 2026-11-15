@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +15,7 @@ import 'services/accounting/journal_backfill_service.dart';
 import 'services/analytics/analytics_service.dart';
 import 'services/app_diagnostics_service.dart';
 import 'services/app_update_service.dart';
+import 'services/backup_service.dart';
 import 'services/image_storage_service.dart';
 import 'services/license_service.dart';
 import 'screens/splash_screen.dart';
@@ -56,6 +58,7 @@ Future<void> main() async {
       };
 
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      FlutterCryptography.enable();
       final prefs = await SharedPreferences.getInstance();
       final lastRecordedDbVersion = prefs.getInt('last_app_db_version');
       await DatabaseHelper.instance.database;
@@ -84,6 +87,15 @@ Future<void> main() async {
           return 0;
         }),
       );
+      unawaited(
+        BackupService.cleanupTemporaryBackups().catchError((e, st) {
+          developer.log(
+            'Startup backup cleanup error',
+            error: e,
+            stackTrace: st,
+          );
+        }),
+      );
     },
     (error, stack) {
       developer.log('Uncaught zone error', error: error, stackTrace: stack);
@@ -92,11 +104,7 @@ Future<void> main() async {
         stack,
         operation: 'unhandled_exception',
       );
-      AnalyticsService.instance.recordError(
-        error,
-        stack,
-        'zoned_guarded',
-      );
+      AnalyticsService.instance.recordError(error, stack, 'zoned_guarded');
     },
   );
 }

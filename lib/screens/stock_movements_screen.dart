@@ -22,6 +22,11 @@ import 'document_detail_screen.dart';
 import 'inventory_screen.dart';
 import 'reports/report_date_filter.dart';
 
+class _ProductPickerResult {
+  final Product? product;
+  const _ProductPickerResult(this.product);
+}
+
 class StockMovementsScreen extends StatefulWidget {
   final Product? initialProduct;
   const StockMovementsScreen({super.key, this.initialProduct});
@@ -38,6 +43,8 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
   String _selectedType = 'all';
   String? _error;
   bool _loading = true;
+  int _currentLimit = 300;
+  int _querySeq = 0;
 
   static final _dateFmt = DateFormat('dd/MM/yyyy HH:mm');
   static final _numFmt = NumberFormat('#,##0.##');
@@ -46,37 +53,167 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
   void initState() {
     super.initState();
     _selectedProduct = widget.initialProduct;
-    _load();
+    _load(reloadProducts: true);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool reloadProducts = false}) async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final futures = await Future.wait([
-        DatabaseHelper.instance.getAllProducts(type: 'product'),
-        BusinessReportingService.instance.getStockMovementsReport(
-          productId: _selectedProduct?.id,
-          type: _selectedType,
-          from: _range.from,
-          to: _range.to,
-          limit: 300,
-        ),
-      ]);
-      if (!mounted) return;
+      if (reloadProducts || _allProducts.isEmpty) {
+        final products = await DatabaseHelper.instance.getAllProducts(
+          type: 'product',
+        );
+        if (seq != _querySeq || !mounted) return;
+        _allProducts = products;
+        if (_selectedProduct != null &&
+            !_allProducts.any((p) => p.id == _selectedProduct!.id)) {
+          _selectedProduct = null;
+        }
+      }
+
+      final summary = await BusinessReportingService.instance
+          .getStockMovementsReport(
+            productId: _selectedProduct?.id,
+            type: _selectedType,
+            from: _range.from,
+            to: _range.to,
+            limit: _currentLimit,
+          );
+      if (seq != _querySeq || !mounted) return;
       setState(() {
-        _allProducts = futures[0] as List<Product>;
-        _reportSummary = futures[1] as StockMovementReportSummary;
+        _reportSummary = summary;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (seq != _querySeq || !mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _openProductPicker(AppLocalizations l10n) async {
+    if (_allProducts.isEmpty) {
+      await _load(reloadProducts: true);
+    }
+    if (!mounted) return;
+
+    final result = await showModalBottomSheet<_ProductPickerResult?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final filtered = query.trim().isEmpty
+                ? _allProducts
+                : _allProducts.where((p) {
+                    final q = query.trim().toLowerCase();
+                    return p.name.toLowerCase().contains(q) ||
+                        (p.code?.toLowerCase().contains(q) ?? false) ||
+                        (p.barcode?.toLowerCase().contains(q) ?? false);
+                  }).toList();
+
+            final cs = Theme.of(ctx).colorScheme;
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (_, scrollController) {
+                return Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: cs.outlineVariant,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                      child: TextField(
+                        autofocus: false,
+                        decoration: InputDecoration(
+                          hintText: l10n.searchProductsHint,
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: cs.surfaceContainerLow,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onChanged: (val) => setModalState(() => query = val),
+                      ),
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.apps, color: cs.primary),
+                      title: Text(
+                        l10n.allProducts,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      selected: _selectedProduct == null,
+                      onTap: () =>
+                          Navigator.pop(ctx, const _ProductPickerResult(null)),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView.separated(
+                        controller: scrollController,
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final p = filtered[i];
+                          final isSelected = p.id == _selectedProduct?.id;
+                          return ListTile(
+                            title: Text(
+                              p.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: p.barcode != null && p.barcode!.isNotEmpty
+                                ? Text(
+                                    p.barcode!,
+                                    style: const TextStyle(fontSize: 11),
+                                  )
+                                : null,
+                            selected: isSelected,
+                            onTap: () =>
+                                Navigator.pop(ctx, _ProductPickerResult(p)),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _selectedProduct = result.product;
+        _currentLimit = 300;
+      });
+      _load();
     }
   }
 
@@ -90,11 +227,23 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       PdfReportColumn(title: l10n.date, flex: 1.4),
       PdfReportColumn(title: l10n.product, flex: 2.2),
       PdfReportColumn(title: l10n.type, flex: 1.2),
-      PdfReportColumn(title: l10n.quantity, flex: 1.2, align: pw.TextAlign.right),
+      PdfReportColumn(
+        title: l10n.quantity,
+        flex: 1.2,
+        align: pw.TextAlign.right,
+      ),
       if (_selectedProduct != null)
-        PdfReportColumn(title: l10n.balanceAfter, flex: 1.2, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.balanceAfter,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
       if (canViewCost)
-        PdfReportColumn(title: l10n.averageCost, flex: 1.2, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.averageCost,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
     ];
 
     final rows = _reportSummary!.items.map((item) {
@@ -102,7 +251,9 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       final sign = m.quantity > 0 ? '+' : (m.quantity < 0 ? '-' : '');
       final costStr = m.unitCost != null
           ? _numFmt.format(m.unitCost)
-          : (m.costStatus == StockMovement.costStatusUnknown ? '—' : l10n.costReconstructed);
+          : (m.costStatus == StockMovement.costStatusUnknown
+                ? '—'
+                : l10n.costReconstructed);
 
       return [
         _dateFmt.format(m.date),
@@ -110,14 +261,24 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
         _typeLabel(m.type, l10n),
         '$sign${FormatUtils.formatQuantity(m.quantity.abs())}',
         if (_selectedProduct != null)
-          item.balanceAfter != null ? FormatUtils.formatQuantity(item.balanceAfter!) : '—',
+          item.balanceAfter != null
+              ? FormatUtils.formatQuantity(item.balanceAfter!)
+              : '—',
         if (canViewCost) costStr,
       ];
     }).toList();
 
+    String subtitle = _selectedProduct != null
+        ? _selectedProduct!.name
+        : l10n.allProducts;
+    if (_reportSummary!.items.length >= _currentLimit) {
+      subtitle +=
+          ' (${l10n.showingMovementsLimit(_reportSummary!.items.length)})';
+    }
+
     final data = PdfReportData(
       title: l10n.stockMovementsReport,
-      subtitle: _selectedProduct != null ? _selectedProduct!.name : l10n.allProducts,
+      subtitle: subtitle,
       dateRange: _range.label(l10n),
       warningNotice: _reportSummary!.unvaluedMovementsCount > 0
           ? l10n.unknownCostNotice
@@ -125,11 +286,13 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       summaryCards: [
         PdfReportSummaryCard(
           label: l10n.totalStockIn,
-          value: '+${FormatUtils.formatQuantity(_reportSummary!.totalInQuantity)}',
+          value:
+              '+${FormatUtils.formatQuantity(_reportSummary!.totalInQuantity)}',
         ),
         PdfReportSummaryCard(
           label: l10n.totalStockOut,
-          value: '-${FormatUtils.formatQuantity(_reportSummary!.totalOutQuantity)}',
+          value:
+              '-${FormatUtils.formatQuantity(_reportSummary!.totalOutQuantity)}',
         ),
       ],
       columns: columns,
@@ -153,31 +316,31 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
   }
 
   String _typeLabel(String type, AppLocalizations l10n) => switch (type) {
-        StockMovement.typeOpening => l10n.openingStock,
-        StockMovement.typePurchase => l10n.purchase,
-        StockMovement.typeSale => l10n.invoice,
-        StockMovement.typeAdjustment => l10n.stockAdjustment,
-        StockMovement.typeCancellation => l10n.cancelledCount,
-        _ => type,
-      };
+    StockMovement.typeOpening => l10n.openingStock,
+    StockMovement.typePurchase => l10n.purchase,
+    StockMovement.typeSale => l10n.salesPeriod,
+    StockMovement.typeAdjustment => l10n.stockAdjustment,
+    StockMovement.typeCancellation => l10n.documentCancellation,
+    _ => type,
+  };
 
   Color _typeColor(String type, ColorScheme cs) => switch (type) {
-        StockMovement.typeOpening => Colors.blue,
-        StockMovement.typePurchase => Colors.teal,
-        StockMovement.typeSale => Colors.indigo,
-        StockMovement.typeAdjustment => Colors.amber.shade800,
-        StockMovement.typeCancellation => cs.error,
-        _ => Colors.grey,
-      };
+    StockMovement.typeOpening => Colors.blue,
+    StockMovement.typePurchase => Colors.teal,
+    StockMovement.typeSale => Colors.indigo,
+    StockMovement.typeAdjustment => Colors.amber.shade800,
+    StockMovement.typeCancellation => cs.error,
+    _ => Colors.grey,
+  };
 
   IconData _typeIcon(String type) => switch (type) {
-        StockMovement.typeOpening => Icons.flag_outlined,
-        StockMovement.typePurchase => Icons.shopping_cart_outlined,
-        StockMovement.typeSale => Icons.receipt_long_outlined,
-        StockMovement.typeAdjustment => Icons.tune,
-        StockMovement.typeCancellation => Icons.cancel_outlined,
-        _ => Icons.swap_horiz,
-      };
+    StockMovement.typeOpening => Icons.flag_outlined,
+    StockMovement.typePurchase => Icons.shopping_cart_outlined,
+    StockMovement.typeSale => Icons.receipt_long_outlined,
+    StockMovement.typeAdjustment => Icons.tune,
+    StockMovement.typeCancellation => Icons.cancel_outlined,
+    _ => Icons.swap_horiz,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -195,14 +358,17 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
               tooltip: l10n.stockAdjustment,
               onPressed: () async {
                 final changed = await InventoryScreen.showAdjustDialog(
-                    context, _selectedProduct!);
+                  context,
+                  _selectedProduct!,
+                );
                 if (changed) _load();
               },
             ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined),
             tooltip: l10n.printOrShareReport,
-            onPressed: _reportSummary != null && _reportSummary!.items.isNotEmpty
+            onPressed:
+                _reportSummary != null && _reportSummary!.items.isNotEmpty
                 ? _exportPdf
                 : null,
           ),
@@ -215,53 +381,78 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
             ReportDateFilter(
               range: _range,
               onChanged: (r) {
-                setState(() => _range = r);
+                setState(() {
+                  _range = r;
+                  _currentLimit = 300;
+                });
                 _load();
               },
             ),
 
-            // Product Filter Bar
+            // Searchable Product Filter Bar
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _openProductPicker(l10n),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: cs.outlineVariant),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.inventory_2_outlined,
+                        size: 20,
+                        color: cs.primary,
                       ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int?>(
-                          value: _selectedProduct?.id,
-                          isExpanded: true,
-                          hint: Text(l10n.allProducts, style: const TextStyle(fontSize: 13)),
-                          items: [
-                            DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text(l10n.allProducts, style: const TextStyle(fontSize: 13)),
-                            ),
-                            ..._allProducts.map((p) => DropdownMenuItem<int?>(
-                                  value: p.id,
-                                  child: Text(p.name,
-                                      style: const TextStyle(fontSize: 13),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
-                                )),
-                          ],
-                          onChanged: (id) {
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _selectedProduct?.name ?? l10n.allProducts,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: _selectedProduct != null
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _selectedProduct != null
+                                ? cs.onSurface
+                                : cs.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (_selectedProduct != null)
+                        InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {
                             setState(() {
-                              _selectedProduct =
-                                  id == null ? null : _allProducts.where((p) => p.id == id).firstOrNull;
+                              _selectedProduct = null;
+                              _currentLimit = 300;
                             });
                             _load();
                           },
-                        ),
-                      ),
-                    ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.close,
+                              size: 18,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        )
+                      else
+                        Icon(Icons.arrow_drop_down, color: cs.onSurfaceVariant),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
 
@@ -276,13 +467,16 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                   const SizedBox(width: 6),
                   _typeChip(l10n.purchase, StockMovement.typePurchase),
                   const SizedBox(width: 6),
-                  _typeChip(l10n.invoice, StockMovement.typeSale),
+                  _typeChip(l10n.salesPeriod, StockMovement.typeSale),
                   const SizedBox(width: 6),
                   _typeChip(l10n.stockAdjustment, StockMovement.typeAdjustment),
                   const SizedBox(width: 6),
                   _typeChip(l10n.openingStock, StockMovement.typeOpening),
                   const SizedBox(width: 6),
-                  _typeChip(l10n.cancelledCount, StockMovement.typeCancellation),
+                  _typeChip(
+                    l10n.documentCancellation,
+                    StockMovement.typeCancellation,
+                  ),
                 ],
               ),
             ),
@@ -291,33 +485,51 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
             // Summary Bar
             if (_reportSummary != null && !_loading)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.green.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+                          border: Border.all(
+                            color: Colors.green.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.arrow_downward, size: 16, color: Colors.green),
+                            const Icon(
+                              Icons.arrow_downward,
+                              size: 16,
+                              color: Colors.green,
+                            ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(l10n.totalStockIn,
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                  Text(
+                                    l10n.totalStockIn,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
                                   Text(
                                     '+${FormatUtils.formatQuantity(_reportSummary!.totalInQuantity)}',
                                     style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -329,28 +541,43 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 12,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.red.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                          border: Border.all(
+                            color: Colors.red.withValues(alpha: 0.2),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.arrow_upward, size: 16, color: Colors.red),
+                            const Icon(
+                              Icons.arrow_upward,
+                              size: 16,
+                              color: Colors.red,
+                            ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(l10n.totalStockOut,
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                  Text(
+                                    l10n.totalStockOut,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
                                   Text(
                                     '-${FormatUtils.formatQuantity(_reportSummary!.totalOutQuantity)}',
                                     style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.red),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -365,9 +592,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
             const SizedBox(height: 4),
 
             // Movements List
-            Expanded(
-              child: _buildBody(context, l10n, cs),
-            ),
+            Expanded(child: _buildBody(context, l10n, cs)),
           ],
         ),
       ),
@@ -381,21 +606,25 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       selected: selected,
       visualDensity: VisualDensity.compact,
       onSelected: (_) {
-        setState(() => _selectedType = type);
+        setState(() {
+          _selectedType = type;
+          _currentLimit = 300;
+        });
         _load();
       },
     );
   }
 
-  Widget _buildBody(BuildContext context, AppLocalizations l10n, ColorScheme cs) {
+  Widget _buildBody(
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme cs,
+  ) {
     if (_loading) {
       return const AppLoadingView();
     }
     if (_error != null) {
-      return AppErrorState(
-        message: _error!,
-        onRetry: _load,
-      );
+      return AppErrorState(message: _error!, onRetry: _load);
     }
     final items = _reportSummary?.items ?? [];
     if (items.isEmpty) {
@@ -405,21 +634,57 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       );
     }
 
+    final isAtLimit = items.length >= _currentLimit;
+    final totalCount = items.length + (isAtLimit ? 1 : 0);
+
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(reloadProducts: true),
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 40),
-        itemCount: items.length,
+        itemCount: totalCount,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, i) {
+          if (i == items.length && isAtLimit) {
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.showingMovementsLimit(_currentLimit),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () {
+                      setState(() => _currentLimit += 300);
+                      _load();
+                    },
+                    child: Text(l10n.loadMore),
+                  ),
+                ],
+              ),
+            );
+          }
+
           final item = items[i];
           final m = item.movement;
           final isIn = m.quantity > 0;
           final color = isIn
               ? AppDesignTokens.semanticSuccess(context)
               : (m.quantity < 0
-                  ? AppDesignTokens.semanticDanger(context)
-                  : cs.onSurfaceVariant);
+                    ? AppDesignTokens.semanticDanger(context)
+                    : cs.onSurfaceVariant);
           final typeBadgeColor = _typeColor(m.type, cs);
           final sign = isIn ? '+' : (m.quantity < 0 ? '-' : '');
 
@@ -448,7 +713,11 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                         color: typeBadgeColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(_typeIcon(m.type), color: typeBadgeColor, size: 20),
+                      child: Icon(
+                        _typeIcon(m.type),
+                        color: typeBadgeColor,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 12),
 
@@ -463,14 +732,18 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                 child: Text(
                                   m.productName ?? '—',
                                   style: const TextStyle(
-                                      fontWeight: FontWeight.bold, fontSize: 14),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: typeBadgeColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(6),
@@ -489,13 +762,20 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                           const SizedBox(height: 4),
                           Text(
                             _dateFmt.format(m.date),
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: cs.onSurfaceVariant,
+                            ),
                           ),
-                          if (m.notes != null && m.notes!.trim().isNotEmpty) ...[
+                          if (m.notes != null &&
+                              m.notes!.trim().isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Text(
                               m.notes!,
-                              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                           ],
                           if (m.referenceDocumentId != null) ...[
@@ -508,7 +788,9 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                   textDirection: TextDirection.ltr,
                                   child: Text(
                                     m.referenceDocumentNumber != null &&
-                                            m.referenceDocumentNumber!.isNotEmpty
+                                            m
+                                                .referenceDocumentNumber!
+                                                .isNotEmpty
                                         ? '${_docTypeLabel(m.referenceDocumentType, l10n)}: ${m.referenceDocumentNumber}'
                                         : '#${m.referenceDocumentId}',
                                     style: TextStyle(
@@ -532,7 +814,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                   '${l10n.balanceBefore}: ',
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.blueGrey.shade700,
+                                    color: cs.onSurfaceVariant,
                                   ),
                                 ),
                                 Directionality(
@@ -541,7 +823,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                     '${FormatUtils.formatQuantity(item.balanceBefore!)} → ${FormatUtils.formatQuantity(item.balanceAfter!)}',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Colors.blueGrey.shade700,
+                                      color: cs.primary,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -550,26 +832,40 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                             ),
                           ],
                           // Cost info
-                          if (AccessGuard.can(PermissionRegistry.stockViewCost)) ...[
+                          if (AccessGuard.can(
+                            PermissionRegistry.stockViewCost,
+                          )) ...[
                             if (m.unitCost != null &&
-                                m.costStatus == StockMovement.costStatusKnown) ...[
+                                m.costStatus ==
+                                    StockMovement.costStatusKnown) ...[
                               const SizedBox(height: 4),
                               Text(
                                 '${l10n.averageCost}: ${_numFmt.format(m.unitCost)} | ${l10n.totalCost}: ${_numFmt.format(m.totalCost)}',
-                                style: TextStyle(fontSize: 11, color: Colors.teal.shade700),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.teal.shade700,
+                                ),
                               ),
-                            ] else if (m.costStatus == StockMovement.costStatusReconstructed) ...[
+                            ] else if (m.costStatus ==
+                                StockMovement.costStatusReconstructed) ...[
                               const SizedBox(height: 4),
                               Text(
                                 l10n.costReconstructed,
-                                style: const TextStyle(fontSize: 10, color: Colors.blue),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.blue,
+                                ),
                               ),
-                            ] else if (m.costStatus == StockMovement.costStatusUnknown &&
+                            ] else if (m.costStatus ==
+                                    StockMovement.costStatusUnknown &&
                                 m.type != StockMovement.typeOpening) ...[
                               const SizedBox(height: 4),
                               Text(
                                 l10n.costUnknown,
-                                style: const TextStyle(fontSize: 10, color: Colors.orange),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.orange,
+                                ),
                               ),
                             ],
                           ],

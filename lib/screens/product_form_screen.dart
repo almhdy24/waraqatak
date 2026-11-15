@@ -57,6 +57,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _minStockController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
   final _categoryController = TextEditingController();
+  late final FocusNode _categoryFocusNode;
 
   String _type = Product.typeProduct;
   bool _taxable = true;
@@ -81,6 +82,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   @override
   void initState() {
     super.initState();
+    _categoryFocusNode = FocusNode();
     _applyStoredPricingToControllers();
     final p = widget.product;
     if (p != null) {
@@ -278,6 +280,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _barcodeController.dispose();
     _unitController.dispose();
     _categoryController.dispose();
+    _categoryFocusNode.dispose();
     _salePriceController.dispose();
     _wholesalePriceController.dispose();
     _wholesaleMinQuantityController.dispose();
@@ -1058,6 +1061,106 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _imagePath != p.imagePath;
   }
 
+  Widget _buildProfitMarginIndicator(
+    BuildContext context,
+    AppLocalizations l10n,
+    ColorScheme cs,
+  ) {
+    if (!AccessGuard.can(PermissionRegistry.productsViewCost)) {
+      return const SizedBox.shrink();
+    }
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        _salePriceController,
+        _purchasePriceController,
+      ]),
+      builder: (context, _) {
+        final sale = NumberInput.parse(_salePriceController.text) ?? 0.0;
+        final cost = NumberInput.parse(_purchasePriceController.text) ?? 0.0;
+
+        if (sale <= 0 && cost <= 0) return const SizedBox.shrink();
+
+        final isBelowCost = cost > 0 && sale > 0 && sale < cost;
+        final profit = sale - cost;
+        final marginPercent = sale > 0 ? (profit / sale) * 100 : 0.0;
+        final formattedProfit = FormatUtils.formatQuantity(profit);
+        final formattedMargin =
+            '${marginPercent >= 0 ? '+' : ''}${marginPercent.toStringAsFixed(1)}%';
+
+        final Color bgColor = isBelowCost
+            ? cs.errorContainer
+            : (profit > 0
+                  ? cs.primaryContainer.withValues(alpha: 0.5)
+                  : cs.surfaceContainerHighest);
+        final Color textColor = isBelowCost
+            ? cs.onErrorContainer
+            : (profit > 0 ? cs.onPrimaryContainer : cs.onSurfaceVariant);
+
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isBelowCost ? cs.error : Colors.transparent,
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isBelowCost) ...[
+                Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 16,
+                      color: cs.error,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        l10n.warningSalePriceBelowCost,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: cs.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+              ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${l10n.profitMargin}: $formattedMargin',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  Text(
+                    '${l10n.profit}: $formattedProfit',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<bool> _onWillPop() async {
     if (!_isDirty || _saving) return true;
     final l10n = AppLocalizations.of(context);
@@ -1252,7 +1355,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         const SizedBox(height: 12),
                         RawAutocomplete<String>(
                           textEditingController: _categoryController,
-                          focusNode: FocusNode(),
+                          focusNode: _categoryFocusNode,
                           optionsBuilder: (textEditingValue) {
                             if (textEditingValue.text.isEmpty) {
                               return _existingCategories;
@@ -1607,6 +1710,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             ),
                           ],
                         ],
+                        _buildProfitMarginIndicator(
+                          context,
+                          l10n,
+                          Theme.of(context).colorScheme,
+                        ),
                       ],
                     ),
                   ),

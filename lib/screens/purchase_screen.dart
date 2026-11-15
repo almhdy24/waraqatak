@@ -4,6 +4,7 @@ import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
 import '../models/currency.dart';
+import '../models/payment_method.dart';
 import '../services/document_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
@@ -28,11 +29,17 @@ class PurchaseScreen extends StatefulWidget {
   State<PurchaseScreen> createState() => _PurchaseScreenState();
 }
 
+enum PurchasePaymentOption { fullyPaid, partial, credit }
+
 class _PurchaseScreenState extends State<PurchaseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _discountController = TextEditingController(text: '0');
   final _paidController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
+
+  PurchasePaymentOption _paymentOption = PurchasePaymentOption.fullyPaid;
+  String _paymentMethod = 'cash';
+  List<PaymentMethod> _enabledMethods = [];
 
   final List<TextEditingController> _descriptionControllers = [];
   final List<TextEditingController> _quantityControllers = [];
@@ -80,6 +87,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     final profiles = await DatabaseHelper.instance.getTaxProfiles(
       activeOnly: true,
     );
+    final methods = await DatabaseHelper.instance.getEnabledPaymentMethods();
     if (!mounted) return;
     setState(() {
       _business = business;
@@ -87,6 +95,10 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         for (final p in profiles)
           if (p.id != null) p.id!: p.rate,
       };
+      _enabledMethods = methods;
+      if (methods.isNotEmpty && !methods.any((m) => m.key == _paymentMethod)) {
+        _paymentMethod = methods.first.key;
+      }
     });
   }
 
@@ -104,7 +116,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   bool get _isDirty {
     return _selectedContact != null ||
         _notesController.text.isNotEmpty ||
-        (_discountController.text != '0' && _discountController.text.isNotEmpty) ||
+        (_discountController.text != '0' &&
+            _discountController.text.isNotEmpty) ||
         (_paidController.text != '0' && _paidController.text.isNotEmpty) ||
         _descriptionControllers.any((c) => c.text.isNotEmpty) ||
         _productIds.any((id) => id != null) ||
@@ -125,7 +138,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   Future<void> _removeItem(int index) async {
     final hasContent =
-        _descriptionControllers[index].text.isNotEmpty || _productIds[index] != null;
+        _descriptionControllers[index].text.isNotEmpty ||
+        _productIds[index] != null;
     if (hasContent) {
       final l10n = AppLocalizations.of(context);
       final proceed = await AppConfirmDialog.show(
@@ -151,7 +165,15 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   }
 
   double get _discount => NumberInput.parse(_discountController.text) ?? 0;
-  double get _paid => NumberInput.parse(_paidController.text) ?? 0;
+  double get _paid {
+    if (_paymentOption == PurchasePaymentOption.fullyPaid) {
+      return _totals.total;
+    }
+    if (_paymentOption == PurchasePaymentOption.credit) {
+      return 0.0;
+    }
+    return NumberInput.parse(_paidController.text) ?? 0;
+  }
 
   ({double subtotal, double taxAmount, double total}) get _totals {
     final items = _buildItems();
@@ -187,11 +209,12 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   Future<void> _save({bool isDraft = false}) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     if (_business == null) return;
+    final l10n = AppLocalizations.of(context);
 
     if (_descriptionControllers.isEmpty) {
       AppSnackBar.show(
         context,
-        AppLocalizations.of(context).pleaseAddItems,
+        l10n.pleaseAddItems,
         severity: AppSnackBarSeverity.warning,
       );
       return;
@@ -200,6 +223,27 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     setState(() => _saving = true);
 
     try {
+      final totals = _totals;
+      final decimalDigits = Currency.decimalDigitsForCode(
+        _business?.currencyCode,
+      );
+      final remaining = MoneyUtils.calculateRemaining(
+        totals.total,
+        _paid,
+        decimalDigits,
+      );
+
+      if ((_paymentOption == PurchasePaymentOption.credit || remaining > 0) &&
+          _selectedContact == null &&
+          !isDraft) {
+        AppSnackBar.show(
+          context,
+          l10n.supplierRequiredForCreditPurchase,
+          severity: AppSnackBarSeverity.warning,
+        );
+        return;
+      }
+
       final docId = await DocumentService.createDocument(
         type: 'purchase',
         business: _business!,
@@ -210,6 +254,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         notes: _notesController.text,
         date: DateTime.now(),
         isDraft: isDraft,
+        paymentMethod: _paymentOption == PurchasePaymentOption.credit
+            ? null
+            : _paymentMethod,
       );
 
       if (!mounted) return;
@@ -242,6 +289,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     final subtotal = totals.subtotal;
     final discount = _discount;
     final total = totals.total;
+
     final paid = _paid;
     final decimalDigits = Currency.decimalDigitsForCode(
       _business?.currencyCode,
@@ -302,7 +350,10 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 FilledButton(
                   onPressed: _saving ? null : () => _save(),
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size(110, AppDesignTokens.minTouchTarget),
+                    minimumSize: const Size(
+                      110,
+                      AppDesignTokens.minTouchTarget,
+                    ),
                   ),
                   child: _saving
                       ? SizedBox(
@@ -320,167 +371,246 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
           ),
         ),
         body: ResponsiveCenter(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              ContactAutocompleteField(
-                label: l10n.supplier,
-                type: 'supplier',
-                initialContact: _selectedContact,
-                onContactChanged: (contact) => _selectedContact = contact,
-              ),
-              const SizedBox(height: 16),
-              AppSectionHeader(
-                title: l10n.items,
-                count: _descriptionControllers.length,
-              ),
-              const SizedBox(height: 8),
-              ...List.generate(
-                _descriptionControllers.length,
-                (index) => DocumentItemForm(
-                  descriptionController: _descriptionControllers[index],
-                  quantityController: _quantityControllers[index],
-                  priceController: _priceControllers[index],
-                  taxable: _taxableList[index],
-                  taxRate: _taxRates[index],
-                  productId: _productIds[index],
-                  usePurchasePrice: true,
-                  onProductChanged: (productId) =>
-                      setState(() => _productIds[index] = productId),
-                  onProductSelected: (product) {
-                    setState(() {
-                      if (product == null) {
-                        _taxRates[index] = null;
-                      } else if (!product.isTaxable) {
-                        _taxableList[index] = false;
-                        _taxRates[index] = 0.0;
-                      } else if (product.taxProfileId != null) {
-                        _taxRates[index] = _profileRates[product.taxProfileId];
-                      } else {
-                        _taxRates[index] = null;
-                      }
-                    });
-                  },
-                  onTaxableChanged: (value) =>
-                      setState(() => _taxableList[index] = value ?? true),
-                  onDelete: () => _removeItem(index),
-                  onChanged: () => setState(() {}),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                ContactAutocompleteField(
+                  label: l10n.supplier,
+                  type: 'supplier',
+                  initialContact: _selectedContact,
+                  onContactChanged: (contact) => _selectedContact = contact,
                 ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _addItem,
-                icon: const Icon(Icons.add_circle_outline_rounded),
-                label: Text(l10n.addItem),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(46),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.buttonRadius,
+                const SizedBox(height: 16),
+                AppSectionHeader(
+                  title: l10n.items,
+                  count: _descriptionControllers.length,
+                ),
+                const SizedBox(height: 8),
+                ...List.generate(
+                  _descriptionControllers.length,
+                  (index) => DocumentItemForm(
+                    descriptionController: _descriptionControllers[index],
+                    quantityController: _quantityControllers[index],
+                    priceController: _priceControllers[index],
+                    taxable: _taxableList[index],
+                    taxRate: _taxRates[index],
+                    productId: _productIds[index],
+                    usePurchasePrice: true,
+                    onProductChanged: (productId) =>
+                        setState(() => _productIds[index] = productId),
+                    onProductSelected: (product) {
+                      setState(() {
+                        if (product == null) {
+                          _taxRates[index] = null;
+                        } else if (!product.isTaxable) {
+                          _taxableList[index] = false;
+                          _taxRates[index] = 0.0;
+                        } else if (product.taxProfileId != null) {
+                          _taxRates[index] =
+                              _profileRates[product.taxProfileId];
+                        } else {
+                          _taxRates[index] = null;
+                        }
+                      });
+                    },
+                    onTaxableChanged: (value) =>
+                        setState(() => _taxableList[index] = value ?? true),
+                    onDelete: () => _removeItem(index),
+                    onChanged: () => setState(() {}),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _addItem,
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                  label: Text(l10n.addItem),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(46),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppDesignTokens.buttonRadius,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.paymentDetails,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                const SizedBox(height: 20),
+                Text(
+                  l10n.paymentDetails,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              AmountField(
-                controller: _discountController,
-                decoration: InputDecoration(
-                  labelText: l10n.discount,
-                  prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+                const SizedBox(height: 10),
+                SegmentedButton<PurchasePaymentOption>(
+                  segments: [
+                    ButtonSegment(
+                      value: PurchasePaymentOption.fullyPaid,
+                      label: Text(
+                        l10n.paidStatus,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      icon: const Icon(Icons.check_circle_outline, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: PurchasePaymentOption.partial,
+                      label: Text(
+                        l10n.statusPartiallyPaid,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      icon: const Icon(Icons.pie_chart_outline, size: 16),
+                    ),
+                    ButtonSegment(
+                      value: PurchasePaymentOption.credit,
+                      label: Text(
+                        l10n.unpaidStatus,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      icon: const Icon(Icons.hourglass_empty_rounded, size: 16),
+                    ),
+                  ],
+                  selected: {_paymentOption},
+                  onSelectionChanged: (set) {
+                    final opt = set.first;
+                    setState(() {
+                      _paymentOption = opt;
+                      if (opt == PurchasePaymentOption.fullyPaid) {
+                        _paidController.text = NumberInput.formatForInput(
+                          _totals.total,
+                          maxDecimals: 4,
+                        );
+                      } else if (opt == PurchasePaymentOption.credit) {
+                        _paidController.text = '0';
+                      } else if (opt == PurchasePaymentOption.partial) {
+                        if (_paidController.text == '0' ||
+                            _paidController.text.isEmpty) {
+                          _paidController.text = NumberInput.formatForInput(
+                            _totals.total,
+                            maxDecimals: 4,
+                          );
+                        }
+                      }
+                    });
+                  },
                 ),
-                textInputAction: TextInputAction.next,
-                maxDecimals: 4,
-                showMultipliers: true,
-                onTap: () {
-                  if (_discountController.text.isNotEmpty) {
-                    _discountController.selection = TextSelection(
-                      baseOffset: 0,
-                      extentOffset: _discountController.text.length,
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              AmountField(
-                controller: _paidController,
-                decoration: InputDecoration(
-                  labelText: l10n.paid,
-                  prefixIcon: const Icon(Icons.payments_outlined, size: 20),
-                  helperText: l10n.remainingBalanceHelper,
+                const SizedBox(height: 12),
+                AmountField(
+                  controller: _discountController,
+                  decoration: InputDecoration(
+                    labelText: l10n.discount,
+                    prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+                  ),
+                  textInputAction: TextInputAction.next,
+                  maxDecimals: 4,
+                  showMultipliers: true,
+                  onTap: () {
+                    if (_discountController.text.isNotEmpty) {
+                      _discountController.selection = TextSelection(
+                        baseOffset: 0,
+                        extentOffset: _discountController.text.length,
+                      );
+                    }
+                  },
                 ),
-                textInputAction: TextInputAction.next,
-                maxDecimals: 4,
-                showMultipliers: true,
-                onTap: () {
-                  if (_paidController.text.isNotEmpty) {
-                    _paidController.selection = TextSelection(
-                      baseOffset: 0,
-                      extentOffset: _paidController.text.length,
-                    );
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _notesController,
-                decoration: InputDecoration(
-                  labelText: l10n.notes,
-                  prefixIcon: const Icon(Icons.notes_rounded, size: 20),
+                if (_paymentOption == PurchasePaymentOption.partial) ...[
+                  const SizedBox(height: 12),
+                  AmountField(
+                    controller: _paidController,
+                    decoration: InputDecoration(
+                      labelText: l10n.paid,
+                      prefixIcon: const Icon(Icons.payments_outlined, size: 20),
+                      helperText: l10n.remainingBalanceHelper,
+                    ),
+                    textInputAction: TextInputAction.next,
+                    maxDecimals: 4,
+                    showMultipliers: true,
+                    onTap: () {
+                      if (_paidController.text.isNotEmpty) {
+                        _paidController.selection = TextSelection(
+                          baseOffset: 0,
+                          extentOffset: _paidController.text.length,
+                        );
+                      }
+                    },
+                  ),
+                ],
+                if (_paymentOption != PurchasePaymentOption.credit &&
+                    _enabledMethods.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.paymentMethod,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _enabledMethods.map((m) {
+                      return ChoiceChip(
+                        label: Text(m.label(l10n.langCode)),
+                        selected: _paymentMethod == m.key,
+                        onSelected: (_) =>
+                            setState(() => _paymentMethod = m.key),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _notesController,
+                  decoration: InputDecoration(
+                    labelText: l10n.notes,
+                    prefixIcon: const Icon(Icons.notes_rounded, size: 20),
+                  ),
+                  maxLines: 2,
                 ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              AppTotalsCard(
-                subtotal: subtotal,
-                discount: discount,
-                taxAmount: totals.taxAmount,
-                taxRate: _business?.taxRate ?? 0,
-                total: total,
-                paid: paid,
-                remaining: remaining,
-                currencySymbol: _business?.currencySymbol ?? '',
-                isTaxInclusive: _business?.pricesIncludeTax ?? false,
-                netTaxableBase: (_business?.pricesIncludeTax ?? false)
-                    ? (total - totals.taxAmount)
-                    : null,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton(
-                  onPressed: _saving ? null : () => _save(),
-                  child: _saving
-                      ? SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
-                          ),
-                        )
-                      : Text(l10n.savePurchase),
+                const SizedBox(height: 16),
+                AppTotalsCard(
+                  subtotal: subtotal,
+                  discount: discount,
+                  taxAmount: totals.taxAmount,
+                  taxRate: _business?.taxRate ?? 0,
+                  total: total,
+                  paid: paid,
+                  remaining: remaining,
+                  currencySymbol: _business?.currencySymbol ?? '',
+                  isTaxInclusive: _business?.pricesIncludeTax ?? false,
+                  netTaxableBase: (_business?.pricesIncludeTax ?? false)
+                      ? (total - totals.taxAmount)
+                      : null,
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _saving ? null : () => _save(isDraft: true),
-                child: Text(l10n.saveDraft),
-              ),
-            ],
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: _saving ? null : () => _save(),
+                    child: _saving
+                        ? SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          )
+                        : Text(l10n.savePurchase),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _saving ? null : () => _save(isDraft: true),
+                  child: Text(l10n.saveDraft),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }

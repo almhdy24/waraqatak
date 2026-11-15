@@ -584,262 +584,268 @@ class _ProductCard extends StatelessWidget {
       child: Material(
         color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: stockOut
-                  ? cs.error.withValues(alpha: 0.35)
-                  : cs.outlineVariant,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Icon swatch / image thumbnail
-                  ProductImageThumbnail(
-                    imagePath: product.imagePath,
-                    isService: isService,
-                    size: 44,
-                    heroTag: product.id != null
-                        ? 'product_image_${product.id}'
-                        : null,
-                  ),
-                  const SizedBox(width: 12),
-
-                  // Name + meta
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                product.name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  decoration: product.isActive
-                                      ? null
-                                      : TextDecoration.lineThrough,
-                                ),
-                                maxLines: 2,
-                              ),
-                            ),
-                            if (!product.isActive) ...[
-                              const SizedBox(width: 6),
-                              _badge(l10n.inactive, Colors.grey),
-                            ] else if (stockOut)
-                              _badge(l10n.outOfStock, cs.error)
-                            else if (stockLow)
-                              _badge(l10n.lowStock, Colors.orange),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 10,
-                          children: [
-                            if (product.category != null &&
-                                product.category!.isNotEmpty)
-                              _metaChip(
-                                Icons.category_outlined,
-                                product.category!,
-                              ),
-                            if (product.code != null &&
-                                product.code!.isNotEmpty)
-                              _metaChip(
-                                Icons.tag,
-                                '${l10n.sku}: ${product.code}',
-                              ),
-                            if (product.barcode != null &&
-                                product.barcode!.isNotEmpty)
-                              _metaChip(Icons.qr_code, product.barcode!),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Action menu
-                  PopupMenuButton<String>(
-                    icon: Icon(
-                      Icons.more_vert,
-                      size: 20,
-                      color: cs.onSurfaceVariant,
-                    ),
-                    onSelected: (v) {
-                      if (v == 'edit') onEdit();
-                      if (v == 'toggle') onToggleActive();
-                      if (v == 'delete') onDelete();
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.edit_outlined),
-                          title: Text(l10n.edit),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'toggle',
-                        child: ListTile(
-                          dense: true,
-                          leading: Icon(
-                            product.isActive
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                          ),
-                          title: Text(
-                            product.isActive
-                                ? l10n.deactivateProduct
-                                : l10n.activateProduct,
-                          ),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: ListTile(
-                          dense: true,
-                          leading: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
-                          ),
-                          title: Text(
-                            l10n.delete,
-                            style: const TextStyle(color: Colors.red),
-                          ),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+        child: InkWell(
+          onTap: onEdit,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: stockOut
+                    ? cs.error.withValues(alpha: 0.35)
+                    : cs.outlineVariant,
               ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Icon swatch / image thumbnail
+                    ProductImageThumbnail(
+                      imagePath: product.imagePath,
+                      isService: isService,
+                      size: 44,
+                      heroTag: product.id != null
+                          ? 'product_image_${product.id}'
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
 
-              const SizedBox(height: 10),
-              const Divider(height: 1),
-              const SizedBox(height: 10),
-
-              // Price row + stock bar
-              Row(
-                children: [
-                  // Price
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        priceFmt.format(product.salePrice),
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: cs.primary,
-                        ),
-                      ),
-                      if (product.priceCurrency != null &&
-                          product.referenceSalePrice != null)
-                        Text(
-                          '${priceFmt.format(product.referenceSalePrice)} ${product.priceCurrency}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      Text(
-                        l10n.unitPrice,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (!isService) ...[
-                    const SizedBox(width: 16),
+                    // Name + meta
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(
-                                Icons.inventory_2_outlined,
-                                size: 13,
-                                color: stockColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                FormatUtils.formatQuantity(
-                                  product.stockQuantity,
-                                  unit: product.unit,
-                                ),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: stockColor,
+                              Expanded(
+                                child: Text(
+                                  product.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    decoration: product.isActive
+                                        ? null
+                                        : TextDecoration.lineThrough,
+                                  ),
+                                  maxLines: 2,
                                 ),
                               ),
-                              if (product.minStock > 0) ...[
-                                Text(
-                                  ' / ',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                ),
-                                Text(
-                                  FormatUtils.formatQuantity(product.minStock),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
+                              if (!product.isActive) ...[
+                                const SizedBox(width: 6),
+                                _badge(l10n.inactive, Colors.grey),
+                              ] else if (stockOut)
+                                _badge(l10n.outOfStock, cs.error)
+                              else if (stockLow)
+                                _badge(l10n.lowStock, Colors.orange),
                             ],
                           ),
                           const SizedBox(height: 4),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: _stockPercent(product),
-                              minHeight: 5,
-                              backgroundColor: Colors.grey.shade200,
-                              valueColor: AlwaysStoppedAnimation(stockColor),
-                            ),
+                          Wrap(
+                            spacing: 10,
+                            children: [
+                              if (product.category != null &&
+                                  product.category!.isNotEmpty)
+                                _metaChip(
+                                  Icons.category_outlined,
+                                  product.category!,
+                                ),
+                              if (product.code != null &&
+                                  product.code!.isNotEmpty)
+                                _metaChip(
+                                  Icons.tag,
+                                  '${l10n.sku}: ${product.code}',
+                                ),
+                              if (product.barcode != null &&
+                                  product.barcode!.isNotEmpty)
+                                _metaChip(Icons.qr_code, product.barcode!),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                  ] else
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.build_circle_outlined,
-                            size: 13,
-                            color: Colors.blue.shade600,
+
+                    // Action menu
+                    PopupMenuButton<String>(
+                      icon: Icon(
+                        Icons.more_vert,
+                        size: 20,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      onSelected: (v) {
+                        if (v == 'edit') onEdit();
+                        if (v == 'toggle') onToggleActive();
+                        if (v == 'delete') onDelete();
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.edit_outlined),
+                            title: Text(l10n.edit),
+                            contentPadding: EdgeInsets.zero,
                           ),
-                          const SizedBox(width: 4),
+                        ),
+                        PopupMenuItem(
+                          value: 'toggle',
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(
+                              product.isActive
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                            ),
+                            title: Text(
+                              product.isActive
+                                  ? l10n.deactivateProduct
+                                  : l10n.activateProduct,
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            title: Text(
+                              l10n.delete,
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 10),
+
+                // Price row + stock bar
+                Row(
+                  children: [
+                    // Price
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          priceFmt.format(product.salePrice),
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: cs.primary,
+                          ),
+                        ),
+                        if (product.priceCurrency != null &&
+                            product.referenceSalePrice != null)
                           Text(
-                            l10n.servicesOnly,
+                            '${priceFmt.format(product.referenceSalePrice)} ${product.priceCurrency}',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 10,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        Text(
+                          l10n.unitPrice,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (!isService) ...[
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.inventory_2_outlined,
+                                  size: 13,
+                                  color: stockColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  FormatUtils.formatQuantity(
+                                    product.stockQuantity,
+                                    unit: product.unit,
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: stockColor,
+                                  ),
+                                ),
+                                if (product.minStock > 0) ...[
+                                  Text(
+                                    ' / ',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                                  Text(
+                                    FormatUtils.formatQuantity(
+                                      product.minStock,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: _stockPercent(product),
+                                minHeight: 5,
+                                backgroundColor: Colors.grey.shade200,
+                                valueColor: AlwaysStoppedAnimation(stockColor),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.build_circle_outlined,
+                              size: 13,
                               color: Colors.blue.shade600,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.servicesOnly,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

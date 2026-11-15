@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
+import '../services/access/audit_service.dart';
 import '../services/bulk_pricing_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
@@ -35,7 +37,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
   BulkPriceRounding _rounding = BulkPriceRounding.none;
   final _valController = TextEditingController(text: '10');
 
-  List<BulkPricePreviewItem> _previewItems = [];
+  Map<int, BulkPricePreviewItem> _previewMap = {};
   bool _loading = true;
   String? _error;
 
@@ -97,11 +99,8 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
           if (r['product_id'] != null) r['product_id'] as int,
       };
 
-      // Default select all products
+      // Do not select all products by default
       _selectedProductIds.clear();
-      for (final p in _allProducts) {
-        if (p.id != null) _selectedProductIds.add(p.id!);
-      }
 
       _updatePreview();
       setState(() => _loading = false);
@@ -116,17 +115,17 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
 
   void _updatePreview() {
     final val = NumberInput.parse(_valController.text.trim()) ?? 0.0;
-    final selectedProducts = _allProducts
-        .where((p) => _selectedProductIds.contains(p.id))
-        .toList();
-
-    _previewItems = BulkPricingService.instance.preview(
-      products: selectedProducts,
+    final items = BulkPricingService.instance.preview(
+      products: _allProducts,
       opType: _opType,
       opValue: val,
       target: _target,
       rounding: _rounding,
     );
+    _previewMap = {
+      for (final it in items)
+        if (it.product.id != null) it.product.id!: it,
+    };
   }
 
   Future<void> _applyChanges() async {
@@ -141,7 +140,14 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
       return;
     }
 
-    final hasErrors = _previewItems.any((it) => !it.isValid);
+    final selectedItems = _selectedProductIds
+        .map((id) => _previewMap[id])
+        .whereType<BulkPricePreviewItem>()
+        .toList();
+
+    if (selectedItems.isEmpty) return;
+
+    final hasErrors = selectedItems.any((it) => !it.isValid);
     if (hasErrors) {
       AppSnackBar.show(
         context,
@@ -151,9 +157,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
       return;
     }
 
-    if (_previewItems.isEmpty) return;
-
-    final hasCustomUnits = _previewItems.any(
+    final hasCustomUnits = selectedItems.any(
       (it) =>
           it.product.id != null &&
           _productIdsWithCustomUnits.contains(it.product.id!),
@@ -164,7 +168,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(l10n.confirmPriceUpdate),
         content: Text(
-          '${l10n.selectProducts}: ${_previewItems.length}\n'
+          '${l10n.selectProducts}: ${selectedItems.length}\n'
           '${l10n.operationType}: ${_getOpLabel(_opType, l10n)} ($val)\n'
           '${l10n.targetPrice}: ${_getTargetLabel(_target, l10n)}'
           '${hasCustomUnits ? '\n\n${l10n.bulkPricingCustomUnitsWarning}' : ''}',
@@ -184,19 +188,21 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
 
     if (!mounted) return;
     if (confirmed == true) {
+      final revertSnapshots = selectedItems.map((it) => it.product).toList();
       setState(() => _loading = true);
       try {
         final result = await BulkPricingService.instance.applyBatch(
-          items: _previewItems,
+          items: selectedItems,
           opType: _opType,
           opValue: val,
           target: _target,
         );
         if (!mounted) return;
-        AppSnackBar.show(
+        AppSnackBar.showUndo(
           context,
           l10n.pricesUpdatedSuccess,
-          severity: AppSnackBarSeverity.success,
+          actionLabel: l10n.undo,
+          onUndo: () => _undoPriceChanges(revertSnapshots),
         );
         if (result.skippedCount > 0) {
           AppSnackBar.show(
@@ -216,6 +222,55 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
         );
         setState(() => _loading = false);
       }
+    }
+  }
+
+  Future<void> _undoPriceChanges(List<Product> previousSnapshots) async {
+    final l10n = AppLocalizations.of(context);
+    setState(() => _loading = true);
+    try {
+      final db = await DatabaseHelper.instance.database;
+      await db.transaction((txn) async {
+        final now = DateTime.now().toIso8601String();
+        for (final p in previousSnapshots) {
+          if (p.id == null) continue;
+          await txn.update(
+            'products',
+            {
+              'sale_price': p.salePrice,
+              'purchase_price': p.purchasePrice,
+              'wholesale_price': p.wholesalePrice,
+              'updated_at': now,
+            },
+            where: 'id = ?',
+            whereArgs: [p.id],
+          );
+        }
+        await AuditService.instance.logEvent(
+          txn,
+          'bulk_pricing_undo',
+          entityType: 'products_batch',
+          entityId: previousSnapshots.length,
+          details:
+              'reverted ${previousSnapshots.length} products to previous prices',
+        );
+      });
+      CatalogEvents.notifyPricesChanged();
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        l10n.operationSuccessful,
+        severity: AppSnackBarSeverity.success,
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+        severity: AppSnackBarSeverity.error,
+      );
+      setState(() => _loading = false);
     }
   }
 
@@ -340,22 +395,30 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                         const SizedBox(width: 8),
 
                         // Value
-                        SizedBox(
-                          width: 90,
-                          child: AmountField(
-                            controller: _valController,
-                            maxDecimals: 4,
-                            showMultipliers: false,
-                            decoration: InputDecoration(
-                              labelText: l10n.value,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 10,
+                        Builder(
+                          builder: (context) {
+                            final isPercent =
+                                _opType == BulkPriceOpType.percentageIncrease ||
+                                _opType == BulkPriceOpType.percentageDecrease;
+                            return SizedBox(
+                              width: 100,
+                              child: AmountField(
+                                controller: _valController,
+                                maxDecimals: 4,
+                                showMultipliers: false,
+                                decoration: InputDecoration(
+                                  labelText: l10n.value,
+                                  suffixText: isPercent ? '%' : null,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 10,
+                                  ),
+                                ),
+                                onChanged: (_) => setState(_updatePreview),
                               ),
-                            ),
-                            onChanged: (_) => setState(_updatePreview),
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -471,7 +534,6 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                       selected: _selectedCategory == null,
                       onSelected: (_) => setState(() {
                         _selectedCategory = null;
-                        _updatePreview();
                       }),
                     ),
                     const SizedBox(width: 6),
@@ -483,7 +545,6 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                           selected: _selectedCategory == c,
                           onSelected: (_) => setState(() {
                             _selectedCategory = c;
-                            _updatePreview();
                           }),
                         ),
                       ),
@@ -510,7 +571,6 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                             if (p.id != null) _selectedProductIds.remove(p.id!);
                           }
                         }
-                        _updatePreview();
                       });
                     },
                   ),
@@ -588,52 +648,74 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
 
             // Preview List
             Expanded(
-              child: _previewItems.isEmpty
+              child: filteredProducts.isEmpty
                   ? Center(child: Text(l10n.noMatchingProduct))
                   : ListView.separated(
-                      itemCount: _previewItems.length,
+                      itemCount: filteredProducts.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (ctx, idx) {
-                        final item = _previewItems[idx];
+                        final product = filteredProducts[idx];
+                        final item = _previewMap[product.id];
                         final isSelected = _selectedProductIds.contains(
-                          item.product.id,
+                          product.id,
                         );
 
                         final double oldDisplayPrice;
                         final double newDisplayPrice;
                         if (_target == BulkPriceTarget.purchasePrice) {
-                          oldDisplayPrice = item.currentPurchasePrice;
-                          newDisplayPrice = item.proposedPurchasePrice;
+                          oldDisplayPrice =
+                              item?.currentPurchasePrice ??
+                              product.purchasePrice;
+                          newDisplayPrice =
+                              item?.proposedPurchasePrice ??
+                              product.purchasePrice;
                         } else if (_target == BulkPriceTarget.wholesalePrice) {
-                          oldDisplayPrice = item.currentWholesalePrice ?? 0.0;
-                          newDisplayPrice = item.proposedWholesalePrice ?? 0.0;
+                          oldDisplayPrice =
+                              item?.currentWholesalePrice ??
+                              product.wholesalePrice ??
+                              0.0;
+                          newDisplayPrice =
+                              item?.proposedWholesalePrice ??
+                              product.wholesalePrice ??
+                              0.0;
                         } else {
-                          oldDisplayPrice = item.currentSalePrice;
-                          newDisplayPrice = item.proposedSalePrice;
+                          oldDisplayPrice =
+                              item?.currentSalePrice ?? product.salePrice;
+                          newDisplayPrice =
+                              item?.proposedSalePrice ?? product.salePrice;
                         }
                         final delta = newDisplayPrice - oldDisplayPrice;
+                        final isPercent =
+                            _opType == BulkPriceOpType.percentageIncrease ||
+                            _opType == BulkPriceOpType.percentageDecrease;
+                        final pctSuffix = (isPercent && oldDisplayPrice > 0)
+                            ? ' (${delta >= 0 ? "+" : ""}${_numFmt.format((delta / oldDisplayPrice) * 100)}%)'
+                            : '';
 
                         return CheckboxListTile(
                           value: isSelected,
                           onChanged: (val) {
                             setState(() {
                               if (val == true) {
-                                _selectedProductIds.add(item.product.id!);
+                                if (product.id != null) {
+                                  _selectedProductIds.add(product.id!);
+                                }
                               } else {
-                                _selectedProductIds.remove(item.product.id!);
+                                if (product.id != null) {
+                                  _selectedProductIds.remove(product.id!);
+                                }
                               }
-                              _updatePreview();
                             });
                           },
                           title: Text(
-                            item.product.name,
+                            product.name,
                             style: const TextStyle(
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
                             ),
                           ),
                           subtitle: Text(
-                            '${l10n.currentPrice}: ${_numFmt.format(oldDisplayPrice)} ${item.product.category != null ? "• ${item.product.category}" : ""}',
+                            '${l10n.currentPrice}: ${_numFmt.format(oldDisplayPrice)}${product.unit != null && product.unit!.isNotEmpty ? " / ${product.unit}" : ""} ${product.category != null ? "• ${product.category}" : ""}',
                             style: const TextStyle(fontSize: 11),
                           ),
                           secondary: Column(
@@ -645,11 +727,13 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 12,
-                                  color: item.isValid ? cs.primary : Colors.red,
+                                  color: (item?.isValid ?? true)
+                                      ? cs.primary
+                                      : Colors.red,
                                 ),
                               ),
                               Text(
-                                '${delta >= 0 ? "+" : ""}${_numFmt.format(delta)}',
+                                '${delta >= 0 ? "+" : ""}${_numFmt.format(delta)}$pctSuffix',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
