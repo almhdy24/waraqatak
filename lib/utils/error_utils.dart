@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import '../localization/app_localizations.dart';
 import '../models/reference_pricing_types.dart';
+import '../services/access/access_error.dart';
+import '../services/access/access_messages.dart';
 
 /// Centralized utility to convert technical exceptions and database errors
 /// into clear, actionable, friendly Arabic messages for business users,
@@ -17,6 +19,15 @@ class ErrorUtils {
   }
 
   static String toFriendlyMessage(Object error, AppLocalizations l10n) {
+    if (error is AccessError) {
+      return localizeAccessError(
+        l10n,
+        error.code,
+        permissionKey: error.permissionKey,
+        args: error.args,
+      );
+    }
+
     if (error is ReferencePricingException) {
       return switch (error.code) {
         ReferencePricingError.invalidRate => l10n.refErrInvalidRate,
@@ -43,6 +54,20 @@ class ErrorUtils {
     debugPrint('[Waraqatak Error] $raw');
 
     final lower = raw.toLowerCase();
+
+    // Permission / Access control errors
+    if (raw.contains('PermissionDeniedException') ||
+        raw.contains('AccessErrorCode.missingPermission')) {
+      final permMatch = RegExp(
+        r'PermissionDeniedException\(([^, )]+)',
+      ).firstMatch(raw);
+      final perm = permMatch?.group(1);
+      return localizeAccessError(
+        l10n,
+        AccessErrorCode.missingPermission,
+        permissionKey: perm,
+      );
+    }
 
     // Barcode duplicate
     if (lower.contains('unique constraint failed: products.barcode') ||
@@ -175,7 +200,9 @@ class ErrorUtils {
 
     if (cleaned.isNotEmpty &&
         !cleaned.contains('NoSuchMethodError') &&
-        !cleaned.contains('Null check operator')) {
+        !cleaned.contains('Null check operator') &&
+        !cleaned.contains('PermissionDeniedException') &&
+        !cleaned.contains('AccessError')) {
       return cleaned;
     }
 

@@ -302,6 +302,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _handleStockAdjustment() async {
+    if (!AccessGuard.can(PermissionRegistry.productsManage)) return;
     final entitlement = await LicenseService.instance.checkEntitlement();
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
@@ -414,6 +415,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _save() async {
+    if (!AccessGuard.can(PermissionRegistry.productsManage)) return;
     if (_saving || !_formKey.currentState!.validate()) return;
 
     final baseUnitName = _unitController.text.trim().toLowerCase();
@@ -653,6 +655,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _showUnitDialog([ProductUnit? existing, int? index]) async {
+    if (!AccessGuard.can(PermissionRegistry.productsManage)) return;
     final l10n = AppLocalizations.of(context);
     final currentRate = _rates
         .where((r) => r.code == _priceCurrency)
@@ -926,6 +929,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   Future<void> _handleDelete() async {
+    if (!AccessGuard.can(PermissionRegistry.productsDelete)) return;
     final l10n = AppLocalizations.of(context);
     final id = widget.product!.id!;
     final referenced = await DatabaseHelper.instance.isProductReferenced(id);
@@ -1175,6 +1179,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canManage = AccessGuard.can(PermissionRegistry.productsManage);
+    final canDelete = AccessGuard.can(PermissionRegistry.productsDelete);
     final l10n = AppLocalizations.of(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final isService = _type == Product.typeService;
@@ -1197,7 +1203,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           title: Text(title),
           centerTitle: true,
           actions: [
-            if (!isNew)
+            if (!isNew && canDelete)
               IconButton(
                 icon: const Icon(Icons.delete_outline),
                 tooltip: l10n.delete,
@@ -1749,11 +1755,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                 fontSize: 16,
                               ),
                             ),
-                            TextButton.icon(
-                              onPressed: () => _showUnitDialog(),
-                              icon: const Icon(Icons.add, size: 18),
-                              label: Text(l10n.addSalesUnit),
-                            ),
+                            if (canManage)
+                              TextButton.icon(
+                                onPressed: () => _showUnitDialog(),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: Text(l10n.addSalesUnit),
+                              ),
                           ],
                         ),
                         if (_productUnits.isEmpty)
@@ -1812,31 +1819,34 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                 ],
                               ),
                               subtitle: Text(desc),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 18,
-                                    ),
-                                    tooltip: l10n.edit,
-                                    onPressed: () => _showUnitDialog(u, idx),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                    ),
-                                    tooltip: l10n.delete,
-                                    onPressed: () {
-                                      setState(
-                                        () => _productUnits.removeAt(idx),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
+                              trailing: canManage
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.edit_outlined,
+                                            size: 18,
+                                          ),
+                                          tooltip: l10n.edit,
+                                          onPressed: () =>
+                                              _showUnitDialog(u, idx),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            size: 18,
+                                          ),
+                                          tooltip: l10n.delete,
+                                          onPressed: () {
+                                            setState(
+                                              () => _productUnits.removeAt(idx),
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    )
+                                  : null,
                             );
                           }),
                       ],
@@ -1888,7 +1898,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                   ? l10n.openingStockHelp
                                   : l10n.stockCannotBeEditedDirectly,
                               helperMaxLines: 2,
-                              suffixIcon: !isNew
+                              suffixIcon: (!isNew && canManage)
                                   ? IconButton(
                                       icon: const Icon(Icons.tune),
                                       tooltip: l10n.stockAdjustment,
@@ -1997,40 +2007,43 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                if (canManage) ...[
+                  const SizedBox(height: 24),
 
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton(
-                    onPressed: _saving ? null : _save,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppDesignTokens.buttonRadius,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.buttonRadius,
+                          ),
                         ),
                       ),
-                    ),
-                    child: _saving
-                        ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.onPrimary,
+                      child: _saving
+                          ? SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            )
+                          : Text(
+                              isNew
+                                  ? (isService
+                                        ? l10n.saveService
+                                        : l10n.saveProduct)
+                                  : l10n.saveChanges,
                             ),
-                          )
-                        : Text(
-                            isNew
-                                ? (isService
-                                      ? l10n.saveService
-                                      : l10n.saveProduct)
-                                : l10n.saveChanges,
-                          ),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),

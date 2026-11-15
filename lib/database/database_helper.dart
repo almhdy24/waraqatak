@@ -2955,7 +2955,7 @@ class DatabaseHelper {
 
       final assetRows = await txn.query(
         'digital_assets',
-        columns: ['id', 'aspect_ratio', 'width', 'height'],
+        columns: ['id', 'width', 'height'],
         where: 'id = ? AND business_id = ?',
         whereArgs: [assetId, businessId],
         limit: 1,

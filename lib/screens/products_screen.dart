@@ -5,6 +5,8 @@ import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 import '../services/product_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
@@ -134,23 +136,31 @@ class _ProductsScreenState extends State<ProductsScreen> {
       _query = _searchCtrl.text;
       _load();
     } else {
-      AppSnackBar.show(
-        context,
-        '${l10n.barcodeNotFound}: $query',
-        actionLabel: l10n.addProduct,
-        onAction: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductFormScreen(initialBarcode: query),
-            ),
-          ).then((_) => _load());
-        },
-      );
+      if (AccessGuard.can(PermissionRegistry.productsManage)) {
+        AppSnackBar.show(
+          context,
+          '${l10n.barcodeNotFound}: $query',
+          actionLabel: l10n.addProduct,
+          onAction: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProductFormScreen(initialBarcode: query),
+              ),
+            ).then((_) => _load());
+          },
+        );
+      } else {
+        AppSnackBar.show(
+          context,
+          '${l10n.barcodeNotFound}: $query',
+        );
+      }
     }
   }
 
   Future<void> _handleDelete(Product product) async {
+    if (!AccessGuard.can(PermissionRegistry.productsDelete)) return;
     final l10n = AppLocalizations.of(context);
     final referenced = await DatabaseHelper.instance.isProductReferenced(
       product.id!,
@@ -222,6 +232,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   }
 
   Future<void> _toggleActive(Product product) async {
+    if (!AccessGuard.can(PermissionRegistry.productsManage)) return;
     final l10n = AppLocalizations.of(context);
     await ProductService.setActive(product.id!, active: !product.isActive);
     if (!mounted) return;
@@ -325,6 +336,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canManage = AccessGuard.can(PermissionRegistry.productsManage);
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
@@ -452,15 +464,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'fab_products',
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ProductFormScreen()),
-        ).then((_) => _load()),
-        icon: const Icon(Icons.add),
-        label: Text(l10n.addProduct),
-      ),
+      floatingActionButton: canManage
+          ? FloatingActionButton.extended(
+              heroTag: 'fab_products',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProductFormScreen()),
+              ).then((_) => _load()),
+              icon: const Icon(Icons.add),
+              label: Text(l10n.addProduct),
+            )
+          : null,
     );
   }
 
@@ -514,14 +528,17 @@ class _ProductsScreenState extends State<ProductsScreen> {
           description: l10n.noMatchingProduct,
         );
       }
+      final canManage = AccessGuard.can(PermissionRegistry.productsManage);
       return AppEmptyState(
         icon: Icons.inventory_2_outlined,
         title: l10n.noProducts,
-        actionLabel: l10n.addProduct,
-        onAction: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ProductFormScreen()),
-        ).then((_) => _load()),
+        actionLabel: canManage ? l10n.addProduct : null,
+        onAction: canManage
+            ? () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProductFormScreen()),
+              ).then((_) => _load())
+            : null,
       );
     }
 
@@ -562,6 +579,8 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canManage = AccessGuard.can(PermissionRegistry.productsManage);
+    final canDelete = AccessGuard.can(PermissionRegistry.productsDelete);
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
     final isService = product.isService;
@@ -685,43 +704,49 @@ class _ProductCard extends StatelessWidget {
                           value: 'edit',
                           child: ListTile(
                             dense: true,
-                            leading: const Icon(Icons.edit_outlined),
-                            title: Text(l10n.edit),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'toggle',
-                          child: ListTile(
-                            dense: true,
                             leading: Icon(
-                              product.isActive
-                                  ? Icons.visibility_off_outlined
+                              canManage
+                                  ? Icons.edit_outlined
                                   : Icons.visibility_outlined,
                             ),
-                            title: Text(
-                              product.isActive
-                                  ? l10n.deactivateProduct
-                                  : l10n.activateProduct,
-                            ),
+                            title: Text(canManage ? l10n.edit : l10n.details),
                             contentPadding: EdgeInsets.zero,
                           ),
                         ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: ListTile(
-                            dense: true,
-                            leading: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.red,
+                        if (canManage)
+                          PopupMenuItem(
+                            value: 'toggle',
+                            child: ListTile(
+                              dense: true,
+                              leading: Icon(
+                                product.isActive
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                              ),
+                              title: Text(
+                                product.isActive
+                                    ? l10n.deactivateProduct
+                                    : l10n.activateProduct,
+                              ),
+                              contentPadding: EdgeInsets.zero,
                             ),
-                            title: Text(
-                              l10n.delete,
-                              style: const TextStyle(color: Colors.red),
-                            ),
-                            contentPadding: EdgeInsets.zero,
                           ),
-                        ),
+                        if (canDelete)
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: ListTile(
+                              dense: true,
+                              leading: const Icon(
+                                Icons.delete_outline,
+                                color: Colors.red,
+                              ),
+                              title: Text(
+                                l10n.delete,
+                                style: const TextStyle(color: Colors.red),
+                              ),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
                       ],
                     ),
                   ],
