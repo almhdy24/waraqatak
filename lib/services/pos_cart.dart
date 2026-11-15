@@ -167,6 +167,7 @@ class PosCart {
 
   List<PosCartLine> get lines => List.unmodifiable(_lines);
   bool get isEmpty => _lines.isEmpty;
+  bool get isNotEmpty => _lines.isNotEmpty;
   double get itemCount => _lines.fold(0, (s, l) => s + l.quantity);
   double get subtotal =>
       _lines.fold(0, (s, l) => s + l.totalFor(_decimalDigits));

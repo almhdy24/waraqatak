@@ -63,5 +63,28 @@ void main() {
 
       settings.removeListener(listener);
     });
+
+    test('dismissLongPressHint updates value and persists to SharedPreferences', () async {
+      final settings = QuickSaleSettings.instance;
+      settings.setDismissedLongPressHintForTesting(false);
+      expect(settings.hasDismissedLongPressHint, isFalse);
+
+      int notifications = 0;
+      void listener() => notifications++;
+      settings.addListener(listener);
+
+      await settings.dismissLongPressHint();
+      expect(settings.hasDismissedLongPressHint, isTrue);
+      expect(notifications, 1);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool(QuickSaleSettings.longPressHintDismissedKey), isTrue);
+
+      // Subsequent call does not trigger unnecessary notification
+      await settings.dismissLongPressHint();
+      expect(notifications, 1);
+
+      settings.removeListener(listener);
+    });
   });
 }

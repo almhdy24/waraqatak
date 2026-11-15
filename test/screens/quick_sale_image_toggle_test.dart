@@ -91,8 +91,8 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
       }
 
-      // Verify toggle button icon indicates images ON
-      expect(find.byIcon(Icons.image_outlined), findsOneWidget);
+      // Verify settings indicate images ON
+      expect(find.byType(PopupMenuButton<String>), findsOneWidget);
       expect(QuickSaleSettings.instance.showProductImages, isTrue);
 
       // Verify product tiles are rendered with showImage: true
@@ -117,14 +117,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.text('تجريبي'), findsOneWidget);
 
-      // 3. Tap toggle button in AppBar
+      // 3. Open PopupMenuButton in AppBar and tap toggle button
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.image_outlined), findsOneWidget);
       await tester.tap(find.byIcon(Icons.image_outlined));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
       // Verify QuickSaleSettings.instance.showProductImages flipped to false
       expect(QuickSaleSettings.instance.showProductImages, isFalse);
-      expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
 
       // Verify tile now has showImage: false
       final updatedTile = tester.widget<PosProductTile>(
@@ -138,13 +139,14 @@ void main() {
       // Verify search query still present
       expect(find.text('تجريبي'), findsOneWidget);
 
-      // 4. Tap toggle button again -> flips back to true
+      // 4. Open PopupMenuButton again and tap toggle button -> flips back to true
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.image_not_supported_outlined), findsOneWidget);
       await tester.tap(find.byIcon(Icons.image_not_supported_outlined));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
       expect(QuickSaleSettings.instance.showProductImages, isTrue);
-      expect(find.byIcon(Icons.image_outlined), findsOneWidget);
       expect(find.text(l10n.posItemsCount('1')), findsOneWidget);
       expect(find.text('تجريبي'), findsOneWidget);
     },

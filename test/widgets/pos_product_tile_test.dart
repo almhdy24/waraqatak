@@ -15,12 +15,12 @@ void main() {
       expect(posTileExtent(showImage: false, textScale: 1.4), closeTo(162.4, 0.001));
       expect(posTileExtent(showImage: false, textScale: 2.0), closeTo(162.4, 0.001));
 
-      // showImage: true -> (116.0 * clamp(scale, 1.0, 1.4)) + 100.0
-      expect(posTileExtent(showImage: true, textScale: 0.8), closeTo(216.0, 0.001));
-      expect(posTileExtent(showImage: true, textScale: 1.0), closeTo(216.0, 0.001));
-      expect(posTileExtent(showImage: true, textScale: 1.2), closeTo(239.2, 0.001));
-      expect(posTileExtent(showImage: true, textScale: 1.4), closeTo(262.4, 0.001));
-      expect(posTileExtent(showImage: true, textScale: 2.0), closeTo(262.4, 0.001));
+      // showImage: true -> (116.0 * clamp(scale, 1.0, 1.4)) + 64.0
+      expect(posTileExtent(showImage: true, textScale: 0.8), closeTo(180.0, 0.001));
+      expect(posTileExtent(showImage: true, textScale: 1.0), closeTo(180.0, 0.001));
+      expect(posTileExtent(showImage: true, textScale: 1.2), closeTo(203.2, 0.001));
+      expect(posTileExtent(showImage: true, textScale: 1.4), closeTo(226.4, 0.001));
+      expect(posTileExtent(showImage: true, textScale: 2.0), closeTo(226.4, 0.001));
     });
   });
 
@@ -198,6 +198,45 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('3'), findsOneWidget);
+    });
+
+    testWidgets('colors stock text with warning color when 0 < stockQuantity <= minStock in both tile modes', (tester) async {
+      final lowStockProduct = Product(
+        id: 3,
+        name: 'Sugar',
+        salePrice: 2.0,
+        stockQuantity: 4.0,
+        minStock: 5.0,
+      );
+
+      for (final showImage in [false, true]) {
+        await tester.pumpWidget(
+          LanguageProvider(
+            langCode: 'en',
+            onChangeLanguage: (_) async {},
+            child: MaterialApp(
+              locale: const Locale('en'),
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              home: Scaffold(
+                body: PosProductTile(
+                  product: lowStockProduct,
+                  cartQuantity: 0,
+                  showImage: showImage,
+                  onTap: () {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final stockTextWidget = tester.widget<Text>(find.text('In stock: 4'));
+        expect(stockTextWidget.style?.color, equals(const Color(0xFFD97706)));
+      }
     });
   });
 }

@@ -1433,6 +1433,10 @@ class AppLocalizations {
   String get posSearchHint =>
       _t('ابحث بالاسم أو الكود أو الباركود', 'Search by name, code or barcode');
   String get posViewCart => _t('السلة', 'Cart');
+  String get posEmptyCartHint =>
+      _t('اضغط على منتج لإضافته', 'Tap a product to add it');
+  String get posLongPressQuantityHint =>
+      _t('اضغط مطولاً لتحديد الكمية', 'Long-press to set quantity');
   String get posCartEmpty => _t(
     'السلة فارغة. اضغط على منتج لإضافته.',
     'Cart is empty. Tap a product to add it.',

@@ -272,7 +272,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   Future<void> _onCatalogChanged() async {
     if (!mounted) return;
     await _load();
-    if (!_cart.isEmpty && mounted) {
+    if (_cart.isNotEmpty && mounted) {
       _toast(AppLocalizations.of(context).catalogUpdatedCartKept);
     }
   }
@@ -411,6 +411,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   }
 
   Future<void> _promptAddQuantity(Product p) async {
+    QuickSaleSettings.instance.dismissLongPressHint();
     final l10n = AppLocalizations.of(context);
     final units = p.id != null
         ? (_productUnits[p.id!] ?? const <ProductUnit>[])
@@ -1188,50 +1189,82 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         appBar: AppBar(
           title: Text(l10n.posQuickSale),
           actions: [
-            ListenableBuilder(
-              listenable: QuickSaleSettings.instance,
-              builder: (context, _) {
-                final showImages = QuickSaleSettings.instance.showProductImages;
-                return IconButton(
-                  tooltip: showImages
-                      ? l10n.posHideProductImages
-                      : l10n.posShowProductImages,
-                  icon: Icon(
-                    showImages
-                        ? Icons.image_outlined
-                        : Icons.image_not_supported_outlined,
-                  ),
-                  onPressed: () {
-                    QuickSaleSettings.instance.setShowProductImages(
-                      !showImages,
-                    );
-                  },
-                );
-              },
-            ),
             IconButton(
               tooltip: l10n.scanBarcode,
               icon: const Icon(Icons.qr_code_scanner),
               onPressed: _scan,
             ),
-            IconButton(
-              tooltip: l10n.posHoldCart,
-              icon: const Icon(Icons.pause_circle_outline),
-              onPressed: _cart.isEmpty ? null : _holdCart,
-            ),
             Badge(
               isLabelVisible: _heldCarts.isNotEmpty,
               label: Text(_heldCarts.length.toString()),
+              offset: const Offset(-2, 4),
               child: IconButton(
                 tooltip: l10n.posHeldCarts,
                 icon: const Icon(Icons.history_rounded),
                 onPressed: _showHeldCartsDialog,
               ),
             ),
-            IconButton(
-              tooltip: l10n.posClearCart,
-              icon: const Icon(Icons.remove_shopping_cart_outlined),
-              onPressed: _cart.isEmpty ? null : _clearCart,
+            ListenableBuilder(
+              listenable: QuickSaleSettings.instance,
+              builder: (context, _) {
+                final showImages = QuickSaleSettings.instance.showProductImages;
+                return PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
+                  onSelected: (val) {
+                    if (val == 'toggle_images') {
+                      QuickSaleSettings.instance.setShowProductImages(
+                        !showImages,
+                      );
+                    } else if (val == 'hold_cart') {
+                      if (_cart.isNotEmpty) _holdCart();
+                    } else if (val == 'clear_cart') {
+                      if (_cart.isNotEmpty) _clearCart();
+                    }
+                  },
+                  itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'toggle_images',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          showImages
+                              ? Icons.image_outlined
+                              : Icons.image_not_supported_outlined,
+                        ),
+                        title: Text(
+                          showImages
+                              ? l10n.posHideProductImages
+                              : l10n.posShowProductImages,
+                        ),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'hold_cart',
+                      enabled: _cart.isNotEmpty,
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        enabled: _cart.isNotEmpty,
+                        leading: const Icon(Icons.pause_circle_outline),
+                        title: Text(l10n.posHoldCart),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'clear_cart',
+                      enabled: _cart.isNotEmpty,
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        enabled: _cart.isNotEmpty,
+                        leading: const Icon(Icons.remove_shopping_cart_outlined),
+                        title: Text(l10n.posClearCart),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -1288,6 +1321,57 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             },
           ),
         ),
+        ListenableBuilder(
+          listenable: QuickSaleSettings.instance,
+          builder: (context, _) {
+            if (QuickSaleSettings.instance.hasDismissedLongPressHint) {
+              return const SizedBox.shrink();
+            }
+            return Container(
+              margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              padding: const EdgeInsetsDirectional.fromSTEB(12, 6, 8, 6),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: cs.primary.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.touch_app_outlined,
+                    size: 16,
+                    color: cs.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.posLongPressQuantityHint,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    tooltip: l10n.close,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      QuickSaleSettings.instance.dismissLongPressHint();
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
         Builder(
           builder: (context) {
             final categories =
@@ -1303,48 +1387,52 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               return const SizedBox.shrink();
             }
 
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Row(
-                children: [
-                  ChoiceChip(
-                    label: Text(l10n.all, style: const TextStyle(fontSize: 11)),
-                    selected: _selectedCategory == null && !_showFrequentlySold,
-                    onSelected: (_) => setState(() {
-                      _selectedCategory = null;
-                      _showFrequentlySold = false;
-                    }),
-                  ),
-                  if (_frequentProductIds.isNotEmpty) ...[
-                    const SizedBox(width: 6),
+            return Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     ChoiceChip(
-                      avatar: const Icon(Icons.star_rounded, size: 14),
-                      label: Text(
-                        l10n.posFrequentlySold,
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                      selected: _showFrequentlySold,
-                      onSelected: (sel) => setState(() {
-                        _showFrequentlySold = sel;
-                        if (sel) _selectedCategory = null;
+                      label: Text(l10n.all, style: const TextStyle(fontSize: 11)),
+                      selected: _selectedCategory == null && !_showFrequentlySold,
+                      onSelected: (_) => setState(() {
+                        _selectedCategory = null;
+                        _showFrequentlySold = false;
                       }),
                     ),
-                  ],
-                  ...categories.map(
-                    (c) => Padding(
-                      padding: const EdgeInsetsDirectional.only(start: 6),
-                      child: ChoiceChip(
-                        label: Text(c, style: const TextStyle(fontSize: 11)),
-                        selected: _selectedCategory == c,
+                    if (_frequentProductIds.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      ChoiceChip(
+                        avatar: const Icon(Icons.star_rounded, size: 14),
+                        label: Text(
+                          l10n.posFrequentlySold,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        selected: _showFrequentlySold,
                         onSelected: (sel) => setState(() {
-                          _selectedCategory = sel ? c : null;
-                          if (sel) _showFrequentlySold = false;
+                          _showFrequentlySold = sel;
+                          if (sel) _selectedCategory = null;
                         }),
                       ),
+                    ],
+                    ...categories.map(
+                      (c) => Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 6),
+                        child: ChoiceChip(
+                          label: Text(c, style: const TextStyle(fontSize: 11)),
+                          selected: _selectedCategory == c,
+                          onSelected: (sel) => setState(() {
+                            _selectedCategory = sel ? c : null;
+                            if (sel) _showFrequentlySold = false;
+                          }),
+                        ),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -1375,15 +1463,47 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                       showImage: showImages,
                       textScale: textScale,
                     ).roundToDouble();
-                    return GridView.builder(
+
+                    if (showImages) {
+                      return GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 190,
+                          mainAxisExtent: tileHeight,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                        ),
+                        itemCount: products.length,
+                        itemBuilder: (_, i) {
+                          final p = products[i];
+                          final tracks = PosCart.tracksStock(p);
+                          final inCart = p.id == null
+                              ? 0.0
+                              : _cart.quantityOf(p.id!);
+                          final available = tracks
+                              ? p.stockQuantity - inCart
+                              : double.infinity;
+                          final soldOut = tracks && available <= 0;
+                          final isBlocked = _cart.enforceStock && soldOut;
+                          return PosProductTile(
+                            product: p,
+                            cartQuantity: inCart.round(),
+                            showImage: true,
+                            price: _fmt(p.salePrice),
+                            availableQuantity: available,
+                            isSoldOut: soldOut,
+                            isBlocked: isBlocked,
+                            onTap: () => _addProduct(p),
+                            onLongPress: () => _promptAddQuantity(p),
+                          );
+                        },
+                      );
+                    }
+
+                    return ListView.separated(
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 190,
-                        mainAxisExtent: tileHeight,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                      ),
                       itemCount: products.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (_, i) {
                         final p = products[i];
                         final tracks = PosCart.tracksStock(p);
@@ -1398,7 +1518,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         return PosProductTile(
                           product: p,
                           cartQuantity: inCart.round(),
-                          showImage: showImages,
+                          showImage: false,
                           price: _fmt(p.salePrice),
                           availableQuantity: available,
                           isSoldOut: soldOut,
@@ -1418,6 +1538,8 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   Widget _cartBar(AppLocalizations l10n) {
     final cs = Theme.of(context).colorScheme;
     final total = _totals.total;
+    final isEmpty = _cart.isEmpty;
+
     return SafeArea(
       top: false,
       child: DecoratedBox(
@@ -1426,43 +1548,80 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           border: Border(top: BorderSide(color: cs.outlineVariant)),
           boxShadow: AppDesignTokens.softShadow(context),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.posItemsCount(
-                        FormatUtils.formatQuantity(_cart.itemCount),
-                      ),
-                      style: TextStyle(
-                        color: cs.onSurfaceVariant,
-                        fontSize: 12,
-                      ),
+        child: Material(
+          color: Colors.transparent,
+          child: isEmpty
+              ? SizedBox(
+                  height: AppDesignTokens.minTouchTarget + 12,
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.touch_app_outlined,
+                          size: 18,
+                          color: cs.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.posEmptyCartHint,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                    AppAmountText(
-                      amount: total,
-                      currencySymbol: _business?.currencySymbol ?? '',
-                      fontSize: 19,
-                      fontWeight: FontWeight.bold,
+                  ),
+                )
+              : InkWell(
+                  onTap: () => _openCartSheet(l10n),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.posItemsCount(
+                                  FormatUtils.formatQuantity(_cart.itemCount),
+                                ),
+                                style: TextStyle(
+                                  color: cs.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              AppAmountText(
+                                amount: total,
+                                currencySymbol: _business?.currencySymbol ?? '',
+                                fontSize: 19,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ],
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: () => _openCartSheet(l10n),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(
+                              130,
+                              AppDesignTokens.minTouchTarget,
+                            ),
+                          ),
+                          icon: const Icon(Icons.shopping_cart_outlined),
+                          label: Text(l10n.posViewCart),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              FilledButton.icon(
-                onPressed: _cart.isEmpty ? null : () => _openCartSheet(l10n),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(130, AppDesignTokens.minTouchTarget),
-                ),
-                icon: const Icon(Icons.shopping_cart_outlined),
-                label: Text(l10n.posViewCart),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1834,7 +1993,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               ),
             ),
           ),
-          if (!_cart.isEmpty)
+          if (_cart.isNotEmpty)
             Text(
               l10n.posItemsCount(FormatUtils.formatQuantity(_cart.itemCount)),
               style: TextStyle(
