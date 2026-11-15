@@ -4022,11 +4022,11 @@ class AppLocalizations {
   String get selectCustomer => _t('اختيار عميل', 'Select Customer');
   String get clear => _t('مسح', 'Clear');
 
-  // ========== PHASE 5A KEYS ==========
+  // ========== STATUS COLORS & UX KEYS ==========
   String get removeDeviceLicenseTitle =>
       _t('إزالة ترخيص الجهاز', 'Remove device license');
   String get voucherLoadingBalance =>
-      _t('جاري تحميل الرصيد المستحق...', 'Loading outstanding balance...');
+      _t('جارٍ تحميل الرصيد المستحق…', 'Loading outstanding balance…');
   String get voucherBalanceLoadFailed =>
       _t('تعذر جلب الرصيد المستحق', 'Failed to load balance');
   String get voucherSelectCustomerHint => _t(
@@ -4071,5 +4071,5 @@ class AppLocalizations {
   String get logoInvalidImage =>
       _t('الملف المختار ليس صورة صالحة', 'The selected file is not a valid image');
   String csvPreviewLimited(int shown, int total) =>
-      _t('عرض أول $shown صفًا من $total', 'Showing first $shown of $total rows');
+      _t('عرض أول $shown صفاً من $total', 'Showing first $shown of $total rows');
 }

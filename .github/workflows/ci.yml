@@ -65,6 +65,7 @@ jobs:
 
   build-apk:
     name: Build Release APKs
+    if: false # Temporarily suspended: APK/AAB build execution suspended
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: analyze-and-test
