@@ -1,12 +1,28 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:warqatek/services/backup_encryption_service.dart';
 import 'package:warqatek/services/backup_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory testDir;
+
+  Future<File> createMockEncryptedSafetyFile(String path, {DateTime? mtime}) async {
+    final file = File(path);
+    final bytes = [
+      ...BackupEncryptionService.magicBytes,
+      1, // version
+      1, // kdf
+      ...List.filled(32, 0),
+    ];
+    await file.writeAsBytes(bytes);
+    if (mtime != null) {
+      await file.setLastModified(mtime);
+    }
+    return file;
+  }
 
   setUp(() async {
     testDir = await Directory.systemTemp.createTemp('safety_retention_test_');
@@ -29,9 +45,10 @@ void main() {
 
       // Create 5 safety backups with distinct timestamps
       for (var i = 1; i <= 5; i++) {
-        final f = File('${testDir.path}/warqatek_safety_pre_restore_${i}_1.waraq');
-        await f.writeAsString('safety_$i');
-        await f.setLastModified(baseTime.add(Duration(hours: i)));
+        final f = await createMockEncryptedSafetyFile(
+          '${testDir.path}/warqatek_safety_pre_restore_${i}_1.waraq',
+          mtime: baseTime.add(Duration(hours: i)),
+        );
         files.add(f);
       }
 
@@ -48,14 +65,15 @@ void main() {
     });
 
     test('2. Deletes safety backups older than 30 days', () async {
-      final oldFile = File('${testDir.path}/warqatek_safety_pre_restore_old_1.waraq');
-      await oldFile.writeAsString('old_safety');
-      // Modified 35 days ago
-      await oldFile.setLastModified(DateTime.now().subtract(const Duration(days: 35)));
+      final oldFile = await createMockEncryptedSafetyFile(
+        '${testDir.path}/warqatek_safety_pre_restore_old_1.waraq',
+        mtime: DateTime.now().subtract(const Duration(days: 35)),
+      );
 
-      final recentFile = File('${testDir.path}/warqatek_safety_pre_restore_recent_1.waraq');
-      await recentFile.writeAsString('recent_safety');
-      await recentFile.setLastModified(DateTime.now().subtract(const Duration(days: 1)));
+      final recentFile = await createMockEncryptedSafetyFile(
+        '${testDir.path}/warqatek_safety_pre_restore_recent_1.waraq',
+        mtime: DateTime.now().subtract(const Duration(days: 1)),
+      );
 
       await BackupService.pruneSafetyBackups();
 
@@ -97,6 +115,16 @@ void main() {
         () async => await BackupService.pruneSafetyBackups(),
         returnsNormally,
       );
+    });
+
+    test('6. Cleans up legacy plaintext safety backups even if recent', () async {
+      final legacyFile = File('${testDir.path}/warqatek_safety_pre_restore_legacy_1.waraq');
+      await legacyFile.writeAsString('{"legacy": "plaintext_data"}');
+      await legacyFile.setLastModified(DateTime.now().subtract(const Duration(hours: 1)));
+
+      await BackupService.pruneSafetyBackups();
+
+      expect(await legacyFile.exists(), isFalse);
     });
   });
 }
