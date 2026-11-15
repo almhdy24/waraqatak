@@ -29,6 +29,8 @@ class _CustomersScreenState extends State<CustomersScreen>
   String _query = '';
   bool _activeOnly = false;
   String? _error;
+  bool _isLoading = false;
+  int _loadVersion = 0;
 
   String get _filterType => _tabCtrl.index == 0 ? 'customer' : 'supplier';
 
@@ -55,8 +57,9 @@ class _CustomersScreenState extends State<CustomersScreen>
   }
 
   Future<void> _load() async {
+    final version = ++_loadVersion;
     setState(() {
-      _contacts = null;
+      _isLoading = true;
       _error = null;
     });
     try {
@@ -66,11 +69,27 @@ class _CustomersScreenState extends State<CustomersScreen>
               type: _filterType, activeOnly: _activeOnly)
           : await db.getAllContacts(
               type: _filterType, activeOnly: _activeOnly);
-      if (!mounted) return;
-      setState(() => _contacts = contacts);
+      if (!mounted || version != _loadVersion) return;
+      setState(() {
+        _contacts = contacts;
+        _isLoading = false;
+      });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.toString());
+      if (!mounted || version != _loadVersion) return;
+      setState(() {
+        _isLoading = false;
+        if (_contacts == null) {
+          _error = e.toString();
+        }
+      });
+      if (_contacts != null && mounted) {
+        final l10n = AppLocalizations.of(context);
+        AppSnackBar.show(
+          context,
+          ErrorUtils.toFriendlyMessage(e, l10n),
+          severity: AppSnackBarSeverity.error,
+        );
+      }
     }
   }
 
@@ -246,6 +265,8 @@ class _CustomersScreenState extends State<CustomersScreen>
                 ],
               ),
             ),
+            if (_isLoading && _contacts != null)
+              const LinearProgressIndicator(minHeight: 2),
             Expanded(
               child: TabBarView(
                 controller: _tabCtrl,
@@ -268,7 +289,7 @@ class _CustomersScreenState extends State<CustomersScreen>
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
-    if (_error != null) {
+    if (_error != null && _contacts == null) {
       return AppErrorState(
         message: ErrorUtils.toFriendlyMessage(_error!, l10n),
         onRetry: _load,

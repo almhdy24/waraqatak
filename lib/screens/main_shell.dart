@@ -97,7 +97,17 @@ class _MainShellState extends State<MainShell> {
 
   void _select(int i) {
     _built.add(i);
-    setState(() => _index = i);
+    setState(() {
+      _index = i;
+      switch (i) {
+        case 1:
+          _documentsRefreshToken++;
+        case 2:
+          _customersRefreshToken++;
+        case 3:
+          _productsRefreshToken++;
+      }
+    });
     const screens = ['home', 'invoices', 'customers', 'products', 'settings'];
     if (i >= 0 && i < screens.length) {
       try {
@@ -106,15 +116,8 @@ class _MainShellState extends State<MainShell> {
         });
       } catch (_) {}
     }
-    switch (i) {
-      case 0:
-        _homeKey.currentState?.reload();
-      case 1:
-        _documentsRefreshToken++;
-      case 2:
-        _customersRefreshToken++;
-      case 3:
-        _productsRefreshToken++;
+    if (i == 0) {
+      _homeKey.currentState?.reload();
     }
   }
 

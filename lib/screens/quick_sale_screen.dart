@@ -238,6 +238,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   final List<_HeldCart> _heldCarts = [];
   Set<int> _frequentProductIds = {};
   String? _selectedCategory;
+  List<String> _categories = [];
   bool _showFrequentlySold = false;
 
   Business? _business;
@@ -315,6 +316,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       } catch (_) {}
       if (!mounted || gen != _loadGeneration) return;
       final business = results[0] as Business?;
+      final prods = results[1] as List<Product>;
       final methods = results[2] as List<PaymentMethod>;
       final units = results[3] as Map<int, List<ProductUnit>>;
       final taxProfilesList = results[4] as List<TaxProfile>;
@@ -322,9 +324,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         for (final p in taxProfilesList)
           if (p.id != null) p.id!: p,
       };
+      final cats = prods
+          .map((p) => p.category)
+          .whereType<String>()
+          .where((c) => c.trim().isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
       setState(() {
         _business = business;
-        _products = results[1] as List<Product>;
+        _products = prods;
+        _categories = cats;
         _methods = methods;
         _productUnits = units;
         _frequentProductIds = frequentIds;
@@ -411,177 +421,119 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     setState(() {});
   }
 
+  Future<double?> _askQuantity({
+    required String title,
+    required String unitLabel,
+    required double initialQuantity,
+  }) async {
+    final l10n = AppLocalizations.of(context);
+    final ctrl = TextEditingController(
+      text: FormatUtils.formatQuantity(initialQuantity),
+    );
+    ctrl.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: ctrl.text.length,
+    );
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.itemQuantity,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 8),
+              AmountField(
+                controller: ctrl,
+                autofocus: true,
+                maxDecimals: 4,
+                showMultipliers: false,
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                  suffixText: unitLabel.isNotEmpty ? unitLabel : null,
+                ),
+                validator: (val) {
+                  final parsed = NumberInput.parse(val);
+                  if (parsed == null || parsed <= 0) {
+                    return l10n.invalidQuantity;
+                  }
+                  return null;
+                },
+                onFieldSubmitted: (_) {
+                  if (formKey.currentState?.validate() == true) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() == true) {
+                Navigator.pop(ctx, true);
+              }
+            },
+            child: Text(l10n.save),
+          ),
+        ],
+      ),
+    );
+
+    final result = confirmed == true ? NumberInput.parse(ctrl.text) : null;
+    Future.delayed(const Duration(milliseconds: 350), ctrl.dispose);
+    return (result != null && result > 0) ? result : null;
+  }
+
   Future<void> _promptAddQuantity(Product p) async {
     QuickSaleSettings.instance.dismissLongPressHint();
-    final l10n = AppLocalizations.of(context);
     final units = p.id != null
         ? (_productUnits[p.id!] ?? const <ProductUnit>[])
         : const <ProductUnit>[];
     final defaultUnit = units.where((u) => u.isDefaultSale).firstOrNull;
     final unitLabel = defaultUnit?.unitName ?? p.unit ?? '';
 
-    final qtyCtrl = TextEditingController(text: '1');
-    qtyCtrl.selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: qtyCtrl.text.length,
+    final qty = await _askQuantity(
+      title: p.name,
+      unitLabel: unitLabel,
+      initialQuantity: 1,
     );
-    final formKey = GlobalKey<FormState>();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(p.name),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.itemQuantity,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 8),
-              AmountField(
-                controller: qtyCtrl,
-                autofocus: true,
-                maxDecimals: 4,
-                showMultipliers: false,
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  suffixText: unitLabel.isNotEmpty ? unitLabel : null,
-                ),
-                validator: (val) {
-                  final parsed = NumberInput.parse(val);
-                  if (parsed == null || parsed <= 0) {
-                    return l10n.invalidQuantity;
-                  }
-                  return null;
-                },
-                onFieldSubmitted: (_) {
-                  if (formKey.currentState?.validate() == true) {
-                    Navigator.pop(ctx, true);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() == true) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: Text(l10n.save),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted) return;
-    if (confirmed == true) {
-      final qty = NumberInput.parse(qtyCtrl.text);
-      if (qty != null && qty > 0) {
-        _addProduct(p, quantity: qty);
-      }
-    }
+    if (!mounted || qty == null) return;
+    _addProduct(p, quantity: qty);
   }
 
   Future<void> _promptDirectQuantity(
     int index,
     void Function(VoidCallback) update,
   ) async {
-    final l10n = AppLocalizations.of(context);
     final line = _cart.lines[index];
     final p = line.product;
     final unitLabel = line.unit?.unitName ?? p.unit ?? '';
-    final qtyCtrl = TextEditingController(
-      text: FormatUtils.formatQuantity(line.quantity),
-    );
-    qtyCtrl.selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: qtyCtrl.text.length,
-    );
-    final formKey = GlobalKey<FormState>();
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(p.name),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.itemQuantity,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 8),
-              AmountField(
-                controller: qtyCtrl,
-                autofocus: true,
-                maxDecimals: 4,
-                showMultipliers: false,
-                decoration: InputDecoration(
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  suffixText: unitLabel.isNotEmpty ? unitLabel : null,
-                ),
-                validator: (val) {
-                  final parsed = NumberInput.parse(val);
-                  if (parsed == null || parsed <= 0) {
-                    return l10n.invalidQuantity;
-                  }
-                  return null;
-                },
-                onFieldSubmitted: (_) {
-                  if (formKey.currentState?.validate() == true) {
-                    Navigator.pop(ctx, true);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState?.validate() == true) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: Text(l10n.save),
-          ),
-        ],
-      ),
+    final newQty = await _askQuantity(
+      title: p.name,
+      unitLabel: unitLabel,
+      initialQuantity: line.quantity,
     );
-
-    if (!mounted) return;
-    if (confirmed == true) {
-      final newQty = NumberInput.parse(qtyCtrl.text);
-      if (newQty != null && newQty > 0) {
-        update(() => _setQty(index, newQty));
-      }
-    }
+    if (!mounted || newQty == null) return;
+    update(() => _setQty(index, newQty));
   }
 
   void _setQty(int index, double qty) {
@@ -656,6 +608,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   /// 5. If multiple results remain, preserve the results for manual selection.
   /// 6. Show product-not-found message only when no matching result exists.
   void _addByCode(String code, AppLocalizations l10n) {
+    if (!mounted) return;
     final raw = code.trim();
     if (raw.isEmpty) return;
     final normalized = ArabicSearchUtils.normalize(raw);
@@ -889,51 +842,66 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final timeFmt = DateFormat('hh:mm a');
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${l10n.posHeldCarts} (${_heldCarts.length})'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: _heldCarts.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final h = _heldCarts[i];
-              return ListTile(
-                leading: const Icon(Icons.pause_circle_outline),
-                title: Text(
-                  h.customer?.name ??
-                      l10n.posItemsCount(h.lines.length.toString()),
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text(
-                  '${timeFmt.format(h.heldAt)} • ${_fmt(h.total)}',
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: () {
-                    setState(() => _heldCarts.removeAt(i));
-                    _saveHeldCarts();
-                    Navigator.pop(ctx);
-                    if (_heldCarts.isNotEmpty) {
-                      _showHeldCartsDialog();
-                    }
-                  },
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _recallHeldCart(h);
-                },
-              );
-            },
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('${l10n.posHeldCarts} (${_heldCarts.length})'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: _heldCarts.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        l10n.posNoHeldCarts,
+                        style: TextStyle(
+                          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _heldCarts.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final h = _heldCarts[i];
+                      return ListTile(
+                        leading: const Icon(Icons.pause_circle_outline),
+                        title: Text(
+                          h.customer?.name ??
+                              l10n.posItemsCount(h.lines.length.toString()),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          '${timeFmt.format(h.heldAt)} • ${_fmt(h.total)}',
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20),
+                          tooltip: l10n.delete,
+                          onPressed: () {
+                            setState(() => _heldCarts.removeAt(i));
+                            setDialogState(() {});
+                            _saveHeldCarts();
+                            if (_heldCarts.isEmpty) {
+                              Navigator.pop(ctx);
+                            }
+                          },
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _recallHeldCart(h);
+                        },
+                      );
+                    },
+                  ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.cancel),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
-        ],
       ),
     );
   }
@@ -1147,7 +1115,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         name: '${data.doc.documentNumber}.pdf',
       );
     } catch (e) {
-      if (mounted) _toast('${l10n.operationFailed}: $e');
+      if (mounted) _toast(ErrorUtils.toFriendlyMessage(e, l10n));
     }
   }
 
@@ -1166,7 +1134,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       );
       if (!mounted) return;
     } catch (e) {
-      if (mounted) _toast('${l10n.operationFailed}: $e');
+      if (mounted) _toast(ErrorUtils.toFriendlyMessage(e, l10n));
     }
   }
 
@@ -1310,6 +1278,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   ? null
                   : IconButton(
                       icon: const Icon(Icons.close),
+                      tooltip: l10n.clear,
                       onPressed: () {
                         _searchCtrl.clear();
                         setState(() => _query = '');
@@ -1373,71 +1342,55 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             );
           },
         ),
-        Builder(
-          builder: (context) {
-            final categories =
-                _products
-                    .map((p) => p.category)
-                    .whereType<String>()
-                    .where((c) => c.trim().isNotEmpty)
-                    .toSet()
-                    .toList()
-                  ..sort();
-
-            if (categories.isEmpty && _frequentProductIds.isEmpty) {
-              return const SizedBox.shrink();
-            }
-
-            return Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+        if (_categories.isNotEmpty || _frequentProductIds.isNotEmpty)
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ChoiceChip(
+                    label: Text(l10n.all, style: const TextStyle(fontSize: 11)),
+                    selected: _selectedCategory == null && !_showFrequentlySold,
+                    onSelected: (_) => setState(() {
+                      _selectedCategory = null;
+                      _showFrequentlySold = false;
+                    }),
+                  ),
+                  if (_frequentProductIds.isNotEmpty) ...[
+                    const SizedBox(width: 6),
                     ChoiceChip(
-                      label: Text(l10n.all, style: const TextStyle(fontSize: 11)),
-                      selected: _selectedCategory == null && !_showFrequentlySold,
-                      onSelected: (_) => setState(() {
-                        _selectedCategory = null;
-                        _showFrequentlySold = false;
+                      avatar: const Icon(Icons.star_rounded, size: 14),
+                      label: Text(
+                        l10n.posFrequentlySold,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      selected: _showFrequentlySold,
+                      onSelected: (sel) => setState(() {
+                        _showFrequentlySold = sel;
+                        if (sel) _selectedCategory = null;
                       }),
                     ),
-                    if (_frequentProductIds.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      ChoiceChip(
-                        avatar: const Icon(Icons.star_rounded, size: 14),
-                        label: Text(
-                          l10n.posFrequentlySold,
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        selected: _showFrequentlySold,
+                  ],
+                  ..._categories.map(
+                    (c) => Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 6),
+                      child: ChoiceChip(
+                        label: Text(c, style: const TextStyle(fontSize: 11)),
+                        selected: _selectedCategory == c,
                         onSelected: (sel) => setState(() {
-                          _showFrequentlySold = sel;
-                          if (sel) _selectedCategory = null;
+                          _selectedCategory = sel ? c : null;
+                          if (sel) _showFrequentlySold = false;
                         }),
                       ),
-                    ],
-                    ...categories.map(
-                      (c) => Padding(
-                        padding: const EdgeInsetsDirectional.only(start: 6),
-                        child: ChoiceChip(
-                          label: Text(c, style: const TextStyle(fontSize: 11)),
-                          selected: _selectedCategory == c,
-                          onSelected: (sel) => setState(() {
-                            _selectedCategory = sel ? c : null;
-                            if (sel) _showFrequentlySold = false;
-                          }),
-                        ),
-                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
+            ),
+          ),
         Expanded(
           child: products.isEmpty
               ? Center(

@@ -37,15 +37,15 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool silent = false}) async {
     if (!mounted) return;
-    setState(() => _loading = true);
+    if (!silent) setState(() => _loading = true);
     final List<AppNotification> items;
     try {
       items = await AppOpsService.instance.getNotifications();
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      if (!silent) setState(() => _loading = false);
       return;
     }
     if (!mounted) return;
@@ -69,7 +69,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
         await AppOpsService.instance.markAsRead(n.serverId);
       }
     }
-    await _load();
+    await _load(silent: true);
   }
 
   void _toggleSelection(AppNotification item) {
@@ -113,7 +113,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
       actionExpires: true,
       onAction: () async {
         await AppOpsService.instance.restoreNotification(item);
-        await _load();
+        await _load(silent: true);
       },
     );
   }
@@ -171,7 +171,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
         for (final item in toDelete) {
           await AppOpsService.instance.restoreNotification(item);
         }
-        await _load();
+        await _load(silent: true);
       },
     );
   }
@@ -208,7 +208,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
 
     final snapshot = List<AppNotification>.from(_notifications);
     await AppOpsService.instance.deleteAllNotifications(_notifications);
-    await _load();
+    await _load(silent: true);
 
     if (!mounted) return;
     AppSnackBar.show(
@@ -222,7 +222,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
             await AppOpsService.instance.restoreNotification(item);
           }
         }
-        await _load();
+        await _load(silent: true);
       },
     );
   }
@@ -230,7 +230,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
   void _openDetail(AppNotification item) async {
     if (!item.isRead) {
       await AppOpsService.instance.markAsRead(item.serverId);
-      _load();
+      _load(silent: true);
     }
 
     if (!mounted) return;

@@ -12,6 +12,7 @@ import '../services/app_diagnostics_service.dart';
 import '../services/app_update_service.dart';
 import '../utils/url_launcher_utils.dart';
 import '../utils/date_format_utils.dart';
+import '../utils/error_utils.dart';
 import '../utils/quick_sale_settings.dart';
 import 'about_screen.dart';
 import 'business_setup_screen.dart';
@@ -188,12 +189,153 @@ class _SettingsScreenState extends State<SettingsScreen> {
         '${s.trialDaysRemaining} ${l10n.daysLeftInTrial}',
       EntitlementStatus.licensed =>
         s.licenseExpiresAt != null
-            ? '${l10n.licenseExpiresOn} ${s.licenseExpiresAt!.toLocal().toString().split(' ').first}'
+            ? '${l10n.licenseExpiresOn} ${AppDateUtils.formatDate(s.licenseExpiresAt!.toLocal())}'
             : l10n.activatedStatus,
       EntitlementStatus.trialExpired => l10n.trialExpiredStatus,
       EntitlementStatus.licenseExpired => l10n.licenseExpiredStatus,
       EntitlementStatus.licenseRevoked => l10n.licenseRevokedStatus,
     };
+  }
+
+  Future<void> _saveBackup(AppLocalizations l10n) async {
+    final password = await BackupPasswordCreateDialog.show(context);
+    if (password == null || !mounted) return;
+
+    if (password.isNotEmpty) {
+      final saved = await BackupProgressDialog.show(
+        context,
+        title: l10n.saveBackupTo,
+        message: l10n.backupEncrypting,
+        operation: (isCancelled) => BackupService.createBackupUserChosen(
+          password: password,
+          isCancelled: isCancelled,
+        ),
+      );
+      if (mounted && saved) {
+        await _loadBackupInfo();
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            l10n.backupSavedTo,
+            severity: AppSnackBarSeverity.success,
+          );
+        }
+      }
+    } else {
+      try {
+        final saved = await BackupService.createBackupUserChosen();
+        if (mounted && saved) {
+          await _loadBackupInfo();
+          if (mounted) {
+            AppSnackBar.show(
+              context,
+              l10n.backupSavedTo,
+              severity: AppSnackBarSeverity.success,
+            );
+          }
+        }
+      } catch (_) {
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            l10n.backupSaveFailed,
+            severity: AppSnackBarSeverity.error,
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _restoreBackup(AppLocalizations l10n) async {
+    if (_isRestoring) return;
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: l10n.confirmRestore,
+      message: l10n.restoreWarning,
+      confirmLabel: l10n.restore,
+      cancelLabel: l10n.cancel,
+      isDestructive: true,
+    );
+    if (confirmed != true || !mounted) return;
+
+    final authed = await SensitiveActionGate.reauthenticate(
+      context,
+      title: l10n.confirmRestore,
+      message: l10n.restoreWarning,
+      requireOwner: true,
+    );
+    if (!authed || !mounted) return;
+
+    setState(() => _isRestoring = true);
+    try {
+      final success = await BackupService.restoreBackup(
+        context: context,
+      );
+      if (mounted && success) {
+        MainShell.triggerGlobalRefresh();
+        await _loadBackupInfo();
+        if (mounted) {
+          AppSnackBar.show(
+            context,
+            l10n.operationSuccessful,
+            severity: AppSnackBarSeverity.success,
+          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      }
+    } on BackupUnsupportedVersionException {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.backupUpdateRequired,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    } on BackupDecryptionException {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.backupIncorrectPassword,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    } on BackupCorruptedFileException {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.backupCorrupted,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    } on BackupInvalidFormatException {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.backupInvalidFormat,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    } on BackupIntegrityException {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.backupIntegrityFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRestoring = false);
+      }
+    }
   }
 
   Future<void> _openUsersAndPermissions() async {
@@ -363,7 +505,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (mounted) {
                       AppSnackBar.show(
                         this.context,
-                        '${l10n.operationFailed}: $e',
+                        ErrorUtils.toFriendlyMessage(e, l10n),
                         severity: AppSnackBarSeverity.error,
                       );
                     }
@@ -403,152 +545,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: const Icon(Icons.save_outlined),
           title: Text(l10n.saveBackupTo),
-          onTap: () async {
-            final password = await BackupPasswordCreateDialog.show(context);
-            if (password == null) return;
-            if (!context.mounted) return;
-
-            if (password.isNotEmpty) {
-              final saved = await BackupProgressDialog.show(
-                context,
-                title: l10n.saveBackupTo,
-                message: l10n.backupEncrypting,
-                operation: (isCancelled) =>
-                    BackupService.createBackupUserChosen(
-                      password: password,
-                      isCancelled: isCancelled,
-                    ),
-              );
-              if (context.mounted && saved) {
-                await _loadBackupInfo();
-                if (context.mounted) {
-                  AppSnackBar.show(
-                    context,
-                    l10n.backupSavedTo,
-                    severity: AppSnackBarSeverity.success,
-                  );
-                }
-              }
-            } else {
-              try {
-                final saved = await BackupService.createBackupUserChosen();
-                if (context.mounted && saved) {
-                  await _loadBackupInfo();
-                  if (context.mounted) {
-                    AppSnackBar.show(
-                      context,
-                      l10n.backupSavedTo,
-                      severity: AppSnackBarSeverity.success,
-                    );
-                  }
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  AppSnackBar.show(
-                    context,
-                    l10n.backupSaveFailed,
-                    severity: AppSnackBarSeverity.error,
-                  );
-                }
-              }
-            }
-          },
+          onTap: () => _saveBackup(l10n),
         ),
       if (isOwner)
         ListTile(
           leading: const Icon(Icons.restore),
           title: Text(l10n.restore),
-          onTap: () async {
-            if (_isRestoring) return;
-            final confirmed = await AppConfirmDialog.show(
-              context,
-              title: l10n.confirmRestore,
-              message: l10n.restoreWarning,
-              confirmLabel: l10n.restore,
-              cancelLabel: l10n.cancel,
-              isDestructive: true,
-            );
-            if (confirmed != true || !context.mounted) return;
-
-            final authed = await SensitiveActionGate.reauthenticate(
-              context,
-              title: l10n.confirmRestore,
-              message: l10n.restoreWarning,
-              requireOwner: true,
-            );
-            if (!authed || !context.mounted) return;
-
-            setState(() => _isRestoring = true);
-            try {
-              final success = await BackupService.restoreBackup(
-                context: context,
-              );
-              if (context.mounted && success) {
-                MainShell.triggerGlobalRefresh();
-                await _loadBackupInfo();
-                if (context.mounted) {
-                  AppSnackBar.show(
-                    context,
-                    l10n.operationSuccessful,
-                    severity: AppSnackBarSeverity.success,
-                  );
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                }
-              }
-            } on BackupUnsupportedVersionException {
-              if (context.mounted) {
-                AppSnackBar.show(
-                  context,
-                  l10n.backupUpdateRequired,
-                  severity: AppSnackBarSeverity.error,
-                );
-              }
-            } on BackupDecryptionException {
-              if (context.mounted) {
-                AppSnackBar.show(
-                  context,
-                  l10n.backupIncorrectPassword,
-                  severity: AppSnackBarSeverity.error,
-                );
-              }
-            } on BackupCorruptedFileException {
-              if (context.mounted) {
-                AppSnackBar.show(
-                  context,
-                  l10n.backupCorrupted,
-                  severity: AppSnackBarSeverity.error,
-                );
-              }
-            } on BackupInvalidFormatException {
-              if (context.mounted) {
-                AppSnackBar.show(
-                  context,
-                  l10n.backupInvalidFormat,
-                  severity: AppSnackBarSeverity.error,
-                );
-              }
-            } on BackupIntegrityException {
-              if (context.mounted) {
-                AppSnackBar.show(
-                  context,
-                  l10n.backupIntegrityFailed,
-                  severity: AppSnackBarSeverity.error,
-                );
-              }
-            } catch (_) {
-              if (context.mounted) {
-                AppSnackBar.show(
-                  context,
-                  l10n.operationFailed,
-                  severity: AppSnackBarSeverity.error,
-                );
-              }
-            } finally {
-              if (mounted) {
-                setState(() => _isRestoring = false);
-              }
-            }
-          },
+          onTap: () => _restoreBackup(l10n),
         ),
       if (isOwner)
         ListTile(
@@ -601,6 +604,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.only(bottom: 24),
           children: [
+            if (_isRestoring) const LinearProgressIndicator(),
             // ── Current User Profile (Multi-User Only) ──────────────────────
             const CurrentUserProfileCard(),
 
@@ -908,6 +912,22 @@ class _CurrentUserProfileCardState extends State<CurrentUserProfileCard> {
   String? _customRoleName;
   String? _resolvedRoleId;
 
+  String _roleLabel(
+    AppLocalizations l10n, {
+    required bool isOwner,
+    required String roleId,
+  }) {
+    if (isOwner) return l10n.roleOwner;
+    return switch (roleId) {
+      'role-template-admin' => l10n.roleAdministrator,
+      'role-template-salesperson' => l10n.roleTemplate_salesperson_name,
+      'role-template-inventory' => l10n.roleTemplate_inventory_name,
+      'role-template-accountant' => l10n.roleTemplate_accountant_name,
+      'role-template-manager' => l10n.roleTemplate_manager_name,
+      _ => _customRoleName ?? roleId,
+    };
+  }
+
   void _resolveRole(String roleId) {
     if (_resolvedRoleId == roleId) return;
     _resolvedRoleId = roleId;
@@ -951,20 +971,11 @@ class _CurrentUserProfileCardState extends State<CurrentUserProfileCard> {
         final l10n = AppLocalizations.of(context);
         final cs = Theme.of(context).colorScheme;
 
-        String roleName = user.isOwner
-            ? (l10n.isArabic ? 'المالك' : 'Owner')
-            : (user.roleId == 'role-template-admin'
-                  ? (l10n.isArabic ? 'مدير النظام' : 'Administrator')
-                  : (user.roleId == 'role-template-salesperson'
-                        ? l10n.roleTemplate_salesperson_name
-                        : (user.roleId == 'role-template-inventory'
-                              ? l10n.roleTemplate_inventory_name
-                              : (user.roleId == 'role-template-accountant'
-                                    ? l10n.roleTemplate_accountant_name
-                                    : (user.roleId == 'role-template-manager'
-                                          ? l10n.roleTemplate_manager_name
-                                          : (_customRoleName ??
-                                                user.roleId))))));
+        final roleName = _roleLabel(
+          l10n,
+          isOwner: user.isOwner,
+          roleId: user.roleId,
+        );
 
         if (!user.isOwner && !user.roleId.startsWith('role-template-')) {
           _resolveRole(user.roleId);

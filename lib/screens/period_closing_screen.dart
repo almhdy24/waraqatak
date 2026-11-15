@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../utils/date_format_utils.dart';
+import '../utils/error_utils.dart';
 import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_date_picker.dart';
@@ -34,29 +35,45 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final closedThrough = await DatabaseHelper.instance.getBooksClosedThrough();
-    if (!mounted) return;
-    setState(() {
-      _booksClosedThrough = closedThrough;
-      _loading = false;
-    });
+    try {
+      final closedThrough =
+          await DatabaseHelper.instance.getBooksClosedThrough();
+      if (!mounted) return;
+      setState(() {
+        _booksClosedThrough = closedThrough;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      final l10n = AppLocalizations.of(context);
+      AppSnackBar.show(
+        context,
+        ErrorUtils.toFriendlyMessage(e, l10n),
+        severity: AppSnackBarSeverity.error,
+      );
+    }
   }
 
   Future<void> _pickLockDate() async {
     final l10n = AppLocalizations.of(context);
-    final initialDate = _booksClosedThrough ?? DateTime.now();
+    final today = DateTime.now();
+    final initialDate = _booksClosedThrough ?? today;
     final picked = await AppDatePicker.show(
       context: context,
-      initialDate: initialDate,
+      initialDate: initialDate.isAfter(today) ? today : initialDate,
       firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
+      lastDate: DateTime(today.year, today.month, today.day),
     );
     if (picked == null || !mounted) return;
 
+    final confirmMsg = l10n.confirmSetPeriodLockWithDate(
+      AppDateUtils.formatDate(picked),
+    );
     final confirmed = await AppConfirmDialog.show(
       context,
       title: l10n.confirmSetPeriodLockTitle,
-      message: l10n.confirmSetPeriodLockMessage,
+      message: confirmMsg,
       confirmLabel: l10n.confirm,
       isDestructive: false,
     );
@@ -65,7 +82,7 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
     final authed = await SensitiveActionGate.reauthenticate(
       context,
       title: l10n.confirmSetPeriodLockTitle,
-      message: l10n.confirmSetPeriodLockMessage,
+      message: confirmMsg,
     );
     if (!authed || !mounted) return;
 

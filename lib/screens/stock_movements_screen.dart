@@ -11,6 +11,7 @@ import '../services/access/permission_registry.dart';
 import '../services/business_reporting_service.dart';
 import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
+import '../utils/error_utils.dart';
 import '../utils/format_utils.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
@@ -57,10 +58,13 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
     _load(reloadProducts: true);
   }
 
-  Future<void> _load({bool reloadProducts = false}) async {
+  Future<void> _load({
+    bool reloadProducts = false,
+    bool showSpinner = true,
+  }) async {
     final seq = ++_querySeq;
     setState(() {
-      _loading = true;
+      if (showSpinner) _loading = true;
       _error = null;
     });
     try {
@@ -174,31 +178,42 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                     ),
                     const Divider(height: 1),
                     Expanded(
-                      child: ListView.separated(
-                        controller: scrollController,
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (_, i) {
-                          final p = filtered[i];
-                          final isSelected = p.id == _selectedProduct?.id;
-                          return ListTile(
-                            title: Text(
-                              p.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Text(
+                                l10n.noSearchResults,
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                            )
+                          : ListView.separated(
+                              controller: scrollController,
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (_, i) {
+                                final p = filtered[i];
+                                final isSelected = p.id == _selectedProduct?.id;
+                                final subtitleParts = [p.code, p.barcode]
+                                    .where((s) => s != null && s.isNotEmpty)
+                                    .join(' · ');
+                                return ListTile(
+                                  title: Text(
+                                    p.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: subtitleParts.isNotEmpty
+                                      ? Text(
+                                          subtitleParts,
+                                          style: const TextStyle(fontSize: 11),
+                                        )
+                                      : null,
+                                  selected: isSelected,
+                                  onTap: () =>
+                                      Navigator.pop(ctx, _ProductPickerResult(p)),
+                                );
+                              },
                             ),
-                            subtitle: p.barcode != null && p.barcode!.isNotEmpty
-                                ? Text(
-                                    p.barcode!,
-                                    style: const TextStyle(fontSize: 11),
-                                  )
-                                : null,
-                            selected: isSelected,
-                            onTap: () =>
-                                Navigator.pop(ctx, _ProductPickerResult(p)),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 );
@@ -310,7 +325,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       if (!mounted) return;
       AppSnackBar.show(
         context,
-        '${l10n.operationFailed}: $e',
+        ErrorUtils.toFriendlyMessage(e, l10n),
         severity: AppSnackBarSeverity.error,
       );
     }
@@ -638,7 +653,10 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       return const AppLoadingView();
     }
     if (_error != null) {
-      return AppErrorState(message: _error!, onRetry: _load);
+      return AppErrorState(
+        message: ErrorUtils.toFriendlyMessage(_error!, l10n),
+        onRetry: _load,
+      );
     }
     final items = _reportSummary?.items ?? [];
     if (items.isEmpty) {
@@ -652,7 +670,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
     final totalCount = items.length + (isAtLimit ? 1 : 0);
 
     return RefreshIndicator(
-      onRefresh: () => _load(reloadProducts: true),
+      onRefresh: () => _load(reloadProducts: true, showSpinner: false),
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 40),
         itemCount: totalCount,
@@ -682,7 +700,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                   FilledButton.tonal(
                     onPressed: () {
                       setState(() => _currentLimit += 300);
-                      _load();
+                      _load(showSpinner: false);
                     },
                     child: Text(l10n.loadMore),
                   ),
@@ -948,7 +966,8 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       'invoice' => l10n.invoice,
       'purchase' => l10n.purchase,
       'quotation' => l10n.quotation,
-      'receipt' => l10n.paymentReceipt,
+      'receipt' || 'payment_receipt' => l10n.paymentReceipt,
+      'expense_voucher' => l10n.expenseVoucher,
       _ => l10n.documents,
     };
   }

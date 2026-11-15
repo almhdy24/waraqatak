@@ -57,14 +57,22 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SvgPicture.asset('assets/logo.svg', width: 110, height: 110),
+            SvgPicture.asset(
+              'assets/logo.svg',
+              width: 110,
+              height: 110,
+              semanticsLabel: '',
+            ),
             const SizedBox(height: 24),
-            Text(
-              l10n.appTitle,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
+            Semantics(
+              header: true,
+              child: Text(
+                l10n.appTitle,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
             ),
             const SizedBox(height: 8),

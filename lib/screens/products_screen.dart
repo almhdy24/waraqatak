@@ -85,7 +85,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Future<void> _load() async {
     final currentSession = ++_searchSession;
     setState(() {
-      _products = null;
       _error = null;
     });
     try {
@@ -249,15 +248,15 @@ class _ProductsScreenState extends State<ProductsScreen> {
     MaterialPageRoute(builder: (_) => ProductFormScreen(product: product)),
   ).then((_) => _load());
 
-  Future<void> _openInventory() async {
+  Future<void> _openProGated(Feature feature, Widget Function() build) async {
     final entitlement = await LicenseService.instance.checkEntitlement(
       force: true,
     );
     if (!mounted) return;
-    if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
+    if (!FeatureAccess.canAccess(feature, entitlement)) {
       final result = await ProUpgradeSheet.show(
         context,
-        feature: Feature.inventory,
+        feature: feature,
       );
       if (result == true && mounted) {
         await Navigator.push<bool>(
@@ -272,68 +271,19 @@ class _ProductsScreenState extends State<ProductsScreen> {
     if (!mounted) return;
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const InventoryScreen()),
-    );
-    if (mounted) {
-      _load();
-    }
-  }
-
-  Future<void> _openBulkPricing() async {
-    final entitlement = await LicenseService.instance.checkEntitlement(
-      force: true,
-    );
-    if (!mounted) return;
-    if (!FeatureAccess.canAccess(Feature.bulkPriceUpdate, entitlement)) {
-      final result = await ProUpgradeSheet.show(
-        context,
-        feature: Feature.bulkPriceUpdate,
-      );
-      if (result == true && mounted) {
-        await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (_) => const ActivationScreen()),
-        );
-        if (!mounted) return;
-        LicenseService.instance.invalidateCache();
-      }
-      return;
-    }
-    if (!mounted) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const BulkPricingScreen()),
+      MaterialPageRoute(builder: (_) => build()),
     );
     if (mounted) _load();
   }
 
-  Future<void> _openCsv() async {
-    final entitlement = await LicenseService.instance.checkEntitlement(
-      force: true,
-    );
-    if (!mounted) return;
-    if (!FeatureAccess.canAccess(Feature.csvImportExport, entitlement)) {
-      final result = await ProUpgradeSheet.show(
-        context,
-        feature: Feature.csvImportExport,
-      );
-      if (result == true && mounted) {
-        await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (_) => const ActivationScreen()),
-        );
-        if (!mounted) return;
-        LicenseService.instance.invalidateCache();
-      }
-      return;
-    }
-    if (!mounted) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const CsvImportExportScreen()),
-    );
-    if (mounted) _load();
-  }
+  Future<void> _openInventory() =>
+      _openProGated(Feature.inventory, () => const InventoryScreen());
+
+  Future<void> _openBulkPricing() =>
+      _openProGated(Feature.bulkPriceUpdate, () => const BulkPricingScreen());
+
+  Future<void> _openCsv() =>
+      _openProGated(Feature.csvImportExport, () => const CsvImportExportScreen());
 
   @override
   Widget build(BuildContext context) {
@@ -402,9 +352,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                       if (_query.isNotEmpty)
                         IconButton(
                           icon: const Icon(Icons.clear, size: 18),
-                          tooltip: MaterialLocalizations.of(
-                            context,
-                          ).closeButtonLabel,
+                          tooltip: l10n.clear,
                           onPressed: () {
                             _debounceTimer?.cancel();
                             _searchCtrl.clear();
@@ -522,11 +470,21 @@ class _ProductsScreenState extends State<ProductsScreen> {
     }
     final products = _products!;
     if (products.isEmpty) {
-      if (_query.isNotEmpty) {
+      if (_query.isNotEmpty || _typeFilter != null || _categoryFilter != null) {
         return AppEmptyState(
           icon: Icons.search_off_rounded,
           title: l10n.noSearchResults,
           description: l10n.noMatchingProduct,
+          actionLabel: l10n.clearFilters,
+          onAction: () {
+            setState(() {
+              _query = '';
+              _searchCtrl.clear();
+              _typeFilter = null;
+              _categoryFilter = null;
+            });
+            _load();
+          },
         );
       }
       final canManage = AccessGuard.can(PermissionRegistry.productsManage);
@@ -652,6 +610,7 @@ class _ProductCard extends StatelessWidget {
                                         : TextDecoration.lineThrough,
                                   ),
                                   maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               if (!product.isActive) ...[
@@ -696,6 +655,8 @@ class _ProductCard extends StatelessWidget {
 
                     // Action menu
                     PopupMenuButton<String>(
+                      tooltip:
+                          MaterialLocalizations.of(context).showMenuTooltip,
                       icon: Icon(
                         Icons.more_vert,
                         size: 20,

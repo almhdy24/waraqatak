@@ -11,6 +11,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_search_bar.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/status_badge.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -75,9 +76,19 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     } catch (e) {
       if (!mounted || currentVersion != _searchVersion) return;
       setState(() {
-        _error = e.toString();
         _isLoading = false;
+        if (_documents == null) {
+          _error = e.toString();
+        }
       });
+      if (_documents != null && mounted) {
+        final l10n = AppLocalizations.of(context);
+        AppSnackBar.show(
+          context,
+          ErrorUtils.toFriendlyMessage(e, l10n),
+          severity: AppSnackBarSeverity.error,
+        );
+      }
     }
   }
 
