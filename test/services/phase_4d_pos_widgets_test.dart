@@ -115,13 +115,14 @@ void main() {
 
       expect(find.byType(ProductAutocompleteField), findsOneWidget);
       await tester.enterText(find.byType(TextFormField), 'Test Product');
-      // Advance by debounce duration
+      // Advance fake timer past the 250ms debounce
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Test Product'), findsOneWidget);
-
-      // Dismiss options overlay cleanly before test teardown
-      FocusManager.instance.primaryFocus?.unfocus();
+      // Drain async database call
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
       await tester.pumpAndSettle();
+      expect(find.text('Test Product'), findsOneWidget);
     });
 
     testWidgets(
