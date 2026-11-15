@@ -345,7 +345,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 ),
                 child: Text(
                   l10n.noCustomMethods,
-                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ...custom.map(

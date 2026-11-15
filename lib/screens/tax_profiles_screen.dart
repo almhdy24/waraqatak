@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/tax_profile.dart';
+import '../widgets/app_empty_state.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 import '../utils/number_input.dart';
@@ -207,6 +208,7 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.taxProfiles),
@@ -216,26 +218,17 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
         onPressed: () => _showForm(),
         child: const Icon(Icons.add),
       ),
-      body: ResponsiveCenter(child: _profiles == null
-          ? const Center(child: CircularProgressIndicator())
-          : _profiles!.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.percent_outlined,
-                            size: 64, color: Colors.grey.shade300),
-                        const SizedBox(height: 12),
-                        Text(l10n.noTaxProfiles,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                )
-              : ListView.builder(
+      body: ResponsiveCenter(
+        child: _profiles == null
+            ? const Center(child: CircularProgressIndicator())
+            : _profiles!.isEmpty
+                ? AppEmptyState(
+                    icon: Icons.percent_outlined,
+                    title: l10n.noTaxProfiles,
+                    actionLabel: l10n.addTaxProfile,
+                    onAction: () => _showForm(),
+                  )
+                : ListView.builder(
                   padding: const EdgeInsets.only(bottom: 80),
                   itemCount: _profiles!.length,
                   itemBuilder: (_, i) {
@@ -299,12 +292,16 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
+                                  color: cs.surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text(l10n.inactive,
-                                    style: const TextStyle(
-                                        fontSize: 10, color: Colors.grey)),
+                                child: Text(
+                                  l10n.inactive,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
                               ),
                             ],
                           ],

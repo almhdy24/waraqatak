@@ -43,6 +43,7 @@ import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/contact_autocomplete_field.dart';
 import '../widgets/pos_product_tile.dart';
 import 'barcode_scanner_screen.dart';
@@ -2333,7 +2334,8 @@ class _SaleDoneDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return AlertDialog(
-      icon: const Icon(Icons.check_circle, color: Colors.green, size: 52),
+      icon: Icon(Icons.check_circle,
+          color: AppStatusColors.fg(context, AppStatus.success), size: 52),
       title: Text(l10n.posSaleCompleted),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2352,7 +2354,7 @@ class _SaleDoneDialog extends StatelessWidget {
               '${l10n.posChange}: $change',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.green.shade700,
+                color: AppStatusColors.fg(context, AppStatus.success),
                 fontWeight: FontWeight.w600,
               ),
             ),

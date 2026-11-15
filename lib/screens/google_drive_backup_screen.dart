@@ -9,6 +9,7 @@ import '../localization/app_localizations.dart';
 import '../services/backup_encryption_service.dart';
 import '../services/google_drive_backup_service.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/access/screen_access_gate.dart';
 import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/app_design_tokens.dart';
@@ -302,8 +303,8 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                             : Icons.lock_open_outlined,
                         size: 14,
                         color: backup.encrypted
-                            ? Colors.green.shade700
-                            : Colors.amber.shade800,
+                            ? AppStatusColors.fg(context, AppStatus.success)
+                            : AppStatusColors.fg(context, AppStatus.warning),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -314,8 +315,8 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: backup.encrypted
-                              ? Colors.green.shade700
-                              : Colors.amber.shade800,
+                              ? AppStatusColors.fg(context, AppStatus.success)
+                              : AppStatusColors.fg(context, AppStatus.warning),
                         ),
                       ),
                     ],
@@ -576,18 +577,14 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: _signedIn
-                                              ? Colors.green.withValues(
-                                                  alpha: 0.12,
-                                                )
+                                              ? AppStatusColors.bg(context, AppStatus.success)
                                               : cs.surfaceContainerHighest,
                                           borderRadius: BorderRadius.circular(
                                             12,
                                           ),
                                           border: Border.all(
                                             color: _signedIn
-                                                ? Colors.green.withValues(
-                                                    alpha: 0.4,
-                                                  )
+                                                ? AppStatusColors.border(context, AppStatus.success)
                                                 : cs.outlineVariant,
                                           ),
                                         ),
@@ -599,7 +596,7 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
                                             color: _signedIn
-                                                ? Colors.green.shade800
+                                                ? AppStatusColors.fg(context, AppStatus.success)
                                                 : cs.onSurfaceVariant,
                                           ),
                                         ),
@@ -863,13 +860,10 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                                                     vertical: 1,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: b.encrypted
-                                                    ? Colors.green.withValues(
-                                                        alpha: 0.12,
-                                                      )
-                                                    : Colors.amber.withValues(
-                                                        alpha: 0.12,
-                                                      ),
+                                                color: AppStatusColors.bg(
+                                                  context,
+                                                  b.encrypted ? AppStatus.success : AppStatus.warning,
+                                                ),
                                                 borderRadius:
                                                     BorderRadius.circular(4),
                                               ),
@@ -880,9 +874,10 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
                                                 style: TextStyle(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.bold,
-                                                  color: b.encrypted
-                                                      ? Colors.green.shade800
-                                                      : Colors.amber.shade900,
+                                                  color: AppStatusColors.fg(
+                                                    context,
+                                                    b.encrypted ? AppStatus.success : AppStatus.warning,
+                                                  ),
                                                 ),
                                               ),
                                             ),

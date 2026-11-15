@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../core/constants/app_constants.dart';
 import '../localization/app_localizations.dart';
 import '../models/app_notification.dart';
 import '../services/app_ops_service.dart';
+import '../utils/date_format_utils.dart';
 import '../utils/url_launcher_utils.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/responsive.dart';
 import 'about_screen.dart';
 import 'database_diagnostic_screen.dart';
@@ -138,7 +139,10 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
             child: Text(l10n.cancel),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(l10n.delete),
           ),
@@ -189,7 +193,10 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
             child: Text(l10n.cancel),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(l10n.deleteAll),
           ),
@@ -229,9 +236,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
     if (!mounted) return;
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final dateStr = DateFormat(
-      'yyyy/MM/dd – HH:mm',
-    ).format(item.publishedAt.toLocal());
+    final dateStr = AppDateUtils.formatDateTime(item.publishedAt.toLocal());
 
     showModalBottomSheet<void>(
       context: context,
@@ -258,7 +263,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                   Text(
                     dateStr,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.grey,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -383,45 +388,13 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
   }
 
   Widget _categoryChip(String category, AppLocalizations l10n) {
-    Color bg;
-    Color fg;
-    String label;
-
-    switch (category) {
-      case 'update':
-        bg = Colors.blue.shade50;
-        fg = Colors.blue.shade800;
-        label = l10n.categoryUpdate;
-        break;
-      case 'critical':
-        bg = Colors.red.shade50;
-        fg = Colors.red.shade800;
-        label = l10n.categoryCritical;
-        break;
-      case 'tips':
-        bg = Colors.green.shade50;
-        fg = Colors.green.shade800;
-        label = l10n.categoryTips;
-        break;
-      case 'announcement':
-      default:
-        bg = Colors.amber.shade50;
-        fg = Colors.amber.shade900;
-        label = l10n.categoryAnnouncement;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.bold),
-      ),
-    );
+    final (AppStatus status, String label) = switch (category) {
+      'update' => (AppStatus.info, l10n.categoryUpdate),
+      'critical' => (AppStatus.danger, l10n.categoryCritical),
+      'tips' => (AppStatus.success, l10n.categoryTips),
+      _ => (AppStatus.warning, l10n.categoryAnnouncement),
+    };
+    return AppStatusBadge(label: label, status: status, fontSize: 12);
   }
 
   @override
@@ -491,11 +464,11 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                       child: Row(
                         children: [
                           Icon(Icons.delete_sweep_outlined,
-                              size: 20, color: Colors.red.shade700),
+                              size: 20, color: theme.colorScheme.error),
                           const SizedBox(width: 8),
                           Text(
                             l10n.deleteAll,
-                            style: TextStyle(color: Colors.red.shade700),
+                            style: TextStyle(color: theme.colorScheme.error),
                           ),
                         ],
                       ),
@@ -517,14 +490,14 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                           Icon(
                             Icons.mark_email_read_outlined,
                             size: 72,
-                            color: Colors.grey.shade400,
+                            color: theme.colorScheme.outline,
                           ),
                           const SizedBox(height: 16),
                           Text(
                             l10n.noNotifications,
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodyLarge?.copyWith(
-                              color: Colors.grey.shade600,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -545,9 +518,8 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final item = _notifications[index];
-                        final dateStr = DateFormat(
-                          'yyyy/MM/dd',
-                        ).format(item.publishedAt.toLocal());
+                        final dateStr =
+                            AppDateUtils.formatDate(item.publishedAt.toLocal());
 
                         final isSelected =
                             _selectedIds.contains(item.serverId);
@@ -612,7 +584,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey.shade700,
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -622,7 +594,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                                     dateStr,
                                     style:
                                         theme.textTheme.labelSmall?.copyWith(
-                                      color: Colors.grey.shade500,
+                                      color: theme.colorScheme.outline,
                                     ),
                                   ),
                                   if (!item.isDismissible) ...[
@@ -630,14 +602,14 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                                     Icon(
                                       Icons.lock_outline,
                                       size: 12,
-                                      color: Colors.red.shade400,
+                                      color: theme.colorScheme.error,
                                     ),
                                     const SizedBox(width: 2),
                                     Text(
                                       l10n.categoryCritical,
                                       style: theme.textTheme.labelSmall
                                           ?.copyWith(
-                                        color: Colors.red.shade400,
+                                        color: theme.colorScheme.error,
                                         fontSize: 10,
                                       ),
                                     ),
@@ -667,12 +639,12 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                           key: ValueKey('notif_${item.serverId}'),
                           direction: DismissDirection.endToStart,
                           background: Container(
-                            color: Colors.red.shade700,
+                            color: theme.colorScheme.error,
                             alignment: AlignmentDirectional.centerEnd,
                             padding: const EdgeInsetsDirectional.only(end: 20),
-                            child: const Icon(
+                            child: Icon(
                               Icons.delete_outline,
-                              color: Colors.white,
+                              color: theme.colorScheme.onError,
                             ),
                           ),
                           onDismissed: (_) => _deleteSingle(item),

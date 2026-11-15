@@ -4,6 +4,7 @@ import '../../localization/app_localizations.dart';
 import '../../models/stocktake.dart';
 import '../../services/stocktake_service.dart';
 import '../../widgets/app_icons.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 import 'stocktake_screen.dart';
 
@@ -68,16 +69,16 @@ class _StocktakeHistoryScreenState extends State<StocktakeHistoryScreen> {
                         itemBuilder: (ctx, idx) {
                           final s = _sessions[idx];
 
-                          Color statusColor = Colors.grey;
+                          Color statusColor = cs.onSurfaceVariant;
                           String statusText = s.status;
                           if (s.isCompleted) {
-                            statusColor = Colors.teal;
+                            statusColor = AppStatusColors.fg(context, AppStatus.success);
                             statusText = l10n.sessionStatusCompleted;
                           } else if (s.isCancelled) {
-                            statusColor = Colors.red;
+                            statusColor = cs.error;
                             statusText = l10n.sessionStatusCancelled;
                           } else if (s.isActive) {
-                            statusColor = Colors.orange;
+                            statusColor = AppStatusColors.fg(context, AppStatus.warning);
                             statusText = l10n.sessionStatusInProgress;
                           }
 

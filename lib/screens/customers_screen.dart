@@ -131,10 +131,11 @@ class _CustomersScreenState extends State<CustomersScreen>
               child: Text(l10n.cancel)),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style:
-                FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(l10n.delete,
-                style: const TextStyle(color: Colors.white)),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -331,11 +332,8 @@ class _ContactCard extends StatelessWidget {
   Color _avatarColor(String name, ColorScheme cs) {
     final colors = [
       cs.primary,
-      Colors.teal,
-      Colors.indigo,
-      Colors.deepOrange,
-      Colors.purple,
-      Colors.green.shade700,
+      cs.secondary,
+      cs.tertiary,
     ];
     return colors[initialOf(name).runes.first % colors.length];
   }
@@ -411,7 +409,7 @@ class _ContactCard extends StatelessWidget {
                           ),
                           if (!contact.active) ...[
                             const SizedBox(width: 6),
-                            _StatusBadge(l10n.inactive, Colors.grey),
+                            _StatusBadge(l10n.inactive, cs.onSurfaceVariant),
                           ],
                         ],
                       ),
@@ -435,24 +433,24 @@ class _ContactCard extends StatelessWidget {
                           ),
                           if (contact.phone != null) ...[
                             const SizedBox(width: 10),
-                            const Icon(Icons.phone_outlined,
-                                size: 13, color: Colors.grey),
+                            Icon(Icons.phone_outlined,
+                                size: 13, color: cs.onSurfaceVariant),
                             const SizedBox(width: 3),
                             Text(contact.phone!,
-                                style: const TextStyle(
-                                    fontSize: 12, color: Colors.grey)),
+                                style: TextStyle(
+                                    fontSize: 12, color: cs.onSurfaceVariant)),
                           ],
                         ],
                       ),
                       if (contact.email != null) ...[
                         const SizedBox(height: 2),
                         Row(children: [
-                          const Icon(Icons.email_outlined,
-                              size: 13, color: Colors.grey),
+                          Icon(Icons.email_outlined,
+                              size: 13, color: cs.onSurfaceVariant),
                           const SizedBox(width: 3),
                           Text(contact.email!,
-                              style: const TextStyle(
-                                  fontSize: 12, color: Colors.grey)),
+                              style: TextStyle(
+                                  fontSize: 12, color: cs.onSurfaceVariant)),
                         ]),
                       ],
                     ],
@@ -495,11 +493,10 @@ class _ContactCard extends StatelessWidget {
                       value: 'delete',
                       child: ListTile(
                         dense: true,
-                        leading: const Icon(Icons.delete_outline,
-                            color: Colors.red),
+                        leading: Icon(Icons.delete_outline,
+                            color: cs.error),
                         title: Text(l10n.delete,
-                            style:
-                                const TextStyle(color: Colors.red)),
+                            style: TextStyle(color: cs.error)),
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),

@@ -15,6 +15,7 @@ import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/responsive.dart';
 import '../document_detail_screen.dart';
@@ -323,14 +324,14 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                           _chip(
                             l10n.totalPurchasesAmt,
                             baseTotals.purchases,
-                            Colors.orange,
+                            AppStatusColors.fg(context, AppStatus.warning),
                             symbol: baseSymbol,
                           ),
                           const SizedBox(width: 8),
                           _chip(
                             l10n.totalPaid,
                             baseTotals.paid,
-                            Colors.teal,
+                            AppStatusColors.fg(context, AppStatus.success),
                             symbol: baseSymbol,
                           ),
                           const SizedBox(width: 8),
@@ -392,14 +393,14 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                                       _chip(
                                         '${l10n.totalPurchasesAmt} (${e.key})',
                                         e.value.purchases,
-                                        Colors.orange,
+                                        AppStatusColors.fg(context, AppStatus.warning),
                                         symbol: sym,
                                       ),
                                       const SizedBox(width: 8),
                                       _chip(
                                         '${l10n.totalPaid} (${e.key})',
                                         e.value.paid,
-                                        Colors.teal,
+                                        AppStatusColors.fg(context, AppStatus.success),
                                         symbol: sym,
                                       ),
                                       const SizedBox(width: 8),
@@ -425,16 +426,16 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                 child: Row(
                   children: [
                     Text('${l10n.finalized}: $finalizedCount',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     const SizedBox(width: 12),
                     if (cancelledCount > 0)
                       Text('${l10n.cancelledCount}: $cancelledCount',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     const Spacer(),
                     if (summary.currencies.length > 1)
                       Text(
                         l10n.mixedCurrenciesNotice,
-                        style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                        style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.warning)),
                       ),
                   ],
                 ),
@@ -492,6 +493,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
       itemCount: items.length,
       padding: const EdgeInsets.only(top: 4, bottom: 16),
       itemBuilder: (ctx, i) {
+        final cs = Theme.of(ctx).colorScheme;
         final item = items[i];
         final doc = item.document;
         final isCancelled = doc.status == DocumentStatus.cancelled;
@@ -537,7 +539,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                     ),
                     Text(
                       _dateFmt.format(doc.date),
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -547,14 +549,14 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                     children: [
                       Text(
                         '${l10n.paid}: ${_numFmt.format(doc.paid)}',
-                        style: const TextStyle(fontSize: 11, color: Colors.teal),
+                        style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.success)),
                       ),
                       const SizedBox(width: 10),
                       Text(
                         '${l10n.remaining}: ${_numFmt.format(doc.remaining)}',
                         style: TextStyle(
                           fontSize: 11,
-                          color: doc.remaining > 0 ? Colors.red : Colors.grey,
+                          color: doc.remaining > 0 ? cs.error : cs.outline,
                         ),
                       ),
                     ],

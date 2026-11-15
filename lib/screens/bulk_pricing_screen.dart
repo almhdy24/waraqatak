@@ -729,7 +729,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                                   fontSize: 12,
                                   color: (item?.isValid ?? true)
                                       ? cs.primary
-                                      : Colors.red,
+                                      : cs.error,
                                 ),
                               ),
                               Text(
@@ -737,7 +737,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w500,
-                                  color: delta >= 0 ? Colors.teal : Colors.red,
+                                  color: delta >= 0 ? cs.tertiary : cs.error,
                                 ),
                               ),
                             ],

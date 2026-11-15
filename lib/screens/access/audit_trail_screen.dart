@@ -8,6 +8,7 @@ import '../../services/access/audit_service.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 
 class AuditTrailScreen extends StatefulWidget {
@@ -190,28 +191,28 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
     }
   }
 
-  Color _getActionColor(String action, ColorScheme cs) {
+  Color _getActionColor(BuildContext context, String action, ColorScheme cs) {
     if (action.contains('denied') || action.contains('failed') || action.contains('lockout')) {
       return cs.error;
     }
     if (action.contains('login') || action.contains('success') || action.contains('created')) {
-      return Colors.teal;
+      return AppStatusColors.fg(context, AppStatus.success);
     }
     if (action.contains('updated') || action.contains('override') || action.contains('unlocked')) {
-      return Colors.amber.shade800;
+      return AppStatusColors.fg(context, AppStatus.warning);
     }
     return cs.primary;
   }
 
-  Color _getActionContainerColor(String action, ColorScheme cs) {
+  Color _getActionContainerColor(BuildContext context, String action, ColorScheme cs) {
     if (action.contains('denied') || action.contains('failed') || action.contains('lockout')) {
       return cs.errorContainer.withValues(alpha: 0.6);
     }
     if (action.contains('login') || action.contains('success') || action.contains('created')) {
-      return Colors.teal.withValues(alpha: 0.15);
+      return AppStatusColors.bg(context, AppStatus.success);
     }
     if (action.contains('updated') || action.contains('override') || action.contains('unlocked')) {
-      return Colors.amber.withValues(alpha: 0.15);
+      return AppStatusColors.bg(context, AppStatus.warning);
     }
     return cs.primaryContainer.withValues(alpha: 0.5);
   }
@@ -353,8 +354,8 @@ class _AuditTrailScreenState extends State<AuditTrailScreen> {
                                 final details = event['details']?.toString();
                                 final entityType = event['entity_type']?.toString();
                                 final entityId = event['entity_id']?.toString();
-                                final badgeColor = _getActionColor(action, cs);
-                                final containerColor = _getActionContainerColor(action, cs);
+                                final badgeColor = _getActionColor(context, action, cs);
+                                final containerColor = _getActionContainerColor(context, action, cs);
                                 final localizedAction = localizedAuditAction(l10n, action);
 
                                 return Card(

@@ -26,6 +26,7 @@ import 'customer_detail_screen.dart';
 import 'edit_document_screen.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/cancel_paid_document_dialog.dart';
 import '../widgets/responsive.dart';
 
@@ -1237,11 +1238,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
     if (statusKey == 'refunded') {
       statusLabel = l10n.refundStatusRefunded;
-      badgeColor = Colors.green;
+      badgeColor = AppStatusColors.fg(context, AppStatus.success);
       statusIcon = Icons.check_circle_outline_rounded;
     } else if (statusKey == 'unrefunded') {
       statusLabel = l10n.refundStatusNotRefunded;
-      badgeColor = Colors.orange;
+      badgeColor = AppStatusColors.fg(context, AppStatus.warning);
       statusIcon = Icons.schedule_rounded;
     } else {
       statusLabel = l10n.refundStatusNotRecorded;

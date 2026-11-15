@@ -288,13 +288,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade700,
+                          color: cs.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           l10n.inactive,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
                             fontSize: 9,
                           ),
                         ),
@@ -411,7 +411,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 value: _fmt.format(_outstanding),
                 currency: currency,
                 icon: Icons.account_balance_wallet_outlined,
-                color: _outstanding > 0 ? Colors.red.shade600 : Colors.grey,
+                color: _outstanding > 0 ? cs.error : cs.outline,
                 highlight: _outstanding > 0,
               ),
             ),
@@ -464,7 +464,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         '${_fmt.format(e.value)} $sym',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.red.shade700,
+                          color: cs.error,
                           fontSize: 12,
                         ),
                       ),
@@ -569,11 +569,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   Color _contactColor(String name, ColorScheme cs) {
     final colors = [
       cs.primary,
-      Colors.teal,
-      Colors.indigo,
-      Colors.deepOrange,
-      Colors.purple,
-      Colors.green.shade700,
+      cs.secondary,
+      cs.tertiary,
     ];
     return colors[initialOf(name).runes.first % colors.length];
   }
@@ -668,12 +665,12 @@ class _StatCard extends StatelessWidget {
         ),
         Text(
           currency,
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+          style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.outline),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+          style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -745,7 +742,7 @@ class _DocumentTile extends StatelessWidget {
                       dateFmt.format(doc.date),
                       style: TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade500,
+                        color: Theme.of(context).colorScheme.outline,
                       ),
                     ),
                   ],

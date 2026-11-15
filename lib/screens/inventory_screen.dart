@@ -10,6 +10,7 @@ import '../utils/format_utils.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
 import '../widgets/app_design_tokens.dart';
+import '../widgets/app_status_colors.dart';
 import 'barcode_scanner_screen.dart';
 import 'stock_movements_screen.dart';
 import '../widgets/responsive.dart';
@@ -604,11 +605,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: movements.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, i) {
+                      itemBuilder: (itemCtx, i) {
+                        final cs = Theme.of(itemCtx).colorScheme;
                         final m = movements[i];
                         final isIn = m.quantity > 0;
                         final color =
-                            isIn ? Colors.green : Colors.red;
+                            isIn ? AppStatusColors.fg(itemCtx, AppStatus.success) : cs.error;
                         return Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 10),
@@ -667,7 +669,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                       _dateFmt.format(m.date),
                                       style: TextStyle(
                                           fontSize: 10,
-                                          color: Colors.grey.shade400),
+                                          color: cs.outline),
                                     ),
                                 ],
                               ),
@@ -859,7 +861,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     _SummaryChip(
                       icon: Icons.warning_amber_rounded,
                       label: '$lowCount ${l10n.lowStock}',
-                      color: Colors.orange,
+                      color: AppStatusColors.fg(context, AppStatus.warning),
                       selected: _stockFilter == 'low',
                       onTap: () => setState(() => _stockFilter = 'low'),
                     ),
@@ -875,7 +877,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     _SummaryChip(
                       icon: Icons.check_circle_outline,
                       label: '${_products!.length - lowCount - outCount} ${l10n.healthyStock}',
-                      color: Colors.green,
+                      color: AppStatusColors.fg(context, AppStatus.success),
                       selected: _stockFilter == 'healthy',
                       onTap: () => setState(() => _stockFilter = 'healthy'),
                     ),
@@ -897,7 +899,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              Icon(Icons.error_outline, size: 48, color: cs.error),
               const SizedBox(height: 12),
               Text(l10n.operationFailed),
               const SizedBox(height: 12),
@@ -934,11 +936,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.warehouse_outlined,
-                  size: 72, color: Colors.grey.shade300),
+                  size: 72, color: cs.outline),
               const SizedBox(height: 12),
               Text(l10n.noProducts,
                   style: TextStyle(
-                      color: Colors.grey.shade500, fontSize: 15)),
+                      color: cs.onSurfaceVariant, fontSize: 15)),
             ]),
       );
     }
@@ -958,8 +960,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
           final color = stockOut
               ? cs.error
               : stockLow
-                  ? Colors.orange
-                  : Colors.green;
+                  ? AppStatusColors.fg(context, AppStatus.warning)
+                  : AppStatusColors.fg(context, AppStatus.success);
           final statusLabel = stockOut
               ? l10n.outOfStock
               : stockLow
@@ -1051,7 +1053,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 ' / ${FormatUtils.formatQuantity(p.minStock)}',
                                 style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade500),
+                                    color: cs.onSurfaceVariant),
                               ),
                             const Spacer(),
                           ],
@@ -1062,7 +1064,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           child: LinearProgressIndicator(
                             value: pct,
                             minHeight: 5,
-                            backgroundColor: Colors.grey.shade200,
+                            backgroundColor: cs.surfaceContainerHighest,
                             valueColor:
                                 AlwaysStoppedAnimation(color),
                           ),
@@ -1168,7 +1170,7 @@ class _QtyBox extends StatelessWidget {
                   color: color)),
           const SizedBox(height: 2),
           Text(label,
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center),
         ]),
       );

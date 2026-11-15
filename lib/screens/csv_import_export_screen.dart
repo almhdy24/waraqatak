@@ -7,6 +7,7 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 
@@ -172,7 +173,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.file_upload_outlined, color: Colors.blue),
+                                Icon(Icons.file_upload_outlined, color: cs.primary),
                                 const SizedBox(width: 8),
                                 Text(
                                   l10n.exportProductsCsv,
@@ -217,7 +218,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.file_download_outlined, color: Colors.teal),
+                                Icon(Icons.file_download_outlined, color: cs.tertiary),
                                 const SizedBox(width: 8),
                                 Text(
                                   l10n.importProductsCsv,
@@ -230,18 +231,18 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.amber.shade50,
+                                color: AppStatusColors.bg(context, AppStatus.warning),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.amber.shade300),
+                                border: Border.all(color: AppStatusColors.border(context, AppStatus.warning)),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.info_outline, color: Colors.amber, size: 20),
+                                  Icon(Icons.info_outline, color: AppStatusColors.fg(context, AppStatus.warning), size: 20),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       l10n.csvStockInfoNotice,
-                                      style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                                      style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.warning)),
                                     ),
                                   ),
                                 ],
@@ -279,9 +280,9 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                                 children: [
-                                  _statChip(l10n.validRows, '${_preview!.validNewCount}', color: Colors.teal),
-                                  _statChip(l10n.duplicateHandling, '${_preview!.existingCount}', color: Colors.blue),
-                                  _statChip(l10n.invalidRows, '${_preview!.errorCount}', color: Colors.red),
+                                  _statChip(l10n.validRows, '${_preview!.validNewCount}', color: AppStatusColors.fg(context, AppStatus.success)),
+                                  _statChip(l10n.duplicateHandling, '${_preview!.existingCount}', color: AppStatusColors.fg(context, AppStatus.info)),
+                                  _statChip(l10n.invalidRows, '${_preview!.errorCount}', color: cs.error),
                                 ],
                               ),
                               const SizedBox(height: 16),
@@ -325,7 +326,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 12,
-                                          color: r.isValid ? cs.onSurface : Colors.red,
+                                          color: r.isValid ? cs.onSurface : cs.error,
                                         ),
                                       ),
                                       subtitle: Text(
@@ -333,12 +334,12 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                                             '${l10n.price}: ${r.salePrice} • ${r.isExisting ? l10n.existingProductTag : l10n.newProductTag}',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: r.isValid ? Colors.grey : Colors.red,
+                                          color: r.isValid ? cs.onSurfaceVariant : cs.error,
                                         ),
                                       ),
                                       trailing: Icon(
                                         r.isValid ? Icons.check_circle : Icons.error,
-                                        color: r.isValid ? (r.isExisting ? Colors.blue : Colors.teal) : Colors.red,
+                                        color: r.isValid ? (r.isExisting ? AppStatusColors.fg(context, AppStatus.info) : AppStatusColors.fg(context, AppStatus.success)) : cs.error,
                                         size: 16,
                                       ),
                                     );
@@ -363,7 +364,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                     if (_lastResult != null) ...[
                       const SizedBox(height: 16),
                       Card(
-                        color: Colors.teal.shade50,
+                        color: AppStatusColors.bg(context, AppStatus.success),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -372,14 +373,14 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.check_circle, color: Colors.teal),
+                                  Icon(Icons.check_circle, color: AppStatusColors.fg(context, AppStatus.success)),
                                   const SizedBox(width: 8),
                                   Text(
                                     l10n.importSummary,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
-                                      color: Colors.teal.shade900,
+                                      color: AppStatusColors.fg(context, AppStatus.success),
                                     ),
                                   ),
                                 ],
@@ -394,7 +395,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
                                     _lastResult!.skippedReferenceFields,
                                   ),
                                   style: TextStyle(
-                                    color: Colors.amber.shade900,
+                                    color: AppStatusColors.fg(context, AppStatus.warning),
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -414,7 +415,7 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
     return Column(
       children: [
         Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ],
     );
   }

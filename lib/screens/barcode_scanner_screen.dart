@@ -124,13 +124,16 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.teal.withValues(alpha: 0.85),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer
+                          .withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
                       '${l10n.barcodeScanner}: $_lastScannedCode',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),

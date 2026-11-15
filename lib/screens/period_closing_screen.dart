@@ -9,6 +9,7 @@ import '../widgets/app_date_picker.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/responsive.dart';
 
 /// Screen dedicated to managing the accounting period lock (books closed through date).
@@ -111,6 +112,7 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final isClosed = _booksClosedThrough != null;
+    final status = isClosed ? AppStatus.warning : AppStatus.success;
 
     return Scaffold(
       appBar: AppBar(
@@ -127,14 +129,10 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
                   Container(
                     padding: const EdgeInsets.all(AppDesignTokens.space20),
                     decoration: BoxDecoration(
-                      color: isClosed
-                          ? Colors.orange.withValues(alpha: 0.08)
-                          : Colors.green.withValues(alpha: 0.08),
+                      color: AppStatusColors.bg(context, status),
                       borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
                       border: Border.all(
-                        color: isClosed
-                            ? Colors.orange.withValues(alpha: 0.4)
-                            : Colors.green.withValues(alpha: 0.4),
+                        color: AppStatusColors.border(context, status),
                       ),
                     ),
                     child: Column(
@@ -145,15 +143,14 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: (isClosed ? Colors.orange : Colors.green)
-                                    .withValues(alpha: 0.15),
+                                color: AppStatusColors.bg(context, status),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
                                 isClosed
                                     ? Icons.lock_outline_rounded
                                     : Icons.lock_open_rounded,
-                                color: isClosed ? Colors.orange : Colors.green,
+                                color: AppStatusColors.fg(context, status),
                                 size: 28,
                               ),
                             ),
@@ -169,13 +166,7 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
-                                      color: isClosed
-                                          ? (theme.brightness == Brightness.dark
-                                              ? Colors.orangeAccent
-                                              : Colors.deepOrange.shade800)
-                                          : (theme.brightness == Brightness.dark
-                                              ? Colors.greenAccent
-                                              : Colors.green.shade800),
+                                      color: AppStatusColors.fg(context, status),
                                     ),
                                   ),
                                   const SizedBox(height: 4),

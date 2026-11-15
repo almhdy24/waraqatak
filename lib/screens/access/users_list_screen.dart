@@ -86,7 +86,9 @@ class _UsersListScreenState extends State<UsersListScreen> {
           children: options.map((m) {
             return ListTile(
               title: Text(l10n.autoLockMinutesDesc(m)),
-              trailing: m == current ? const Icon(Icons.check, color: Colors.teal) : null,
+              trailing: m == current
+                  ? Icon(Icons.check, color: Theme.of(ctx).colorScheme.primary)
+                  : null,
               onTap: () => Navigator.pop(ctx, m),
             );
           }).toList(),

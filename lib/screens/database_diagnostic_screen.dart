@@ -17,6 +17,7 @@ import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'product_form_screen.dart';
@@ -377,10 +378,10 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: Colors.amber.shade100,
+                  backgroundColor: AppStatusColors.bg(ctx, AppStatus.warning),
                   child: Icon(
                     Icons.rate_review_outlined,
-                    color: Colors.amber.shade900,
+                    color: AppStatusColors.fg(ctx, AppStatus.warning),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -412,9 +413,9 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.amber.shade50,
+                color: AppStatusColors.bg(ctx, AppStatus.warning),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade200),
+                border: Border.all(color: AppStatusColors.border(ctx, AppStatus.warning)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,14 +425,14 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                       Icon(
                         Icons.lightbulb_outline,
                         size: 18,
-                        color: Colors.amber.shade900,
+                        color: AppStatusColors.fg(ctx, AppStatus.warning),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         l10n.repairReviewGuidance,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade900,
+                          color: AppStatusColors.fg(ctx, AppStatus.warning),
                           fontSize: 13,
                         ),
                       ),
@@ -441,7 +442,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                   Text(
                     issue.recommendedAction,
                     style: TextStyle(
-                      color: Colors.amber.shade900,
+                      color: AppStatusColors.fg(ctx, AppStatus.warning),
                       fontSize: 13,
                       height: 1.4,
                     ),
@@ -886,10 +887,10 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     };
   }
 
-  Color _severityColor(DiagnosticSeverity severity, ColorScheme cs) {
+  Color _severityColor(BuildContext context, DiagnosticSeverity severity, ColorScheme cs) {
     return switch (severity) {
       DiagnosticSeverity.error => cs.error,
-      DiagnosticSeverity.warning => Colors.amber.shade800,
+      DiagnosticSeverity.warning => AppStatusColors.fg(context, AppStatus.warning),
       DiagnosticSeverity.info => cs.primary,
     };
   }
@@ -1024,13 +1025,13 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.12),
+                color: AppStatusColors.bg(context, AppStatus.success),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.check_circle_outline,
                 size: 72,
-                color: Colors.green,
+                color: AppStatusColors.fg(context, AppStatus.success),
               ),
             ),
             const SizedBox(height: 24),
@@ -1247,7 +1248,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
           child: _buildMetricCard(
             title: l10n.diagnosticsSummaryWarnings,
             count: report.warningCount,
-            color: Colors.amber.shade800,
+            color: AppStatusColors.fg(context, AppStatus.warning),
             icon: Icons.warning_amber_rounded,
             theme: theme,
           ),
@@ -1361,7 +1362,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     ThemeData theme,
     ColorScheme cs,
   ) {
-    final color = _severityColor(issue.severity, cs);
+    final color = _severityColor(context, issue.severity, cs);
     final icon = _severityIcon(issue.severity);
 
     return Card(
@@ -1424,10 +1425,10 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.12),
+                    color: AppStatusColors.bg(context, AppStatus.success),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: Colors.green.withValues(alpha: 0.4),
+                      color: AppStatusColors.border(context, AppStatus.success),
                     ),
                   ),
                   child: Row(
@@ -1436,13 +1437,13 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                       Icon(
                         Icons.check_circle_outline,
                         size: 12,
-                        color: Colors.green.shade800,
+                        color: AppStatusColors.fg(context, AppStatus.success),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         l10n.repairSafeBadge,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.green.shade800,
+                          color: AppStatusColors.fg(context, AppStatus.success),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1456,10 +1457,10 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.amber.shade800.withValues(alpha: 0.14),
+                    color: AppStatusColors.bg(context, AppStatus.warning),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: Colors.amber.shade800.withValues(alpha: 0.4),
+                      color: AppStatusColors.border(context, AppStatus.warning),
                     ),
                   ),
                   child: Row(
@@ -1468,13 +1469,13 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                       Icon(
                         Icons.rate_review_outlined,
                         size: 12,
-                        color: Colors.amber.shade900,
+                        color: AppStatusColors.fg(context, AppStatus.warning),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         l10n.diagnosticsManualReviewRequired,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: Colors.amber.shade900,
+                          color: AppStatusColors.fg(context, AppStatus.warning),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -1772,7 +1773,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.info_outline, color: Colors.orange, size: 36),
+        icon: Icon(Icons.info_outline, color: AppStatusColors.fg(context, AppStatus.warning), size: 36),
         title: Text(l10n.diagnosticsRecordUnavailable),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1881,10 +1882,10 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                     leading: CircleAvatar(
                       backgroundColor: rec.exists
                           ? cs.primaryContainer.withValues(alpha: 0.5)
-                          : Colors.orange.withValues(alpha: 0.15),
+                          : AppStatusColors.bg(context, AppStatus.warning),
                       child: Icon(
                         rec.icon,
-                        color: rec.exists ? cs.primary : Colors.orange.shade800,
+                        color: rec.exists ? cs.primary : AppStatusColors.fg(context, AppStatus.warning),
                         size: 20,
                       ),
                     ),
@@ -2286,8 +2287,8 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                   ),
                   decoration: BoxDecoration(
                     color: isParity
-                        ? Colors.green.withValues(alpha: 0.12)
-                        : Colors.orange.withValues(alpha: 0.12),
+                        ? AppStatusColors.bg(context, AppStatus.success)
+                        : AppStatusColors.bg(context, AppStatus.warning),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -2298,7 +2299,9 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                             ? Icons.check_circle_outline
                             : Icons.warning_amber_rounded,
                         size: 16,
-                        color: isParity ? Colors.green : Colors.orange,
+                        color: isParity
+                            ? AppStatusColors.fg(context, AppStatus.success)
+                            : AppStatusColors.fg(context, AppStatus.warning),
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -2306,7 +2309,9 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: isParity ? Colors.green : Colors.orange,
+                          color: isParity
+                              ? AppStatusColors.fg(context, AppStatus.success)
+                              : AppStatusColors.fg(context, AppStatus.warning),
                         ),
                       ),
                     ],
@@ -2325,7 +2330,7 @@ class _DatabaseDiagnosticScreenState extends State<DatabaseDiagnosticScreen> {
                       ? Icons.verified_outlined
                       : Icons.sync_problem_outlined,
                   size: 18,
-                  color: isParity ? Colors.green : cs.error,
+                  color: isParity ? AppStatusColors.fg(context, AppStatus.success) : cs.error,
                 ),
                 const SizedBox(width: 8),
                 Expanded(

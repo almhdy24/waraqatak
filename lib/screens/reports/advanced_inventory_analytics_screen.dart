@@ -10,6 +10,7 @@ import '../../services/license_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
@@ -214,14 +215,14 @@ class _AdvancedInventoryAnalyticsScreenState
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Row(
                   children: [
-                    _chip(l10n.inventoryTurnover, _metrics!.inventoryTurnoverRatio.toStringAsFixed(2), Colors.blue),
+                    _chip(l10n.inventoryTurnover, _metrics!.inventoryTurnoverRatio.toStringAsFixed(2), AppStatusColors.fg(context, AppStatus.info)),
                     const SizedBox(width: 8),
-                    _chip(l10n.tiedUpCapital, _numFmt.format(_metrics!.totalTiedUpCapitalInSlowMoving), Colors.orange),
+                    _chip(l10n.tiedUpCapital, _numFmt.format(_metrics!.totalTiedUpCapitalInSlowMoving), AppStatusColors.fg(context, AppStatus.warning)),
                     const SizedBox(width: 8),
-                    _chip(l10n.reorderRecommendations, '${_metrics!.reorderCount}', Colors.teal),
+                    _chip(l10n.reorderRecommendations, '${_metrics!.reorderCount}', AppStatusColors.fg(context, AppStatus.success)),
                     const SizedBox(width: 8),
                     _chip(l10n.negativeMarginAlert, '${_metrics!.negativeMarginCount}',
-                        _metrics!.negativeMarginCount > 0 ? Colors.red : Colors.grey),
+                        _metrics!.negativeMarginCount > 0 ? cs.error : cs.onSurfaceVariant),
                   ],
                 ),
               ),
@@ -275,7 +276,7 @@ class _AdvancedInventoryAnalyticsScreenState
                 overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
             Text(label,
-                style: const TextStyle(fontSize: 9, color: Colors.grey),
+                style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
           ],
@@ -305,12 +306,12 @@ class _AdvancedInventoryAnalyticsScreenState
               ? Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.amber.shade100,
+                    color: AppStatusColors.bg(ctx, AppStatus.warning),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     l10n.reorderSuggestionTag(FormatUtils.formatQuantity(it.reorderSuggestion)),
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppStatusColors.fg(ctx, AppStatus.warning)),
                   ),
                 )
               : null,
@@ -329,7 +330,7 @@ class _AdvancedInventoryAnalyticsScreenState
       itemBuilder: (ctx, idx) {
         final it = items[idx];
         return ListTile(
-          leading: const Icon(Icons.hourglass_bottom_rounded, color: Colors.orange),
+          leading: Icon(Icons.hourglass_bottom_rounded, color: AppStatusColors.fg(ctx, AppStatus.warning)),
           title: Text(it.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           subtitle: Text(
             '${l10n.stock}: ${FormatUtils.formatQuantity(it.stockQuantity)} ${it.product.unit ?? ""} • '
@@ -342,8 +343,8 @@ class _AdvancedInventoryAnalyticsScreenState
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(_numFmt.format(it.valuation),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange)),
-                    Text(l10n.tiedUpCapital, style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppStatusColors.fg(ctx, AppStatus.warning))),
+                    Text(l10n.tiedUpCapital, style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant)),
                   ],
                 )
               : null,
@@ -361,11 +362,11 @@ class _AdvancedInventoryAnalyticsScreenState
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.check_circle_outline, size: 48, color: Colors.teal),
+              Icon(Icons.check_circle_outline, size: 48, color: AppStatusColors.fg(context, AppStatus.success)),
               const SizedBox(height: 8),
               Text(
                 l10n.noProductsBelowCost,
-                style: TextStyle(fontSize: 13, color: Colors.teal.shade800),
+                style: TextStyle(fontSize: 13, color: AppStatusColors.fg(context, AppStatus.success)),
               ),
             ],
           ),
@@ -382,7 +383,7 @@ class _AdvancedInventoryAnalyticsScreenState
         final loss = avgCost - p.salePrice;
 
         return ListTile(
-          leading: const Icon(Icons.warning_rounded, color: Colors.red),
+          leading: Icon(Icons.warning_rounded, color: cs.error),
           title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
           subtitle: Text(
             '${l10n.sellingPrice}: ${_numFmt.format(p.salePrice)} | ${l10n.averageCost}: ${_numFmt.format(avgCost)}',
@@ -390,7 +391,7 @@ class _AdvancedInventoryAnalyticsScreenState
           ),
           trailing: Text(
             l10n.lossAmount(_numFmt.format(loss)),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: cs.error),
           ),
         );
       },

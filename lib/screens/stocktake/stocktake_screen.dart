@@ -11,6 +11,7 @@ import '../../utils/number_input.dart';
 import '../../widgets/amount_field.dart';
 import '../../widgets/app_icons.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/responsive.dart';
 import 'stocktake_history_screen.dart';
@@ -236,7 +237,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
             },
             child: Text(
               l10n.uncounted,
-              style: const TextStyle(color: Colors.red),
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
             ),
           ),
           FilledButton(
@@ -307,34 +308,34 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                     _summaryRow(
                       l10n.uncounted,
                       '${review.totalUncounted}',
-                      color: Colors.orange,
+                      color: AppStatusColors.fg(ctx, AppStatus.warning),
                     ),
                     _summaryRow(
                       l10n.statusMatched,
                       '${review.matchedCount}',
-                      color: Colors.teal,
+                      color: AppStatusColors.fg(ctx, AppStatus.success),
                     ),
                     _summaryRow(
                       l10n.variance,
                       '${review.discrepantCount}',
                       color: review.discrepantCount > 0
-                          ? Colors.red
-                          : Colors.teal,
+                          ? Theme.of(ctx).colorScheme.error
+                          : AppStatusColors.fg(ctx, AppStatus.success),
                     ),
                     const Divider(height: 16),
                     if (review.hasInterimMovements) ...[
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
+                          color: AppStatusColors.bg(ctx, AppStatus.warning),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.shade400),
+                          border: Border.all(color: AppStatusColors.border(ctx, AppStatus.warning)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.warning_amber_rounded,
-                              color: Colors.amber,
+                              color: AppStatusColors.fg(ctx, AppStatus.warning),
                               size: 20,
                             ),
                             const SizedBox(width: 8),
@@ -343,7 +344,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                                 l10n.interimMovementWarning,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: Colors.amber.shade900,
+                                  color: AppStatusColors.fg(ctx, AppStatus.warning),
                                 ),
                               ),
                             ),
@@ -355,14 +356,14 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
+                        color: AppStatusColors.bg(ctx, AppStatus.info),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         l10n.stocktakeDiscrepancyWarning,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.blue.shade900,
+                          color: AppStatusColors.fg(ctx, AppStatus.info),
                         ),
                       ),
                     ),
@@ -439,7 +440,10 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
             child: Text(l10n.cancel),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(l10n.cancelStocktakeSession),
           ),
@@ -610,15 +614,15 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                   value: 'cancel',
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.cancel_outlined,
-                        color: Colors.red,
+                        color: cs.error,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
                       Text(
                         l10n.cancelStocktakeSession,
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(color: cs.error),
                       ),
                     ],
                   ),
@@ -641,17 +645,17 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                   _statChip(
                     l10n.countedQty,
                     '$countedCount',
-                    color: Colors.teal,
+                    color: AppStatusColors.fg(context, AppStatus.success),
                   ),
                   _statChip(
                     l10n.uncounted,
                     '${_items.length - countedCount}',
-                    color: Colors.orange,
+                    color: AppStatusColors.fg(context, AppStatus.warning),
                   ),
                   _statChip(
                     l10n.variance,
                     '$discrepantCount',
-                    color: discrepantCount > 0 ? Colors.red : Colors.teal,
+                    color: discrepantCount > 0 ? cs.error : AppStatusColors.fg(context, AppStatus.success),
                   ),
                 ],
               ),
@@ -777,8 +781,8 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
                                       color: it.isCounted
-                                          ? Colors.teal
-                                          : Colors.orange,
+                                          ? AppStatusColors.fg(context, AppStatus.success)
+                                          : AppStatusColors.fg(context, AppStatus.warning),
                                     ),
                                   ),
                                   if (it.isCounted)
@@ -791,9 +795,9 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
                                         fontWeight: FontWeight.w500,
                                         color: hasDiscrepancy
                                             ? (variance > 0
-                                                  ? Colors.blue
-                                                  : Colors.red)
-                                            : Colors.teal,
+                                                  ? AppStatusColors.fg(context, AppStatus.info)
+                                                  : cs.error)
+                                            : AppStatusColors.fg(context, AppStatus.success),
                                       ),
                                     ),
                                 ],
@@ -856,7 +860,7 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
             color: color,
           ),
         ),
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ],
     );
   }

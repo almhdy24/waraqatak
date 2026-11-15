@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
 import '../services/backup_encryption_service.dart';
 import 'app_design_tokens.dart';
+import 'app_status_colors.dart';
 
 /// Dialog shown before backup creation asking if the user wants password protection.
 ///
@@ -243,16 +244,16 @@ class _BackupPasswordCreateDialogState
               Container(
                 padding: const EdgeInsets.all(AppDesignTokens.space12),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.15),
+                  color: AppStatusColors.bg(context, AppStatus.warning),
                   borderRadius: AppDesignTokens.br8,
-                  border: Border.all(color: Colors.amber.shade700, width: 1),
+                  border: Border.all(color: AppStatusColors.border(context, AppStatus.warning), width: 1),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
                       Icons.warning_amber_rounded,
-                      color: Colors.amber.shade800,
+                      color: AppStatusColors.fg(context, AppStatus.warning),
                       size: 20,
                     ),
                     const SizedBox(width: AppDesignTokens.space8),
@@ -261,7 +262,7 @@ class _BackupPasswordCreateDialogState
                         l10n.backupPasswordWarning,
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.amber.shade900,
+                          color: AppStatusColors.fg(context, AppStatus.warning),
                           fontWeight: FontWeight.w600,
                           height: 1.4,
                         ),
@@ -505,7 +506,7 @@ class _BackupPasswordPromptDialogState
                   l10n.backupSlowNotice,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.amber.shade800,
+                    color: AppStatusColors.fg(context, AppStatus.warning),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -653,7 +654,7 @@ class _BackupProgressDialogState extends State<BackupProgressDialog> {
                 l10n.backupSlowNotice,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.amber.shade800,
+                  color: AppStatusColors.fg(context, AppStatus.warning),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),

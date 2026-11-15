@@ -8,6 +8,7 @@ import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 
 class SupplierReportScreen extends StatefulWidget {
@@ -161,17 +162,17 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.08),
+                      color: AppStatusColors.bg(context, AppStatus.warning),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(l10n.allTimeBalance,
-                          style: const TextStyle(fontSize: 10, color: Colors.orange)),
+                          style: TextStyle(fontSize: 10, color: AppStatusColors.fg(context, AppStatus.warning))),
                       Text(l10n.payable,
-                          style: const TextStyle(fontSize: 10, color: Colors.orange)),
+                          style: TextStyle(fontSize: 10, color: AppStatusColors.fg(context, AppStatus.warning))),
                       Text('${_numFmt.format(totalPayable)} $_currencySymbol',
-                          style: const TextStyle(fontSize: 14,
-                              fontWeight: FontWeight.bold, color: Colors.orange)),
+                          style: TextStyle(fontSize: 14,
+                              fontWeight: FontWeight.bold, color: AppStatusColors.fg(context, AppStatus.warning))),
                     ]),
                   ),
                 ),
@@ -191,14 +192,15 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
       ]));
     }
     if (_rows == null) return const Center(child: CircularProgressIndicator());
+    final cs = Theme.of(context).colorScheme;
     if (_rows!.isEmpty) {
       return Center(child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.store_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(Icons.store_outlined, size: 64, color: cs.outline),
           const SizedBox(height: 12),
           Text(l10n.noReportData, textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey)),
+              style: TextStyle(color: cs.onSurfaceVariant)),
         ]),
       ));
     }
@@ -218,7 +220,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            side: BorderSide(color: cs.outlineVariant),
           ),
           child: ListTile(
             title: Row(children: [
@@ -226,15 +228,15 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
                   style: const TextStyle(fontWeight: FontWeight.bold))),
               if (hasDebt)
                 Text(_numFmt.format(outstanding),
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, color: Colors.orange)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, color: AppStatusColors.fg(context, AppStatus.warning))),
             ]),
             subtitle: Text(
               '${l10n.purchaseCount}: $docCount · ${l10n.totalPurchasesAmt}: ${_numFmt.format(total)}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
-            trailing: hasDebt ? null : const Icon(Icons.check_circle_outline,
-                color: Colors.green, size: 18),
+            trailing: hasDebt ? null : Icon(Icons.check_circle_outline,
+                color: AppStatusColors.fg(context, AppStatus.success), size: 18),
             onTap: () async {
               final contactId = row['contact_id'] as int;
               final contact = await DatabaseHelper.instance.getContactById(contactId);

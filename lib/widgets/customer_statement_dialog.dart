@@ -13,6 +13,7 @@ import '../services/pdf_service.dart';
 import '../utils/format_utils.dart';
 import 'app_date_picker.dart';
 import 'app_snackbar.dart';
+import 'app_status_colors.dart';
 
 enum StatementPeriodPreset { thisMonth, last7Days, allTime, custom }
 
@@ -354,15 +355,15 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    border: Border.all(color: Colors.amber.shade700),
+                    color: AppStatusColors.bg(context, AppStatus.warning),
+                    border: Border.all(color: AppStatusColors.border(context, AppStatus.warning)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.warning_amber_rounded,
-                        color: Colors.amber.shade900,
+                        color: AppStatusColors.fg(context, AppStatus.warning),
                         size: 20,
                       ),
                       const SizedBox(width: 8),
@@ -372,7 +373,7 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: Colors.amber.shade900,
+                            color: AppStatusColors.fg(context, AppStatus.warning),
                           ),
                         ),
                       ),
@@ -410,15 +411,15 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
                             label: l10n.totalPaid,
                             value: _numFmt.format(_statement!.totalPaid),
                             symbol: _statement!.currencySymbol,
-                            color: Colors.green.shade700,
+                            color: AppStatusColors.fg(context, AppStatus.success),
                           ),
                           _statItem(
                             label: l10n.closingBalance,
                             value: _numFmt.format(_statement!.closingBalance),
                             symbol: _statement!.currencySymbol,
                             color: _statement!.closingBalance > 0
-                                ? Colors.red.shade700
-                                : Colors.green.shade700,
+                                ? Theme.of(context).colorScheme.error
+                                : AppStatusColors.fg(context, AppStatus.success),
                             isBold: true,
                           ),
                         ],
@@ -497,7 +498,7 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
   }) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 2),
         Text(
           '$value $symbol',

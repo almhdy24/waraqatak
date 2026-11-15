@@ -17,6 +17,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'inventory_screen.dart';
@@ -324,14 +325,17 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
     _ => type,
   };
 
-  Color _typeColor(String type, ColorScheme cs) => switch (type) {
-    StockMovement.typeOpening => Colors.blue,
-    StockMovement.typePurchase => Colors.teal,
-    StockMovement.typeSale => Colors.indigo,
-    StockMovement.typeAdjustment => Colors.amber.shade800,
-    StockMovement.typeCancellation => cs.error,
-    _ => Colors.grey,
-  };
+  Color _typeColor(BuildContext context, String type, ColorScheme cs) =>
+      switch (type) {
+        StockMovement.typeOpening =>
+          AppStatusColors.fg(context, AppStatus.info),
+        StockMovement.typePurchase => cs.tertiary,
+        StockMovement.typeSale => cs.primary,
+        StockMovement.typeAdjustment =>
+          AppStatusColors.fg(context, AppStatus.warning),
+        StockMovement.typeCancellation => cs.error,
+        _ => cs.onSurfaceVariant,
+      };
 
   IconData _typeIcon(String type) => switch (type) {
     StockMovement.typeOpening => Icons.flag_outlined,
@@ -489,104 +493,114 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                   horizontal: 12,
                   vertical: 4,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.green.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.arrow_downward,
-                              size: 16,
-                              color: Colors.green,
+                child: Builder(
+                  builder: (context) {
+                    final successColor =
+                        AppDesignTokens.semanticSuccess(context);
+                    final dangerColor =
+                        AppDesignTokens.semanticDanger(context);
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 12,
                             ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    l10n.totalStockIn,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    '+${FormatUtils.formatQuantity(_reportSummary!.totalInQuantity)}',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green,
-                                    ),
-                                  ),
-                                ],
+                            decoration: BoxDecoration(
+                              color: successColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: successColor.withValues(alpha: 0.2),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.red.withValues(alpha: 0.2),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.arrow_downward,
+                                  size: 16,
+                                  color: successColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        l10n.totalStockIn,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: cs.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      Text(
+                                        '+${FormatUtils.formatQuantity(_reportSummary!.totalInQuantity)}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: successColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.arrow_upward,
-                              size: 16,
-                              color: Colors.red,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 12,
                             ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    l10n.totalStockOut,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                                  Text(
-                                    '-${FormatUtils.formatQuantity(_reportSummary!.totalOutQuantity)}',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.red,
-                                    ),
-                                  ),
-                                ],
+                            decoration: BoxDecoration(
+                              color: dangerColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: dangerColor.withValues(alpha: 0.2),
                               ),
                             ),
-                          ],
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.arrow_upward,
+                                  size: 16,
+                                  color: dangerColor,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        l10n.totalStockOut,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: cs.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      Text(
+                                        '-${FormatUtils.formatQuantity(_reportSummary!.totalOutQuantity)}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: dangerColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ),
             const SizedBox(height: 4),
@@ -685,7 +699,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
               : (m.quantity < 0
                     ? AppDesignTokens.semanticDanger(context)
                     : cs.onSurfaceVariant);
-          final typeBadgeColor = _typeColor(m.type, cs);
+          final typeBadgeColor = _typeColor(context, m.type, cs);
           final sign = isIn ? '+' : (m.quantity < 0 ? '-' : '');
 
           return Material(
@@ -843,7 +857,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                 '${l10n.averageCost}: ${_numFmt.format(m.unitCost)} | ${l10n.totalCost}: ${_numFmt.format(m.totalCost)}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: Colors.teal.shade700,
+                                  color: cs.tertiary,
                                 ),
                               ),
                             ] else if (m.costStatus ==
@@ -851,9 +865,10 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 l10n.costReconstructed,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
-                                  color: Colors.blue,
+                                  color: AppStatusColors.fg(
+                                      context, AppStatus.info),
                                 ),
                               ),
                             ] else if (m.costStatus ==
@@ -862,9 +877,10 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 l10n.costUnknown,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
-                                  color: Colors.orange,
+                                  color: AppStatusColors.fg(
+                                      context, AppStatus.warning),
                                 ),
                               ),
                             ],

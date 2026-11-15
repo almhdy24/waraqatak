@@ -21,94 +21,103 @@ class LockedFeatureScreen extends StatelessWidget {
         title: Text(l10n.proFeatureTitle),
         centerTitle: true,
       ),
-      body: ResponsiveCenter(child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              Container(
-                width: 80,
-                height: 80,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.lock_outline,
-                    size: 40, color: cs.primary),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.proFeaturesActivation,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                l10n.getActivationKeyInfo,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 14, color: cs.onSurfaceVariant, height: 1.5),
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.shield_outlined,
-                        color: Colors.green.shade700, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        l10n.freeDataAlwaysAvailable,
-                        style: TextStyle(
-                            fontSize: 13, color: Colors.green.shade800),
+      body: ResponsiveCenter(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, c) => SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: c.maxHeight - 48),
+                child: IntrinsicHeight(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Spacer(),
+                      Container(
+                        width: 80,
+                        height: 80,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.lock_outline,
+                            size: 40, color: cs.primary),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 20),
+                      Text(
+                        l10n.proFeaturesActivation,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        l10n.getActivationKeyInfo,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 14, color: cs.onSurfaceVariant, height: 1.5),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: cs.secondaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.shield_outlined,
+                                color: cs.onSecondaryContainer, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                l10n.freeDataAlwaysAvailable,
+                                style: TextStyle(
+                                    fontSize: 13, color: cs.onSecondaryContainer),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton.icon(
+                          onPressed: () async {
+                            final result = await Navigator.push<bool>(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const ActivationScreen()),
+                            );
+                            if (result == true && context.mounted) {
+                              Navigator.pop(context, true);
+                            }
+                          },
+                          icon: const Icon(Icons.vpn_key_outlined),
+                          label: Text(l10n.enterActivationKeyAction),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const TransparencyScreen()),
+                        ),
+                        icon: const Icon(Icons.info_outline, size: 18),
+                        label: Text(l10n.seeFreeVsPro),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
-              const Spacer(),
-              SizedBox(
-                height: 52,
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    final result = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const ActivationScreen()),
-                    );
-                    if (result == true && context.mounted) {
-                      Navigator.pop(context, true);
-                    }
-                  },
-                  icon: const Icon(Icons.vpn_key_outlined),
-                  label: Text(l10n.enterActivationKeyAction),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const TransparencyScreen()),
-                ),
-                icon: const Icon(Icons.info_outline, size: 18),
-                label: Text(l10n.seeFreeVsPro),
-              ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
         ),
-      )),
+      ),
     );
   }
 }

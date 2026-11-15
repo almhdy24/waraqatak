@@ -8,6 +8,7 @@ import '../services/license_service.dart';
 import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
 import '../utils/error_utils.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
@@ -134,12 +135,12 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
     return Icons.history_edu_outlined;
   }
 
-  Color _getActionColor(String action) {
-    if (action.contains('finalized')) return Colors.teal;
-    if (action.contains('cancelled')) return Colors.red;
-    if (action.startsWith('bulk_pricing')) return Colors.blue;
-    if (action.startsWith('csv_import')) return Colors.purple;
-    return Colors.orange;
+  Color _getActionColor(BuildContext context, String action, ColorScheme cs) {
+    if (action.contains('finalized')) return AppStatusColors.fg(context, AppStatus.success);
+    if (action.contains('cancelled')) return cs.error;
+    if (action.startsWith('bulk_pricing')) return AppStatusColors.fg(context, AppStatus.info);
+    if (action.startsWith('csv_import')) return cs.tertiary;
+    return AppStatusColors.fg(context, AppStatus.warning);
   }
 
   @override
@@ -208,7 +209,7 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
                                 final details = e['details'] as String? ?? '—';
                                 final ts = DateTime.tryParse(e['timestamp'] as String? ?? '');
                                 final dateStr = ts != null ? _dateFmt.format(ts) : (e['timestamp'] ?? '—');
-                                final color = _getActionColor(action);
+                                final color = _getActionColor(context, action, cs);
 
                                 return ListTile(
                                   leading: CircleAvatar(

@@ -9,6 +9,7 @@ import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -358,7 +359,7 @@ class _Header extends StatelessWidget {
               avatar: Icon(
                 balanced! ? Icons.check_circle : Icons.error_outline,
                 size: 18,
-                color: balanced! ? Colors.green : scheme.error,
+                color: balanced! ? AppStatusColors.fg(context, AppStatus.success) : scheme.error,
               ),
               label: Text(
                 balanced! ? l10n.balancedLabel : l10n.notBalancedLabel,
@@ -437,7 +438,7 @@ class _IncomeStatementView extends StatelessWidget {
           s.trustedNetProfit,
           textValue: s.hasIncompleteCostOfSales ? '—' : null,
           color: s.hasIncompleteCostOfSales
-              ? Colors.amber.shade900
+              ? AppStatusColors.fg(context, AppStatus.warning)
               : (profit ? AppDesignTokens.semanticSuccess(context) : scheme.error),
         ),
         const SizedBox(height: 12),
@@ -446,16 +447,16 @@ class _IncomeStatementView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             margin: const EdgeInsets.only(bottom: 8),
             decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.15),
+              color: AppStatusColors.bg(context, AppStatus.warning),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber.shade700, width: 0.5),
+              border: Border.all(color: AppStatusColors.border(context, AppStatus.warning), width: 0.5),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.info_outline,
                   size: 14,
-                  color: Colors.amber.shade900,
+                  color: AppStatusColors.fg(context, AppStatus.warning),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -463,7 +464,7 @@ class _IncomeStatementView extends StatelessWidget {
                     '${l10n.costIncomplete} (${s.uncostedSalesCount})',
                     style: TextStyle(
                       fontSize: 11,
-                      color: Colors.amber.shade900,
+                      color: AppStatusColors.fg(context, AppStatus.warning),
                       fontWeight: FontWeight.bold,
                     ),
                   ),

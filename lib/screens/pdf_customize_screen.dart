@@ -650,7 +650,7 @@ class _OptionsList extends StatelessWidget {
                     decoration: BoxDecoration(
                       border: Border.all(color: cs.outlineVariant),
                       borderRadius: BorderRadius.circular(8),
-                      color: Colors.grey.shade100,
+                      color: cs.surfaceContainerHighest,
                     ),
                     padding: const EdgeInsets.all(4),
                     child: Opacity(
@@ -991,7 +991,14 @@ class _ColorDot extends StatelessWidget {
             ),
           ),
           child: selected
-              ? const Icon(Icons.check, color: Colors.white, size: 20)
+              ? Icon(
+                  Icons.check,
+                  color: ThemeData.estimateBrightnessForColor(color) ==
+                          Brightness.dark
+                      ? Colors.white
+                      : Colors.black87,
+                  size: 20,
+                )
               : null,
         ),
       ),

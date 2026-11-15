@@ -21,6 +21,7 @@ import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/product_image_thumbnail.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
@@ -595,8 +596,8 @@ class _ProductCard extends StatelessWidget {
     final stockColor = stockOut
         ? cs.error
         : stockLow
-        ? Colors.orange
-        : Colors.green;
+            ? AppStatusColors.fg(context, AppStatus.warning)
+            : AppStatusColors.fg(context, AppStatus.success);
 
     return Opacity(
       opacity: product.isActive ? 1.0 : 0.6,
@@ -655,11 +656,15 @@ class _ProductCard extends StatelessWidget {
                               ),
                               if (!product.isActive) ...[
                                 const SizedBox(width: 6),
-                                _badge(l10n.inactive, Colors.grey),
+                                _badge(l10n.inactive, cs.onSurfaceVariant),
                               ] else if (stockOut)
                                 _badge(l10n.outOfStock, cs.error)
                               else if (stockLow)
-                                _badge(l10n.lowStock, Colors.orange),
+                                _badge(
+                                  l10n.lowStock,
+                                  AppStatusColors.fg(
+                                      context, AppStatus.warning),
+                                ),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -671,16 +676,18 @@ class _ProductCard extends StatelessWidget {
                                 _metaChip(
                                   Icons.category_outlined,
                                   product.category!,
+                                  cs,
                                 ),
                               if (product.code != null &&
                                   product.code!.isNotEmpty)
                                 _metaChip(
                                   Icons.tag,
                                   '${l10n.sku}: ${product.code}',
+                                  cs,
                                 ),
                               if (product.barcode != null &&
                                   product.barcode!.isNotEmpty)
-                                _metaChip(Icons.qr_code, product.barcode!),
+                                _metaChip(Icons.qr_code, product.barcode!, cs),
                             ],
                           ),
                         ],
@@ -736,13 +743,13 @@ class _ProductCard extends StatelessWidget {
                             value: 'delete',
                             child: ListTile(
                               dense: true,
-                              leading: const Icon(
+                              leading: Icon(
                                 Icons.delete_outline,
-                                color: Colors.red,
+                                color: cs.error,
                               ),
                               title: Text(
                                 l10n.delete,
-                                style: const TextStyle(color: Colors.red),
+                                style: TextStyle(color: cs.error),
                               ),
                               contentPadding: EdgeInsets.zero,
                             ),
@@ -777,14 +784,14 @@ class _ProductCard extends StatelessWidget {
                             '${priceFmt.format(product.referenceSalePrice)} ${product.priceCurrency}',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.grey.shade500,
+                              color: cs.outline,
                             ),
                           ),
                         Text(
                           l10n.unitPrice,
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.grey.shade500,
+                            color: cs.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -819,7 +826,7 @@ class _ProductCard extends StatelessWidget {
                                     ' / ',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Colors.grey.shade400,
+                                      color: cs.outline,
                                     ),
                                   ),
                                   Text(
@@ -828,7 +835,7 @@ class _ProductCard extends StatelessWidget {
                                     ),
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Colors.grey.shade500,
+                                      color: cs.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -840,7 +847,7 @@ class _ProductCard extends StatelessWidget {
                               child: LinearProgressIndicator(
                                 value: _stockPercent(product),
                                 minHeight: 5,
-                                backgroundColor: Colors.grey.shade200,
+                                backgroundColor: cs.surfaceContainerHighest,
                                 valueColor: AlwaysStoppedAnimation(stockColor),
                               ),
                             ),
@@ -854,14 +861,16 @@ class _ProductCard extends StatelessWidget {
                             Icon(
                               Icons.build_circle_outlined,
                               size: 13,
-                              color: Colors.blue.shade600,
+                              color: AppStatusColors.fg(
+                                  context, AppStatus.info),
                             ),
                             const SizedBox(width: 4),
                             Text(
                               l10n.servicesOnly,
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.blue.shade600,
+                                color: AppStatusColors.fg(
+                                    context, AppStatus.info),
                               ),
                             ),
                           ],
@@ -895,12 +904,12 @@ class _ProductCard extends StatelessWidget {
     ),
   );
 
-  Widget _metaChip(IconData icon, String label) => Row(
+  Widget _metaChip(IconData icon, String label, ColorScheme cs) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(icon, size: 11, color: Colors.grey.shade500),
+      Icon(icon, size: 11, color: cs.outline),
       const SizedBox(width: 3),
-      Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+      Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
     ],
   );
 }

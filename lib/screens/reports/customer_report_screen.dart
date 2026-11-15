@@ -8,6 +8,7 @@ import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 
 class CustomerReportScreen extends StatefulWidget {
@@ -187,6 +188,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
+    final cs = Theme.of(context).colorScheme;
     if (_error != null) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text(l10n.operationFailed),
@@ -198,10 +200,10 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
       return Center(child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.people_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(Icons.people_outlined, size: 64, color: cs.outline),
           const SizedBox(height: 12),
           Text(l10n.noReportData, textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey)),
+              style: TextStyle(color: cs.onSurfaceVariant)),
         ]),
       ));
     }
@@ -216,15 +218,15 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
         final docCount = row['doc_count'] as int;
         final hasDebt = outstanding > 0;
         final debtColor = hasDebt
-            ? Theme.of(context).colorScheme.error
-            : Colors.green;
+            ? cs.error
+            : AppStatusColors.fg(context, AppStatus.success);
 
         return Card(
           elevation: 0,
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            side: BorderSide(color: cs.outlineVariant),
           ),
           child: ListTile(
             title: Row(children: [
@@ -236,10 +238,10 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
             ]),
             subtitle: Text(
               '${l10n.invoiceCount}: $docCount · ${l10n.totalSales}: ${_numFmt.format(total)}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
-            trailing: hasDebt ? null : const Icon(Icons.check_circle_outline,
-                color: Colors.green, size: 18),
+            trailing: hasDebt ? null : Icon(Icons.check_circle_outline,
+                color: AppStatusColors.fg(context, AppStatus.success), size: 18),
             onTap: () async {
               final contactId = row['contact_id'] as int;
               final contact = await DatabaseHelper.instance.getContactById(contactId);

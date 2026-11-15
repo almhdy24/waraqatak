@@ -14,6 +14,7 @@ import '../../widgets/amount_field.dart';
 import '../inventory_screen.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 
 class InventoryReportScreen extends StatefulWidget {
@@ -326,12 +327,12 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _auditRow(l10n.costKnown, '${summary.knownMovements}', Colors.green),
-            _auditRow(l10n.costReconstructed, '${summary.reconstructedMovements}', Colors.blue),
-            _auditRow(l10n.costUnknown, '${summary.unknownMovements}', Colors.orange),
+            _auditRow(l10n.costKnown, '${summary.knownMovements}', AppStatusColors.fg(ctx, AppStatus.success)),
+            _auditRow(l10n.costReconstructed, '${summary.reconstructedMovements}', AppStatusColors.fg(ctx, AppStatus.info)),
+            _auditRow(l10n.costUnknown, '${summary.unknownMovements}', AppStatusColors.fg(ctx, AppStatus.warning)),
             const Divider(height: 24),
-            _auditRow(l10n.valuedStockCount, '${summary.knownProducts}', Colors.teal),
-            _auditRow(l10n.unresolvedCostProducts, '${summary.unknownProducts}', Colors.amber.shade800),
+            _auditRow(l10n.valuedStockCount, '${summary.knownProducts}', AppStatusColors.fg(ctx, AppStatus.success)),
+            _auditRow(l10n.unresolvedCostProducts, '${summary.unknownProducts}', AppStatusColors.fg(ctx, AppStatus.warning)),
           ],
         ),
         actions: [
@@ -510,13 +511,13 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                     _chip(
                       l10n.inventoryValuationAtCost,
                       _numFmt.format(totalValuation),
-                      Colors.teal,
+                      AppStatusColors.fg(context, AppStatus.success),
                     ),
                     const SizedBox(width: 8),
                     _chip(
                       l10n.unresolvedCostProducts,
                       '$unvaluedCount',
-                      unvaluedCount > 0 ? Colors.amber.shade800 : Colors.grey,
+                      unvaluedCount > 0 ? AppStatusColors.fg(context, AppStatus.warning) : Theme.of(context).colorScheme.outline,
                     ),
                   ],
                 ),
@@ -525,9 +526,9 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                 child: Row(
                   children: [
-                    _chip(l10n.trackedProducts, '$total', Colors.blue),
+                    _chip(l10n.trackedProducts, '$total', AppStatusColors.fg(context, AppStatus.info)),
                     const SizedBox(width: 8),
-                    _chip(l10n.lowStock, '$lowStock', Colors.orange),
+                    _chip(l10n.lowStock, '$lowStock', AppStatusColors.fg(context, AppStatus.warning)),
                     const SizedBox(width: 8),
                     _chip(l10n.outOfStock, '$outOfStock', Theme.of(context).colorScheme.error),
                   ],
@@ -596,14 +597,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.warehouse_outlined, size: 64, color: Colors.grey.shade300),
+            Icon(Icons.warehouse_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 12),
             Text(
               _selectedStatus == 'low_stock'
                   ? l10n.noReplenishmentNeeded
                   : l10n.noReportData,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ]),
         ),
@@ -621,8 +622,8 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         final statusColor = isOut
             ? Theme.of(context).colorScheme.error
             : isLow
-                ? Colors.orange
-                : Colors.green;
+                ? AppStatusColors.fg(context, AppStatus.warning)
+                : AppStatusColors.fg(context, AppStatus.success);
         final statusLabel = isOut
             ? l10n.outOfStock
             : isLow
@@ -656,7 +657,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                           if (p.category != null && p.category!.isNotEmpty)
                             Text(
                               p.category!,
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                         ],
                       ),
@@ -677,7 +678,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                             '${l10n.shortageQuantity}: ${FormatUtils.formatQuantity(item.shortageQuantity, unit: p.unit)}',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.orange.shade800,
+                              color: AppStatusColors.fg(context, AppStatus.warning),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -696,7 +697,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                             : (p.stockQuantity > 0 ? '${l10n.costStatus}: ${l10n.costUnknown}' : ''),
                         style: TextStyle(
                           fontSize: 11,
-                          color: hasCost ? Colors.teal.shade700 : Colors.orange,
+                          color: hasCost ? AppStatusColors.fg(context, AppStatus.success) : AppStatusColors.fg(context, AppStatus.warning),
                           fontWeight: hasCost ? FontWeight.w500 : FontWeight.normal,
                         ),
                       ),
@@ -724,14 +725,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.1),
+                            color: AppStatusColors.bg(context, AppStatus.info),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             l10n.reconcileCost,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
-                              color: Colors.blue,
+                              color: AppStatusColors.fg(context, AppStatus.info),
                               fontWeight: FontWeight.w600,
                             ),
                           ),

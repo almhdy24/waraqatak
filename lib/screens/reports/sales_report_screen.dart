@@ -14,6 +14,7 @@ import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
+import '../../widgets/app_status_colors.dart';
 import '../document_detail_screen.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/access/screen_access_gate.dart';
@@ -247,6 +248,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final cs = Theme.of(context).colorScheme;
     final baseCurrency = _business?.currencyCode ?? 'SDG';
     final baseSymbol = _business?.currencySymbol ?? 'ج.س';
 
@@ -314,21 +316,21 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     _summaryChip(
                       l10n.totalSales,
                       totalSales,
-                      Colors.green,
+                      AppStatusColors.fg(context, AppStatus.success),
                       symbol: baseSymbol,
                     ),
                     const SizedBox(width: 8),
                     _summaryChip(
                       l10n.cogs,
                       totalCogs,
-                      Colors.blueGrey,
+                      cs.secondary,
                       symbol: baseSymbol,
                     ),
                     const SizedBox(width: 8),
                     _summaryChip(
                       l10n.grossProfit,
                       totalTrustedProfit,
-                      Colors.teal,
+                      AppStatusColors.fg(context, AppStatus.success),
                       symbol: baseSymbol,
                     ),
                   ],
@@ -341,7 +343,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     _summaryChip(
                       l10n.totalPaid,
                       totalPaid,
-                      Colors.teal,
+                      AppStatusColors.fg(context, AppStatus.success),
                       symbol: baseSymbol,
                     ),
                     const SizedBox(width: 8),
@@ -486,15 +488,15 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   children: [
                     Text(
                       '${l10n.finalized}: ${finalized.length}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(width: 12),
                     if (cancelled.isNotEmpty)
                       Text(
                         '${l10n.cancelledCount}: ${cancelled.length}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey,
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     const Spacer(),
@@ -502,14 +504,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                       Icon(
                         Icons.info_outline,
                         size: 13,
-                        color: Colors.amber.shade800,
+                        color: AppStatusColors.fg(context, AppStatus.warning),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         l10n.costIncomplete,
                         style: TextStyle(
                           fontSize: 11,
-                          color: Colors.amber.shade900,
+                          color: AppStatusColors.fg(context, AppStatus.warning),
                         ),
                       ),
                     ],
@@ -621,10 +623,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     ),
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.15),
+                      color: AppStatusColors.bg(context, AppStatus.warning),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: Colors.amber.shade700,
+                        color: AppStatusColors.border(context, AppStatus.warning),
                         width: 0.5,
                       ),
                     ),
@@ -632,7 +634,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                       l10n.costIncomplete,
                       style: TextStyle(
                         fontSize: 10,
-                        color: Colors.amber.shade900,
+                        color: AppStatusColors.fg(context, AppStatus.warning),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -657,7 +659,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     ),
                     Text(
                       _dateFmt.format(doc.date),
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -672,10 +674,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         style: TextStyle(
                           fontSize: 11,
                           color: (item.isCostReliable && item.grossProfit >= 0)
-                              ? Colors.teal.shade700
+                              ? AppStatusColors.fg(context, AppStatus.success)
                               : (item.isCostReliable
-                                    ? Colors.red
-                                    : Colors.grey),
+                                    ? Theme.of(context).colorScheme.error
+                                    : Theme.of(context).colorScheme.onSurfaceVariant),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -684,9 +686,9 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                         const SizedBox(width: 8),
                         Text(
                           '(${item.profitMargin.toStringAsFixed(1)}%)',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: Colors.grey,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],

@@ -18,6 +18,7 @@ import '../widgets/app_icons.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_metric_card.dart';
 import '../widgets/app_section_header.dart';
+import '../widgets/app_status_colors.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/status_badge.dart';
 import 'activation_screen.dart';
@@ -345,6 +346,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     final currencySymbol = _business!.currencySymbol;
+    final cs = Theme.of(context).colorScheme;
     final d = _dashboardData;
     final double sales = (d['sales'] as num?)?.toDouble() ?? 0;
     final double purchases = (d['purchases'] as num?)?.toDouble() ?? 0;
@@ -494,7 +496,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               l10n.salesPeriod,
                               '${_numFmt.format(sales)} $currencySymbol',
                               icon: Icons.trending_up_rounded,
-                              color: Colors.green,
+                              color: AppStatusColors.fg(context, AppStatus.success),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -503,7 +505,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               l10n.purchasesPeriod,
                               '${_numFmt.format(purchases)} $currencySymbol',
                               icon: Icons.shopping_cart_outlined,
-                              color: Colors.orange,
+                              color: AppStatusColors.fg(context, AppStatus.warning),
                             ),
                           ),
                         ],
@@ -516,7 +518,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               l10n.paymentsIn,
                               '${_numFmt.format(paymentsIn)} $currencySymbol',
                               icon: Icons.call_received_rounded,
-                              color: Colors.teal,
+                              color: cs.tertiary,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -525,7 +527,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               l10n.paymentsOut,
                               '${_numFmt.format(paymentsOut)} $currencySymbol',
                               icon: Icons.call_made_rounded,
-                              color: Colors.redAccent,
+                              color: cs.error,
                             ),
                           ),
                         ],
@@ -540,8 +542,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               '${_numFmt.format(customerOutstanding)} $currencySymbol',
                               icon: Icons.person_outlined,
                               color: customerOutstanding > 0
-                                  ? Theme.of(context).colorScheme.error
-                                  : Colors.grey,
+                                  ? cs.error
+                                  : cs.outline,
                               subtitle: l10n.allTimeBalance,
                             ),
                           ),
@@ -552,8 +554,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               '${_numFmt.format(supplierPayable)} $currencySymbol',
                               icon: Icons.store_outlined,
                               color: supplierPayable > 0
-                                  ? Colors.deepOrange
-                                  : Colors.grey,
+                                  ? AppStatusColors.fg(context, AppStatus.warning)
+                                  : cs.outline,
                               subtitle: l10n.allTimeBalance,
                             ),
                           ),
@@ -598,21 +600,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             if (outOfStock > 0)
                               _badge(
                                 '$outOfStock ${l10n.outOfStock}',
-                                Colors.red,
+                                cs.error,
                               ),
                             if (lowStock > 0) ...[
                               const SizedBox(width: 6),
                               _badge(
                                 '$lowStock ${l10n.lowStock}',
-                                Colors.orange,
+                                AppStatusColors.fg(context, AppStatus.warning),
                               ),
                             ],
                             if (outOfStock == 0 && lowStock == 0)
                               Text(
                                 '$totalProducts ${l10n.trackedProducts}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey,
+                                  color: cs.onSurfaceVariant,
                                 ),
                               ),
                             const SizedBox(width: 4),
@@ -730,8 +732,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (e == null) return null;
 
     String? message;
-    Color bgColor = Colors.blue.shade50;
-    Color textColor = Colors.blue.shade800;
+    AppStatus status = AppStatus.info;
     bool isWarning = false;
     bool dismissible = false;
     String? actionLabel;
@@ -741,8 +742,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       case EntitlementStatus.trialActive:
         isWarning = e.trialDaysRemaining <= 5;
         message = '${e.trialDaysRemaining} ${l10n.daysLeftInTrial}';
-        bgColor = isWarning ? Colors.amber.shade100 : Colors.green.shade50;
-        textColor = isWarning ? Colors.amber.shade900 : Colors.green.shade800;
+        status = isWarning ? AppStatus.warning : AppStatus.success;
         actionLabel = l10n.enterActivationKeyAction;
         onAction = _openActivationScreen;
       case EntitlementStatus.licensed:
@@ -753,8 +753,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (daysLeft <= 14) {
             message =
                 '${l10n.licenseExpiresOn} ${e.licenseExpiresAt!.toLocal().toString().split(' ').first}';
-            bgColor = Colors.amber.shade100;
-            textColor = Colors.amber.shade900;
+            status = AppStatus.warning;
             isWarning = true;
             actionLabel = l10n.enterActivationKeyAction;
             onAction = _openActivationScreen;
@@ -765,16 +764,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (_freeModeBannerDismissed) return null;
         dismissible = true;
         message = l10n.freeModeBannerMsg;
-        bgColor = const Color(0xFFEEF2FF);
-        textColor = const Color(0xFF3730A3);
+        status = AppStatus.info;
         actionLabel = l10n.enterActivationKeyAction;
         onAction = _openActivationScreen;
       case EntitlementStatus.licenseRevoked:
         if (_freeModeBannerDismissed) return null;
         dismissible = true;
         message = l10n.freeModeBannerMsg;
-        bgColor = Colors.orange.shade50;
-        textColor = Colors.orange.shade800;
+        status = AppStatus.warning;
         isWarning = true;
         actionLabel = l10n.enterActivationKeyAction;
         onAction = _openActivationScreen;
@@ -782,15 +779,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (message == null) return null;
 
-    // Pastel banners are for light mode; in dark mode tint the surface
-    // with the same hue and lighten the text instead.
-    if (Theme.of(context).brightness == Brightness.dark) {
-      bgColor = Color.alphaBlend(
-        textColor.withValues(alpha: 0.22),
-        Theme.of(context).colorScheme.surface,
-      );
-      textColor = Color.lerp(textColor, Colors.white, 0.6)!;
-    }
+    final bgColor = AppStatusColors.bg(context, status);
+    final textColor = AppStatusColors.fg(context, status);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -890,7 +880,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       title: title,
       value: value,
       icon: icon,
-      color: color == Colors.grey ? null : color,
+      color: color == Theme.of(context).colorScheme.outline ? null : color,
       subtitle: subtitle,
       compact: true,
     );

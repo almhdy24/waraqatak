@@ -393,7 +393,11 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline, size: 56, color: Colors.grey),
+                Icon(
+                  Icons.lock_outline,
+                  size: 56,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   l10n.exchangeRates,
@@ -788,7 +792,9 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     l10n.customCurrency,
-                    style: const TextStyle(color: Colors.grey),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 )
               else

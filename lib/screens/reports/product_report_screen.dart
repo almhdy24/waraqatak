@@ -9,6 +9,7 @@ import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -386,11 +387,11 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                 child: Row(
                   children: [
-                    _chip(l10n.totalSales, totalSalesValue, Colors.green),
+                    _chip(l10n.totalSales, totalSalesValue, AppStatusColors.fg(context, AppStatus.success)),
                     const SizedBox(width: 8),
-                    _chip(l10n.cogs, totalCogs, Colors.blueGrey),
+                    _chip(l10n.cogs, totalCogs, cs.secondary),
                     const SizedBox(width: 8),
-                    _chip(l10n.grossProfit, totalProfit, Colors.teal),
+                    _chip(l10n.grossProfit, totalProfit, AppStatusColors.fg(context, AppStatus.success)),
                   ],
                 ),
               ),
@@ -399,12 +400,12 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                   padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 13, color: Colors.amber.shade800),
+                      Icon(Icons.info_outline, size: 13, color: AppStatusColors.fg(context, AppStatus.warning)),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           l10n.costIncomplete,
-                          style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                          style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.warning)),
                         ),
                       ),
                     ],
@@ -415,12 +416,12 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                   padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 13, color: Colors.amber.shade800),
+                      Icon(Icons.info_outline, size: 13, color: AppStatusColors.fg(context, AppStatus.warning)),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           l10n.mixedCurrenciesNotice,
-                          style: TextStyle(fontSize: 11, color: Colors.amber.shade900),
+                          style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.warning)),
                         ),
                       ),
                     ],
@@ -473,10 +474,10 @@ class _ProductReportScreenState extends State<ProductReportScreen>
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
+            Icon(Icons.inventory_2_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 12),
             Text(l10n.noDataForPeriod,
-                textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+                textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ]),
         ),
       );
@@ -515,7 +516,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                           if (item.category != null && item.category!.isNotEmpty)
                             Text(
                               item.category!,
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                         ],
                       ),
@@ -525,22 +526,22 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.15),
+                          color: AppStatusColors.bg(context, AppStatus.warning),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.amber.shade700, width: 0.5),
+                          border: Border.all(color: AppStatusColors.border(context, AppStatus.warning), width: 0.5),
                         ),
                         child: Text(
                           l10n.costIncomplete,
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.amber.shade900,
+                            color: AppStatusColors.fg(context, AppStatus.warning),
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                     Text(
                       '${l10n.stockStatus}: ${FormatUtils.formatQuantity(item.currentStock, unit: item.unit)}',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -553,9 +554,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                     spacing: 14,
                     runSpacing: 6,
                     children: [
-                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), Colors.green),
-                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), Colors.green),
-                      _statCell(l10n.transactionCount, '${item.transactionCount}', Colors.indigo),
+                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), AppStatusColors.fg(context, AppStatus.success)),
+                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), AppStatusColors.fg(context, AppStatus.success)),
+                      _statCell(l10n.transactionCount, '${item.transactionCount}', AppStatusColors.fg(context, AppStatus.info)),
                     ],
                   ),
                 ] else if (activeTab == 1) ...[
@@ -564,19 +565,19 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                     spacing: 14,
                     runSpacing: 6,
                     children: [
-                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), Colors.green),
-                      _statCell(l10n.cogs, _numFmt.format(item.cogs), Colors.blueGrey),
+                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), AppStatusColors.fg(context, AppStatus.success)),
+                      _statCell(l10n.cogs, _numFmt.format(item.cogs), Theme.of(context).colorScheme.secondary),
                       _statCell(
                         l10n.grossProfit,
                         item.isCostReliable ? _numFmt.format(item.grossProfit) : '—',
-                        (item.isCostReliable && item.grossProfit >= 0) ? Colors.teal : Colors.grey,
+                        (item.isCostReliable && item.grossProfit >= 0) ? AppStatusColors.fg(context, AppStatus.success) : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       _statCell(
                         l10n.profitMargin,
                         item.isCostReliable && item.salesRevenue > 0
                             ? '${item.profitMargin.toStringAsFixed(1)}%'
                             : '—',
-                        Colors.indigo,
+                        AppStatusColors.fg(context, AppStatus.info),
                       ),
                     ],
                   ),
@@ -586,15 +587,15 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                     spacing: 14,
                     runSpacing: 6,
                     children: [
-                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), Colors.green),
-                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), Colors.green),
+                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), AppStatusColors.fg(context, AppStatus.success)),
+                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), AppStatusColors.fg(context, AppStatus.success)),
                       _statCell(
                         l10n.grossProfit,
                         item.isCostReliable ? _numFmt.format(item.grossProfit) : '—',
-                        (item.isCostReliable && item.grossProfit >= 0) ? Colors.teal : Colors.grey,
+                        (item.isCostReliable && item.grossProfit >= 0) ? AppStatusColors.fg(context, AppStatus.success) : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       if (item.currentValuation != null)
-                        _statCell(l10n.inventoryValuationAtCost, _numFmt.format(item.currentValuation), Colors.teal),
+                        _statCell(l10n.inventoryValuationAtCost, _numFmt.format(item.currentValuation), AppStatusColors.fg(context, AppStatus.success)),
                     ],
                   ),
                 ],
@@ -610,7 +611,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
       ],
     );

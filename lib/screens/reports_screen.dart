@@ -23,6 +23,7 @@ import 'reports/advanced_inventory_analytics_screen.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_section_header.dart';
+import '../widgets/app_status_colors.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -33,6 +34,7 @@ class ReportsScreen extends StatefulWidget {
 
 class _ReportsScreenState extends State<ReportsScreen> {
   EntitlementState? _entitlement;
+  bool _opening = false;
 
   @override
   void initState() {
@@ -46,41 +48,48 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _openReport(_ReportEntry entry) async {
-    final feature = entry.proFeature;
-    if (feature != null) {
-      // Re-evaluate on every open so a running session cannot outlive expiry.
-      try {
-        final fresh = await LicenseService.instance.checkEntitlement(
-          force: true,
-        );
-        if (mounted) setState(() => _entitlement = fresh);
-      } catch (_) {}
-    }
-    if (feature != null && !FeatureAccess.canAccess(feature, _entitlement)) {
-      if (!mounted) return;
-      final result = await ProUpgradeSheet.show(context, feature: feature);
-      if (result == true && mounted) {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ActivationScreen()),
-        );
-        if (!mounted) return;
-        LicenseService.instance.invalidateCache();
-        final e = await LicenseService.instance.checkEntitlement(force: true);
-        if (mounted) setState(() => _entitlement = e);
-      }
-      return;
-    }
-    if (!mounted) return;
+    if (_opening) return;
+    _opening = true;
     try {
-      final reportKey = _resolveReportKey(entry.screen);
-      if (reportKey != null) {
-        AnalyticsService.instance.track(AnalyticsEvent.reportOpened, {
-          'report': reportKey,
-        });
+      final feature = entry.proFeature;
+      if (feature != null) {
+        // Re-evaluate on every open so a running session cannot outlive expiry.
+        try {
+          final fresh = await LicenseService.instance.checkEntitlement(
+            force: true,
+          );
+          if (mounted) setState(() => _entitlement = fresh);
+        } catch (_) {}
       }
-    } catch (_) {}
-    Navigator.push(context, MaterialPageRoute(builder: (_) => entry.screen));
+      if (feature != null && !FeatureAccess.canAccess(feature, _entitlement)) {
+        if (!mounted) return;
+        final result = await ProUpgradeSheet.show(context, feature: feature);
+        if (result == true && mounted) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ActivationScreen()),
+          );
+          if (!mounted) return;
+          LicenseService.instance.invalidateCache();
+          final e = await LicenseService.instance.checkEntitlement(force: true);
+          if (mounted) setState(() => _entitlement = e);
+        }
+        return;
+      }
+      if (!mounted) return;
+      try {
+        final reportKey = _resolveReportKey(entry.screen);
+        if (reportKey != null) {
+          AnalyticsService.instance.track(AnalyticsEvent.reportOpened, {
+            'report': reportKey,
+          });
+        }
+      } catch (_) {}
+      await Navigator.push(
+          context, MaterialPageRoute(builder: (_) => entry.screen));
+    } finally {
+      _opening = false;
+    }
   }
 
   static String? _resolveReportKey(Widget screen) {
@@ -121,7 +130,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         reports: [
           _ReportEntry(
             icon: Icons.trending_up_rounded,
-            color: Colors.green,
+            color: const Color(0xFF2E7D32),
             title: l10n.salesReport,
             subtitle: l10n.reportSubtitleSales,
             screen: const SalesReportScreen(),
@@ -129,7 +138,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.shopping_cart_outlined,
-            color: Colors.orange,
+            color: const Color(0xFFE65100),
             title: l10n.purchasesReport,
             subtitle: l10n.reportSubtitlePurchases,
             screen: const PurchasesReportScreen(),
@@ -138,7 +147,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.payments_outlined,
-            color: Colors.teal,
+            color: const Color(0xFF00796B),
             title: l10n.paymentsReport,
             subtitle: l10n.reportSubtitlePayments,
             screen: const PaymentsReportScreen(),
@@ -146,7 +155,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.people_outlined,
-            color: Colors.blue,
+            color: const Color(0xFF1565C0),
             title: l10n.customerReport,
             subtitle: l10n.reportSubtitleCustomers,
             screen: const CustomerReportScreen(),
@@ -154,7 +163,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.store_outlined,
-            color: Colors.deepPurple,
+            color: const Color(0xFF512DA8),
             title: l10n.supplierReport,
             subtitle: l10n.reportSubtitleSuppliers,
             screen: const SupplierReportScreen(),
@@ -168,7 +177,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         reports: [
           _ReportEntry(
             icon: Icons.warehouse_outlined,
-            color: Colors.brown,
+            color: const Color(0xFF5D4037),
             title: l10n.inventoryReport,
             subtitle: l10n.reportSubtitleInventory,
             screen: const InventoryReportScreen(),
@@ -177,7 +186,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.notification_important_outlined,
-            color: Colors.deepOrange,
+            color: const Color(0xFFE64A19),
             title: l10n.lowStockReport,
             subtitle: l10n.reportSubtitleLowStock,
             screen: const InventoryReportScreen(initialFilter: 'low_stock'),
@@ -186,7 +195,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.history_outlined,
-            color: Colors.blueGrey,
+            color: const Color(0xFF455A64),
             title: l10n.stockMovementsReport,
             subtitle: l10n.reportSubtitleMovements,
             screen: const StockMovementsScreen(),
@@ -195,7 +204,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.inventory_2_outlined,
-            color: Colors.indigo,
+            color: const Color(0xFF283593),
             title: l10n.productReport,
             subtitle: l10n.reportSubtitleProducts,
             screen: const ProductReportScreen(),
@@ -204,7 +213,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
           _ReportEntry(
             icon: Icons.analytics_outlined,
-            color: Colors.teal,
+            color: const Color(0xFF00796B),
             title: l10n.advancedInventoryAnalytics,
             subtitle: l10n.reportSubtitleAdvancedAnalytics,
             screen: const AdvancedInventoryAnalyticsScreen(),
@@ -218,7 +227,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         reports: [
           _ReportEntry(
             icon: Icons.history_edu_outlined,
-            color: Colors.blueGrey,
+            color: const Color(0xFF455A64),
             title: l10n.auditHistoryTitle,
             subtitle: l10n.reportSubtitleAudit,
             screen: const AuditHistoryScreen(),
@@ -260,7 +269,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                 ),
                 ...availableReports.map((entry) {
-                  final locked =
+                  final locked = _entitlement != null &&
                       entry.proFeature != null &&
                       !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
                   return Padding(
@@ -283,8 +292,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           vertical: 4,
                         ),
                         leading: CircleAvatar(
-                          backgroundColor: entry.color.withValues(alpha: 0.12),
-                          child: Icon(entry.icon, color: entry.color, size: 22),
+                          backgroundColor: AppStatusColors.adapt(
+                            context,
+                            entry.color,
+                          ).withValues(alpha: 0.14),
+                          child: Icon(
+                            entry.icon,
+                            color: AppStatusColors.adapt(context, entry.color),
+                            size: 22,
+                          ),
                         ),
                         title: Text(
                           entry.title,
@@ -308,13 +324,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (entry.proFeature != null) ...[
+                            if (locked) ...[
                               const ProBadge(),
                               const SizedBox(width: 8),
                             ],
                             Icon(
                               locked ? Icons.lock_outline : chevronIcon,
-                              color: locked ? Colors.grey : primaryColor,
+                              semanticLabel:
+                                  locked ? l10n.proFeatureTitle : null,
+                              color: locked
+                                  ? Theme.of(context).colorScheme.outline
+                                  : primaryColor,
                               size: locked ? 18 : 24,
                             ),
                           ],

@@ -9,6 +9,7 @@ import '../../models/payment_method.dart';
 import '../../utils/currency_utils.dart';
 import '../document_detail_screen.dart';
 import '../../widgets/app_amount_text.dart';
+import '../../widgets/app_status_colors.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
 
@@ -100,9 +101,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 children: [
                   Row(
                     children: [
-                      _chip('${l10n.receivedPayments} ($baseSymbol)', baseTotals.inAmount, Colors.green),
+                      _chip('${l10n.receivedPayments} ($baseSymbol)', baseTotals.inAmount, AppStatusColors.fg(context, AppStatus.success)),
                       const SizedBox(width: 8),
-                      _chip('${l10n.madePayments} ($baseSymbol)', baseTotals.outAmount, Colors.orange),
+                      _chip('${l10n.madePayments} ($baseSymbol)', baseTotals.outAmount, AppStatusColors.fg(context, AppStatus.warning)),
                     ],
                   ),
                   if (legacyEntries.isNotEmpty)
@@ -148,9 +149,9 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                                 padding: const EdgeInsets.only(bottom: 4),
                                 child: Row(
                                   children: [
-                                    _chip('${l10n.receivedPayments} ($symbol)', entry.value.inAmount, Colors.green),
+                                    _chip('${l10n.receivedPayments} ($symbol)', entry.value.inAmount, AppStatusColors.fg(context, AppStatus.success)),
                                     const SizedBox(width: 8),
-                                    _chip('${l10n.madePayments} ($symbol)', entry.value.outAmount, Colors.orange),
+                                    _chip('${l10n.madePayments} ($symbol)', entry.value.outAmount, AppStatusColors.fg(context, AppStatus.warning)),
                                   ],
                                 ),
                               );
@@ -196,14 +197,15 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       ]));
     }
     if (_rows == null) return const Center(child: CircularProgressIndicator());
+    final cs = Theme.of(context).colorScheme;
     if (_rows!.isEmpty) {
       return Center(child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.payments_outlined, size: 64, color: Colors.grey.shade300),
+          Icon(Icons.payments_outlined, size: 64, color: cs.outline),
           const SizedBox(height: 12),
           Text(l10n.noDataForPeriod, textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.grey)),
+              style: TextStyle(color: cs.onSurfaceVariant)),
         ]),
       ));
     }
@@ -215,7 +217,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         final row = _rows![i];
         final amount = (row['amount'] as num).toDouble();
         final isIn = row['doc_type'] == 'invoice';
-        final color = isIn ? Colors.green : Colors.orange;
+        final color = isIn ? AppStatusColors.fg(context, AppStatus.success) : AppStatusColors.fg(context, AppStatus.warning);
         final method = row['payment_method'] as String?;
         final cCode = (row['currency_code'] as String?)?.trim() ?? '';
         final sym = cCode.isNotEmpty ? ' ${Currency.symbolForCode(cCode)}' : '';
@@ -266,7 +268,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 style: const TextStyle(fontSize: 12),
               )),
               Text(_dateFmt.format(DateTime.parse(row['date'] as String)),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             ]),
           ),
         );
