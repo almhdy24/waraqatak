@@ -11,7 +11,6 @@ permissions:
 jobs:
   build-debug-apk:
     name: Build Debug APK
-    if: false # Temporarily suspended: APK/AAB build execution suspended
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
