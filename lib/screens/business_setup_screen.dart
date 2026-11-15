@@ -555,12 +555,12 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
                     foregroundColor: Theme.of(context).colorScheme.onPrimary,
                   ),
                   child: _saving
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
                       : Text(l10n.save),

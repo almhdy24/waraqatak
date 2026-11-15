@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../localization/app_localizations.dart';
 import '../widgets/app_icons.dart';
+import '../widgets/app_status_colors.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
   final bool continuousMode;
@@ -79,7 +80,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                       ? Icons.flash_on
                       : Icons.flash_off,
                   color: state.torchState == TorchState.on
-                      ? Colors.yellow
+                      ? AppStatusColors.fg(context, AppStatus.warning)
                       : Colors.white,
                 ),
                 onPressed: _controller.toggleTorch,

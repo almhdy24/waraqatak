@@ -444,8 +444,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     const SizedBox(width: 6),
                     Text(
                       _isSupplier
-                          ? (l10n.langCode == 'ar' ? 'مستحقات قديمة بعملات أخرى' : 'Legacy payables in other currencies')
-                          : (l10n.langCode == 'ar' ? 'مستحقات قديمة بعملات أخرى' : 'Legacy receivables in other currencies'),
+                          ? l10n.legacyPayablesOtherCurrencies
+                          : l10n.legacyReceivablesOtherCurrencies,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,

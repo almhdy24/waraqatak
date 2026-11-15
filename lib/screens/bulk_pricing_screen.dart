@@ -754,7 +754,7 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
                 color: cs.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: cs.shadow.withValues(alpha: 0.08),
                     blurRadius: 4,
                     offset: const Offset(0, -2),
                   ),

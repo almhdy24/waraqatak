@@ -96,6 +96,18 @@ class ErrorUtils {
       return l10n.errorInsufficientStockGeneral;
     }
 
+    // Product in use
+    if (raw.contains('ProductInUseException') ||
+        lower.contains('product is in use')) {
+      return l10n.errProductInUse;
+    }
+
+    // Image storage error
+    if (raw.contains('ImageStorageException') ||
+        lower.contains('image storage failed')) {
+      return l10n.logoInvalidImage;
+    }
+
     // Stock cannot be negative
     if (lower.contains('stock cannot be negative') ||
         lower.contains('negative stock')) {

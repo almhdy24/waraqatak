@@ -4072,4 +4072,8 @@ class AppLocalizations {
       _t('الملف المختار ليس صورة صالحة', 'The selected file is not a valid image');
   String csvPreviewLimited(int shown, int total) =>
       _t('عرض أول $shown صفاً من $total', 'Showing first $shown of $total rows');
+  String get legacyPayablesOtherCurrencies =>
+      _t('مستحقات قديمة بعملات أخرى', 'Legacy payables in other currencies');
+  String get legacyReceivablesOtherCurrencies =>
+      _t('مستحقات قديمة بعملات أخرى', 'Legacy receivables in other currencies');
 }
