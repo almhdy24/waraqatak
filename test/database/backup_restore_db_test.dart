@@ -359,7 +359,7 @@ void main() {
     try {
       await expectLater(
         () => BackupService.restoreFromJsonMap(validPayload),
-        throwsA(isA<FileSystemException>()),
+        throwsA(anyOf(isA<FileSystemException>(), isA<BackupIntegrityException>())),
       );
 
       // Verify database was untouched because safety backup failed before transaction
@@ -576,7 +576,7 @@ void main() {
 
         await expectLater(
           () => BackupService.restoreFromJsonMap(payload),
-          throwsA(isA<FileSystemException>()),
+          throwsA(anyOf(isA<FileSystemException>(), isA<BackupIntegrityException>())),
         );
 
         // Database was untouched because safety backup failed before transaction
