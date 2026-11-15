@@ -8411,14 +8411,14 @@ class DatabaseHelper {
       );
 
       // 5. Audit log
-      await txn.insert('audit_log', {
-        'action': 'stocktake_started',
-        'entity_type': 'stocktake_session',
-        'entity_id': sessionId,
-        'details':
+      await AuditService.instance.logEvent(
+        txn,
+        'stocktake_started',
+        entityType: 'stocktake_session',
+        entityId: sessionId,
+        details:
             'session="$sessionNumber" items=${products.length}${categoryFilter != null ? " category=$categoryFilter" : ""}',
-        'timestamp': now.toIso8601String(),
-      });
+      );
 
       return StocktakeSession(
         id: sessionId,
@@ -8670,13 +8670,13 @@ class DatabaseHelper {
         whereArgs: [sessionId],
       );
 
-      await txn.insert('audit_log', {
-        'action': 'stocktake_cancelled',
-        'entity_type': 'stocktake_session',
-        'entity_id': sessionId,
-        'details': 'session="${session.sessionNumber}"',
-        'timestamp': DateTime.now().toIso8601String(),
-      });
+      await AuditService.instance.logEvent(
+        txn,
+        'stocktake_cancelled',
+        entityType: 'stocktake_session',
+        entityId: sessionId,
+        details: 'session="${session.sessionNumber}"',
+      );
     });
   }
 

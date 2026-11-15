@@ -268,7 +268,7 @@ abstract final class AccessDao {
   /// - Owner core columns (is_owner, is_active, role_id, username) are immutable.
   /// - Only one Owner account can ever exist.
   /// - Non-owner users cannot be promoted to Owner.
-  /// - System roles cannot be deleted or modified.
+  /// - System roles cannot be deleted, and their id and is_system flag cannot be modified.
   /// - Owner role permissions cannot be deleted or modified.
   static Future<void> createSecurityTriggers(DatabaseExecutor db) async {
     if (await tableExists(db, 'users')) {

@@ -4,6 +4,7 @@ import '../models/document.dart';
 import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
+import 'access/audit_service.dart';
 import 'accounting/stock_ledger.dart';
 
 /// Summary of current inventory valuation at cost.
@@ -285,14 +286,14 @@ class InventoryCostingService {
     );
 
     // Audit log event
-    await txn.insert('audit_log', {
-      'action': 'cost_reconciled',
-      'entity_type': 'product',
-      'entity_id': productId,
-      'details':
+    await AuditService.instance.logEvent(
+      txn,
+      'cost_reconciled',
+      entityType: 'product',
+      entityId: productId,
+      details:
           'product="$name" new_cost=$newUnitCost stock=$stock${notes != null ? " reason=$notes" : ""}',
-      'timestamp': DateTime.now().toIso8601String(),
-    });
+    );
   }
 
   /// Returns overall inventory valuation at cost.

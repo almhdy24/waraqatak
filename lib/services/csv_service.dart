@@ -12,6 +12,7 @@ import '../models/product_unit.dart';
 import '../models/reference_pricing_types.dart';
 import '../utils/reference_pricing_math.dart';
 import 'access/access_guard.dart';
+import 'access/audit_service.dart';
 import 'access/permission_registry.dart';
 import 'analytics/analytics_service.dart';
 
@@ -1216,14 +1217,14 @@ class CsvService {
       }
 
       // Record audit log event
-      await txn.insert('audit_log', {
-        'action': 'csv_import',
-        'entity_type': 'products_csv',
-        'entity_id': imported + updated,
-        'details':
+      await AuditService.instance.logEvent(
+        txn,
+        'csv_import',
+        entityType: 'products_csv',
+        entityId: imported + updated,
+        details:
             'imported=$imported updated=$updated skipped=$skipped skippedReferenceFields=$skippedReferenceFields strategy=${strategy.name}',
-        'timestamp': now,
-      });
+      );
 
       if (imported + updated > 0) {
         CatalogEvents.notifyPricesChanged();

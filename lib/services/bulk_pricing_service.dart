@@ -2,6 +2,7 @@ import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../database/reference_pricing_dao.dart';
 import 'access/access_guard.dart';
+import 'access/audit_service.dart';
 import 'access/permission_registry.dart';
 import '../models/product.dart';
 import '../models/reference_pricing_types.dart';
@@ -291,14 +292,14 @@ class BulkPricingService {
 
       // Record audit event only if affectedCount > 0
       if (affectedCount > 0) {
-        await txn.insert('audit_log', {
-          'action': 'bulk_pricing',
-          'entity_type': 'products_batch',
-          'entity_id': affectedCount,
-          'details':
+        await AuditService.instance.logEvent(
+          txn,
+          'bulk_pricing',
+          entityType: 'products_batch',
+          entityId: affectedCount,
+          details:
               'affected_count=$affectedCount op=${opType.name} value=$opValue target=${target.name}',
-          'timestamp': now,
-        });
+        );
       }
     });
 

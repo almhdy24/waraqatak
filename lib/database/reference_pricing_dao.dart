@@ -12,6 +12,7 @@ import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../models/reference_pricing_types.dart';
 import '../services/access/access_guard.dart';
+import '../services/access/audit_service.dart';
 import '../services/access/permission_registry.dart';
 import '../utils/reference_pricing_math.dart';
 
@@ -642,13 +643,12 @@ abstract final class ReferencePricingDao {
     required String entityType,
     required Map<String, Object?> details,
   }) async {
-    await txn.insert('audit_log', {
-      'action': action,
-      'entity_type': entityType,
-      'entity_id': null,
-      'details': jsonEncode(details),
-      'timestamp': DateTime.now().toIso8601String(),
-    });
+    await AuditService.instance.logEvent(
+      txn,
+      action,
+      entityType: entityType,
+      details: jsonEncode(details),
+    );
   }
 
   /// Verifies core database invariants I1, I2, I3, I4, returning human-readable violations.

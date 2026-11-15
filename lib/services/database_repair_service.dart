@@ -7,6 +7,7 @@ import '../models/database_diagnostic.dart';
 import '../models/document_status.dart';
 import '../models/stock_movement.dart';
 import 'access/access_guard.dart';
+import 'access/audit_service.dart';
 import 'access/permission_registry.dart';
 import 'accounting/journal_backfill_service.dart';
 import 'accounting/stock_ledger.dart';
@@ -1418,13 +1419,14 @@ class DatabaseRepairService {
           );
 
           // Audit log inside txn
-          await txn.insert('audit_log', {
-            'action': 'REPAIR_MOVEMENT_OPTION_A',
-            'entity_type': 'documents',
-            'entity_id': preview.documentId,
-            'details': 'Neutralized surplus movement of ${preview.surplusMovement} on ${preview.documentNumber}',
-            'timestamp': DateTime.now().toIso8601String(),
-          });
+          await AuditService.instance.logEvent(
+            txn,
+            'REPAIR_MOVEMENT_OPTION_A',
+            entityType: 'documents',
+            entityId: preview.documentId,
+            details:
+                'Neutralized surplus movement of ${preview.surplusMovement} on ${preview.documentNumber}',
+          );
           repairedCount = 1;
         } else {
           // Option B: Pair duplicate movement with compensating adjustment and neutralize both
@@ -1464,13 +1466,14 @@ class DatabaseRepairService {
           );
 
           // Audit log inside txn
-          await txn.insert('audit_log', {
-            'action': 'REPAIR_MOVEMENT_OPTION_B',
-            'entity_type': 'documents',
-            'entity_id': preview.documentId,
-            'details': 'Neutralized duplicate movement #$dupId and compensating adjustment #$adjId for ${preview.documentNumber}',
-            'timestamp': DateTime.now().toIso8601String(),
-          });
+          await AuditService.instance.logEvent(
+            txn,
+            'REPAIR_MOVEMENT_OPTION_B',
+            entityType: 'documents',
+            entityId: preview.documentId,
+            details:
+                'Neutralized duplicate movement #$dupId and compensating adjustment #$adjId for ${preview.documentNumber}',
+          );
           repairedCount = 2;
         }
       });

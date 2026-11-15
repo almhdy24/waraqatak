@@ -218,15 +218,28 @@ class AuditService {
       );
     }
 
-    final next = _chainLock.then((_) => _logEventInternal(
-      db,
-      action,
-      entityType: entityType,
-      entityId: entityId,
-      details: details,
-      explicitUserId: userId,
-      explicitUserName: userName,
-    ));
+    final next = _chainLock.then((_) {
+      if (db is Database) {
+        return db.transaction((txn) => _logEventInternal(
+          txn,
+          action,
+          entityType: entityType,
+          entityId: entityId,
+          details: details,
+          explicitUserId: userId,
+          explicitUserName: userName,
+        ));
+      }
+      return _logEventInternal(
+        db,
+        action,
+        entityType: entityType,
+        entityId: entityId,
+        details: details,
+        explicitUserId: userId,
+        explicitUserName: userName,
+      );
+    });
     _chainLock = next.catchError((_) {});
     return next;
   }
@@ -377,6 +390,15 @@ class AuditService {
               verifiedCount: verifiedCount,
               brokenAtId: id,
               error: 'Forged genesis anchor detected at row $id',
+            );
+          }
+          if (prevHash != genesisHash) {
+            return AuditVerificationResult(
+              isValid: false,
+              verifiedCount: verifiedCount,
+              brokenAtId: id,
+              error:
+                  'prev_hash mismatch: expected $genesisHash but got $prevHash',
             );
           }
           expectedPrevHash = prevHash;
