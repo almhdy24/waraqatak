@@ -119,8 +119,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Test Product'), findsOneWidget);
 
-      // Clean up overlay before test teardown
-      await tester.pumpWidget(const SizedBox());
+      // Dismiss options overlay cleanly before test teardown
+      FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
     });
 
