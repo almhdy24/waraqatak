@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -8,28 +9,33 @@ import '../../localization/app_localizations.dart';
 import '../../models/business.dart';
 import '../../models/customer_statement.dart';
 import '../../utils/pdf_settings.dart';
+import 'pdf_font_data.dart';
 import 'pdf_fonts.dart';
 import 'pdf_text_utils.dart';
 import 'pdf_theme.dart';
 
 class PdfCustomerStatementBuilder {
-  static final _numFmt = NumberFormat('#,##0.##');
-  static final _dateFmt = DateFormat('dd/MM/yyyy');
-  static final _timeFmt = DateFormat('dd/MM/yyyy HH:mm');
+  static final _numFmt = NumberFormat('#,##0.##', 'en');
+  static final _dateFmt = DateFormat('dd/MM/yyyy', 'en');
+  static final _timeFmt = DateFormat('dd/MM/yyyy HH:mm', 'en');
+
+  @visibleForTesting
+  static bool shouldShowWarnings({
+    required bool showInternalWarnings,
+    required bool hasDiscrepancy,
+  }) => showInternalWarnings && hasDiscrepancy;
 
   static Future<Uint8List> build({
     required CustomerStatement statement,
     required Business business,
     required AppLocalizations l10n,
     PdfStyleSettings style = const PdfStyleSettings(),
+    bool showInternalWarnings = false,
   }) async {
     final theme = PdfTheme.fromSettings(style);
-    final regularFontData =
-        await rootBundle.load('assets/fonts/Tajawal-Regular.ttf');
-    final boldFontData =
-        await rootBundle.load('assets/fonts/Tajawal-Bold.ttf');
-    final regular = ArabicTtfFont(regularFontData);
-    final bold = ArabicTtfFont(boldFontData);
+    final (regularData, boldData) = await PdfFontData.load();
+    final regular = ArabicTtfFont(regularData);
+    final bold = ArabicTtfFont(boldData);
 
     pw.MemoryImage? logoImage;
     if (business.logoPath != null && business.logoPath!.isNotEmpty) {
@@ -44,8 +50,7 @@ class PdfCustomerStatementBuilder {
 
     final pdf = pw.Document();
     final isArabic = l10n.isArabic;
-    final textDir =
-        isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+    final textDir = isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
 
     pdf.addPage(
       pw.MultiPage(
@@ -83,7 +88,7 @@ class PdfCustomerStatementBuilder {
           pw.SizedBox(height: 12),
 
           // Warnings if discrepancies exist
-          if (statement.hasDiscrepancy) ...[
+          if (showInternalWarnings && statement.hasDiscrepancy) ...[
             _buildWarningBox(
               warnings: statement.warnings,
               theme: theme,
@@ -153,8 +158,9 @@ class PdfCustomerStatementBuilder {
     final base = pw.ThemeData.withFont(base: regular, bold: bold);
     if (!rtl) return base;
     return base.copyWith(
-      defaultTextStyle: base.defaultTextStyle
-          .copyWith(wordSpacing: PdfTextUtils.rtlWordSpacing),
+      defaultTextStyle: base.defaultTextStyle.copyWith(
+        wordSpacing: PdfTextUtils.rtlWordSpacing,
+      ),
     );
   }
 
@@ -289,20 +295,20 @@ class PdfCustomerStatementBuilder {
                     ),
                   ],
                 ),
-                if (contact.phone != null) ...[
+                if (contact.phone?.trim().isNotEmpty == true) ...[
                   pw.SizedBox(height: 3),
                   PdfTextUtils.directionalText(
-                    '${l10n.phone}: ${contact.phone}',
+                    '${l10n.phone}: ${contact.phone!.trim()}',
                     font: regular,
                     fontSize: theme.fs(9.5),
                     color: theme.textColor,
                     fallbackDirection: pw.TextDirection.ltr,
                   ),
                 ],
-                if (contact.address != null) ...[
+                if (contact.address?.trim().isNotEmpty == true) ...[
                   pw.SizedBox(height: 2),
                   PdfTextUtils.directionalText(
-                    '${l10n.address}: ${contact.address}',
+                    '${l10n.address}: ${contact.address!.trim()}',
                     font: regular,
                     fontSize: theme.fs(9),
                     color: theme.mutedTextColor,
@@ -524,23 +530,54 @@ class PdfCustomerStatementBuilder {
       l10n.runningBalance,
     ];
 
+    final order = List<int>.generate(headers.length, (i) => i);
+    final idx = isArabic ? order.reversed.toList() : order;
+    const baseWidths = [1.4, 3.2, 1.6, 1.6, 2.0];
+    final colWidths = <int, pw.TableColumnWidth>{
+      for (int pos = 0; pos < idx.length; pos++)
+        pos: pw.FlexColumnWidth(baseWidths[idx[pos]]),
+    };
+
+    final numAlign = isArabic
+        ? pw.Alignment.centerLeft
+        : pw.Alignment.centerRight;
+
     final rows = <List<pw.Widget>>[];
 
     // Opening balance row
-    rows.add([
-      _cellText(_dateFmt.format(statement.from), regular, theme,
-          fallbackDir: pw.TextDirection.ltr),
-      _cellText(l10n.openingBalance, bold, theme),
-      _cellText('-', regular, theme, align: pw.TextAlign.center),
-      _cellText('-', regular, theme, align: pw.TextAlign.center),
+    final openingCells = [
+      _cellText(
+        _dateFmt.format(statement.from),
+        regular,
+        theme,
+        fallbackDir: pw.TextDirection.ltr,
+        isArabic: isArabic,
+      ),
+      _cellText(l10n.openingBalance, bold, theme, isArabic: isArabic),
+      _cellText(
+        '-',
+        regular,
+        theme,
+        align: pw.TextAlign.center,
+        isArabic: isArabic,
+      ),
+      _cellText(
+        '-',
+        regular,
+        theme,
+        align: pw.TextAlign.center,
+        isArabic: isArabic,
+      ),
       _cellText(
         '${_numFmt.format(statement.openingBalance)} $sym',
         bold,
         theme,
-        align: pw.TextAlign.right,
+        alignment: numAlign,
         fallbackDir: pw.TextDirection.ltr,
+        isArabic: isArabic,
       ),
-    ]);
+    ];
+    rows.add(idx.map((cIdx) => openingCells[cIdx]).toList());
 
     for (final e in statement.entries) {
       final desc = _formatEntryDescription(e, l10n);
@@ -548,68 +585,77 @@ class PdfCustomerStatementBuilder {
       final creditStr = e.credit > 0 ? _numFmt.format(e.credit) : '-';
       final balanceStr = '${_numFmt.format(e.runningBalance)} $sym';
 
-      rows.add([
-        _cellText(_dateFmt.format(e.date), regular, theme,
-            fallbackDir: pw.TextDirection.ltr),
-        _cellText(desc, e.isAdjustment ? bold : regular, theme,
-            color: e.isAdjustment
-                ? PdfColor.fromHex('#C62828')
-                : theme.textColor),
+      final entryCells = [
+        _cellText(
+          _dateFmt.format(e.date),
+          regular,
+          theme,
+          fallbackDir: pw.TextDirection.ltr,
+          isArabic: isArabic,
+        ),
+        _cellText(
+          desc,
+          e.isAdjustment ? bold : regular,
+          theme,
+          color: e.isAdjustment ? PdfColor.fromHex('#C62828') : theme.textColor,
+          isArabic: isArabic,
+        ),
         _cellText(
           debitStr,
           regular,
           theme,
-          align: pw.TextAlign.right,
+          alignment: numAlign,
           color: e.debit > 0 ? theme.primaryColor : theme.mutedTextColor,
           fallbackDir: pw.TextDirection.ltr,
+          isArabic: isArabic,
         ),
         _cellText(
           creditStr,
           regular,
           theme,
-          align: pw.TextAlign.right,
+          alignment: numAlign,
           color: e.credit > 0
               ? PdfColor.fromHex('#2E7D32')
               : theme.mutedTextColor,
           fallbackDir: pw.TextDirection.ltr,
+          isArabic: isArabic,
         ),
         _cellText(
           balanceStr,
           bold,
           theme,
-          align: pw.TextAlign.right,
+          alignment: numAlign,
           color: e.runningBalance > 0
               ? PdfColor.fromHex('#C62828')
               : PdfColor.fromHex('#2E7D32'),
           fallbackDir: pw.TextDirection.ltr,
+          isArabic: isArabic,
         ),
-      ]);
+      ];
+      rows.add(idx.map((cIdx) => entryCells[cIdx]).toList());
     }
 
     return pw.Table(
       border: pw.TableBorder.all(color: theme.borderColor, width: 0.5),
-      columnWidths: {
-        0: const pw.FlexColumnWidth(1.4), // Date
-        1: const pw.FlexColumnWidth(3.2), // Details
-        2: const pw.FlexColumnWidth(1.6), // Debit
-        3: const pw.FlexColumnWidth(1.6), // Credit
-        4: const pw.FlexColumnWidth(2.0), // Balance
-      },
+      columnWidths: colWidths,
       children: [
         // Table Header
         pw.TableRow(
           decoration: pw.BoxDecoration(color: theme.lightBg),
-          children: headers
+          children: idx
               .map(
-                (h) => pw.Container(
-                  alignment: pw.Alignment.center,
-                  padding:
-                      const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 4),
-                  child: PdfTextUtils.directionalText(
-                    h,
-                    font: bold,
-                    fontSize: theme.fs(9),
+                (cIdx) => pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(
+                    vertical: 5,
+                    horizontal: 4,
+                  ),
+                  child: _cellText(
+                    headers[cIdx],
+                    bold,
+                    theme,
+                    align: pw.TextAlign.center,
                     color: theme.primaryColor,
+                    isArabic: isArabic,
                   ),
                 ),
               )
@@ -622,7 +668,9 @@ class PdfCustomerStatementBuilder {
                 .map(
                   (cell) => pw.Padding(
                     padding: const pw.EdgeInsets.symmetric(
-                        vertical: 4, horizontal: 4),
+                      vertical: 4,
+                      horizontal: 4,
+                    ),
                     child: cell,
                   ),
                 )
@@ -641,13 +689,17 @@ class PdfCustomerStatementBuilder {
     pw.Alignment? alignment,
     PdfColor? color,
     pw.TextDirection? fallbackDir,
+    bool isArabic = false,
   }) {
-    final effectiveAlignment = alignment ??
+    final effectiveAlignment =
+        alignment ??
         (align == pw.TextAlign.center
             ? pw.Alignment.center
             : align == pw.TextAlign.right
-                ? pw.Alignment.centerRight
-                : pw.Alignment.centerLeft);
+            ? (isArabic ? pw.Alignment.centerLeft : pw.Alignment.centerRight)
+            : align == pw.TextAlign.left
+            ? pw.Alignment.centerLeft
+            : (isArabic ? pw.Alignment.centerRight : pw.Alignment.centerLeft));
     return pw.Container(
       alignment: effectiveAlignment,
       child: PdfTextUtils.directionalText(
@@ -721,31 +773,68 @@ class PdfCustomerStatementBuilder {
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: PdfColors.grey200),
                 children: [
-                  _cellText(l10n.date, bold, theme, align: pw.TextAlign.center),
-                  _cellText(l10n.paymentReceipt, bold, theme,
-                      align: pw.TextAlign.center),
-                  _cellText(l10n.cancelledInvoice, bold, theme,
-                      align: pw.TextAlign.center),
-                  _cellText(l10n.amount, bold, theme,
-                      align: pw.TextAlign.center),
+                  _cellText(
+                    l10n.date,
+                    bold,
+                    theme,
+                    align: pw.TextAlign.center,
+                    isArabic: isArabic,
+                  ),
+                  _cellText(
+                    l10n.paymentReceipt,
+                    bold,
+                    theme,
+                    align: pw.TextAlign.center,
+                    isArabic: isArabic,
+                  ),
+                  _cellText(
+                    l10n.cancelledInvoice,
+                    bold,
+                    theme,
+                    align: pw.TextAlign.center,
+                    isArabic: isArabic,
+                  ),
+                  _cellText(
+                    l10n.amount,
+                    bold,
+                    theme,
+                    align: pw.TextAlign.center,
+                    isArabic: isArabic,
+                  ),
                 ],
               ),
               ...receipts.map(
                 (r) => pw.TableRow(
                   children: [
-                    _cellText(_dateFmt.format(r.date), regular, theme,
-                        align: pw.TextAlign.center,
-                        fallbackDir: pw.TextDirection.ltr),
-                    _cellText(r.receiptNumber, regular, theme,
-                        align: pw.TextAlign.center),
-                    _cellText('#${r.cancelledInvoiceNumber}', regular, theme,
-                        align: pw.TextAlign.center),
+                    _cellText(
+                      _dateFmt.format(r.date),
+                      regular,
+                      theme,
+                      align: pw.TextAlign.center,
+                      fallbackDir: pw.TextDirection.ltr,
+                      isArabic: isArabic,
+                    ),
+                    _cellText(
+                      r.receiptNumber,
+                      regular,
+                      theme,
+                      align: pw.TextAlign.center,
+                      isArabic: isArabic,
+                    ),
+                    _cellText(
+                      '#${r.cancelledInvoiceNumber}',
+                      regular,
+                      theme,
+                      align: pw.TextAlign.center,
+                      isArabic: isArabic,
+                    ),
                     _cellText(
                       '${_numFmt.format(r.amount)} $symbol',
                       bold,
                       theme,
                       align: pw.TextAlign.right,
                       fallbackDir: pw.TextDirection.ltr,
+                      isArabic: isArabic,
                     ),
                   ],
                 ),
@@ -822,7 +911,9 @@ class PdfCustomerStatementBuilder {
       margin: const pw.EdgeInsets.only(top: 10),
       padding: const pw.EdgeInsets.only(top: 6),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
+        border: pw.Border(
+          top: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+        ),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

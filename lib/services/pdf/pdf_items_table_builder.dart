@@ -9,8 +9,8 @@ import 'pdf_text_utils.dart';
 import 'pdf_theme.dart';
 
 class PdfItemsTableBuilder {
-  static final _money = NumberFormat('#,##0.00');
-  static final _qty = NumberFormat('#,##0.###');
+  static final _money = NumberFormat('#,##0.00', 'en');
+  static final _qty = NumberFormat('#,##0.###', 'en');
 
   static pw.Widget build({
     required List<DocumentItem> items,
@@ -23,7 +23,9 @@ class PdfItemsTableBuilder {
     final minimal = theme.style.template == PdfTemplate.minimal;
     final modern = theme.style.template == PdfTemplate.modern;
     final headerText = modern ? theme.onPrimaryColor : theme.primaryColor;
-    final headerBg = modern ? theme.primaryColor : (minimal ? null : theme.lightBg);
+    final headerBg = modern
+        ? theme.primaryColor
+        : (minimal ? null : theme.lightBg);
 
     // Column order is reversed for Arabic so "#" and "item" sit on the right.
     List<T> ordered<T>(List<T> cells) =>
@@ -33,36 +35,70 @@ class PdfItemsTableBuilder {
       _cell('#', bold, headerText, theme, center: true),
       _cell(l10n.item, bold, headerText, theme),
       _cell(l10n.quantity, bold, headerText, theme, center: true),
-      _cell(l10n.price, bold, headerText, theme, numeric: true, isArabic: isArabic),
-      _cell(l10n.total, bold, headerText, theme, numeric: true, isArabic: isArabic),
+      _cell(
+        l10n.price,
+        bold,
+        headerText,
+        theme,
+        numeric: true,
+        isArabic: isArabic,
+      ),
+      _cell(
+        l10n.total,
+        bold,
+        headerText,
+        theme,
+        numeric: true,
+        isArabic: isArabic,
+      ),
     ]);
 
     final rows = <pw.TableRow>[];
     for (var i = 0; i < items.length; i++) {
       final item = items[i];
       final striped = theme.style.zebraRows && i.isOdd;
-      rows.add(pw.TableRow(
-        decoration: striped
-            ? const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF9FAFB))
-            : null,
-        children: ordered([
-          _cell('${i + 1}', regular, theme.mutedTextColor, theme, center: true),
-          _cell(item.description, regular, theme.textColor, theme),
-          _cell(
-            item.saleUnit != null && item.saleUnit!.isNotEmpty
-                ? '${_qty.format(item.quantity)} ${item.saleUnit}'
-                : _qty.format(item.quantity),
-            regular,
-            theme.textColor,
-            theme,
-            center: true,
-          ),
-          _cell(_money.format(item.price), regular, theme.textColor, theme,
-              numeric: true, isArabic: isArabic),
-          _cell(_money.format(item.total), bold, theme.textColor, theme,
-              numeric: true, isArabic: isArabic),
-        ]),
-      ));
+      rows.add(
+        pw.TableRow(
+          decoration: striped
+              ? const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF9FAFB))
+              : null,
+          children: ordered([
+            _cell(
+              '${i + 1}',
+              regular,
+              theme.mutedTextColor,
+              theme,
+              center: true,
+            ),
+            _cell(item.description, regular, theme.textColor, theme),
+            _cell(
+              item.saleUnit != null && item.saleUnit!.isNotEmpty
+                  ? '${_qty.format(item.quantity)} ${item.saleUnit}'
+                  : _qty.format(item.quantity),
+              regular,
+              theme.textColor,
+              theme,
+              center: true,
+            ),
+            _cell(
+              _money.format(item.price),
+              regular,
+              theme.textColor,
+              theme,
+              numeric: true,
+              isArabic: isArabic,
+            ),
+            _cell(
+              _money.format(item.total),
+              bold,
+              theme.textColor,
+              theme,
+              numeric: true,
+              isArabic: isArabic,
+            ),
+          ]),
+        ),
+      );
     }
 
     final itemCol = isArabic ? 3 : 1;
@@ -70,8 +106,10 @@ class PdfItemsTableBuilder {
     return pw.Table(
       border: minimal
           ? pw.TableBorder(
-              horizontalInside:
-                  pw.BorderSide(color: theme.borderColor, width: 0.6),
+              horizontalInside: pw.BorderSide(
+                color: theme.borderColor,
+                width: 0.6,
+              ),
               bottom: pw.BorderSide(color: theme.borderColor, width: 0.6),
             )
           : pw.TableBorder.all(color: theme.borderColor, width: 0.8),
@@ -85,7 +123,10 @@ class PdfItemsTableBuilder {
           decoration: headerBg == null
               ? pw.BoxDecoration(
                   border: pw.Border(
-                    bottom: pw.BorderSide(color: theme.primaryColor, width: 1.2),
+                    bottom: pw.BorderSide(
+                      color: theme.primaryColor,
+                      width: 1.2,
+                    ),
                   ),
                 )
               : pw.BoxDecoration(color: headerBg),
@@ -110,8 +151,8 @@ class PdfItemsTableBuilder {
         ? pw.Alignment.center
         // Numbers align to the trailing edge of the reading direction.
         : numeric
-            ? (isArabic ? pw.Alignment.centerLeft : pw.Alignment.centerRight)
-            : (isArabic ? pw.Alignment.centerRight : pw.Alignment.centerLeft);
+        ? (isArabic ? pw.Alignment.centerLeft : pw.Alignment.centerRight)
+        : (isArabic ? pw.Alignment.centerRight : pw.Alignment.centerLeft);
     return pw.Container(
       alignment: align,
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),

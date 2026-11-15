@@ -61,4 +61,23 @@ class FormatUtils {
     }
     return '${NumberFormat('#,##0.##', 'en_US').format(rate)}%';
   }
+
+  /// Sanitizes a file name component (without extension) for cross-platform file saving.
+  static String safeFileName(String s, {int maxLen = 80}) =>
+      formatUtilsSafeFileName(s, maxLen: maxLen);
 }
+
+/// Sanitizes a file name component (without extension) for cross-platform file saving.
+String safeFileName(String s, {int maxLen = 80}) {
+  var out = s
+      .replaceAll(RegExp(r'[\\/:*?"<>|\u0000-\u001F]+'), '_')
+      .replaceAll(RegExp(r'\s+'), '_')
+      .replaceAll(RegExp(r'_+'), '_')
+      .replaceAll(RegExp(r'^[_.]+|[_.]+$'), '');
+  if (out.isEmpty) out = 'document';
+  return out.length > maxLen ? out.substring(0, maxLen) : out;
+}
+
+// Alias for static member access
+String formatUtilsSafeFileName(String s, {int maxLen = 80}) =>
+    safeFileName(s, maxLen: maxLen);

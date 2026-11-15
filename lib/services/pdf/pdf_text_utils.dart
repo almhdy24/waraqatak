@@ -2,15 +2,19 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class PdfTextUtils {
-  static final _arabic = RegExp(r'[\u0600-\u06FF]');
-  static final _bidiIsolates = RegExp(r'[\u2066-\u2069]');
+  static final _arabic = RegExp(
+    r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]',
+  );
+  static final _bidiControls = RegExp(
+    r'[\u200E\u200F\u061C\u202A-\u202E\u2066-\u2069]',
+  );
 
-  /// Removes Unicode Bidi isolates (U+2066 LRI, U+2067 RLI, U+2068 FSI, U+2069 PDI).
-  /// PDF fonts (such as Tajawal) lack glyphs for isolate control characters,
-  /// causing PDF renderers to produce missing-glyph replacement boxes.
+  /// Strips Unicode Bidi control characters (LRM, RLM, ALM, embeddings,
+  /// overrides, and isolates) because Tajawal has no glyphs for them,
+  /// which causes PDF renderers to produce missing-glyph replacement boxes.
   static String stripBidiIsolates(String text) {
     if (text.isEmpty) return text;
-    return text.replaceAll(_bidiIsolates, '');
+    return text.replaceAll(_bidiControls, '');
   }
 
   static bool hasArabic(String text) => _arabic.hasMatch(text);
@@ -51,7 +55,9 @@ class PdfTextUtils {
           fontWeight: fontWeight,
           color: color,
           // See PdfDocumentBuilder._pageTheme: keeps RTL words separated.
-          wordSpacing: direction == pw.TextDirection.rtl ? rtlWordSpacing : null,
+          wordSpacing: direction == pw.TextDirection.rtl
+              ? rtlWordSpacing
+              : null,
         ),
       ),
     );

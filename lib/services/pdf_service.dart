@@ -10,6 +10,7 @@ import '../models/document.dart';
 import '../models/document_item.dart';
 import '../models/digital_seal.dart';
 import '../database/database_helper.dart';
+import '../utils/format_utils.dart';
 import '../utils/pdf_settings.dart';
 import '../utils/print_settings.dart';
 import 'pdf/pdf_customer_statement_builder.dart';
@@ -80,7 +81,7 @@ class PdfService {
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile.fromData(bytes, mimeType: 'application/pdf')],
-        fileNameOverrides: ['${doc.documentNumber}.pdf'],
+        fileNameOverrides: ['${safeFileName(doc.documentNumber)}.pdf'],
       ),
     );
     try {
@@ -131,9 +132,9 @@ class PdfService {
       statement.currencySymbol,
     );
 
-    final fileName =
-        'statement_${statement.contact.name}_${DateFormat('yyyyMMdd').format(statement.to)}.pdf'
-            .replaceAll(RegExp(r'\s+'), '_');
+    final baseName =
+        'statement_${statement.contact.name}_${DateFormat('yyyyMMdd').format(statement.to)}';
+    final fileName = '${safeFileName(baseName)}.pdf';
 
     await SharePlus.instance.share(
       ShareParams(
@@ -175,10 +176,12 @@ class PdfService {
       l10n: l10n,
       data: data,
     );
-    final safeName =
-        (fileName ??
-                '${data.title}_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf')
-            .replaceAll(RegExp(r'\s+'), '_');
+    final rawBase = fileName != null
+        ? (fileName.endsWith('.pdf')
+              ? fileName.substring(0, fileName.length - 4)
+              : fileName)
+        : '${data.title}_${DateFormat('yyyyMMdd').format(DateTime.now())}';
+    final safeName = '${safeFileName(rawBase)}.pdf';
 
     await Printing.layoutPdf(onLayout: (format) async => bytes, name: safeName);
     try {

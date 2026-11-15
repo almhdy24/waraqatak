@@ -10,6 +10,7 @@ import '../models/customer_statement.dart';
 import '../models/document.dart';
 import '../services/customer_statement_service.dart';
 import '../services/pdf_service.dart';
+import '../utils/format_utils.dart';
 import 'app_date_picker.dart';
 import 'app_snackbar.dart';
 
@@ -167,9 +168,11 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
         l10n: l10n,
       );
       if (!mounted) return;
+      final baseName =
+          'statement_${widget.contact.name}_${_dateFmt.format(_to)}';
       await Printing.layoutPdf(
         onLayout: (format) async => bytes,
-        name: 'statement_${widget.contact.name}_${_dateFmt.format(_to)}.pdf',
+        name: '${safeFileName(baseName)}.pdf',
       );
     } catch (e) {
       if (!mounted) return;
@@ -314,11 +317,12 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
               // Legacy currency notice (if multiple exist)
               if (_availableCurrencies.length > 1) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest
                         .withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -356,8 +360,11 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.warning_amber_rounded,
-                          color: Colors.amber.shade900, size: 20),
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.amber.shade900,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -490,10 +497,7 @@ class _CustomerStatementDialogState extends State<CustomerStatementDialog> {
   }) {
     return Column(
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 10, color: Colors.grey),
-        ),
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
         const SizedBox(height: 2),
         Text(
           '$value $symbol',

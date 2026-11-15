@@ -9,7 +9,7 @@ import '../../utils/pdf_settings.dart';
 import 'pdf_theme.dart';
 
 class PdfTotalsBuilder {
-  static final _money = NumberFormat('#,##0.00');
+  static final _money = NumberFormat('#,##0.00', 'en');
 
   static pw.Widget build({
     required Document doc,
@@ -20,8 +20,9 @@ class PdfTotalsBuilder {
     required PdfTheme theme,
     required bool isArabic,
   }) {
-    final labelDirection =
-        isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+    final labelDirection = isArabic
+        ? pw.TextDirection.rtl
+        : pw.TextDirection.ltr;
     final textColor = theme.textColor;
     final primaryColor = theme.primaryColor;
     final fontSize = theme.fs(11);
@@ -131,7 +132,8 @@ class PdfTotalsBuilder {
             labelDirection: labelDirection,
             fontSize: fontSize,
           ),
-          if (doc.type == 'invoice' && theme.style.showPaymentSummary) ...[
+          if ((doc.type == 'invoice' || doc.type == 'purchase') &&
+              theme.style.showPaymentSummary) ...[
             _row(
               label: l10n.paid,
               value: doc.paid,
@@ -179,8 +181,7 @@ class PdfTotalsBuilder {
               style: pw.TextStyle(
                 font: font,
                 fontSize: bold ? fontSize * 1.1 : fontSize,
-                fontWeight:
-                    bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
                 color: color,
               ),
             ),
@@ -190,8 +191,7 @@ class PdfTotalsBuilder {
             style: pw.TextStyle(
               font: font,
               fontSize: bold ? fontSize * 1.1 : fontSize,
-              fontWeight:
-                  bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+              fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
               color: color,
             ),
           ),

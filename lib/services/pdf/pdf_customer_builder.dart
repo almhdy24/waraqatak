@@ -20,8 +20,8 @@ class PdfCustomerBuilder {
     final textColor = theme.textColor;
     final minimal = theme.style.template == PdfTemplate.minimal;
     final name = contact?.name ?? doc.recipientName ?? '';
-    final phone = contact?.phone ?? doc.recipientPhone;
-    final address = contact?.address;
+    final phone = (contact?.phone ?? doc.recipientPhone)?.trim();
+    final address = contact?.address?.trim();
 
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 12),
@@ -47,8 +47,9 @@ class PdfCustomerBuilder {
         children: [
           // Label
           pw.Directionality(
-            textDirection:
-                isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr,
+            textDirection: isArabic
+                ? pw.TextDirection.rtl
+                : pw.TextDirection.ltr,
             child: pw.Text(
               '${l10n.customerOrParty}:',
               style: pw.TextStyle(
@@ -66,7 +67,7 @@ class PdfCustomerBuilder {
             fontSize: theme.fs(13),
             color: textColor,
           ),
-          if (phone != null) ...[
+          if (phone != null && phone.isNotEmpty) ...[
             pw.SizedBox(height: 4),
             pw.Directionality(
               textDirection: isArabic
@@ -90,7 +91,7 @@ class PdfCustomerBuilder {
               fallbackDirection: pw.TextDirection.ltr,
             ),
           ],
-          if (address != null) ...[
+          if (address != null && address.isNotEmpty) ...[
             pw.SizedBox(height: 4),
             pw.Directionality(
               textDirection: isArabic

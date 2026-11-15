@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -9,6 +10,7 @@ import '../../models/business.dart';
 import '../../utils/pdf_settings.dart';
 import '../access/access_guard.dart';
 import '../access/permission_registry.dart';
+import 'pdf_font_data.dart';
 import 'pdf_fonts.dart';
 import 'pdf_text_utils.dart';
 import 'pdf_theme.dart';
@@ -64,7 +66,7 @@ class PdfReportData {
 
 /// Generic PDF builder for tabular business reports.
 class PdfReportBuilder {
-  static final _timeFmt = DateFormat('dd/MM/yyyy HH:mm');
+  static final _timeFmt = DateFormat('dd/MM/yyyy HH:mm', 'en');
 
   static Future<Uint8List> build({
     required Business business,
@@ -74,12 +76,9 @@ class PdfReportBuilder {
   }) async {
     AccessGuard.require(PermissionRegistry.reportsExportPdf);
     final theme = PdfTheme.fromSettings(style);
-    final regularFontData =
-        await rootBundle.load('assets/fonts/Tajawal-Regular.ttf');
-    final boldFontData =
-        await rootBundle.load('assets/fonts/Tajawal-Bold.ttf');
-    final regular = ArabicTtfFont(regularFontData);
-    final bold = ArabicTtfFont(boldFontData);
+    final (regularData, boldData) = await PdfFontData.load();
+    final regular = ArabicTtfFont(regularData);
+    final bold = ArabicTtfFont(boldData);
 
     pw.MemoryImage? logoImage;
     if (business.logoPath != null && business.logoPath!.isNotEmpty) {
@@ -149,6 +148,7 @@ class PdfReportBuilder {
             theme: theme,
             bold: bold,
             regular: regular,
+            isArabic: isArabic,
           ),
         ],
       ),
@@ -162,11 +162,18 @@ class PdfReportBuilder {
     pw.Font bold, {
     required bool rtl,
   }) {
-    return pw.ThemeData.withFont(
+    final base = pw.ThemeData.withFont(
       base: regular,
       bold: bold,
       fontFallback: [regular],
     );
+    return rtl
+        ? base.copyWith(
+            defaultTextStyle: base.defaultTextStyle.copyWith(
+              wordSpacing: PdfTextUtils.rtlWordSpacing,
+            ),
+          )
+        : base;
   }
 
   static pw.Widget _buildHeader({
@@ -332,15 +339,34 @@ class PdfReportBuilder {
     );
   }
 
+  @visibleForTesting
+  static List<int> orderedColumnIndexes(int n, bool rtl) {
+    final order = List<int>.generate(n, (i) => i);
+    return rtl ? order.reversed.toList() : order;
+  }
+
+  // Numeric columns that were declared `right` must stay visually at the numeric edge:
+  // in Arabic report data, treat `TextAlign.right` as "numeric end" and map it
+  // to `centerLeft` when `isArabic` (same rule as PdfItemsTableBuilder).
+  static pw.Alignment _align(pw.TextAlign a, bool rtl) => switch (a) {
+    pw.TextAlign.center => pw.Alignment.center,
+    pw.TextAlign.right =>
+      rtl ? pw.Alignment.centerLeft : pw.Alignment.centerRight,
+    pw.TextAlign.left => pw.Alignment.centerLeft,
+    _ => rtl ? pw.Alignment.centerRight : pw.Alignment.centerLeft, // start
+  };
+
   static pw.Widget _buildTable({
     required PdfReportData data,
     required PdfTheme theme,
     required pw.Font bold,
     required pw.Font regular,
+    required bool isArabic,
   }) {
+    final idx = orderedColumnIndexes(data.columns.length, isArabic);
     final colWidths = <int, pw.TableColumnWidth>{};
-    for (int i = 0; i < data.columns.length; i++) {
-      colWidths[i] = pw.FlexColumnWidth(data.columns[i].flex);
+    for (int pos = 0; pos < idx.length; pos++) {
+      colWidths[pos] = pw.FlexColumnWidth(data.columns[idx[pos]].flex);
     }
 
     final tableRows = <pw.TableRow>[];
@@ -349,8 +375,10 @@ class PdfReportBuilder {
     tableRows.add(
       pw.TableRow(
         decoration: pw.BoxDecoration(color: theme.lightBg),
-        children: data.columns.map((c) {
-          return pw.Padding(
+        children: idx.map((cIdx) {
+          final c = data.columns[cIdx];
+          return pw.Container(
+            alignment: _align(c.align, isArabic),
             padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
             child: PdfTextUtils.directionalText(
               c.title,
@@ -373,17 +401,15 @@ class PdfReportBuilder {
           decoration: pw.BoxDecoration(
             color: isEven ? PdfColors.white : PdfColors.grey50,
           ),
-          children: List.generate(data.columns.length, (cIdx) {
+          children: idx.map((cIdx) {
             final text = cIdx < row.length ? row[cIdx] : '';
             final col = data.columns[cIdx];
-            final cellAlign = col.align == pw.TextAlign.right
-                ? pw.Alignment.centerRight
-                : (col.align == pw.TextAlign.center
-                    ? pw.Alignment.center
-                    : pw.Alignment.centerLeft);
             return pw.Container(
-              alignment: cellAlign,
-              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+              alignment: _align(col.align, isArabic),
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 4,
+              ),
               child: PdfTextUtils.directionalText(
                 text,
                 font: regular,
@@ -392,7 +418,7 @@ class PdfReportBuilder {
                 fallbackDirection: pw.TextDirection.ltr,
               ),
             );
-          }),
+          }).toList(),
         ),
       );
     }
@@ -407,10 +433,17 @@ class PdfReportBuilder {
               top: pw.BorderSide(color: PdfColors.grey400, width: 0.8),
             ),
           ),
-          children: List.generate(data.columns.length, (cIdx) {
-            final text = cIdx < data.totalsRow!.length ? data.totalsRow![cIdx] : '';
-            return pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+          children: idx.map((cIdx) {
+            final text = cIdx < data.totalsRow!.length
+                ? data.totalsRow![cIdx]
+                : '';
+            final col = data.columns[cIdx];
+            return pw.Container(
+              alignment: _align(col.align, isArabic),
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 5,
+                vertical: 5,
+              ),
               child: PdfTextUtils.directionalText(
                 text,
                 font: bold,
@@ -419,7 +452,7 @@ class PdfReportBuilder {
                 fallbackDirection: pw.TextDirection.ltr,
               ),
             );
-          }),
+          }).toList(),
         ),
       );
     }
@@ -442,7 +475,9 @@ class PdfReportBuilder {
       margin: const pw.EdgeInsets.only(top: 8),
       padding: const pw.EdgeInsets.only(top: 4),
       decoration: const pw.BoxDecoration(
-        border: pw.Border(top: pw.BorderSide(color: PdfColors.grey300, width: 0.5)),
+        border: pw.Border(
+          top: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+        ),
       ),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

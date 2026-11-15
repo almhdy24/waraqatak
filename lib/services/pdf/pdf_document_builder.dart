@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -18,6 +19,7 @@ import '../../utils/print_settings.dart';
 import '../digital_seal_storage_service.dart';
 import '../seal_geometry_engine.dart';
 import 'pdf_customer_builder.dart';
+import 'pdf_font_data.dart';
 import 'pdf_fonts.dart';
 import 'pdf_header_builder.dart';
 import 'pdf_items_table_builder.dart';
@@ -41,12 +43,9 @@ class PdfDocumentBuilder {
   }) async {
     final theme = PdfTheme.fromSettings(style);
     // Load fonts once regardless of paper size
-    final regularFontData = await rootBundle.load(
-      'assets/fonts/Tajawal-Regular.ttf',
-    );
-    final boldFontData = await rootBundle.load('assets/fonts/Tajawal-Bold.ttf');
-    final regular = ArabicTtfFont(regularFontData);
-    final bold = ArabicTtfFont(boldFontData);
+    final (regularData, boldData) = await PdfFontData.load();
+    final regular = ArabicTtfFont(regularData);
+    final bold = ArabicTtfFont(boldData);
 
     pw.MemoryImage? logoImage;
     if (business.logoPath != null && business.logoPath!.isNotEmpty) {
@@ -140,6 +139,7 @@ class PdfDocumentBuilder {
         bold: bold,
         logoImage: logoImage,
         theme: theme,
+        paymentMethodLabel: paymentMethodLabel,
         effectiveStamp: effectiveStamp,
         effectiveSignature: effectiveSignature,
         stampImage: stampImage,
@@ -280,24 +280,27 @@ class PdfDocumentBuilder {
             regular: regular,
             textColor: theme.textColor,
             isArabic: isArabic,
+            fontSize: theme.fs(12),
           ),
           _buildInfoRow(
             label: l10n.date,
-            value: DateFormat('dd/MM/yyyy').format(doc.date),
+            value: DateFormat('dd/MM/yyyy', 'en').format(doc.date),
             bold: bold,
             regular: regular,
             textColor: theme.textColor,
             isArabic: isArabic,
+            fontSize: theme.fs(12),
             valueDirection: pw.TextDirection.ltr,
           ),
           if (doc.type == 'quotation' && doc.validUntil != null)
             _buildInfoRow(
               label: l10n.validUntil,
-              value: DateFormat('dd/MM/yyyy').format(doc.validUntil!),
+              value: DateFormat('dd/MM/yyyy', 'en').format(doc.validUntil!),
               bold: bold,
               regular: regular,
               textColor: theme.textColor,
               isArabic: isArabic,
+              fontSize: theme.fs(12),
               valueDirection: pw.TextDirection.ltr,
             ),
           if ((doc.type == 'payment_receipt' ||
@@ -310,6 +313,7 @@ class PdfDocumentBuilder {
               regular: regular,
               textColor: theme.textColor,
               isArabic: isArabic,
+              fontSize: theme.fs(12),
             ),
           if (doc.type == 'payment_receipt' && relatedDocument != null)
             _buildInfoRow(
@@ -319,6 +323,7 @@ class PdfDocumentBuilder {
               regular: regular,
               textColor: theme.textColor,
               isArabic: isArabic,
+              fontSize: theme.fs(12),
               valueDirection: pw.TextDirection.ltr,
             ),
           if (doc.type == 'invoice' &&
@@ -331,6 +336,7 @@ class PdfDocumentBuilder {
               regular: regular,
               textColor: theme.textColor,
               isArabic: isArabic,
+              fontSize: theme.fs(12),
               valueDirection: pw.TextDirection.ltr,
             ),
           pw.SizedBox(height: 12),
@@ -521,6 +527,7 @@ class PdfDocumentBuilder {
     required pw.Font regular,
     required PdfColor textColor,
     required bool isArabic,
+    required double fontSize,
     pw.TextDirection? valueDirection,
   }) {
     final labelDirection = isArabic
@@ -538,7 +545,11 @@ class PdfDocumentBuilder {
             textDirection: labelDirection,
             child: pw.Text(
               '$label:',
-              style: pw.TextStyle(font: bold, fontSize: 12, color: textColor),
+              style: pw.TextStyle(
+                font: bold,
+                fontSize: fontSize,
+                color: textColor,
+              ),
             ),
           ),
           pw.SizedBox(width: 4),
@@ -549,7 +560,7 @@ class PdfDocumentBuilder {
                 value,
                 style: pw.TextStyle(
                   font: regular,
-                  fontSize: 12,
+                  fontSize: fontSize,
                   color: textColor,
                 ),
               ),
@@ -651,6 +662,9 @@ class PdfDocumentBuilder {
 
   // ==================== Thermal 80mm layout ====================
 
+  @visibleForTesting
+  static double lineTotalOf(DocumentItem item) => item.total;
+
   static Future<Uint8List> _buildThermal({
     required Document doc,
     required Business business,
@@ -662,6 +676,7 @@ class PdfDocumentBuilder {
     required pw.Font bold,
     pw.MemoryImage? logoImage,
     required PdfTheme theme,
+    String paymentMethodLabel = '',
     DigitalSealConfig? effectiveStamp,
     DigitalSealConfig? effectiveSignature,
     pw.MemoryImage? stampImage,
@@ -670,7 +685,7 @@ class PdfDocumentBuilder {
     final pdf = pw.Document();
     final isArabic = l10n.langCode == 'ar';
     final textDir = isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
-    final numFmt = NumberFormat('#,##0.00');
+    final numFmt = NumberFormat('#,##0.00', 'en');
     final currency = doc.currencyCode;
     const double fontSize = 10;
     const double smallSize = 9;
@@ -703,6 +718,20 @@ class PdfDocumentBuilder {
     );
 
     final widgets = <pw.Widget>[];
+
+    // Logo
+    if (logoImage != null && theme.style.logoShape != PdfLogoShape.hidden) {
+      widgets.add(
+        pw.Center(
+          child: pw.SizedBox(
+            width: 48,
+            height: 48,
+            child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+          ),
+        ),
+      );
+      widgets.add(pw.SizedBox(height: 4));
+    }
 
     // Header
     widgets.add(
@@ -744,6 +773,17 @@ class PdfDocumentBuilder {
         ),
       );
     }
+    if (theme.style.showTaxId && business.taxId?.trim().isNotEmpty == true) {
+      widgets.add(
+        pw.Center(
+          child: txt(
+            '${l10n.pdfTaxIdLabel} ${business.taxId!}',
+            size: smallSize,
+            align: pw.TextAlign.center,
+          ),
+        ),
+      );
+    }
     widgets.add(divider());
 
     // Doc info
@@ -762,27 +802,55 @@ class PdfDocumentBuilder {
     );
     widgets.add(
       txt(
-        '${l10n.date}: ${DateFormat('dd/MM/yyyy').format(doc.date)}',
+        '${l10n.date}: ${DateFormat('dd/MM/yyyy', 'en').format(doc.date)}',
         size: smallSize,
       ),
     );
-
-    // Contact
-    final contactName = contact?.name ?? doc.recipientName;
-    if (contactName != null && contactName.isNotEmpty) {
+    if (doc.type == 'quotation' && doc.validUntil != null) {
       widgets.add(
-        pw.Directionality(
-          textDirection: textDir,
-          child: pw.Text(
-            '${l10n.customerOrParty}: $contactName',
-            style: pw.TextStyle(
-              font: regular,
-              fontSize: smallSize,
-              color: theme.textColor,
-            ),
-          ),
+        txt(
+          '${l10n.validUntil}: ${DateFormat('dd/MM/yyyy', 'en').format(doc.validUntil!)}',
+          size: smallSize,
         ),
       );
+    }
+    if ((doc.type == 'payment_receipt' || doc.type == 'expense_voucher') &&
+        paymentMethodLabel.isNotEmpty) {
+      widgets.add(
+        txt('${l10n.paymentMethod}: $paymentMethodLabel', size: smallSize),
+      );
+    }
+    if (doc.type == 'payment_receipt' && relatedDocument != null) {
+      widgets.add(
+        txt(
+          '${l10n.relatedInvoice}: ${relatedDocument.documentNumber}',
+          size: smallSize,
+        ),
+      );
+    }
+
+    // Contact
+    if (theme.style.showCustomer) {
+      final contactName = contact?.name ?? doc.recipientName;
+      if (contactName != null && contactName.isNotEmpty) {
+        widgets.add(
+          pw.Directionality(
+            textDirection: textDir,
+            child: pw.Text(
+              '${l10n.customerOrParty}: $contactName',
+              style: pw.TextStyle(
+                font: regular,
+                fontSize: smallSize,
+                color: theme.textColor,
+              ),
+            ),
+          ),
+        );
+      }
+      final phone = (contact?.phone ?? doc.recipientPhone)?.trim();
+      if (phone != null && phone.isNotEmpty) {
+        widgets.add(txt('${l10n.phone}: $phone', size: smallSize));
+      }
     }
     widgets.add(divider());
 
@@ -801,7 +869,7 @@ class PdfDocumentBuilder {
           ),
         ),
       );
-      final lineTotal = item.quantity * item.price;
+      final lineTotal = item.total;
       final unitSuffix = item.saleUnit != null && item.saleUnit!.isNotEmpty
           ? ' ${item.saleUnit}'
           : '';
@@ -858,8 +926,11 @@ class PdfDocumentBuilder {
       );
     }
     totRow(l10n.grandTotal, doc.total, emph: true);
-    if (doc.paid > 0) totRow(l10n.paid, doc.paid);
-    if (doc.remaining > 0) totRow(l10n.remaining, doc.remaining);
+    if ((doc.type == 'invoice' || doc.type == 'purchase') &&
+        theme.style.showPaymentSummary) {
+      if (doc.paid > 0) totRow(l10n.paid, doc.paid);
+      if (doc.remaining > 0) totRow(l10n.remaining, doc.remaining);
+    }
 
     // Notes
     if (theme.style.showNotes && doc.notes != null && doc.notes!.isNotEmpty) {
