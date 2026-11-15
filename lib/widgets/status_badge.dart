@@ -95,9 +95,9 @@ class StatusBadge extends StatelessWidget {
         Icons.cancel_outlined,
       ),
       _ => (
-        l10n.statusIssued,
-        isDark ? AppDesignTokens.infoDark : AppDesignTokens.info,
-        Icons.description_outlined,
+        status,
+        isDark ? AppDesignTokens.neutralMutedDark : AppDesignTokens.neutralMuted,
+        Icons.help_outline_rounded,
       ),
     };
   }

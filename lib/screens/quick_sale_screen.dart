@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:printing/printing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/catalog_events.dart';
 import '../features/wholesale/wholesale_feature.dart';
@@ -19,6 +21,8 @@ import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../models/tax_profile.dart';
 import '../models/currency.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 import '../services/document_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
@@ -63,11 +67,13 @@ class QuickSaleScreen extends StatefulWidget {
   }) {
     if (total <= 0) return const [];
     final results = <double>{};
-    final exact = MoneyUtils.round(total, decimalDigits);
+    final double exact = decimalDigits == 0
+        ? total.roundToDouble()
+        : MoneyUtils.round(total, decimalDigits);
     results.add(exact);
 
     final List<num> effectiveDenominations;
-    if (total < 100 && decimalDigits > 0) {
+    if (total < 100) {
       effectiveDenominations = const [1, 5, 10, 20, 50, 100];
     } else {
       effectiveDenominations = denominations;
@@ -77,7 +83,10 @@ class QuickSaleScreen extends StatefulWidget {
       if (d <= 0) continue;
       final multiple = ((total / d).floor() + 1) * d.toDouble();
       if (multiple > total) {
-        results.add(MoneyUtils.round(multiple, decimalDigits));
+        final val = decimalDigits == 0
+            ? multiple.roundToDouble()
+            : MoneyUtils.round(multiple, decimalDigits);
+        results.add(val);
       }
     }
 
@@ -89,11 +98,136 @@ class QuickSaleScreen extends StatefulWidget {
   State<QuickSaleScreen> createState() => _QuickSaleScreenState();
 }
 
+class _HeldCart {
+  final String id;
+  final DateTime heldAt;
+  final Contact? customer;
+  final String? pricingCategory;
+  final double discount;
+  final List<PosCartLine> lines;
+
+  _HeldCart({
+    required this.id,
+    required this.heldAt,
+    this.customer,
+    this.pricingCategory,
+    required this.discount,
+    required this.lines,
+  });
+
+  double get total =>
+      lines.fold(0.0, (acc, line) => acc + line.total) - discount;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'heldAt': heldAt.toIso8601String(),
+    'customer': customer?.toMap(),
+    'pricingCategory': pricingCategory,
+    'discount': discount,
+    'lines': lines
+        .map(
+          (l) => {
+            'productId': l.product.id,
+            'quantity': l.quantity,
+            'taxRate': l.taxRate,
+            'pricingCategory': l.pricingCategory,
+            'priceOverride': l.priceOverride,
+            'wholesalePricingEnabled': l.wholesalePricingEnabled,
+            'unit': l.unit?.toMap(),
+          },
+        )
+        .toList(),
+  };
+
+  static _HeldCart? fromJson(
+    Map<String, dynamic> json, {
+    required Map<int, Product> productMap,
+    Map<int, List<ProductUnit>>? productUnitsMap,
+  }) {
+    try {
+      final id =
+          json['id'] as String? ??
+          DateTime.now().millisecondsSinceEpoch.toString();
+      final heldAtRaw = json['heldAt'] as String?;
+      final heldAt = heldAtRaw != null
+          ? DateTime.tryParse(heldAtRaw) ?? DateTime.now()
+          : DateTime.now();
+      final customerRaw = json['customer'];
+      final customer = customerRaw is Map<String, dynamic>
+          ? Contact.fromMap(customerRaw)
+          : null;
+      final pricingCategory = json['pricingCategory'] as String?;
+      final discount = (json['discount'] as num?)?.toDouble() ?? 0.0;
+      final rawLines = json['lines'];
+      if (rawLines is! List) return null;
+
+      final lines = <PosCartLine>[];
+      for (final rawLine in rawLines) {
+        if (rawLine is! Map<String, dynamic>) continue;
+        final productId = rawLine['productId'] as int?;
+        if (productId == null) continue;
+        final product = productMap[productId];
+        if (product == null) continue; // product was deleted from catalog
+
+        final quantity = (rawLine['quantity'] as num?)?.toDouble() ?? 1.0;
+        final taxRate = (rawLine['taxRate'] as num?)?.toDouble();
+        final linePricingCategory = rawLine['pricingCategory'] as String?;
+        final priceOverride = (rawLine['priceOverride'] as num?)?.toDouble();
+        final wholesalePricingEnabled =
+            rawLine['wholesalePricingEnabled'] as bool? ?? false;
+
+        ProductUnit? unit;
+        final unitRaw = rawLine['unit'];
+        if (unitRaw is Map<String, dynamic>) {
+          final parsedUnit = ProductUnit.fromMap(unitRaw);
+          final availableUnits = productUnitsMap?[productId];
+          unit =
+              availableUnits?.cast<ProductUnit?>().firstWhere(
+                (u) =>
+                    u?.id != null && u?.id == parsedUnit.id ||
+                    u?.unitName == parsedUnit.unitName,
+                orElse: () => parsedUnit,
+              ) ??
+              parsedUnit;
+        }
+
+        lines.add(
+          PosCartLine(
+            product,
+            quantity,
+            taxRate: taxRate,
+            unit: unit,
+            pricingCategory: linePricingCategory,
+            priceOverride: priceOverride,
+            wholesalePricingEnabled: wholesalePricingEnabled,
+          ),
+        );
+      }
+
+      return _HeldCart(
+        id: id,
+        heldAt: heldAt,
+        customer: customer,
+        pricingCategory: pricingCategory,
+        discount: discount,
+        lines: lines,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 class _QuickSaleScreenState extends State<QuickSaleScreen> {
   final _cart = PosCart();
   final _searchCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
   final _receivedCtrl = TextEditingController();
+
+  final List<_HeldCart> _heldCarts = [];
+  Set<int> _frequentProductIds = {};
+  String? _selectedCategory;
+  bool _showFrequentlySold = false;
 
   Business? _business;
   List<Product> _products = [];
@@ -104,6 +238,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   bool _loadFailed = false;
   bool _saving = false;
   String _query = '';
+  int _loadGeneration = 0;
 
   static final _money = NumberFormat('#,##0.##');
 
@@ -132,6 +267,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   }
 
   Future<void> _load() async {
+    final gen = ++_loadGeneration;
     if (_loadFailed && mounted) {
       setState(() {
         _loadFailed = false;
@@ -148,7 +284,24 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         db.getTaxProfiles(),
       ]);
       final entitlement = await LicenseService.instance.checkEntitlement();
-      if (!mounted) return;
+      Set<int> frequentIds = {};
+      try {
+        final rawDb = await db.database;
+        final topSoldRows = await rawDb.rawQuery('''
+          SELECT di.product_id, SUM(di.quantity) as total_qty
+          FROM document_items di
+          JOIN documents d ON d.id = di.document_id
+          WHERE d.type = 'invoice' AND d.status != 'cancelled' AND di.product_id IS NOT NULL
+          GROUP BY di.product_id
+          ORDER BY total_qty DESC
+          LIMIT 20
+        ''');
+        frequentIds = {
+          for (final r in topSoldRows)
+            if (r['product_id'] != null) r['product_id'] as int,
+        };
+      } catch (_) {}
+      if (!mounted || gen != _loadGeneration) return;
       final business = results[0] as Business?;
       final methods = results[2] as List<PaymentMethod>;
       final units = results[3] as Map<int, List<ProductUnit>>;
@@ -162,6 +315,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
         _products = results[1] as List<Product>;
         _methods = methods;
         _productUnits = units;
+        _frequentProductIds = frequentIds;
         _cart.setEnforceStock(
           FeatureAccess.canAccess(Feature.inventory, entitlement),
         );
@@ -183,8 +337,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
             methods.firstOrNull?.key;
         _loading = false;
       });
+      await _loadHeldCarts();
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _loading = false;
         _loadFailed = true;
@@ -197,15 +352,23 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   List<Product> get _filtered {
     final q = _query.trim();
-    if (q.isEmpty) return _products;
-    return _products
-        .where(
-          (p) =>
-              ArabicSearchUtils.matches(p.name, q) ||
-              (p.code != null && ArabicSearchUtils.matches(p.code, q)) ||
-              (p.barcode != null && ArabicSearchUtils.matches(p.barcode, q)),
-        )
-        .toList();
+    return _products.where((p) {
+      if (_showFrequentlySold &&
+          (p.id == null || !_frequentProductIds.contains(p.id))) {
+        return false;
+      }
+      if (_selectedCategory != null && p.category != _selectedCategory) {
+        return false;
+      }
+      if (q.isNotEmpty) {
+        final matches =
+            ArabicSearchUtils.matches(p.name, q) ||
+            (p.code != null && ArabicSearchUtils.matches(p.code, q)) ||
+            (p.barcode != null && ArabicSearchUtils.matches(p.barcode, q));
+        if (!matches) return false;
+      }
+      return true;
+    }).toList();
   }
 
   ({double subtotal, double taxAmount, double total}) get _totals =>
@@ -410,7 +573,36 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   void _setQty(int index, double qty) {
     final l10n = AppLocalizations.of(context);
-    final name = _cart.lines[index].product.name;
+    final line = _cart.lines[index];
+    final name = line.product.name;
+    if (qty <= 0) {
+      final removedProduct = line.product;
+      final removedQty = line.quantity;
+      final removedUnit = line.unit;
+      final removedCategory = line.pricingCategory;
+      final removedOverride = line.priceOverride;
+
+      _cart.setQuantity(index, 0);
+      _syncDiscountField();
+      setState(() {});
+      AppSnackBar.showUndo(
+        context,
+        '${l10n.posItemRemoved}: $name',
+        actionLabel: l10n.undo,
+        onUndo: () {
+          setState(() {
+            _cart.add(
+              removedProduct,
+              quantity: removedQty,
+              unit: removedUnit,
+              pricingCategory: removedCategory,
+              priceOverride: removedOverride,
+            );
+          });
+        },
+      );
+      return;
+    }
     if (_cart.setQuantity(index, qty) == PosCartError.outOfStock) {
       _toast(l10n.posNotEnoughStock(name));
     }
@@ -583,9 +775,192 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
   }
 
+  static const String _heldCartsPrefKey = 'quick_sale_held_carts';
+
+  Future<void> _saveHeldCarts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_heldCarts.isEmpty) {
+        await prefs.remove(_heldCartsPrefKey);
+        return;
+      }
+      final jsonList = _heldCarts.map((h) => h.toJson()).toList();
+      await prefs.setString(_heldCartsPrefKey, jsonEncode(jsonList));
+    } catch (_) {
+      // Best-effort persistence
+    }
+  }
+
+  Future<void> _loadHeldCarts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_heldCartsPrefKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+
+      final productMap = {
+        for (final p in _products)
+          if (p.id != null) p.id!: p,
+      };
+      final loaded = <_HeldCart>[];
+
+      final cutoff = DateTime.now().subtract(const Duration(days: 7));
+      for (final item in decoded) {
+        if (item is! Map<String, dynamic>) continue;
+        final held = _HeldCart.fromJson(
+          item,
+          productMap: productMap,
+          productUnitsMap: _productUnits,
+        );
+        if (held != null &&
+            held.lines.isNotEmpty &&
+            held.heldAt.isAfter(cutoff)) {
+          loaded.add(held);
+        }
+      }
+
+      while (loaded.length > 20) {
+        loaded.removeAt(0);
+      }
+
+      if (mounted) {
+        setState(() {
+          _heldCarts.clear();
+          _heldCarts.addAll(loaded);
+        });
+      }
+      if (loaded.length != decoded.length) {
+        await _saveHeldCarts();
+      }
+    } catch (_) {
+      // Best-effort loading; corrupted preference will be overwritten on next save
+    }
+  }
+
+  void _holdCart() {
+    if (_cart.isEmpty) return;
+    final l10n = AppLocalizations.of(context);
+    final held = _HeldCart(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      heldAt: DateTime.now(),
+      customer: _cart.customer,
+      pricingCategory: _cart.pricingCategory,
+      discount: _cart.discount,
+      lines: List<PosCartLine>.from(_cart.lines),
+    );
+    setState(() {
+      while (_heldCarts.length >= 20) {
+        _heldCarts.removeAt(0);
+      }
+      _heldCarts.add(held);
+      _cart.clear();
+      _cart.setCustomer(null);
+      _discountCtrl.clear();
+      _receivedCtrl.clear();
+    });
+    _saveHeldCarts();
+    AppSnackBar.show(
+      context,
+      l10n.posCartHeldSuccess,
+      severity: AppSnackBarSeverity.success,
+    );
+  }
+
+  Future<void> _showHeldCartsDialog() async {
+    final l10n = AppLocalizations.of(context);
+    if (_heldCarts.isEmpty) {
+      AppSnackBar.show(context, l10n.posNoHeldCarts);
+      return;
+    }
+    final timeFmt = DateFormat('hh:mm a');
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${l10n.posHeldCarts} (${_heldCarts.length})'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _heldCarts.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final h = _heldCarts[i];
+              return ListTile(
+                leading: const Icon(Icons.pause_circle_outline),
+                title: Text(
+                  h.customer?.name ??
+                      l10n.posItemsCount(h.lines.length.toString()),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  '${timeFmt.format(h.heldAt)} • ${_fmt(h.total)}',
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  onPressed: () {
+                    setState(() => _heldCarts.removeAt(i));
+                    _saveHeldCarts();
+                    Navigator.pop(ctx);
+                    if (_heldCarts.isNotEmpty) {
+                      _showHeldCartsDialog();
+                    }
+                  },
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _recallHeldCart(h);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.cancel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _recallHeldCart(_HeldCart held) {
+    setState(() {
+      _heldCarts.remove(held);
+      _cart.clear();
+      _cart.setCustomer(held.customer);
+      if (held.pricingCategory != null) {
+        _cart.setPricingCategory(held.pricingCategory!);
+      }
+      _cart.discount = held.discount;
+      _discountCtrl.text = held.discount > 0
+          ? NumberInput.formatForInput(held.discount)
+          : '';
+      for (final line in held.lines) {
+        _cart.add(
+          line.product,
+          quantity: line.quantity,
+          unit: line.unit,
+          pricingCategory: line.pricingCategory,
+          priceOverride: line.priceOverride,
+          taxRate: line.taxRate,
+          wholesalePricingEnabled: line.wholesalePricingEnabled,
+        );
+      }
+    });
+    _saveHeldCarts();
+  }
+
   Future<void> _clearCart() async {
     final l10n = AppLocalizations.of(context);
     if (_cart.isEmpty) return;
+    final savedLines = List<PosCartLine>.from(_cart.lines);
+    final savedCustomer = _cart.customer;
+    final savedDiscount = _cart.discount;
+    final savedPricingCategory = _cart.pricingCategory;
+    final savedWholesalePricingEnabled = _cart.wholesalePricingEnabled;
+
     final ok = await AppConfirmDialog.show(
       context,
       title: l10n.posClearCart,
@@ -594,7 +969,36 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       isDestructive: true,
     );
     if (!mounted) return;
-    if (ok) _resetSale();
+    if (ok) {
+      _resetSale();
+      AppSnackBar.showUndo(
+        context,
+        l10n.posClearCart,
+        actionLabel: l10n.undo,
+        onUndo: () {
+          setState(() {
+            _cart.setCustomer(savedCustomer);
+            _cart.setPricingCategory(savedPricingCategory);
+            _cart.setWholesalePricingEnabled(savedWholesalePricingEnabled);
+            _cart.discount = savedDiscount;
+            _discountCtrl.text = savedDiscount > 0
+                ? NumberInput.formatForInput(savedDiscount)
+                : '';
+            for (final line in savedLines) {
+              _cart.add(
+                line.product,
+                quantity: line.quantity,
+                unit: line.unit,
+                pricingCategory: line.pricingCategory,
+                priceOverride: line.priceOverride,
+                taxRate: line.taxRate,
+                wholesalePricingEnabled: line.wholesalePricingEnabled,
+              );
+            }
+          });
+        },
+      );
+    }
   }
 
   void _resetSale() {
@@ -610,6 +1014,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     final l10n = AppLocalizations.of(context);
     final business = _business;
     if (_saving || _cart.isEmpty || business == null || _method == null) return;
+    AccessGuard.require(PermissionRegistry.salesCreate);
     final total = _totals.total;
     final received = NumberInput.parse(_receivedCtrl.text);
 
@@ -799,6 +1204,20 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               onPressed: _scan,
             ),
             IconButton(
+              tooltip: l10n.posHoldCart,
+              icon: const Icon(Icons.pause_circle_outline),
+              onPressed: _cart.isEmpty ? null : _holdCart,
+            ),
+            Badge(
+              isLabelVisible: _heldCarts.isNotEmpty,
+              label: Text(_heldCarts.length.toString()),
+              child: IconButton(
+                tooltip: l10n.posHeldCarts,
+                icon: const Icon(Icons.history_rounded),
+                onPressed: _showHeldCartsDialog,
+              ),
+            ),
+            IconButton(
               tooltip: l10n.posClearCart,
               icon: const Icon(Icons.remove_shopping_cart_outlined),
               onPressed: _cart.isEmpty ? null : _clearCart,
@@ -857,6 +1276,67 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               if (v.trim().isNotEmpty) _addByCode(v, l10n);
             },
           ),
+        ),
+        Builder(
+          builder: (context) {
+            final categories =
+                _products
+                    .map((p) => p.category)
+                    .whereType<String>()
+                    .where((c) => c.trim().isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort();
+
+            if (categories.isEmpty && _frequentProductIds.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Row(
+                children: [
+                  ChoiceChip(
+                    label: Text(l10n.all, style: const TextStyle(fontSize: 11)),
+                    selected: _selectedCategory == null && !_showFrequentlySold,
+                    onSelected: (_) => setState(() {
+                      _selectedCategory = null;
+                      _showFrequentlySold = false;
+                    }),
+                  ),
+                  if (_frequentProductIds.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    ChoiceChip(
+                      avatar: const Icon(Icons.star_rounded, size: 14),
+                      label: Text(
+                        l10n.posFrequentlySold,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      selected: _showFrequentlySold,
+                      onSelected: (sel) => setState(() {
+                        _showFrequentlySold = sel;
+                        if (sel) _selectedCategory = null;
+                      }),
+                    ),
+                  ],
+                  ...categories.map(
+                    (c) => Padding(
+                      padding: const EdgeInsetsDirectional.only(start: 6),
+                      child: ChoiceChip(
+                        label: Text(c, style: const TextStyle(fontSize: 11)),
+                        selected: _selectedCategory == c,
+                        onSelected: (sel) => setState(() {
+                          _selectedCategory = sel ? c : null;
+                          if (sel) _showFrequentlySold = false;
+                        }),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
         Expanded(
           child: products.isEmpty
@@ -1003,6 +1483,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   Future<void> _editLine(int index, void Function(VoidCallback) update) async {
     final l10n = AppLocalizations.of(context);
+    final canEditPrice = AccessGuard.can(PermissionRegistry.salesEditPrice);
     final line = _cart.lines[index];
     final p = line.product;
     final units = p.id != null
@@ -1221,12 +1702,13 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                 const SizedBox(height: 6),
                 AmountField(
                   controller: priceCtrl,
+                  enabled: canEditPrice,
                   maxDecimals: 4,
                   showMultipliers: true,
                   decoration: InputDecoration(
                     isDense: true,
                     suffixText: _business?.currencySymbol ?? '',
-                    suffixIcon: isCustomPrice
+                    suffixIcon: (isCustomPrice && canEditPrice)
                         ? IconButton(
                             tooltip: l10n.reset,
                             icon: const Icon(Icons.refresh, size: 18),
@@ -1276,7 +1758,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
 
     if (result == true) {
-      final overridePrice = isCustomPrice
+      final overridePrice = (canEditPrice && isCustomPrice)
           ? NumberInput.parse(priceCtrl.text.trim())
           : null;
       final newQty = NumberInput.parse(qtyCtrl.text.trim()) ?? line.quantity;
@@ -1435,6 +1917,8 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   Expanded(
                     child: AmountField(
                       controller: _discountCtrl,
+                      enabled:
+                          AccessGuard.can(PermissionRegistry.salesEditDiscount),
                       maxDecimals: 4,
                       showMultipliers: true,
                       decoration: InputDecoration(
@@ -1522,7 +2006,11 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               SizedBox(
                 height: 54,
                 child: FilledButton.icon(
-                  onPressed: _saving || _method == null ? null : _completeSale,
+                  onPressed: _saving ||
+                          _method == null ||
+                          !AccessGuard.can(PermissionRegistry.salesCreate)
+                      ? null
+                      : _completeSale,
                   icon: _saving
                       ? const SizedBox(
                           width: 20,

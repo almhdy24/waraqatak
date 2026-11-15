@@ -54,12 +54,24 @@ class ProUpgradeSheet extends StatelessWidget {
     switch (feature) {
       case Feature.multiUser:
         return 'multi_user';
+      case Feature.purchases:
+        return 'purchases';
+      case Feature.inventory:
+        return 'inventory';
+      case Feature.stocktake:
+        return 'stocktake';
+      case Feature.referenceCurrency:
+        return 'reference_currencies';
       case Feature.advancedReports:
         return 'advanced_reports';
       case Feature.bulkPriceUpdate:
         return 'bulk_pricing';
+      case Feature.csvImportExport:
+        return 'csv_import_export';
+      case Feature.wholesalePricing:
+        return 'wholesale_pricing';
       default:
-        return 'general';
+        return feature.name;
     }
   }
 
@@ -80,7 +92,7 @@ class ProUpgradeSheet extends StatelessWidget {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: cs.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -117,7 +129,7 @@ class ProUpgradeSheet extends StatelessWidget {
                         _featureLabel(l10n),
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -135,19 +147,22 @@ class ProUpgradeSheet extends StatelessWidget {
               l10n.getActivationKeyInfo,
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey.shade700,
+                color: cs.onSurfaceVariant,
                 height: 1.4,
               ),
             ),
             const SizedBox(height: 12),
             _bullet(context, l10n.proIncludesPurchases),
             _bullet(context, l10n.proIncludesInventory),
+            _bullet(context, l10n.featureStocktake),
+            _bullet(context, l10n.exchangeRates),
             _bullet(context, l10n.proIncludesReports),
+            _bullet(context, l10n.pdfSealsSection),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: cs.primaryContainer.withValues(alpha: 0.35),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
@@ -155,7 +170,7 @@ class ProUpgradeSheet extends StatelessWidget {
                   Icon(
                     Icons.check_circle_outline,
                     size: 16,
-                    color: Colors.green.shade700,
+                    color: cs.primary,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -163,7 +178,7 @@ class ProUpgradeSheet extends StatelessWidget {
                       l10n.freeDataAlwaysAvailable,
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.green.shade800,
+                        color: cs.onSurface,
                       ),
                     ),
                   ),
@@ -180,7 +195,7 @@ class ProUpgradeSheet extends StatelessWidget {
               onPressed: () => Navigator.pop(context, false),
               child: Text(
                 l10n.cancel,
-                style: TextStyle(color: Colors.grey.shade600),
+                style: TextStyle(color: cs.onSurfaceVariant),
               ),
             ),
           ],

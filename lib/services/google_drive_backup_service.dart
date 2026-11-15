@@ -12,6 +12,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database/database_helper.dart';
 import '../widgets/backup_password_dialog.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 import 'analytics/analytics_service.dart';
 import 'backup_encryption_service.dart';
 import 'backup_service.dart';
@@ -22,13 +24,18 @@ class DriveBackupFile {
   final String name;
   final int sizeBytes;
   final DateTime modifiedTime;
+  final bool? isEncrypted;
 
   const DriveBackupFile({
     required this.id,
     required this.name,
     required this.sizeBytes,
     required this.modifiedTime,
+    this.isEncrypted,
   });
+
+  bool get encrypted =>
+      isEncrypted == true || name.contains('_enc') || name.endsWith('.enc');
 
   String get formattedSize {
     if (sizeBytes < 1024) return '$sizeBytes B';
@@ -339,7 +346,10 @@ class GoogleDriveBackupService {
   }
 
   Future<bool> isSignedIn() => _client.isSignedIn();
-  Future<bool> signIn() => _client.signIn();
+  Future<bool> signIn() {
+    AccessGuard.require(PermissionRegistry.backupCreate);
+    return _client.signIn();
+  }
   Future<void> signOut() => _client.signOut();
   Future<void> deleteBackup(String fileId) async {
     await _client.deleteBackup(fileId);
@@ -366,21 +376,25 @@ class GoogleDriveBackupService {
 
   /// Creates a local backup and uploads it to the appDataFolder on Google Drive.
   Future<DriveBackupFile> uploadCurrentBackup({String? password}) async {
+    AccessGuard.require(PermissionRegistry.backupCreate);
     final localBackupPath = createLocalBackupOverride != null
         ? await createLocalBackupOverride!()
         : await BackupService.createLocalBackup(password: password);
     final localFile = File(localBackupPath);
     try {
       final bytes = await localFile.readAsBytes();
+      final isEnc = BackupEncryptionService.isEncrypted(bytes);
       final n = DateTime.now();
       String two(int v) => v.toString().padLeft(2, '0');
       final stamp =
           '${n.year}${two(n.month)}${two(n.day)}_${two(n.hour)}${two(n.minute)}${two(n.second)}';
-      final cloudFileName = 'warqatek_backup_$stamp.waraq';
+      final cloudFileName =
+          'warqatek_backup_$stamp${isEnc ? '_enc' : ''}.waraq';
       final uploaded = await _client.uploadBackup(
         bytes: bytes,
         fileName: cloudFileName,
       );
+      await BackupService.recordBackupSuccess();
 
       if (logAuditEventOverride != null) {
         await logAuditEventOverride!(

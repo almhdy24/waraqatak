@@ -281,14 +281,16 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
     setState(() => _previewRefreshKey++);
   }
 
-  Business get _previewBusiness =>
-      _business ??
-      const Business(
-        name: 'ورقتك',
-        ownerName: '',
-        phone: '+249 900 000 000',
-        address: 'الخرطوم',
-      );
+  Business get _previewBusiness {
+    final l10n = AppLocalizations.of(context);
+    return _business ??
+        Business(
+          name: l10n.appTitle,
+          ownerName: '',
+          phone: '',
+          address: '',
+        );
+  }
 
   Future<Uint8List> _buildPreview(AppLocalizations l10n) {
     final business = _previewBusiness;

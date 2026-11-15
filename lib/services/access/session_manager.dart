@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
 import '../../database/access_dao.dart';
 import '../../database/database_helper.dart';
@@ -303,6 +304,10 @@ class SessionManager extends ChangeNotifier {
     _currentUser = null;
     _cachedPermissions = {};
     _isLocked = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('quick_sale_held_carts');
+    } catch (_) {}
     navigatorKey.currentState?.popUntil((route) => route.isFirst);
     notifyListeners();
 
@@ -366,5 +371,18 @@ class SessionManager extends ChangeNotifier {
     _cachedPermissions = {};
     _isLocked = false;
     _lastActivity = DateTime.now();
+  }
+
+  /// Sets active session and permissions for test isolation.
+  @visibleForTesting
+  void setSessionForTesting(
+    AppUser? user, {
+    Set<String> permissions = const {},
+  }) {
+    _isMultiUserEnabled = true;
+    _currentUser = user;
+    _cachedPermissions = permissions;
+    _isLocked = false;
+    _securityUnverified = false;
   }
 }
