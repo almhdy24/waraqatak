@@ -13,6 +13,7 @@ import 'package:warqatek/models/contact.dart';
 import 'package:warqatek/screens/voucher_screen.dart';
 import 'package:warqatek/services/access/session_manager.dart';
 import 'package:warqatek/services/document_service.dart';
+import 'package:warqatek/utils/number_input.dart';
 import 'package:warqatek/widgets/amount_field.dart';
 import 'package:warqatek/widgets/contact_autocomplete_field.dart';
 
@@ -137,7 +138,13 @@ void main() {
 
       // Now verify ActionChip exists with full balance label
       expect(find.byType(ActionChip), findsOneWidget);
-      expect(find.textContaining(l10n.voucherPayFullBalance), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ActionChip),
+          matching: find.textContaining(l10n.voucherPayFullBalance),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.descendant(
           of: find.byType(ActionChip),

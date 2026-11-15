@@ -3947,6 +3947,16 @@ class AppLocalizations {
     'يجب اختيار عميل للمبيعات الآجلة.',
     'Customer selection is required for credit sales.',
   );
+  String get posHoldCart => _t('تعليق الفاتورة', 'Hold Cart');
+  String get posHeldCarts => _t('الفواتير المعلقة', 'Held Carts');
+  String get posCartHeldSuccess =>
+      _t('تم تعليق الفاتورة بنجاح', 'Cart held successfully');
+  String get posRecallCart => _t('استرجاع الفاتورة', 'Recall Cart');
+  String get posNoHeldCarts => _t('لا توجد فواتير معلقة', 'No held carts');
+  String get posFrequentlySold => _t('الأكثر مبيعاً', 'Frequently Sold');
+  String get posContinuousScanning => _t('مسح مستمر', 'Continuous Scanning');
+  String get posItemRemoved =>
+      _t('تم حذف العنصر من السلة', 'Item removed from cart');
   String get voucherPayFullBalance =>
       _t('سداد كامل الرصيد', 'Pay Full Balance');
   String get exact => _t('المبلغ تماماً', 'Exact');

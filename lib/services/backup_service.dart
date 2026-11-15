@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/database_helper.dart';
@@ -20,6 +21,7 @@ import 'image_storage_service.dart';
 import 'digital_seal_storage_service.dart';
 
 class BackupService {
+  static const String settingLastBackupAt = 'last_backup_timestamp';
   static const String backupExtension = 'waraq';
   static const int currentBackupVersion = 6;
   static const String appId = 'warqatek';
@@ -1167,5 +1169,21 @@ class BackupService {
         // Never fail restore due to a single digital seal error.
       }
     }
+  }
+
+  /// Records the timestamp of a successful backup creation in settings and preferences.
+  static Future<void> recordBackupSuccess() async {
+    final nowIso = DateTime.now().toIso8601String();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(settingLastBackupAt, nowIso);
+    } catch (_) {}
+    try {
+      final db = await DatabaseHelper.instance.database;
+      await db.insert('app_settings', {
+        'key': settingLastBackupAt,
+        'value': nowIso,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (_) {}
   }
 }

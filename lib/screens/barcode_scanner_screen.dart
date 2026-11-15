@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../localization/app_localizations.dart';
 import '../widgets/app_icons.dart';
 
 class BarcodeScannerScreen extends StatefulWidget {
-  const BarcodeScannerScreen({super.key});
+  final bool continuousMode;
+  final ValueChanged<String>? onContinuousScan;
+
+  const BarcodeScannerScreen({
+    super.key,
+    this.continuousMode = false,
+    this.onContinuousScan,
+  });
 
   @override
   State<BarcodeScannerScreen> createState() => _BarcodeScannerScreenState();
@@ -15,6 +23,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
   bool _scanned = false;
+  DateTime? _lastScanTime;
+  String? _lastScannedCode;
 
   @override
   void dispose() {
@@ -23,12 +33,27 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_scanned) return;
     final value = capture.barcodes.firstOrNull?.rawValue;
-    if (value != null && value.isNotEmpty) {
-      _scanned = true;
-      Navigator.pop(context, value);
+    if (value == null || value.isEmpty) return;
+
+    if (widget.continuousMode && widget.onContinuousScan != null) {
+      final now = DateTime.now();
+      if (_lastScanTime != null &&
+          _lastScannedCode == value &&
+          now.difference(_lastScanTime!).inMilliseconds < 1200) {
+        return;
+      }
+      _lastScanTime = now;
+      _lastScannedCode = value;
+      HapticFeedback.mediumImpact();
+      widget.onContinuousScan!(value);
+      setState(() {});
+      return;
     }
+
+    if (_scanned) return;
+    _scanned = true;
+    Navigator.pop(context, value);
   }
 
   @override
@@ -61,6 +86,17 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               );
             },
           ),
+          if (widget.continuousMode)
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                l10n.close,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
         ],
       ),
       body: Stack(
@@ -77,18 +113,46 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             bottom: bottomPadding + 24,
             start: 0,
             end: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.continuousMode && _lastScannedCode != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      '${l10n.barcodeScanner}: $_lastScannedCode',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    widget.continuousMode
+                        ? l10n.posContinuousScanning
+                        : l10n.scannerHint,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
                 ),
-                child: Text(
-                  l10n.scannerHint,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
-              ),
+              ],
             ),
           ),
         ],
@@ -96,7 +160,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     );
   }
 
-  Widget _buildError(BuildContext context, AppLocalizations l10n, MobileScannerException error) {
+  Widget _buildError(
+    BuildContext context,
+    AppLocalizations l10n,
+    MobileScannerException error,
+  ) {
     final isPerm = error.errorCode == MobileScannerErrorCode.permissionDenied;
     return ColoredBox(
       color: Colors.black,
@@ -114,8 +182,11 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               const SizedBox(height: 16),
               Text(
                 isPerm ? l10n.scannerPermDenied : l10n.operationFailed,
-                style: const TextStyle(color: Colors.white,
-                    fontSize: 16, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -128,7 +199,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
               if (isPerm)
                 OutlinedButton.icon(
                   onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                  ),
                   icon: Icon(AppIcons.arrowBack(context)),
                   label: Text(l10n.cancel),
                 ),
@@ -166,7 +239,10 @@ class _OverlayPainter extends CustomPainter {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final rect = Rect.fromCenter(
-        center: Offset(cx, cy), width: frameW, height: frameH);
+      center: Offset(cx, cy),
+      width: frameW,
+      height: frameH,
+    );
 
     // Dim overlay
     final dimPaint = Paint()..color = Colors.black.withValues(alpha: 0.55);
