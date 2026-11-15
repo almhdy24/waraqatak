@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
@@ -281,8 +282,38 @@ class CsvService {
     return resultBytes;
   }
 
+  static double? _parseNum(String s) {
+    var t = s.trim();
+    if (t.isEmpty) return null;
+    const ar = '٠١٢٣٤٥٦٧٨٩', fa = '۰۱۲۳۴۵۶۷۸۹';
+    final b = StringBuffer();
+    for (final r in t.runes) {
+      final c = String.fromCharCode(r);
+      final i = ar.indexOf(c);
+      final j = fa.indexOf(c);
+      b.write(
+        i >= 0
+            ? '$i'
+            : j >= 0
+            ? '$j'
+            : c,
+      );
+    }
+    t = b
+        .toString()
+        .replaceAll('٫', '.')
+        .replaceAll('٬', '')
+        .replaceAll('،', '');
+    // CSV cells never contain thousands separators from our own export; a lone comma means decimal.
+    if (RegExp(r'^\d+,\d{1,2}$').hasMatch(t)) t = t.replaceAll(',', '.');
+    return double.tryParse(t);
+  }
+
+  @visibleForTesting
+  static double? parseNumberForTest(String s) => _parseNum(s);
+
   /// Robust RFC 4180 CSV parser supporting multiline and quoted fields.
-  static List<List<String>> parseCsv(String input) {
+  static List<List<String>> parseCsv(String input, {String? delimiter}) {
     final rows = <List<String>>[];
     var currentRow = <String>[];
     final currentField = StringBuffer();
@@ -293,6 +324,16 @@ class CsvService {
     String text = input;
     if (text.startsWith('\uFEFF')) {
       text = text.substring(1);
+    }
+
+    String delim = delimiter ?? ',';
+    if (delimiter == null) {
+      int firstLineEnd = text.indexOf('\n');
+      if (firstLineEnd == -1) firstLineEnd = text.length;
+      final firstRow = text.substring(0, firstLineEnd);
+      if (!firstRow.contains(',') && firstRow.contains(';')) {
+        delim = ';';
+      }
     }
 
     while (i < text.length) {
@@ -318,7 +359,7 @@ class CsvService {
         if (char == '"') {
           insideQuotes = true;
           i++;
-        } else if (char == ',') {
+        } else if (char == delim) {
           currentRow.add(currentField.toString());
           currentField.clear();
           i++;
@@ -527,6 +568,7 @@ class CsvService {
     final baseCurrencyCode = business?.currencyCode.trim();
 
     final parsedRows = <CsvParsedRow>[];
+    final seenInFile = <String>{};
     int validNew = 0;
     int existing = 0;
     int error = 0;
@@ -604,7 +646,7 @@ class CsvService {
         continue;
       }
 
-      final salePrice = double.tryParse(rawSale);
+      final salePrice = _parseNum(rawSale);
       if (salePrice == null || salePrice < 0) {
         error++;
         parsedRows.add(
@@ -619,7 +661,7 @@ class CsvService {
         continue;
       }
 
-      final purchasePrice = double.tryParse(rawPurch) ?? 0.0;
+      final purchasePrice = _parseNum(rawPurch) ?? 0.0;
       if (purchasePrice < 0) {
         error++;
         parsedRows.add(
@@ -636,7 +678,7 @@ class CsvService {
 
       double? wholesalePrice;
       if (WholesaleFeature.isAvailable && rawWholesale.isNotEmpty) {
-        wholesalePrice = double.tryParse(rawWholesale);
+        wholesalePrice = _parseNum(rawWholesale);
         if (wholesalePrice == null || wholesalePrice < 0) {
           error++;
           parsedRows.add(
@@ -654,7 +696,7 @@ class CsvService {
 
       double? wholesaleMinQty;
       if (WholesaleFeature.isAvailable && rawWholesaleMin.isNotEmpty) {
-        wholesaleMinQty = double.tryParse(rawWholesaleMin);
+        wholesaleMinQty = _parseNum(rawWholesaleMin);
         if (wholesaleMinQty == null || wholesaleMinQty < 0) {
           error++;
           parsedRows.add(
@@ -684,16 +726,16 @@ class CsvService {
             break;
           }
           final uName = parts[0].trim();
-          final factor = double.tryParse(parts[1].trim());
+          final factor = _parseNum(parts[1].trim());
           if (uName.isEmpty || factor == null || factor <= 0) {
             unitError = true;
             break;
           }
           final uSalePrice = parts.length > 2 && parts[2].trim().isNotEmpty
-              ? double.tryParse(parts[2].trim())
+              ? _parseNum(parts[2].trim())
               : null;
           final uWholesalePrice = parts.length > 3 && parts[3].trim().isNotEmpty
-              ? double.tryParse(parts[3].trim())
+              ? _parseNum(parts[3].trim())
               : null;
           parsedUnits.add(
             ProductUnit(
@@ -722,7 +764,7 @@ class CsvService {
         }
       }
 
-      final minStock = double.tryParse(rawMin) ?? 0.0;
+      final minStock = _parseNum(rawMin) ?? 0.0;
       final isActive = rawActive == '1' || rawActive.toLowerCase() == 'true';
       final type = rawType == Product.typeService
           ? Product.typeService
@@ -824,6 +866,39 @@ class CsvService {
         );
         continue;
       }
+
+      final normName = rawName.trim().toLowerCase();
+      final normBarcode = (rawBarcode != null && rawBarcode.trim().isNotEmpty)
+          ? rawBarcode.trim().toLowerCase()
+          : null;
+      final normCode = (rawCode != null && rawCode.trim().isNotEmpty)
+          ? rawCode.trim().toLowerCase()
+          : null;
+
+      final isDuplicateInFile =
+          (normName.isNotEmpty && seenInFile.contains('n:$normName')) ||
+          (normBarcode != null && seenInFile.contains('b:$normBarcode')) ||
+          (normCode != null && seenInFile.contains('c:$normCode'));
+
+      if (isDuplicateInFile) {
+        error++;
+        parsedRows.add(
+          CsvParsedRow(
+            rowNumber: r + 1,
+            name: rawName,
+            barcode: rawBarcode?.isEmpty == true ? null : rawBarcode,
+            code: rawCode?.isEmpty == true ? null : rawCode,
+            salePrice: salePrice,
+            isValid: false,
+            errorMessage: 'صف مكرر داخل الملف',
+          ),
+        );
+        continue;
+      }
+
+      if (normName.isNotEmpty) seenInFile.add('n:$normName');
+      if (normBarcode != null) seenInFile.add('b:$normBarcode');
+      if (normCode != null) seenInFile.add('c:$normCode');
 
       if (match != null) {
         existing++;

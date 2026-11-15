@@ -25,15 +25,19 @@ class ProductPerformanceItem {
   final double? averageCost;
   final double? currentValuation;
   final String? currencyCode;
-  final Map<String, ({
-    double qty,
-    double revenue,
-    double cogs,
-    double grossProfit,
-    double profitMargin,
-    bool isReliable,
-    int unknownCount,
-  })> salesByCurrency;
+  final Map<
+    String,
+    ({
+      double qty,
+      double revenue,
+      double cogs,
+      double grossProfit,
+      double profitMargin,
+      bool isReliable,
+      int unknownCount,
+    })
+  >
+  salesByCurrency;
 
   const ProductPerformanceItem({
     required this.productId,
@@ -87,14 +91,18 @@ class ProductPerformanceSummary {
   final bool hasIncompleteCosts;
   final int unvaluedSalesCount;
   final Set<String> currencies;
-  final Map<String, ({
-    double revenue,
-    double cogs,
-    double grossProfit,
-    double trustedProfit,
-    bool hasIncompleteCost,
-    int unvaluedSalesCount,
-  })> totalsByCurrency;
+  final Map<
+    String,
+    ({
+      double revenue,
+      double cogs,
+      double grossProfit,
+      double trustedProfit,
+      bool hasIncompleteCost,
+      int unvaluedSalesCount,
+    })
+  >
+  totalsByCurrency;
 
   bool get hasMultipleCurrencies => currencies.length > 1;
 
@@ -108,8 +116,9 @@ class ProductPerformanceSummary {
     required this.unvaluedSalesCount,
     required this.currencies,
     this.totalsByCurrency = const {},
-  }) : totalTrustedGrossProfit = totalTrustedGrossProfit ??
-            (hasIncompleteCosts ? 0.0 : totalGrossProfit);
+  }) : totalTrustedGrossProfit =
+           totalTrustedGrossProfit ??
+           (hasIncompleteCosts ? 0.0 : totalGrossProfit);
 }
 
 /// Item representing a purchase document in purchase reports.
@@ -139,7 +148,8 @@ class PurchaseReportSummary {
   final double totalRemaining;
   final int cancelledCount;
   final Set<String> currencies;
-  final Map<String, ({double purchases, double paid, double remaining})> totalsByCurrency;
+  final Map<String, ({double purchases, double paid, double remaining})>
+  totalsByCurrency;
 
   const PurchaseReportSummary({
     required this.items,
@@ -238,6 +248,9 @@ class BusinessReportingService {
   BusinessReportingService._();
   static final BusinessReportingService instance = BusinessReportingService._();
 
+  static const String unitFallback = 'قطعة';
+  static const String uncategorizedLabel = 'غير مصنف';
+
   /// Product Performance, Sales by Product, and Profit by Product report.
   Future<ProductPerformanceSummary> getProductPerformance({
     required DateTime from,
@@ -248,10 +261,7 @@ class BusinessReportingService {
   }) async {
     final db = await DatabaseHelper.instance.database;
 
-    final conditions = <String>[
-      'p.is_active = 1',
-      "p.type = 'product'",
-    ];
+    final conditions = <String>['p.is_active = 1', "p.type = 'product'"];
     final productArgs = <Object?>[];
 
     if (category != null && category.isNotEmpty && category != 'all') {
@@ -326,9 +336,12 @@ class BusinessReportingService {
       final docItems = entry.value;
       if (docItems.isEmpty) continue;
 
-      final docSubtotal = (docItems.first['doc_subtotal'] as num?)?.toDouble() ?? 0.0;
-      final docDiscount = (docItems.first['doc_discount'] as num?)?.toDouble() ?? 0.0;
-      final docCurrency = (docItems.first['currency_code'] as String?)?.trim() ?? 'SDG';
+      final docSubtotal =
+          (docItems.first['doc_subtotal'] as num?)?.toDouble() ?? 0.0;
+      final docDiscount =
+          (docItems.first['doc_discount'] as num?)?.toDouble() ?? 0.0;
+      final docCurrency =
+          (docItems.first['currency_code'] as String?)?.trim() ?? 'SDG';
       final currency = docCurrency.isNotEmpty ? docCurrency : 'SDG';
       final decimals = Currency.decimalDigitsForCode(currency);
 
@@ -350,7 +363,9 @@ class BusinessReportingService {
         final pid = item['product_id'] as int?;
         if (pid == null) continue;
         final agg = productAggregators[pid];
-        if (agg == null) continue; // product not in current category filter or inactive
+        if (agg == null) {
+          continue; // product not in current category filter or inactive
+        }
 
         final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
         final totalCost = (item['total_cost'] as num?)?.toDouble();
@@ -359,9 +374,15 @@ class BusinessReportingService {
         agg.totalSalesQty += qty;
         agg.allTransactionIds.add(docId);
 
-        final curAgg = agg.byCurrency.putIfAbsent(currency, () => _PerCurrencySales());
+        final curAgg = agg.byCurrency.putIfAbsent(
+          currency,
+          () => _PerCurrencySales(),
+        );
         curAgg.salesQty += qty;
-        curAgg.salesRevenue = MoneyUtils.round(curAgg.salesRevenue + netRev, decimals);
+        curAgg.salesRevenue = MoneyUtils.round(
+          curAgg.salesRevenue + netRev,
+          decimals,
+        );
         curAgg.transactionIds.add(docId);
 
         // COGS currency safety:
@@ -369,7 +390,10 @@ class BusinessReportingService {
         // We only attribute known COGS against sales in the same currency (baseCurrency).
         if (currency == baseCurrency) {
           if (totalCost != null) {
-            curAgg.knownCogs = MoneyUtils.round(curAgg.knownCogs + totalCost, decimals);
+            curAgg.knownCogs = MoneyUtils.round(
+              curAgg.knownCogs + totalCost,
+              decimals,
+            );
           }
           if (qty > 0 && totalCost == null) {
             curAgg.unknownCostSalesCount += 1;
@@ -393,22 +417,28 @@ class BusinessReportingService {
       final unit = r['unit'] as String?;
       final stockQty = (r['stock_quantity'] as num?)?.toDouble() ?? 0.0;
       final avgCost = (r['average_cost'] as num?)?.toDouble();
-      final costStatus = r['cost_status'] as String? ?? Product.costStatusUnknown;
-      final isCostKnown = costStatus == Product.costStatusKnown && avgCost != null;
+      final costStatus =
+          r['cost_status'] as String? ?? Product.costStatusUnknown;
+      final isCostKnown =
+          costStatus == Product.costStatusKnown && avgCost != null;
 
       final agg = productAggregators[pid] ?? _ProductSalesAggregator();
       final totalSalesQty = agg.totalSalesQty;
       final txCount = agg.allTransactionIds.length;
 
-      final itemSalesByCurrency = <String, ({
-        double qty,
-        double revenue,
-        double cogs,
-        double grossProfit,
-        double profitMargin,
-        bool isReliable,
-        int unknownCount,
-      })>{};
+      final itemSalesByCurrency =
+          <
+            String,
+            ({
+              double qty,
+              double revenue,
+              double cogs,
+              double grossProfit,
+              double profitMargin,
+              bool isReliable,
+              int unknownCount,
+            })
+          >{};
 
       for (final entry in agg.byCurrency.entries) {
         final c = entry.key;
@@ -460,32 +490,39 @@ class BusinessReportingService {
         // Multi-currency product activity: NEVER sum nominally across currencies
         itemCurrency = null;
         isReliable = false;
-        unknownCount = itemSalesByCurrency.values.fold(0, (s, e) => s + e.unknownCount);
+        unknownCount = itemSalesByCurrency.values.fold(
+          0,
+          (s, e) => s + e.unknownCount,
+        );
       } else {
         itemCurrency = baseCurrency;
       }
 
-      final currentValuation = isCostKnown ? (stockQty > 0 ? stockQty * avgCost : 0.0) : null;
+      final currentValuation = isCostKnown
+          ? (stockQty > 0 ? stockQty * avgCost : 0.0)
+          : null;
 
-      items.add(ProductPerformanceItem(
-        productId: pid,
-        productName: name,
-        category: cat,
-        unit: unit,
-        salesQty: totalSalesQty,
-        transactionCount: txCount,
-        salesRevenue: salesRevenue,
-        cogs: cogs,
-        grossProfit: grossProfit,
-        profitMargin: margin,
-        isCostReliable: isReliable,
-        unknownCostSalesCount: unknownCount,
-        currentStock: stockQty,
-        averageCost: avgCost,
-        currentValuation: currentValuation,
-        currencyCode: itemCurrency,
-        salesByCurrency: itemSalesByCurrency,
-      ));
+      items.add(
+        ProductPerformanceItem(
+          productId: pid,
+          productName: name,
+          category: cat,
+          unit: unit,
+          salesQty: totalSalesQty,
+          transactionCount: txCount,
+          salesRevenue: salesRevenue,
+          cogs: cogs,
+          grossProfit: grossProfit,
+          profitMargin: margin,
+          isCostReliable: isReliable,
+          unknownCostSalesCount: unknownCount,
+          currentStock: stockQty,
+          averageCost: avgCost,
+          currentValuation: currentValuation,
+          currencyCode: itemCurrency,
+          salesByCurrency: itemSalesByCurrency,
+        ),
+      );
     }
 
     // Sort items
@@ -513,14 +550,18 @@ class BusinessReportingService {
       items.sort((a, b) => b.salesRevenue.compareTo(a.salesRevenue));
     }
 
-    final summaryTotalsByCurrency = <String, ({
-      double revenue,
-      double cogs,
-      double grossProfit,
-      double trustedProfit,
-      bool hasIncompleteCost,
-      int unvaluedSalesCount,
-    })>{};
+    final summaryTotalsByCurrency =
+        <
+          String,
+          ({
+            double revenue,
+            double cogs,
+            double grossProfit,
+            double trustedProfit,
+            bool hasIncompleteCost,
+            int unvaluedSalesCount,
+          })
+        >{};
 
     for (final c in allCurrencies) {
       double cRev = 0.0;
@@ -605,17 +646,16 @@ class BusinessReportingService {
       'd.date >= ?',
       'd.date <= ?',
     ];
-    final args = <Object?>[
-      from.toIso8601String(),
-      to.toIso8601String(),
-    ];
+    final args = <Object?>[from.toIso8601String(), to.toIso8601String()];
 
     if (supplierId != null) {
       conditions.add('d.contact_id = ?');
       args.add(supplierId);
     }
 
-    if (documentStatus != null && documentStatus.isNotEmpty && documentStatus != 'all') {
+    if (documentStatus != null &&
+        documentStatus.isNotEmpty &&
+        documentStatus != 'all') {
       conditions.add('d.status = ?');
       args.add(documentStatus);
     }
@@ -631,7 +671,8 @@ class BusinessReportingService {
       conditions.add("d.status != '${DocumentStatus.cancelled}'");
     }
 
-    final sql = '''
+    final sql =
+        '''
       SELECT
         d.*,
         c.name AS supplier_name,
@@ -675,7 +716,8 @@ class BusinessReportingService {
           totalRemaining += doc.remaining;
         }
 
-        final prev = totalsByCurrency[doc.currencyCode] ??
+        final prev =
+            totalsByCurrency[doc.currencyCode] ??
             (purchases: 0.0, paid: 0.0, remaining: 0.0);
         totalsByCurrency[doc.currencyCode] = (
           purchases: prev.purchases + doc.total,
@@ -684,14 +726,16 @@ class BusinessReportingService {
         );
       }
 
-      items.add(PurchaseReportItem(
-        document: doc,
-        supplierName: sName,
-        supplierPhone: sPhone,
-        netAmount: doc.total,
-        paidAmount: doc.paid,
-        remainingAmount: doc.remaining,
-      ));
+      items.add(
+        PurchaseReportItem(
+          document: doc,
+          supplierName: sName,
+          supplierPhone: sPhone,
+          netAmount: doc.total,
+          paidAmount: doc.paid,
+          remainingAmount: doc.remaining,
+        ),
+      );
     }
 
     if (totalPurchases == 0.0 && totalsByCurrency.length == 1) {
@@ -715,12 +759,14 @@ class BusinessReportingService {
   /// Current inventory report with stock threshold and valuation at cost.
   Future<InventoryReportSummary> getInventoryReport({
     String? category,
-    String? stockStatus, // 'all', 'low_stock', 'out_of_stock', 'unvalued', 'healthy'
+    String?
+    stockStatus, // 'all', 'low_stock', 'out_of_stock', 'unvalued', 'healthy'
     String? searchQuery,
   }) async {
     final allProducts = await DatabaseHelper.instance.getAllProducts(
       activeOnly: true,
-      type: 'product', // Exclude services from stock valuation and stock reports
+      type:
+          'product', // Exclude services from stock valuation and stock reports
     );
 
     double totalValuation = 0.0;
@@ -739,7 +785,8 @@ class BusinessReportingService {
       final isOut = qty <= 0;
       final isLow = min > 0 && qty > 0 && qty <= min;
       final shortage = (min > 0 && qty < min) ? (min - qty) : 0.0;
-      final isCostKnown = p.isCostKnown && p.averageCost != null && p.averageCost! >= 0;
+      final isCostKnown =
+          p.isCostKnown && p.averageCost != null && p.averageCost! >= 0;
 
       if (isOut) {
         outCount++;
@@ -748,7 +795,9 @@ class BusinessReportingService {
       }
 
       if (qty > 0) {
-        final u = (p.unit != null && p.unit!.trim().isNotEmpty) ? p.unit!.trim() : 'قطعة';
+        final u = (p.unit != null && p.unit!.trim().isNotEmpty)
+            ? p.unit!.trim()
+            : unitFallback;
         unitQuantities[u] = (unitQuantities[u] ?? 0.0) + qty;
 
         if (isCostKnown) {
@@ -760,7 +809,9 @@ class BusinessReportingService {
         }
       }
 
-      final valuation = isCostKnown ? (qty > 0 ? qty * p.averageCost! : 0.0) : null;
+      final valuation = isCostKnown
+          ? (qty > 0 ? qty * p.averageCost! : 0.0)
+          : null;
 
       // Filter by category
       if (category != null && category.isNotEmpty && category != 'all') {
@@ -782,17 +833,19 @@ class BusinessReportingService {
         if (!matchName && !matchBarcode && !matchCode) continue;
       }
 
-      items.add(InventoryReportItem(
-        product: p,
-        stockQuantity: qty,
-        minStock: min,
-        averageCost: p.averageCost,
-        valuationAtCost: valuation,
-        isLowStock: isLow,
-        isOutOfStock: isOut,
-        shortageQuantity: shortage,
-        isCostKnown: isCostKnown,
-      ));
+      items.add(
+        InventoryReportItem(
+          product: p,
+          stockQuantity: qty,
+          minStock: min,
+          averageCost: p.averageCost,
+          valuationAtCost: valuation,
+          isLowStock: isLow,
+          isOutOfStock: isOut,
+          shortageQuantity: shortage,
+          isCostKnown: isCostKnown,
+        ),
+      );
     }
 
     return InventoryReportSummary(
@@ -826,62 +879,116 @@ class BusinessReportingService {
       offset: offset,
     );
 
-    double totalIn = 0.0;
-    double totalOut = 0.0;
-    int unvaluedCount = 0;
+    final db = await DatabaseHelper.instance.database;
 
-    for (final m in movements) {
-      if (m.quantity > 0) {
-        totalIn += m.quantity;
-      } else {
-        totalOut += m.quantity.abs();
-      }
-      if (m.costStatus == StockMovement.costStatusUnknown || m.unitCost == null) {
-        unvaluedCount++;
-      }
+    // Compute complete-range aggregate totals (untruncated by pagination limit)
+    final conditions = <String>[];
+    final args = <Object?>[];
+
+    if (productId != null) {
+      conditions.add('product_id = ?');
+      args.add(productId);
     }
+    if (type != null && type.isNotEmpty && type != 'all') {
+      conditions.add('type = ?');
+      args.add(type);
+    }
+    if (from != null) {
+      conditions.add('date >= ?');
+      args.add(from.toIso8601String());
+    }
+    if (to != null) {
+      conditions.add('date <= ?');
+      args.add(to.toIso8601String());
+    }
+
+    final whereClause = conditions.isNotEmpty
+        ? 'WHERE ${conditions.join(' AND ')}'
+        : '';
+
+    final aggSql =
+        '''
+      SELECT
+        COALESCE(SUM(CASE WHEN quantity > 0 THEN quantity ELSE 0 END), 0.0) AS total_in,
+        COALESCE(SUM(CASE WHEN quantity < 0 THEN ABS(quantity) ELSE 0 END), 0.0) AS total_out,
+        COUNT(CASE WHEN cost_status = 'unknown' OR unit_cost IS NULL THEN 1 END) AS unvalued_count
+      FROM stock_movements
+      $whereClause
+    ''';
+    final aggRows = await db.rawQuery(aggSql, args);
+    final totalIn = (aggRows.first['total_in'] as num?)?.toDouble() ?? 0.0;
+    final totalOut = (aggRows.first['total_out'] as num?)?.toDouble() ?? 0.0;
+    final unvaluedCount =
+        (aggRows.first['unvalued_count'] as num?)?.toInt() ?? 0;
 
     // Calculate running balance when a specific product is filtered
     final items = <StockMovementReportItem>[];
     if (productId != null) {
-      final db = await DatabaseHelper.instance.database;
-      double runningBalance = 0.0;
-      if (from != null) {
-        final preRows = await db.rawQuery('''
-          SELECT COALESCE(SUM(quantity), 0) AS balance
-          FROM stock_movements
-          WHERE product_id = ? AND date < ?
-        ''', [productId, from.toIso8601String()]);
-        runningBalance = (preRows.first['balance'] as num?)?.toDouble() ?? 0.0;
+      if (type != null && type.isNotEmpty && type != 'all') {
+        for (final m in movements) {
+          items.add(
+            StockMovementReportItem(
+              movement: m,
+              balanceBefore: null,
+              balanceAfter: null,
+              isBalanceReliable: false,
+            ),
+          );
+        }
+      } else if (movements.isNotEmpty) {
+        // Movements are returned in DESC order from DB, reverse to calculate chronological running balance
+        final chronological = movements.reversed.toList();
+        final oldest = chronological.first;
+        double runningBalance = 0.0;
+        if (oldest.id != null) {
+          final preRows = await db.rawQuery(
+            '''
+            SELECT COALESCE(SUM(quantity), 0) AS balance
+            FROM stock_movements
+            WHERE product_id = ?
+              AND (date < ? OR (date = ? AND id < ?))
+          ''',
+            [
+              productId,
+              oldest.date.toIso8601String(),
+              oldest.date.toIso8601String(),
+              oldest.id,
+            ],
+          );
+          runningBalance =
+              (preRows.first['balance'] as num?)?.toDouble() ?? 0.0;
+        }
+
+        final chronologicalItems = <StockMovementReportItem>[];
+
+        for (final m in chronological) {
+          final bBefore = runningBalance;
+          runningBalance += m.quantity;
+          final bAfter = runningBalance;
+
+          chronologicalItems.add(
+            StockMovementReportItem(
+              movement: m,
+              balanceBefore: bBefore,
+              balanceAfter: bAfter,
+              isBalanceReliable: true,
+            ),
+          );
+        }
+
+        // Return items in original user-friendly descending order
+        items.addAll(chronologicalItems.reversed);
       }
-
-      // Movements are returned in DESC order from DB, reverse to calculate chronological running balance
-      final chronological = movements.reversed.toList();
-      final chronologicalItems = <StockMovementReportItem>[];
-
-      for (final m in chronological) {
-        final bBefore = runningBalance;
-        runningBalance += m.quantity;
-        final bAfter = runningBalance;
-
-        chronologicalItems.add(StockMovementReportItem(
-          movement: m,
-          balanceBefore: bBefore,
-          balanceAfter: bAfter,
-          isBalanceReliable: true,
-        ));
-      }
-
-      // Return items in original user-friendly descending order
-      items.addAll(chronologicalItems.reversed);
     } else {
       for (final m in movements) {
-        items.add(StockMovementReportItem(
-          movement: m,
-          balanceBefore: null,
-          balanceAfter: null,
-          isBalanceReliable: false,
-        ));
+        items.add(
+          StockMovementReportItem(
+            movement: m,
+            balanceBefore: null,
+            balanceAfter: null,
+            isBalanceReliable: false,
+          ),
+        );
       }
     }
 
@@ -922,7 +1029,8 @@ class BusinessReportingService {
     final fromStr = from.toIso8601String();
     final toStr = to.toIso8601String();
 
-    final salesRows = await db.rawQuery('''
+    final salesRows = await db.rawQuery(
+      '''
       SELECT di.product_id, COALESCE(di.base_quantity, di.quantity) AS quantity, di.unit_cost, di.total_cost
       FROM document_items di
       INNER JOIN documents d ON d.id = di.document_id
@@ -930,7 +1038,9 @@ class BusinessReportingService {
         AND d.status != 'cancelled'
         AND d.status != 'draft'
         AND d.date >= ? AND d.date <= ?
-    ''', [fromStr, toStr]);
+    ''',
+      [fromStr, toStr],
+    );
 
     final soldQtyByProd = <int, double>{};
     double totalCogsInPeriod = 0.0;
@@ -969,7 +1079,9 @@ class BusinessReportingService {
       }
 
       // Group valuation by category
-      final cat = (p.category != null && p.category!.isNotEmpty) ? p.category! : 'غير مصنف';
+      final cat = (p.category != null && p.category!.isNotEmpty)
+          ? p.category!
+          : uncategorizedLabel;
       if (val != null && val > 0) {
         catValuations[cat] = (catValuations[cat] ?? 0.0) + val;
       }
@@ -1019,12 +1131,18 @@ class BusinessReportingService {
     }
 
     velocityItems.sort((a, b) => b.salesVelocity.compareTo(a.salesVelocity));
-    slowMovingItems.sort((a, b) => (b.valuation ?? 0.0).compareTo(a.valuation ?? 0.0));
+    slowMovingItems.sort(
+      (a, b) => (b.valuation ?? 0.0).compareTo(a.valuation ?? 0.0),
+    );
 
-    final turnoverRatio = totalStockValuation > 0 ? (totalCogsInPeriod / totalStockValuation) : 0.0;
+    final turnoverRatio = totalStockValuation > 0
+        ? (totalCogsInPeriod / totalStockValuation)
+        : 0.0;
 
     final catList = catValuations.entries.map((e) {
-      final share = totalStockValuation > 0 ? (e.value / totalStockValuation) * 100.0 : 0.0;
+      final share = totalStockValuation > 0
+          ? (e.value / totalStockValuation) * 100.0
+          : 0.0;
       return CategoryValuationShare(
         category: e.key,
         valuationAtCost: e.value,
@@ -1126,6 +1244,6 @@ class _PerCurrencySales {
 class _ProductSalesAggregator {
   double totalSalesQty = 0.0;
   final Set<int> allTransactionIds = <int>{};
-  final Map<String, _PerCurrencySales> byCurrency = <String, _PerCurrencySales>{};
+  final Map<String, _PerCurrencySales> byCurrency =
+      <String, _PerCurrencySales>{};
 }
-
