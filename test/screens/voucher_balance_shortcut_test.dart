@@ -100,7 +100,7 @@ void main() {
   }
 
   testWidgets(
-    'Voucher screen: ActionChip displays outstanding balance and clicking fills amount',
+    'Voucher screen: pay full balance shortcut displays and clicking fills amount',
     (tester) async {
       final l10n = AppLocalizations('ar');
 
@@ -113,8 +113,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Before selecting a contact, ActionChip should not exist
-      expect(find.byType(ActionChip), findsNothing);
+      // Before selecting a contact, pay full balance shortcut should not exist
+      expect(
+        find.widgetWithText(TextButton, l10n.voucherPayFullBalance),
+        findsNothing,
+      );
 
       // Select contact with debt via Autocomplete field
       final contactInput = find.descendant(
@@ -136,25 +139,15 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Now verify ActionChip exists with full balance label
-      expect(find.byType(ActionChip), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.byType(ActionChip),
-          matching: find.textContaining(l10n.voucherPayFullBalance),
-        ),
-        findsOneWidget,
+      // Now verify pay full balance shortcut button exists
+      final payFullButton = find.widgetWithText(
+        TextButton,
+        l10n.voucherPayFullBalance,
       );
-      expect(
-        find.descendant(
-          of: find.byType(ActionChip),
-          matching: find.textContaining('3,500'),
-        ),
-        findsOneWidget,
-      );
+      expect(payFullButton, findsOneWidget);
 
-      // Tap the ActionChip to populate the amount field
-      await tester.tap(find.byType(ActionChip));
+      // Tap the shortcut button to populate the amount field
+      await tester.tap(payFullButton);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -171,6 +164,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Tap on the autocomplete option
       await tester.tap(find.text('عميل مسدد').last);
       await tester.pump();
       await tester.runAsync(
@@ -178,8 +172,11 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Customer has 0 debt -> ActionChip should not be shown
-      expect(find.byType(ActionChip), findsNothing);
+      // Customer has 0 debt -> shortcut button should not be shown
+      expect(
+        find.widgetWithText(TextButton, l10n.voucherPayFullBalance),
+        findsNothing,
+      );
     },
   );
 }
