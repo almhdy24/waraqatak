@@ -94,6 +94,7 @@ class DigitalSealConfig {
   DigitalSealConfig copyWith({
     SealType? type,
     String? assetId,
+    bool clearAssetId = false,
     bool? isEnabled,
     double? startRatio,
     double? topRatio,
@@ -103,7 +104,7 @@ class DigitalSealConfig {
     SealPageRule? pageRule,
   }) => DigitalSealConfig(
     type: type ?? this.type,
-    assetId: assetId ?? this.assetId,
+    assetId: clearAssetId ? null : (assetId ?? this.assetId),
     isEnabled: isEnabled ?? this.isEnabled,
     startRatio: startRatio ?? this.startRatio,
     topRatio: topRatio ?? this.topRatio,

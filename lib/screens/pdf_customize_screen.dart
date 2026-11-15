@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -144,6 +145,7 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
 
   Future<void> _pickSeal(SealType type) async {
     final l10n = AppLocalizations.of(context);
+    DigitalSealAsset? newlySavedAsset;
     try {
       final file = await FilePicker.pickFile(type: FileType.image);
       if (file == null) return;
@@ -155,9 +157,11 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
         type: type,
         bytes: bytes,
       );
+      newlySavedAsset = asset;
       await DatabaseHelper.instance.insertDigitalAsset(asset);
 
       final current = type == SealType.stamp ? _stampConfig! : _sigConfig!;
+      final oldAssetId = current.assetId;
       final updated = current.copyWith(
         assetId: asset.id,
         aspectRatio: asset.aspectRatio,
@@ -168,6 +172,16 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
         _businessId,
         updated,
       );
+
+      if (oldAssetId != null && oldAssetId != asset.id) {
+        await DatabaseHelper.instance.softDeleteDigitalAsset(
+          oldAssetId,
+          businessId: _businessId,
+        );
+        await DatabaseHelper.instance.cleanupUnreferencedAssets(
+          businessId: _businessId,
+        );
+      }
 
       if (!mounted) return;
       setState(() {
@@ -181,9 +195,28 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
         _previewRefreshKey++;
       });
     } on FormatException catch (e) {
+      if (newlySavedAsset != null) {
+        await DigitalSealStorageService.deleteAssetFile(newlySavedAsset.filename);
+      }
       if (!mounted) return;
-      AppSnackBar.show(context, e.message, severity: AppSnackBarSeverity.error);
+      final errorMsg = e.message.contains('10MB')
+          ? l10n.pdfSealOversized
+          : l10n.pdfSealInvalidOrUnsupported;
+      AppSnackBar.show(context, errorMsg, severity: AppSnackBarSeverity.error);
+    } on IOException {
+      if (newlySavedAsset != null) {
+        await DigitalSealStorageService.deleteAssetFile(newlySavedAsset.filename);
+      }
+      if (!mounted) return;
+      AppSnackBar.show(
+        context,
+        l10n.pdfSealSaveFailed,
+        severity: AppSnackBarSeverity.error,
+      );
     } catch (_) {
+      if (newlySavedAsset != null) {
+        await DigitalSealStorageService.deleteAssetFile(newlySavedAsset.filename);
+      }
       if (!mounted) return;
       AppSnackBar.show(
         context,
@@ -197,7 +230,7 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
     final current = type == SealType.stamp ? _stampConfig! : _sigConfig!;
     final assetIdToRemove = current.assetId;
 
-    final updated = current.copyWith(assetId: null, isEnabled: false);
+    final updated = current.copyWith(clearAssetId: true, isEnabled: false);
 
     await DatabaseHelper.instance.saveBusinessSealConfig(_businessId, updated);
 

@@ -1557,6 +1557,12 @@ class AppLocalizations {
     'حجم الصورة كبير جداً (الحد الأقصى 10 ميغابايت)',
     'Image file is too large (max 10MB)',
   );
+  String get pdfSealInvalidOrUnsupported => _t(
+    'الملف ليس صورة صالحة أو أبعاده غير مدعومة',
+    'Invalid or unsupported image file',
+  );
+  String get pdfSealSaveFailed =>
+      _t('تعذر حفظ الختم', 'Failed to save seal');
   String get pdfSealUploadFailed =>
       _t('فشل في تحميل الصورة', 'Failed to upload image');
   String get pdfSealActive => _t('مفعل', 'Enabled');

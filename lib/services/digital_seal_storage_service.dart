@@ -11,8 +11,21 @@ import '../models/digital_seal.dart';
 class DigitalSealStorageService {
   static const String _subDirectory = 'digital_assets';
   static const int maxFileSizeBytes = 10 * 1024 * 1024; // 10MB limit
+  static const int maxDimension = 4096; // 4096px limit per side
+  static const int maxPixelArea = 16 * 1024 * 1024; // 16MP decompression-bomb guard
+
+  static final RegExp _safeFilenameRegex =
+      RegExp(r'^(stamp|sig)_\d+_[0-9a-f]{12}\.(png|jpeg)$');
 
   static Directory? _cachedDir;
+
+  static File? _resolveSafe(Directory dir, String filename) {
+    if (filename != p.basename(filename)) return null;
+    if (!_safeFilenameRegex.hasMatch(filename)) return null;
+    final resolvedPath = p.normalize(p.join(dir.path, filename));
+    if (!p.isWithin(dir.path, resolvedPath)) return null;
+    return File(resolvedPath);
+  }
 
   static Future<Directory> getAssetsDir() async {
     if (_cachedDir != null && await _cachedDir!.exists()) {
@@ -49,12 +62,26 @@ class DigitalSealStorageService {
         bytes[5] == 0x0A &&
         bytes[6] == 0x1A &&
         bytes[7] == 0x0A) {
+      // Validate IHDR chunk tag (bytes 12-15)
+      if (bytes[12] != 0x49 ||
+          bytes[13] != 0x48 ||
+          bytes[14] != 0x44 ||
+          bytes[15] != 0x52) {
+        throw const FormatException('Invalid PNG: missing IHDR chunk');
+      }
       final width =
           (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
       final height =
           (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
       if (width <= 0 || height <= 0) {
         throw const FormatException('Invalid PNG dimensions');
+      }
+      if (width > maxDimension ||
+          height > maxDimension ||
+          (width * height) > maxPixelArea) {
+        throw const FormatException(
+          'Image dimensions exceed maximum allowed limits (max 4096px or 16MP)',
+        );
       }
       return (width, height, 'png');
     }
@@ -77,14 +104,20 @@ class DigitalSealStorageService {
           final height = (bytes[offset + 5] << 8) | bytes[offset + 6];
           final width = (bytes[offset + 7] << 8) | bytes[offset + 8];
           if (width > 0 && height > 0) {
+            if (width > maxDimension ||
+                height > maxDimension ||
+                (width * height) > maxPixelArea) {
+              throw const FormatException(
+                'Image dimensions exceed maximum allowed limits (max 4096px or 16MP)',
+              );
+            }
             return (width, height, 'jpeg');
           }
         }
         final length = (bytes[offset + 2] << 8) | bytes[offset + 3];
         offset += 2 + length;
       }
-      // If markers could not be fully parsed but header is JPEG, fallback with safe defaults
-      return (800, 800, 'jpeg');
+      throw const FormatException('Failed to parse JPEG dimensions');
     }
 
     throw const FormatException(
@@ -135,7 +168,8 @@ class DigitalSealStorageService {
   static Future<Uint8List?> getAssetBytes(String filename) async {
     try {
       final dir = await getAssetsDir();
-      final file = File(p.join(dir.path, filename));
+      final file = _resolveSafe(dir, filename);
+      if (file == null) return null;
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
         return bytes.isNotEmpty ? bytes : null;
@@ -148,8 +182,8 @@ class DigitalSealStorageService {
   static Future<File?> getAssetFile(String filename) async {
     try {
       final dir = await getAssetsDir();
-      final file = File(p.join(dir.path, filename));
-      if (await file.exists()) {
+      final file = _resolveSafe(dir, filename);
+      if (file != null && await file.exists()) {
         return file;
       }
     } catch (_) {}
@@ -160,7 +194,8 @@ class DigitalSealStorageService {
   static Future<bool> assetExists(String filename) async {
     try {
       final dir = await getAssetsDir();
-      final file = File(p.join(dir.path, filename));
+      final file = _resolveSafe(dir, filename);
+      if (file == null) return false;
       return await file.exists();
     } catch (_) {
       return false;
@@ -171,8 +206,8 @@ class DigitalSealStorageService {
   static Future<void> deleteAssetFile(String filename) async {
     try {
       final dir = await getAssetsDir();
-      final file = File(p.join(dir.path, filename));
-      if (await file.exists()) {
+      final file = _resolveSafe(dir, filename);
+      if (file != null && await file.exists()) {
         await file.delete();
       }
     } catch (_) {}
@@ -184,10 +219,12 @@ class DigitalSealStorageService {
     required String base64Data,
   }) async {
     try {
+      final dir = await getAssetsDir();
+      final file = _resolveSafe(dir, filename);
+      if (file == null) return false;
       final bytes = base64Decode(base64Data);
       if (bytes.isEmpty) return false;
-      final dir = await getAssetsDir();
-      final file = File(p.join(dir.path, filename));
+      validateAndInspectImage(bytes);
       await file.writeAsBytes(bytes, flush: true);
       return true;
     } catch (_) {
