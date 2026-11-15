@@ -4021,4 +4021,55 @@ class AppLocalizations {
   String get exact => _t('المبلغ تماماً', 'Exact');
   String get selectCustomer => _t('اختيار عميل', 'Select Customer');
   String get clear => _t('مسح', 'Clear');
+
+  // ========== PHASE 5A KEYS ==========
+  String get removeDeviceLicenseTitle =>
+      _t('إزالة ترخيص الجهاز', 'Remove device license');
+  String get voucherLoadingBalance =>
+      _t('جاري تحميل الرصيد المستحق...', 'Loading outstanding balance...');
+  String get voucherBalanceLoadFailed =>
+      _t('تعذر جلب الرصيد المستحق', 'Failed to load balance');
+  String get voucherSelectCustomerHint => _t(
+    'اختر العميل من القائمة لتسجيل سند قبض',
+    'Pick the customer from the list to record a receipt',
+  );
+  String get roleOwner => _t('المالك', 'Owner');
+  String get roleAdministrator => _t('مدير النظام', 'Administrator');
+  String get cannotDisableLastMethod => _t(
+    'يجب أن تبقى طريقة دفع واحدة مفعّلة على الأقل',
+    'At least one payment method must stay enabled',
+  );
+  String get cannotDisableDefaultMethod => _t(
+    'عيّن طريقة أخرى كافتراضية ثم عطّل هذه',
+    'Set another method as default before disabling this one',
+  );
+  String get switchToBaseTitle =>
+      _t('التحويل إلى العملة الأساسية؟', 'Switch to base currency?');
+  String get lowStockConfirmTitle => _t('مخزون غير كافٍ', 'Insufficient stock');
+  String lowStockConfirmMessage(String names) => _t(
+    'الكمية غير كافية للأصناف: $names. هل تريد المتابعة؟',
+    'Not enough stock for: $names. Continue anyway?',
+  );
+  String get continueAnyway => _t('متابعة', 'Continue anyway');
+  String get pdfResetConfirmTitle =>
+      _t('استعادة الإعدادات الافتراضية؟', 'Reset to defaults?');
+  String get pdfResetConfirmMessage => _t(
+    'ستعود القوالب والألوان والحقول إلى الوضع الافتراضي. الأختام والتوقيع لن تتأثر.',
+    'Template, colors and fields return to defaults. Stamp and signature are not affected.',
+  );
+  String confirmSetPeriodLockWithDate(String date) => _t(
+    'سيتم إغلاق الدفاتر حتى $date. لن يمكن إنشاء أو تعديل أو حذف أي معاملة بهذا التاريخ أو قبله.',
+    'Books will be closed through $date. Transactions on or before this date can no longer be created, edited or deleted.',
+  );
+  String taxProfileInUse(int count) =>
+      _t('مرتبط بـ $count منتج', 'Used by $count product(s)');
+  String get taxRateRange =>
+      _t('النسبة يجب أن تكون بين 0 و 100', 'Rate must be between 0 and 100');
+  String get clearFilters => _t('مسح التصفية', 'Clear filters');
+  String unitRemoved(String name) =>
+      _t('تم حذف الوحدة: $name', 'Unit removed: $name');
+  String get logoInvalidImage =>
+      _t('الملف المختار ليس صورة صالحة', 'The selected file is not a valid image');
+  String csvPreviewLimited(int shown, int total) =>
+      _t('عرض أول $shown صفًا من $total', 'Showing first $shown of $total rows');
 }

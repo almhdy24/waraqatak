@@ -3,6 +3,7 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/contact.dart';
 import '../utils/error_utils.dart';
+import '../utils/name_initials.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_error_state.dart';
@@ -327,14 +328,6 @@ class _ContactCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.substring(0, name.length.clamp(0, 2)).toUpperCase();
-  }
-
   Color _avatarColor(String name, ColorScheme cs) {
     final colors = [
       cs.primary,
@@ -344,7 +337,7 @@ class _ContactCard extends StatelessWidget {
       Colors.purple,
       Colors.green.shade700,
     ];
-    return colors[name.codeUnitAt(0) % colors.length];
+    return colors[initialOf(name).runes.first % colors.length];
   }
 
   @override
@@ -384,7 +377,7 @@ class _ContactCard extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      _initials(contact.name),
+                      initialOf(contact.name),
                       style: TextStyle(
                         color: color,
                         fontWeight: FontWeight.bold,

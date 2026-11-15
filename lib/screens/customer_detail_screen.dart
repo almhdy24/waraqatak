@@ -15,6 +15,7 @@ import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
+import '../utils/name_initials.dart';
 import '../utils/url_launcher_utils.dart';
 import '../widgets/app_amount_text.dart';
 import '../widgets/app_design_tokens.dart';
@@ -268,7 +269,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        _initials(widget.contact.name),
+                        initialOf(widget.contact.name),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -565,14 +566,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.substring(0, name.length.clamp(0, 2)).toUpperCase();
-  }
-
   Color _contactColor(String name, ColorScheme cs) {
     final colors = [
       cs.primary,
@@ -582,7 +575,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       Colors.purple,
       Colors.green.shade700,
     ];
-    return colors[name.codeUnitAt(0) % colors.length];
+    return colors[initialOf(name).runes.first % colors.length];
   }
 }
 
