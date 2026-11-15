@@ -6,8 +6,11 @@ import 'package:flutter/foundation.dart';
 import '../core/catalog_events.dart';
 import '../database/database_helper.dart';
 import '../database/reference_pricing_dao.dart';
+import '../features/reference_currency/reference_currency_feature.dart';
 import '../models/exchange_rate.dart';
 import '../models/reference_pricing_types.dart';
+import 'access/access_guard.dart';
+import 'access/permission_registry.dart';
 
 /// Service providing public APIs for reference pricing, exchange rates, and catalog repricing.
 ///
@@ -15,6 +18,11 @@ import '../models/reference_pricing_types.dart';
 /// to [ReferencePricingDao].
 abstract final class ReferencePricingService {
   static bool _busy = false;
+
+  static void _assertFeatureAvailable() {
+    if (AccessGuard.isSystemContext) return;
+    ReferenceCurrencyFeature.assertAvailable();
+  }
 
   /// Sets the internal busy re-entrancy flag for testing.
   @visibleForTesting
@@ -40,6 +48,8 @@ abstract final class ReferencePricingService {
 
   /// Writes a new converted-price rounding step to settings.
   static Future<void> setRounding(int rounding) async {
+    _assertFeatureAvailable();
+    AccessGuard.require(PermissionRegistry.pricingManage);
     final db = await DatabaseHelper.instance.database;
     await db.transaction(
       (txn) => ReferencePricingDao.writeRounding(txn, rounding),
@@ -48,6 +58,8 @@ abstract final class ReferencePricingService {
 
   /// Sets the active status of an exchange rate currency.
   static Future<void> setCurrencyActive(String code, bool active) async {
+    _assertFeatureAvailable();
+    AccessGuard.require(PermissionRegistry.pricingRates);
     final db = await DatabaseHelper.instance.database;
     await db.transaction(
       (txn) => ReferencePricingDao.setActive(txn, code, active),
@@ -56,6 +68,8 @@ abstract final class ReferencePricingService {
 
   /// Deletes a custom exchange rate if not referenced by any product.
   static Future<bool> deleteCustomCurrency(String code) async {
+    _assertFeatureAvailable();
+    AccessGuard.require(PermissionRegistry.pricingRates);
     final db = await DatabaseHelper.instance.database;
     return db.transaction(
       (txn) => ReferencePricingDao.deleteCustomIfUnused(txn, code),
@@ -81,6 +95,8 @@ abstract final class ReferencePricingService {
   ///
   /// Atomically inserts the rate row and logs an audit event.
   static Future<void> addCurrencyWithRate(ExchangeRate entry) async {
+    _assertFeatureAvailable();
+    AccessGuard.require(PermissionRegistry.pricingRates);
     final db = await DatabaseHelper.instance.database;
     await db.transaction((txn) async {
       await ReferencePricingDao.insertRate(
@@ -107,6 +123,8 @@ abstract final class ReferencePricingService {
     String code,
     double newRate,
   ) async {
+    _assertFeatureAvailable();
+    AccessGuard.require(PermissionRegistry.pricingRates);
     if (_busy) {
       throw const ReferencePricingException(
         ReferencePricingError.repricingInProgress,
@@ -179,6 +197,8 @@ abstract final class ReferencePricingService {
   /// Protected by a re-entrancy guard. Executes inside a single transaction;
   /// any failure rolls back all price recalculations and the audit event.
   static Future<RepriceResult> recalculateAll() async {
+    _assertFeatureAvailable();
+    AccessGuard.require(PermissionRegistry.pricingManage);
     if (_busy) {
       throw const ReferencePricingException(
         ReferencePricingError.repricingInProgress,

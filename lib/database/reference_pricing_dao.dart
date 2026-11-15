@@ -170,6 +170,7 @@ abstract final class ReferencePricingDao {
     DatabaseExecutor txn,
     String code,
   ) async {
+    AccessGuard.require(PermissionRegistry.pricingRates);
     final rate = await getRate(txn, code);
     if (rate == null || !rate.isCustom) return false;
 
@@ -202,6 +203,7 @@ abstract final class ReferencePricingDao {
 
   /// Writes the reference price rounding step to `app_settings`.
   static Future<void> writeRounding(DatabaseExecutor txn, int rounding) async {
+    AccessGuard.require(PermissionRegistry.pricingManage);
     if (!ReferencePricingMath.allowedRounding.contains(rounding)) {
       throw ArgumentError('Invalid rounding value: $rounding');
     }

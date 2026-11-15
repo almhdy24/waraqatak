@@ -430,66 +430,84 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   Future<void> _scan() async {
     final l10n = AppLocalizations.of(context);
-    final code = await Navigator.push<String>(
+    await Navigator.push<void>(
       context,
-      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+      MaterialPageRoute(
+        builder: (_) => BarcodeScannerScreen(
+          continuousMode: true,
+          onContinuousScan: (code) {
+            _addByCode(code, l10n);
+          },
+        ),
+      ),
     );
-    if (code == null || code.isEmpty || !mounted) return;
-    _addByCode(code, l10n);
   }
 
   /// Search field "enter": prioritized match goes to cart.
   /// 1. Exact barcode match.
   /// 2. Exact product code match.
-  /// 3. If exactly one filtered product remains, add it.
-  /// 4. If multiple results remain, preserve the results for manual selection.
-  /// 5. Show product-not-found message only when no matching result exists.
+  /// 3. Exact product name match.
+  /// 4. If exactly one filtered product remains, add it.
+  /// 5. If multiple results remain, preserve the results for manual selection.
+  /// 6. Show product-not-found message only when no matching result exists.
   void _addByCode(String code, AppLocalizations l10n) {
     final raw = code.trim();
     if (raw.isEmpty) return;
-    final lower = raw.toLowerCase();
+    final normalized = ArabicSearchUtils.normalize(raw);
 
     // 1. Exact barcode match
     final barcodeMatch = _products.where(
-      (p) => p.barcode != null && p.barcode!.trim().toLowerCase() == lower,
+      (p) =>
+          p.barcode != null &&
+          ArabicSearchUtils.normalize(p.barcode!) == normalized,
     );
     if (barcodeMatch.isNotEmpty) {
       _addProduct(barcodeMatch.first);
       _searchCtrl.clear();
       setState(() => _query = '');
-      FocusScope.of(context).unfocus();
       return;
     }
 
     // 2. Exact product code match
     final codeMatch = _products.where(
-      (p) => p.code != null && p.code!.trim().toLowerCase() == lower,
+      (p) =>
+          p.code != null &&
+          ArabicSearchUtils.normalize(p.code!) == normalized,
     );
     if (codeMatch.isNotEmpty) {
       _addProduct(codeMatch.first);
       _searchCtrl.clear();
       setState(() => _query = '');
-      FocusScope.of(context).unfocus();
       return;
     }
 
-    // 3. If exactly one filtered product remains, add it
+    // 3. Exact name match
+    final nameMatch = _products.where(
+      (p) => ArabicSearchUtils.normalize(p.name) == normalized,
+    );
+    if (nameMatch.isNotEmpty) {
+      _addProduct(nameMatch.first);
+      _searchCtrl.clear();
+      setState(() => _query = '');
+      return;
+    }
+
+    // 4. If exactly one filtered product remains, add it
     final filtered = _filtered;
     if (filtered.length == 1) {
       _addProduct(filtered.first);
       _searchCtrl.clear();
       setState(() => _query = '');
-      FocusScope.of(context).unfocus();
       return;
     }
 
-    // 4. If multiple results remain, preserve results for manual selection
+    // 5. If multiple results remain, preserve results for manual selection
     if (filtered.length > 1) {
       FocusScope.of(context).unfocus();
       return;
     }
 
-    // 5. Show product-not-found message only when no matching result exists
+    // 6. Show product-not-found message only when no matching result exists
     _toast(l10n.posProductNotFound);
   }
 

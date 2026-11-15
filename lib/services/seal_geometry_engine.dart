@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../models/digital_seal.dart';
 
 /// Represents a resolved geometric bounding box inside a container.
@@ -61,6 +63,12 @@ class SealGeometryEngine {
   static const double maxWidthRatio = 0.55;
   static const double minAbsoluteWidth = 24.0;
 
+  static double _clamp(double v, double lo, double hi) {
+    final lower = math.min(lo, hi);
+    final val = v.isNaN ? lower : v;
+    return val.clamp(lower, hi);
+  }
+
   /// Resolves absolute bounding box for [config] given printable [containerWidth]
   /// and [containerHeight] and reading direction [isRtl].
   static SealBox resolve({
@@ -74,28 +82,30 @@ class SealGeometryEngine {
     }
 
     // 1. Calculate width clamped between safe ratios and container bounds
-    final clampedWidthRatio = config.widthRatio.clamp(
+    final clampedWidthRatio = _clamp(
+      config.widthRatio,
       minWidthRatio,
       maxWidthRatio,
     );
     final rawWidth = clampedWidthRatio * containerWidth;
-    final width = rawWidth.clamp(minAbsoluteWidth, containerWidth);
+    final width = _clamp(rawWidth, minAbsoluteWidth, containerWidth);
 
     // 2. Preserve intrinsic aspect ratio (width / height)
     final aspect = config.aspectRatio > 0 ? config.aspectRatio : 1.0;
     final rawHeight = width / aspect;
-    final height = rawHeight.clamp(
+    final height = _clamp(
+      rawHeight,
       minAbsoluteWidth / aspect,
       containerHeight * 0.45,
     );
 
     // 3. Resolve vertical position (top)
-    final maxTop = (containerHeight - height).clamp(0.0, containerHeight);
-    final top = (config.topRatio * containerHeight).clamp(0.0, maxTop);
+    final maxTop = _clamp(containerHeight - height, 0.0, containerHeight);
+    final top = _clamp(config.topRatio * containerHeight, 0.0, maxTop);
 
     // 4. Resolve horizontal position (start)
-    final maxStart = (containerWidth - width).clamp(0.0, containerWidth);
-    final start = (config.startRatio * containerWidth).clamp(0.0, maxStart);
+    final maxStart = _clamp(containerWidth - width, 0.0, containerWidth);
+    final start = _clamp(config.startRatio * containerWidth, 0.0, maxStart);
 
     // 5. Map start to X coordinate based on RTL vs LTR
     final x = isRtl ? (containerWidth - start - width) : start;
@@ -128,17 +138,17 @@ class SealGeometryEngine {
       isRtl: false,
     );
 
-    final maxStart = (containerWidth - box.width).clamp(0.0, containerWidth);
-    final newStart = (box.start + deltaStart).clamp(0.0, maxStart);
+    final maxStart = _clamp(containerWidth - box.width, 0.0, containerWidth);
+    final newStart = _clamp(box.start + deltaStart, 0.0, maxStart);
     final newStartRatio = maxStart > 0 ? newStart / containerWidth : 0.0;
 
-    final maxTop = (containerHeight - box.height).clamp(0.0, containerHeight);
-    final newTop = (box.top + deltaTop).clamp(0.0, maxTop);
+    final maxTop = _clamp(containerHeight - box.height, 0.0, containerHeight);
+    final newTop = _clamp(box.top + deltaTop, 0.0, maxTop);
     final newTopRatio = maxTop > 0 ? newTop / containerHeight : 0.0;
 
     return config.copyWith(
-      startRatio: newStartRatio.clamp(0.0, 1.0),
-      topRatio: newTopRatio.clamp(0.0, 1.0),
+      startRatio: _clamp(newStartRatio, 0.0, 1.0),
+      topRatio: _clamp(newTopRatio, 0.0, 1.0),
     );
   }
 
@@ -152,7 +162,8 @@ class SealGeometryEngine {
 
     final currentWidth = config.widthRatio * containerWidth;
     final newWidth = currentWidth + deltaWidth;
-    final newWidthRatio = (newWidth / containerWidth).clamp(
+    final newWidthRatio = _clamp(
+      newWidth / containerWidth,
       minWidthRatio,
       maxWidthRatio,
     );

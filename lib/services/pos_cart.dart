@@ -206,6 +206,8 @@ class PosCart {
     _customer = customer;
     if (customer != null) {
       _pricingCategory = customer.pricingCategory;
+    } else {
+      _pricingCategory = Contact.categoryRetail;
     }
     _repriceLines();
   }

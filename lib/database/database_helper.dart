@@ -3537,6 +3537,20 @@ class DatabaseHelper {
     return Product.fromMap(maps.first);
   }
 
+  Future<Product?> getProductByCode(String code) async {
+    final db = await database;
+    final normalized = code.trim();
+    if (normalized.isEmpty) return null;
+    final maps = await db.query(
+      'products',
+      where: 'TRIM(code) = ? AND is_active = 1',
+      whereArgs: [normalized],
+      limit: 1,
+    );
+    if (maps.isEmpty) return null;
+    return Product.fromMap(maps.first);
+  }
+
   Future<bool> isBarcodeUsed(String barcode, {int? excludeId}) async {
     final db = await database;
     String where = 'barcode = ?';

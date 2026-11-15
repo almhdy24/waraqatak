@@ -397,6 +397,11 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         type: type,
         business: _business!,
         contact: contact,
+        recipientName: _selectedContact?.name ?? _contactName,
+        recipientPhone: _selectedContact?.phone ??
+            (_phoneController.text.trim().isEmpty
+                ? null
+                : _phoneController.text.trim()),
         items: items,
         discount: discount,
         paid: paid,

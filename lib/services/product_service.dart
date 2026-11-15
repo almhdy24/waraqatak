@@ -32,6 +32,7 @@ class ProductService {
     String? notes,
     String? category,
   }) async {
+    AccessGuard.require(PermissionRegistry.productsManage);
     final now = DateTime.now();
     final product = Product(
       name: name,
@@ -146,8 +147,9 @@ class ProductService {
   }
 
   static Future<Product?> findBySku(String sku) async {
-    final results = await DatabaseHelper.instance.searchActiveProducts(sku);
-    return results.where((p) => p.code == sku).firstOrNull;
+    final trimmed = sku.trim();
+    if (trimmed.isEmpty) return null;
+    return DatabaseHelper.instance.getProductByCode(trimmed);
   }
 
   static Future<bool> isBarcodeUsed(String barcode, {int? excludeId}) async {

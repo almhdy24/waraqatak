@@ -411,12 +411,18 @@ class InventoryCostingService {
   }) async {
     final db = await DatabaseHelper.instance.database;
     final where = includeCancelled
-        ? 'type = ? AND date >= ? AND date <= ?'
-        : 'type = ? AND status != ? AND date >= ? AND date <= ?';
+        ? 'type = ? AND status != ? AND date >= ? AND date <= ?'
+        : 'type = ? AND status NOT IN (?, ?) AND date >= ? AND date <= ?';
     final whereArgs = includeCancelled
-        ? ['invoice', from.toIso8601String(), to.toIso8601String()]
+        ? [
+            'invoice',
+            DocumentStatus.draft,
+            from.toIso8601String(),
+            to.toIso8601String(),
+          ]
         : [
             'invoice',
+            DocumentStatus.draft,
             DocumentStatus.cancelled,
             from.toIso8601String(),
             to.toIso8601String(),

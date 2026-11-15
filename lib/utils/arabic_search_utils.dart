@@ -23,6 +23,7 @@ class ArabicSearchUtils {
   };
 
   /// Normalizes Arabic text for comparison/searching:
+  /// - Converts Arabic-Indic (٠-٩) and Extended (۰-۹) digits to ASCII (0-9)
   /// - Strips Tashkeel, Harakat, Tatweel, and combining marks
   /// - Unifies Alif variants (أ, إ, آ, ٱ) -> ا
   /// - Unifies Taa Marbuta (ة) -> ه
@@ -35,6 +36,16 @@ class ArabicSearchUtils {
 
     for (final rune in text.runes) {
       if (_tashkeelRunes.contains(rune)) {
+        continue;
+      }
+
+      if (rune >= 0x0660 && rune <= 0x0669) {
+        buffer.writeCharCode(0x30 + (rune - 0x0660));
+        continue;
+      }
+
+      if (rune >= 0x06F0 && rune <= 0x06F9) {
+        buffer.writeCharCode(0x30 + (rune - 0x06F0));
         continue;
       }
 

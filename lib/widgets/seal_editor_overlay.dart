@@ -99,7 +99,8 @@ class _SealEditorOverlayState extends State<SealEditorOverlay> {
     final config = isStamp ? _localStamp : _localSignature;
     if (config == null) return;
 
-    final delta = details.delta.dx + details.delta.dy;
+    final delta =
+        (widget.isRtl ? -details.delta.dx : details.delta.dx) + details.delta.dy;
     final updated = SealGeometryEngine.updateSizeFromDelta(
       config: config,
       deltaWidth: delta,

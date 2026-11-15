@@ -76,6 +76,8 @@ class DocumentService {
     required String type,
     required Business business,
     Contact? contact,
+    String? recipientName,
+    String? recipientPhone,
     required List<DocumentItemInput> items,
     double discount = 0,
     double paid = 0,
@@ -248,6 +250,9 @@ class DocumentService {
       type: type,
       documentNumber: '',
       date: documentDate,
+      contactId: contact?.id,
+      recipientName: recipientName ?? contact?.name,
+      recipientPhone: recipientPhone ?? contact?.phone,
       subtotal: subtotal,
       discount: discountApplied,
       taxRate: isFinancial || isCustom ? 0 : taxRate,
@@ -320,6 +325,8 @@ class DocumentService {
     required String type,
     required Business business,
     Contact? contact,
+    String? recipientName,
+    String? recipientPhone,
     required List<DocumentItemInput> items,
     double discount = 0,
     double paid = 0,
@@ -344,12 +351,7 @@ class DocumentService {
 
     _validateBusiness(business);
     if (payNowMethod != null) {
-      // Quick sale: the invoice is settled in full, in the same transaction,
-      // through the regular payment path (linked receipt + payment row).
-      if (type != 'invoice' || isDraft || paid != 0) {
-        throw ArgumentError('payNowMethod requires a new, non-draft invoice');
-      }
-      _validatePaymentMethod(payNowMethod);
+      throw ArgumentError('payNowMethod is not supported when updating');
     }
     _validateTaxRate(business.taxRate);
     final db = DatabaseHelper.instance;
@@ -500,8 +502,10 @@ class DocumentService {
       documentNumber: existing.documentNumber,
       date: documentDate,
       contactId: contact?.id,
-      recipientName: contact?.name,
-      recipientPhone: contact?.phone,
+      recipientName: recipientName ??
+          (contact != null ? contact.name : existing.recipientName),
+      recipientPhone: recipientPhone ??
+          (contact != null ? contact.phone : existing.recipientPhone),
       subtotal: subtotal,
       discount: discountApplied,
       taxRate: isFinancial || isCustom ? 0 : taxRate,
