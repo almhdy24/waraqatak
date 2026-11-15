@@ -7971,6 +7971,15 @@ class DatabaseHelper {
     return db.delete('tax_profiles', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<int> countProductsUsingTaxProfile(int profileId) async {
+    final db = await database;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM products WHERE tax_profile_id = ?',
+      [profileId],
+    );
+    return (rows.first['c'] as int?) ?? 0;
+  }
+
   Future<List<TaxProfile>> getTaxProfiles({bool activeOnly = false}) async {
     final db = await database;
     final maps = await db.query(

@@ -16,6 +16,7 @@ import '../services/digital_seal_storage_service.dart';
 import '../services/pdf/pdf_document_builder.dart';
 import '../utils/pdf_settings.dart';
 import '../utils/print_settings.dart';
+import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/seal_editor_overlay.dart';
 
@@ -41,6 +42,8 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
   Uint8List? _stampBytes;
   Uint8List? _sigBytes;
 
+  final Map<SealType, Timer> _sealSaveTimers = {};
+
   int _previewRefreshKey = 0;
 
   @override
@@ -51,7 +54,17 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
 
   @override
   void dispose() {
-    _footerDebounce?.cancel();
+    if (_footerDebounce?.isActive ?? false) {
+      _footerDebounce!.cancel();
+      PdfSettings.save(_style.copyWith(footerText: _footerCtrl.text));
+    }
+    for (final e in _sealSaveTimers.entries.toList()) {
+      e.value.cancel();
+      final cfg = e.key == SealType.stamp ? _stampConfig : _sigConfig;
+      if (cfg != null) {
+        DatabaseHelper.instance.saveBusinessSealConfig(_businessId, cfg);
+      }
+    }
     _footerCtrl.dispose();
     super.dispose();
   }
@@ -168,6 +181,7 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
         isEnabled: true,
       );
 
+      _sealSaveTimers.remove(type)?.cancel();
       await DatabaseHelper.instance.saveBusinessSealConfig(
         _businessId,
         updated,
@@ -232,6 +246,7 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
 
     final updated = current.copyWith(clearAssetId: true, isEnabled: false);
 
+    _sealSaveTimers.remove(type)?.cancel();
     await DatabaseHelper.instance.saveBusinessSealConfig(_businessId, updated);
 
     if (assetIdToRemove != null) {
@@ -266,7 +281,11 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
         _sigConfig = config;
       }
     });
-    await DatabaseHelper.instance.saveBusinessSealConfig(_businessId, config);
+    _sealSaveTimers[config.type]?.cancel();
+    _sealSaveTimers[config.type] = Timer(const Duration(milliseconds: 250), () {
+      _sealSaveTimers.remove(config.type);
+      DatabaseHelper.instance.saveBusinessSealConfig(_businessId, config);
+    });
   }
 
   Future<void> _resetSealPosition(SealType type) async {
@@ -344,7 +363,10 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.pdfCustomize)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     final isArabic = l10n.langCode == 'ar';
@@ -411,7 +433,16 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
           IconButton(
             tooltip: l10n.pdfResetDefaults,
             icon: const Icon(Icons.restart_alt),
-            onPressed: _reset,
+            onPressed: () async {
+              final ok = await AppConfirmDialog.show(
+                context,
+                title: l10n.pdfResetConfirmTitle,
+                message: l10n.pdfResetConfirmMessage,
+                confirmLabel: l10n.pdfResetDefaults,
+                isDestructive: true,
+              );
+              if (ok && mounted) await _reset();
+            },
           ),
         ],
       ),
@@ -973,6 +1004,7 @@ class _ColorDot extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
+      label: AppLocalizations.of(context).pdfAccentColor,
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),

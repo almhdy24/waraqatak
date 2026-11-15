@@ -19,6 +19,7 @@ import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
 import '../utils/date_format_utils.dart';
+import '../utils/error_utils.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
 
@@ -248,7 +249,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
       if (!mounted) return;
       AppSnackBar.show(
         context,
-        '${AppLocalizations.of(context).operationFailed}: $e',
+        ErrorUtils.getFriendlyErrorMessage(
+          e,
+          l10n: AppLocalizations.of(context),
+        ),
         severity: AppSnackBarSeverity.error,
       );
     } finally {
@@ -338,7 +342,9 @@ class _QuotationScreenState extends State<QuotationScreen> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsetsDirectional.all(16),
               children: [
                 ContactAutocompleteField(
                   label: l10n.customer,
@@ -515,6 +521,13 @@ class _QuotationScreenState extends State<QuotationScreen> {
                       controller: _validityController,
                       maxDecimals: 0,
                       showMultipliers: false,
+                      validator: (v) {
+                        final d = NumberInput.parse(v ?? '')?.toInt();
+                        if (d == null || d < 1 || d > 3650) {
+                          return l10n.invalidQuantity;
+                        }
+                        return null;
+                      },
                       decoration: InputDecoration(
                         labelText: l10n.validityDays,
                         helperText:

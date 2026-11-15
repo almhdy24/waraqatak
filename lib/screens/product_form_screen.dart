@@ -68,6 +68,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   List<String> _existingCategories = [];
   double _currentStock = 0;
   List<ProductUnit> _productUnits = [];
+  bool _unitsDirty = false;
   bool _wholesalePricingEnabled = false;
 
   String? _priceCurrency;
@@ -329,6 +330,34 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  void _clearUnitReferencePrices(AppLocalizations l10n) {
+    var had = false;
+    final next = _productUnits.map((u) {
+      if (u.referenceSalePrice != null ||
+          u.referenceWholesalePrice != null ||
+          u.referenceCurrency != null) {
+        had = true;
+        return u.copyWith(
+          clearReferenceSalePrice: true,
+          clearReferenceWholesalePrice: true,
+          clearReferenceCurrency: true,
+        );
+      }
+      return u;
+    }).toList();
+    setState(() {
+      _productUnits = next;
+      if (had) _unitsDirty = true;
+    });
+    if (had) {
+      AppSnackBar.show(
+        context,
+        l10n.unitReferencePricesCleared,
+        severity: AppSnackBarSeverity.info,
+      );
+    }
+  }
+
   Future<void> _onPricingCurrencyChanged(String? newCurrency) async {
     if (newCurrency == _priceCurrency) return;
     final l10n = AppLocalizations.of(context);
@@ -336,7 +365,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     if (newCurrency == null) {
       final confirmed = await AppConfirmDialog.show(
         context,
-        title: l10n.switchToBaseConfirm,
+        title: l10n.switchToBaseTitle,
         message: l10n.switchToBaseConfirm,
         confirmLabel: l10n.confirm,
       );
@@ -356,30 +385,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _purchasePriceController.text = p != null
             ? NumberInput.formatForInput(p.purchasePrice, maxDecimals: 4)
             : '';
-
-        bool hadUnitRefPrices = false;
-        _productUnits = _productUnits.map((u) {
-          if (u.referenceSalePrice != null ||
-              u.referenceWholesalePrice != null ||
-              u.referenceCurrency != null) {
-            hadUnitRefPrices = true;
-            return u.copyWith(
-              clearReferenceSalePrice: true,
-              clearReferenceWholesalePrice: true,
-              clearReferenceCurrency: true,
-            );
-          }
-          return u;
-        }).toList();
-
-        if (hadUnitRefPrices && mounted) {
-          AppSnackBar.show(
-            context,
-            l10n.unitReferencePricesCleared,
-            severity: AppSnackBarSeverity.info,
-          );
-        }
       });
+      _clearUnitReferencePrices(l10n);
       return;
     }
 
@@ -388,30 +395,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       _salePriceController.clear();
       _wholesalePriceController.clear();
       _purchasePriceController.clear();
-
-      bool hadUnitRefPrices = false;
-      _productUnits = _productUnits.map((u) {
-        if (u.referenceSalePrice != null ||
-            u.referenceWholesalePrice != null ||
-            u.referenceCurrency != null) {
-          hadUnitRefPrices = true;
-          return u.copyWith(
-            clearReferenceSalePrice: true,
-            clearReferenceWholesalePrice: true,
-            clearReferenceCurrency: true,
-          );
-        }
-        return u;
-      }).toList();
-
-      if (hadUnitRefPrices && mounted) {
-        AppSnackBar.show(
-          context,
-          l10n.unitReferencePricesCleared,
-          severity: AppSnackBarSeverity.info,
-        );
-      }
     });
+    _clearUnitReferencePrices(l10n);
   }
 
   Future<void> _save() async {
@@ -924,6 +909,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         } else {
           _productUnits.add(res);
         }
+        _unitsDirty = true;
       });
     }
   }
@@ -1009,7 +995,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           _minStockController.text != '0' ||
           _notesController.text.isNotEmpty ||
           _productUnits.isNotEmpty ||
-          _imagePath != null;
+          _imagePath != null ||
+          _wholesaleMinQuantityController.text.isNotEmpty;
     }
     final p = widget.product!;
     final bool pricesDirty;
@@ -1062,7 +1049,19 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _taxProfileId != p.taxProfileId ||
         _isActive != p.isActive ||
         _notesController.text != (p.notes ?? '') ||
-        _imagePath != p.imagePath;
+        _imagePath != p.imagePath ||
+        _unitsDirty ||
+        _minStockController.text !=
+            (p.minStock > 0
+                ? NumberInput.formatForInput(p.minStock, maxDecimals: 4)
+                : '0') ||
+        _wholesaleMinQuantityController.text !=
+            (p.wholesaleMinQuantity != null
+                ? NumberInput.formatForInput(
+                    p.wholesaleMinQuantity!,
+                    maxDecimals: 4,
+                  )
+                : '');
   }
 
   Widget _buildProfitMarginIndicator(
@@ -1211,12 +1210,67 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               ),
           ],
         ),
+        bottomNavigationBar: !canManage
+            ? null
+            : SafeArea(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                    ),
+                    boxShadow: AppDesignTokens.softShadow(context),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton(
+                      onPressed: _saving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor:
+                            Theme.of(context).colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.buttonRadius,
+                          ),
+                        ),
+                      ),
+                      child: _saving
+                          ? SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color:
+                                    Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            )
+                          : Text(
+                              isNew
+                                  ? (isService
+                                      ? l10n.saveService
+                                      : l10n.saveProduct)
+                                  : l10n.saveChanges,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
         body: ResponsiveCenter(
           child: Form(
             key: _formKey,
             autovalidateMode: AutovalidateMode.onUserInteraction,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsetsDirectional.all(16),
               children: [
                 // Type selector
                 Card(
@@ -1359,79 +1413,85 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        RawAutocomplete<String>(
-                          textEditingController: _categoryController,
-                          focusNode: _categoryFocusNode,
-                          optionsBuilder: (textEditingValue) {
-                            if (textEditingValue.text.isEmpty) {
-                              return _existingCategories;
-                            }
-                            return _existingCategories.where(
-                              (c) => c.toLowerCase().contains(
-                                textEditingValue.text.toLowerCase(),
-                              ),
-                            );
-                          },
-                          onSelected: (selection) {
-                            _categoryController.text = selection;
-                          },
-                          fieldViewBuilder:
-                              (
-                                context,
-                                controller,
-                                focusNode,
-                                onFieldSubmitted,
-                              ) {
-                                return TextFormField(
-                                  controller: controller,
-                                  focusNode: focusNode,
-                                  decoration: InputDecoration(
-                                    labelText: l10n.category,
-                                    hintText: l10n.categoryHint,
-                                    prefixIcon: const Icon(
-                                      Icons.category_outlined,
-                                    ),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            return RawAutocomplete<String>(
+                              textEditingController: _categoryController,
+                              focusNode: _categoryFocusNode,
+                              optionsBuilder: (textEditingValue) {
+                                if (textEditingValue.text.isEmpty) {
+                                  return _existingCategories;
+                                }
+                                return _existingCategories.where(
+                                  (c) => c.toLowerCase().contains(
+                                    textEditingValue.text.toLowerCase(),
+                                  ),
+                                );
+                              },
+                              onSelected: (selection) {
+                                _categoryController.text = selection;
+                              },
+                              fieldViewBuilder:
+                                  (
+                                    context,
+                                    controller,
+                                    focusNode,
+                                    onFieldSubmitted,
+                                  ) {
+                                    return TextFormField(
+                                      controller: controller,
+                                      focusNode: focusNode,
+                                      decoration: InputDecoration(
+                                        labelText: l10n.category,
+                                        hintText: l10n.categoryHint,
+                                        prefixIcon: const Icon(
+                                          Icons.category_outlined,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                              optionsViewBuilder:
+                                  (context, onSelected, options) {
+                                return Align(
+                                  alignment: AlignmentDirectional.topStart,
+                                  child: Material(
+                                    elevation: 4.0,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxHeight: 200,
+                                        maxWidth: constraints.maxWidth,
+                                      ),
+                                      child: ListView.builder(
+                                        padding: EdgeInsets.zero,
+                                        shrinkWrap: true,
+                                        itemCount: options.length,
+                                        itemBuilder:
+                                            (BuildContext context, int index) {
+                                              final option = options.elementAt(
+                                                index,
+                                              );
+                                              return InkWell(
+                                                onTap: () => onSelected(option),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 12,
+                                                      ),
+                                                  child: Text(option),
+                                                ),
+                                              );
+                                            },
+                                      ),
                                     ),
                                   ),
                                 );
                               },
-                          optionsViewBuilder: (context, onSelected, options) {
-                            return Align(
-                              alignment: AlignmentDirectional.topStart,
-                              child: Material(
-                                elevation: 4.0,
-                                borderRadius: BorderRadius.circular(12),
-                                child: ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxHeight: 200,
-                                    maxWidth: 300,
-                                  ),
-                                  child: ListView.builder(
-                                    padding: EdgeInsets.zero,
-                                    shrinkWrap: true,
-                                    itemCount: options.length,
-                                    itemBuilder:
-                                        (BuildContext context, int index) {
-                                          final option = options.elementAt(
-                                            index,
-                                          );
-                                          return InkWell(
-                                            onTap: () => onSelected(option),
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 16,
-                                                    vertical: 12,
-                                                  ),
-                                              child: Text(option),
-                                            ),
-                                          );
-                                        },
-                                  ),
-                                ),
-                              ),
                             );
                           },
                         ),
@@ -1839,8 +1899,25 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                           ),
                                           tooltip: l10n.delete,
                                           onPressed: () {
-                                            setState(
-                                              () => _productUnits.removeAt(idx),
+                                            final removed = u;
+                                            final at = idx;
+                                            setState(() {
+                                              _productUnits.removeAt(at);
+                                              _unitsDirty = true;
+                                            });
+                                            AppSnackBar.showUndo(
+                                              context,
+                                              l10n.unitRemoved(removed.unitName),
+                                              actionLabel: l10n.undo,
+                                              onUndo: () {
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  _productUnits.insert(
+                                                    at.clamp(0, _productUnits.length),
+                                                    removed,
+                                                  );
+                                                });
+                                              },
                                             );
                                           },
                                         ),
@@ -1978,7 +2055,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                 (p) => DropdownMenuItem<int?>(
                                   value: p.id,
                                   child: Text(
-                                    '${p.name} (${p.rate.toStringAsFixed(0)}%)',
+                                    '${p.name} (${NumberInput.formatForInput(p.rate, maxDecimals: 2)}%)',
                                   ),
                                 ),
                               ),
@@ -2007,43 +2084,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ),
                   ),
                 ),
-                if (canManage) ...[
-                  const SizedBox(height: 24),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton(
-                      onPressed: _saving ? null : _save,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppDesignTokens.buttonRadius,
-                          ),
-                        ),
-                      ),
-                      child: _saving
-                          ? SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Theme.of(context).colorScheme.onPrimary,
-                              ),
-                            )
-                          : Text(
-                              isNew
-                                  ? (isService
-                                        ? l10n.saveService
-                                        : l10n.saveProduct)
-                                  : l10n.saveChanges,
-                            ),
-                    ),
-                  ),
-                ],
+                const SizedBox(height: 24),
               ],
             ),
           ),

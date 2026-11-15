@@ -5,6 +5,7 @@ import '../models/tax_profile.dart';
 import '../widgets/app_empty_state.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
+import '../utils/error_utils.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
 
@@ -45,6 +46,7 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
         profile?.calculationMode ?? TaxProfile.modeExclusive;
     bool isDefault = profile?.isDefault ?? false;
     bool isActive = profile?.isActive ?? true;
+    bool saving = false;
 
     final types = {
       'vat': l10n.taxTypeVat,
@@ -53,7 +55,7 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
       'other': l10n.taxTypeOther,
     };
 
-    await showDialog<void>(
+    final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialog) => AlertDialog(
@@ -137,37 +139,55 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(l10n.cancel)),
             FilledButton(
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                final rate = NumberInput.parse(rateCtrl.text.trim());
-                if (name.isEmpty || rate == null || rate < 0) {
-                  AppSnackBar.show(
-                    ctx,
-                    l10n.invalidAmount,
-                    severity: AppSnackBarSeverity.warning,
-                  );
-                  return;
-                }
-                Navigator.pop(ctx);
-                final p = TaxProfile(
-                  id: profile?.id,
-                  name: name,
-                  type: selectedType,
-                  rate: rate,
-                  isActive: isActive,
-                  isDefault: isDefault,
-                  calculationMode: selectedMode,
-                  notes: notesCtrl.text.trim().isEmpty
-                      ? null
-                      : notesCtrl.text.trim(),
-                );
-                if (profile == null) {
-                  await DatabaseHelper.instance.insertTaxProfile(p);
-                } else {
-                  await DatabaseHelper.instance.updateTaxProfile(p);
-                }
-                _load();
-              },
+              onPressed: saving
+                  ? null
+                  : () async {
+                      final name = nameCtrl.text.trim();
+                      final rate = NumberInput.parse(rateCtrl.text.trim());
+                      if (name.isEmpty ||
+                          rate == null ||
+                          rate < 0 ||
+                          rate > 100) {
+                        AppSnackBar.show(
+                          ctx,
+                          (rate != null && rate > 100)
+                              ? l10n.taxRateRange
+                              : l10n.invalidAmount,
+                          severity: AppSnackBarSeverity.warning,
+                        );
+                        return;
+                      }
+                      setDialog(() => saving = true);
+                      try {
+                        final p = TaxProfile(
+                          id: profile?.id,
+                          name: name,
+                          type: selectedType,
+                          rate: rate,
+                          isActive: isActive,
+                          isDefault: isDefault,
+                          calculationMode: selectedMode,
+                          notes: notesCtrl.text.trim().isEmpty
+                              ? null
+                              : notesCtrl.text.trim(),
+                        );
+                        if (profile == null) {
+                          await DatabaseHelper.instance.insertTaxProfile(p);
+                        } else {
+                          await DatabaseHelper.instance.updateTaxProfile(p);
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          setDialog(() => saving = false);
+                          AppSnackBar.show(
+                            ctx,
+                            ErrorUtils.toFriendlyMessage(e, l10n),
+                            severity: AppSnackBarSeverity.error,
+                          );
+                        }
+                      }
+                    },
               child: Text(l10n.save),
             ),
           ],
@@ -177,10 +197,29 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
     nameCtrl.dispose();
     rateCtrl.dispose();
     notesCtrl.dispose();
+    if (saved == true && mounted) _load();
   }
 
   Future<void> _delete(TaxProfile profile) async {
     final l10n = AppLocalizations.of(context);
+    final used = await DatabaseHelper.instance.countProductsUsingTaxProfile(profile.id!);
+    if (!mounted) return;
+    if (used > 0) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(l10n.confirmDeleteProfile),
+          content: Text('${profile.name}\n${l10n.taxProfileInUse(used)}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.close),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -246,14 +285,17 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                           backgroundColor: Theme.of(context)
                               .colorScheme
                               .primaryContainer,
-                          child: Text(
-                            '${p.rate.toStringAsFixed(0)}%',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onPrimaryContainer,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${NumberInput.formatForInput(p.rate, maxDecimals: 2)}%',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer,
+                              ),
                             ),
                           ),
                         ),
@@ -317,10 +359,12 @@ class _TaxProfilesScreenState extends State<TaxProfilesScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.edit_outlined, size: 20),
+                              tooltip: l10n.edit,
                               onPressed: () => _showForm(profile: p),
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete_outline, size: 20),
+                              tooltip: l10n.delete,
                               color:
                                   Theme.of(context).colorScheme.error,
                               onPressed: () => _delete(p),

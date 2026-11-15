@@ -8,6 +8,7 @@ import '../models/entitlement.dart';
 import '../services/activation_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../utils/date_format_utils.dart';
 import '../widgets/activation_key_input_widget.dart';
 import '../widgets/access/screen_access_gate.dart';
 import '../widgets/access/sensitive_action_gate.dart';
@@ -35,6 +36,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
   bool _busy = false;
   bool _storageFault = false;
   bool _reloadError = false;
+  int _reloadSeq = 0;
 
   @override
   void initState() {
@@ -43,13 +45,14 @@ class _LicenseScreenState extends State<LicenseScreen> {
   }
 
   Future<void> _reload() async {
+    final seq = ++_reloadSeq;
     setState(() {
       _reloadError = false;
     });
     try {
       final s = await LicenseService.instance.checkEntitlement(force: true);
       final model = await LicenseService.instance.getDeviceModel();
-      if (!mounted) return;
+      if (!mounted || seq != _reloadSeq) return;
       setState(() {
         _state = s;
         _deviceModel = model;
@@ -57,7 +60,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
         _reloadError = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || seq != _reloadSeq) return;
       setState(() {
         _reloadError = true;
       });
@@ -106,7 +109,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
     if (s == null) return '';
     final e = s.licenseExpiresAt;
     if (e == null) return l10n.licenseNoExpiryDate;
-    return e.toLocal().toString().split(' ').first;
+    return AppDateUtils.formatDate(e.toLocal());
   }
 
   String _featureLabel(Feature f, AppLocalizations l10n) => switch (f) {
@@ -219,7 +222,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
 
     final authed = await SensitiveActionGate.reauthenticate(
       context,
-      title: l10n.isArabic ? 'إزالة ترخيص الجهاز' : 'Remove device license',
+      title: l10n.removeDeviceLicenseTitle,
       requireOwner: true,
     );
     if (!authed || !mounted) return;

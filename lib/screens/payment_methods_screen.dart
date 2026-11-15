@@ -3,6 +3,9 @@ import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/payment_method.dart';
 import '../utils/currency_utils.dart';
+import '../utils/error_utils.dart';
+import '../widgets/app_error_state.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/responsive.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
@@ -15,6 +18,7 @@ class PaymentMethodsScreen extends StatefulWidget {
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   List<PaymentMethod> _methods = [];
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -23,19 +27,49 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   }
 
   Future<void> _load() async {
-    final methods = await DatabaseHelper.instance.getPaymentMethods();
-    if (!mounted) return;
-    setState(() {
-      _methods = methods;
-      _loading = false;
-    });
+    try {
+      final methods = await DatabaseHelper.instance.getPaymentMethods();
+      if (!mounted) return;
+      setState(() {
+        _methods = methods;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = ErrorUtils.toFriendlyMessage(e, AppLocalizations.of(context));
+      });
+    }
   }
 
   Future<void> _toggleEnabled(PaymentMethod method) async {
-    await DatabaseHelper.instance.setPaymentMethodEnabled(
-      method.key,
-      enabled: !method.isEnabled,
-    );
+    final l10n = AppLocalizations.of(context);
+    if (method.isEnabled) {
+      final enabledCount = _methods.where((m) => m.isEnabled).length;
+      if (enabledCount <= 1) {
+        AppSnackBar.show(context, l10n.cannotDisableLastMethod,
+            severity: AppSnackBarSeverity.warning);
+        return;
+      }
+      if (method.isDefault) {
+        AppSnackBar.show(context, l10n.cannotDisableDefaultMethod,
+            severity: AppSnackBarSeverity.warning);
+        return;
+      }
+    }
+    try {
+      await DatabaseHelper.instance.setPaymentMethodEnabled(
+        method.key,
+        enabled: !method.isEnabled,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppSnackBar.show(context, ErrorUtils.toFriendlyMessage(e, l10n),
+          severity: AppSnackBarSeverity.error);
+      return;
+    }
     await _load();
   }
 
@@ -220,11 +254,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             FilledButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                await DatabaseHelper.instance.setPaymentMethodEnabled(
-                  method.key,
-                  enabled: false,
-                );
-                await _load();
+                await _toggleEnabled(method);
               },
               child: Text(l10n.disableMethodAction),
             ),
@@ -266,6 +296,13 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.paymentMethods), centerTitle: true),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null && _methods.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l10n.paymentMethods), centerTitle: true),
+        body: AppErrorState(message: _error!, onRetry: _load),
       );
     }
 
@@ -461,7 +498,7 @@ class _MethodTile extends StatelessWidget {
         trailing: (onSetDefault != null || onEdit != null || onDelete != null)
             ? PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, size: 20),
-                tooltip: l10n.settings,
+                tooltip: MaterialLocalizations.of(context).showMenuTooltip,
                 onSelected: (val) {
                   if (val == 'default') onSetDefault?.call();
                   if (val == 'edit') onEdit?.call();

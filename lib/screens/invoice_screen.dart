@@ -9,6 +9,8 @@ import '../models/payment_method.dart';
 import '../models/product.dart';
 import '../models/product_unit.dart';
 import '../services/document_service.dart';
+import '../services/feature_access.dart';
+import '../services/license_service.dart';
 import '../utils/error_utils.dart';
 import '../utils/money_utils.dart';
 import '../utils/number_input.dart';
@@ -193,15 +195,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     return NumberInput.parse(_discountController.text) ?? 0;
   }
 
-  double get _paid {
-    if (_paymentOption == InvoicePaymentOption.fullyPaid) {
-      return _totals.total;
-    }
-    if (_paymentOption == InvoicePaymentOption.credit) {
-      return 0.0;
-    }
-    return NumberInput.parse(_paidController.text) ?? 0;
-  }
+  double _paidFor(double total) => switch (_paymentOption) {
+    InvoicePaymentOption.fullyPaid => total,
+    InvoicePaymentOption.credit => 0.0,
+    InvoicePaymentOption.partial => NumberInput.parse(_paidController.text) ?? 0,
+  };
 
   ({double subtotal, double taxAmount, double total}) get _totals {
     final items = _buildItems();
@@ -281,7 +279,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       );
       final remaining = MoneyUtils.calculateRemaining(
         totals.total,
-        _paid,
+        _paidFor(totals.total),
         decimalDigits,
       );
 
@@ -297,13 +295,28 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         return;
       }
 
+      final entitlement = await LicenseService.instance.checkEntitlement();
+      if (!mounted) return;
+      final hasInventory = FeatureAccess.canAccess(Feature.inventory, entitlement);
+      if (!hasInventory && lowStockWarnings.isNotEmpty) {
+        final names = lowStockWarnings.toSet().join(' • ');
+        final proceed = await AppConfirmDialog.show(
+          context,
+          title: l10n.lowStockConfirmTitle,
+          message: l10n.lowStockConfirmMessage(names),
+          confirmLabel: l10n.continueAnyway,
+          isDestructive: false,
+        );
+        if (!proceed || !mounted) return;
+      }
+
       final docId = await DocumentService.createDocument(
         type: 'invoice',
         business: _business!,
         contact: _selectedContact,
         items: items,
         discount: _discount,
-        paid: _paid,
+        paid: _paidFor(totals.total),
         notes: _notesController.text,
         date: DateTime.now(),
         isDraft: isDraft,
@@ -313,13 +326,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       );
 
       if (!mounted) return;
-      if (lowStockWarnings.isNotEmpty) {
-        AppSnackBar.show(
-          context,
-          '${AppLocalizations.of(context).lowStockAlert}: ${lowStockWarnings.join(", ")}',
-          severity: AppSnackBarSeverity.warning,
-        );
-      }
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -345,14 +351,13 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final primaryColor = Theme.of(context).colorScheme.primary;
 
     final totals = _totals;
     final subtotal = totals.subtotal;
     final discount = _discount;
     final total = totals.total;
 
-    final paid = _paid;
+    final paid = _paidFor(total);
     final decimalDigits = Currency.decimalDigitsForCode(
       _business?.currencyCode,
     );
@@ -436,7 +441,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsetsDirectional.all(16),
               children: [
                 ContactAutocompleteField(
                   label: l10n.customer,
@@ -582,28 +589,38 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 ),
                 const SizedBox(height: 10),
                 SegmentedButton<InvoicePaymentOption>(
+                  showSelectedIcon: false,
                   segments: [
                     ButtonSegment(
                       value: InvoicePaymentOption.fullyPaid,
-                      label: Text(
-                        l10n.paidStatus,
-                        style: const TextStyle(fontSize: 12),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          l10n.paidStatus,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                       icon: const Icon(Icons.check_circle_outline, size: 16),
                     ),
                     ButtonSegment(
                       value: InvoicePaymentOption.partial,
-                      label: Text(
-                        l10n.statusPartiallyPaid,
-                        style: const TextStyle(fontSize: 12),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          l10n.statusPartiallyPaid,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                       icon: const Icon(Icons.pie_chart_outline, size: 16),
                     ),
                     ButtonSegment(
                       value: InvoicePaymentOption.credit,
-                      label: Text(
-                        l10n.unpaidStatus,
-                        style: const TextStyle(fontSize: 12),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          l10n.unpaidStatus,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                       icon: const Icon(Icons.hourglass_empty_rounded, size: 16),
                     ),
@@ -722,37 +739,6 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       : null,
                 ),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton(
-                    onPressed: _saving ? null : () => _save(),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: primaryColor,
-                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppDesignTokens.buttonRadius,
-                        ),
-                      ),
-                    ),
-                    child: _saving
-                        ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          )
-                        : Text(l10n.saveInvoice),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _saving ? null : () => _save(isDraft: true),
-                  child: Text(l10n.saveDraft),
-                ),
               ],
             ),
           ),

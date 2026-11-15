@@ -165,15 +165,11 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   }
 
   double get _discount => NumberInput.parse(_discountController.text) ?? 0;
-  double get _paid {
-    if (_paymentOption == PurchasePaymentOption.fullyPaid) {
-      return _totals.total;
-    }
-    if (_paymentOption == PurchasePaymentOption.credit) {
-      return 0.0;
-    }
-    return NumberInput.parse(_paidController.text) ?? 0;
-  }
+  double _paidFor(double total) => switch (_paymentOption) {
+    PurchasePaymentOption.fullyPaid => total,
+    PurchasePaymentOption.credit => 0.0,
+    PurchasePaymentOption.partial => NumberInput.parse(_paidController.text) ?? 0,
+  };
 
   ({double subtotal, double taxAmount, double total}) get _totals {
     final items = _buildItems();
@@ -229,7 +225,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
       );
       final remaining = MoneyUtils.calculateRemaining(
         totals.total,
-        _paid,
+        _paidFor(totals.total),
         decimalDigits,
       );
 
@@ -250,7 +246,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         contact: _selectedContact,
         items: _buildItems(),
         discount: _discount,
-        paid: _paid,
+        paid: _paidFor(totals.total),
         notes: _notesController.text,
         date: DateTime.now(),
         isDraft: isDraft,
@@ -290,7 +286,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     final discount = _discount;
     final total = totals.total;
 
-    final paid = _paid;
+    final paid = _paidFor(total);
     final decimalDigits = Currency.decimalDigitsForCode(
       _business?.currencyCode,
     );
@@ -374,13 +370,15 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsetsDirectional.all(16),
               children: [
                 ContactAutocompleteField(
                   label: l10n.supplier,
                   type: 'supplier',
                   initialContact: _selectedContact,
-                  onContactChanged: (contact) => _selectedContact = contact,
+                  onContactChanged: (contact) => setState(() => _selectedContact = contact),
                 ),
                 const SizedBox(height: 16),
                 AppSectionHeader(
@@ -445,28 +443,38 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 ),
                 const SizedBox(height: 10),
                 SegmentedButton<PurchasePaymentOption>(
+                  showSelectedIcon: false,
                   segments: [
                     ButtonSegment(
                       value: PurchasePaymentOption.fullyPaid,
-                      label: Text(
-                        l10n.paidStatus,
-                        style: const TextStyle(fontSize: 12),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          l10n.paidStatus,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                       icon: const Icon(Icons.check_circle_outline, size: 16),
                     ),
                     ButtonSegment(
                       value: PurchasePaymentOption.partial,
-                      label: Text(
-                        l10n.statusPartiallyPaid,
-                        style: const TextStyle(fontSize: 12),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          l10n.statusPartiallyPaid,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                       icon: const Icon(Icons.pie_chart_outline, size: 16),
                     ),
                     ButtonSegment(
                       value: PurchasePaymentOption.credit,
-                      label: Text(
-                        l10n.unpaidStatus,
-                        style: const TextStyle(fontSize: 12),
+                      label: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          l10n.unpaidStatus,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                       icon: const Icon(Icons.hourglass_empty_rounded, size: 16),
                     ),
@@ -585,28 +593,6 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                       : null,
                 ),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: FilledButton(
-                    onPressed: _saving ? null : () => _save(),
-                    child: _saving
-                        ? SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          )
-                        : Text(l10n.savePurchase),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: _saving ? null : () => _save(isDraft: true),
-                  child: Text(l10n.saveDraft),
-                ),
               ],
             ),
           ),

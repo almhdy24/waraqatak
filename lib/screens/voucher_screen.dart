@@ -7,6 +7,7 @@ import '../models/contact.dart';
 import '../services/document_service.dart';
 import '../models/currency.dart';
 import '../models/payment_method.dart';
+import '../utils/date_format_utils.dart';
 import '../utils/money_utils.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_confirm_dialog.dart';
@@ -231,12 +232,12 @@ class _VoucherScreenState extends State<VoucherScreen> {
             ),
           );
         } else {
-          Navigator.pop(context);
           AppSnackBar.show(
             context,
             l10n.voucherAllocatedSnack(receiptIds.length.toString()),
             severity: AppSnackBarSeverity.success,
           );
+          Navigator.pop(context);
         }
       } else {
         String effectiveNotes = _reasonController.text.trim();
@@ -275,7 +276,32 @@ class _VoucherScreenState extends State<VoucherScreen> {
   }
 
   Widget _buildBalancePreview(AppLocalizations l10n) {
-    if (_selectedContact == null) return const SizedBox.shrink();
+    if (_selectedContact == null) {
+      final typed = (_contactName ?? '').trim().isNotEmpty;
+      if (!(isReceipt && typed)) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              size: 16,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                l10n.voucherSelectCustomerHint,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     final currency = _business?.currencyCode ?? 'SDG';
     final sym = Currency.symbolForCode(currency);
@@ -292,16 +318,14 @@ class _VoucherScreenState extends State<VoucherScreen> {
           ),
           const SizedBox(width: 8),
           Text(
-            l10n.isArabic
-                ? 'جاري تحميل الرصيد المستحق...'
-                : 'Loading outstanding balance...',
+            l10n.voucherLoadingBalance,
             style: const TextStyle(fontSize: 12),
           ),
         ],
       );
     } else if (_balanceError != null) {
       content = Text(
-        l10n.isArabic ? 'تعذر جلب الرصيد المستحق' : 'Failed to load balance',
+        l10n.voucherBalanceLoadFailed,
         style: TextStyle(
           fontSize: 12,
           color: Theme.of(context).colorScheme.error,
@@ -385,6 +409,17 @@ class _VoucherScreenState extends State<VoucherScreen> {
     );
   }
 
+  Widget _sectionCard(Widget child) => Card(
+    elevation: 0,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+      side: BorderSide(
+        color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.7),
+      ),
+    ),
+    child: child,
+  );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -412,25 +447,16 @@ class _VoucherScreenState extends State<VoucherScreen> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsetsDirectional.all(16),
               children: [
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.cardRadius,
-                    ),
-                    side: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  child: ListTile(
+                _sectionCard(
+                  ListTile(
                     leading: const Icon(Icons.calendar_today_outlined),
                     title: Text(l10n.date),
                     subtitle: Text(
-                      DateFormat('dd/MM/yyyy').format(_voucherDate),
+                      AppDateUtils.formatDate(_voucherDate),
                     ),
                     trailing: const Icon(Icons.edit_calendar_outlined),
                     onTap: () async {
@@ -447,19 +473,8 @@ class _VoucherScreenState extends State<VoucherScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.cardRadius,
-                    ),
-                    side: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  child: Padding(
+                _sectionCard(
+                  Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -499,19 +514,8 @@ class _VoucherScreenState extends State<VoucherScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.cardRadius,
-                    ),
-                    side: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  child: Padding(
+                _sectionCard(
+                  Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -569,28 +573,6 @@ class _VoucherScreenState extends State<VoucherScreen> {
                             return null;
                           },
                         ),
-                        if (_selectedContact != null &&
-                            _outstandingBalance != null &&
-                            _outstandingBalance! > 0) ...[
-                          const SizedBox(height: 8),
-                          ActionChip(
-                            avatar: const Icon(
-                              Icons.check_circle_outline,
-                              size: 16,
-                            ),
-                            label: Text(
-                              '${l10n.voucherPayFullBalance} (${_formatAmount(_outstandingBalance!, Currency.decimalDigitsForCode(_business?.currencyCode))} ${Currency.symbolForCode(_business?.currencyCode ?? 'SDG')})',
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _amountController.text =
-                                    NumberInput.formatForInput(
-                                      _outstandingBalance!,
-                                    );
-                              });
-                            },
-                          ),
-                        ],
                         if (_selectedContact != null) ...[
                           const SizedBox(height: 8),
                           Text(
@@ -608,19 +590,8 @@ class _VoucherScreenState extends State<VoucherScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.cardRadius,
-                    ),
-                    side: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  child: Padding(
+                _sectionCard(
+                  Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -648,19 +619,8 @@ class _VoucherScreenState extends State<VoucherScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      AppDesignTokens.cardRadius,
-                    ),
-                    side: BorderSide(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                    ),
-                  ),
-                  child: Padding(
+                _sectionCard(
+                  Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
