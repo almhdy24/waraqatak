@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart' show DatabaseExecutor;
 import '../../database/access_dao.dart';
 import '../../database/database_helper.dart';
@@ -17,6 +16,9 @@ class SessionManager extends ChangeNotifier {
   /// Global navigator key to pop open sub-screens to root when locking.
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
+
+  /// Optional hook triggered during logout, e.g. to clear POS held carts.
+  static Future<void> Function()? onLogout;
 
   bool _initialized = false;
   bool _isMultiUserEnabled = false;
@@ -304,10 +306,11 @@ class SessionManager extends ChangeNotifier {
     _currentUser = null;
     _cachedPermissions = {};
     _isLocked = true;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('quick_sale_held_carts');
-    } catch (_) {}
+    if (onLogout != null) {
+      try {
+        await onLogout!();
+      } catch (_) {}
+    }
     navigatorKey.currentState?.popUntil((route) => route.isFirst);
     notifyListeners();
 

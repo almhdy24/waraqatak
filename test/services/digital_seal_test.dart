@@ -165,24 +165,19 @@ void main() {
     });
 
     test('Validates JPEG header', () {
-      // Minimal JPEG header
+      // Minimal JPEG with valid SOF0 header
       final jpegBytes = Uint8List.fromList([
-        0xFF,
-        0xD8,
-        0xFF,
-        0xE0,
-        0x00,
-        0x10,
-        0x4A,
-        0x46,
-        0x49,
-        0x46,
+        0xFF, 0xD8, // SOI
+        0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, // APP0
+        0xFF, 0xC0, 0x00, 0x0B, 0x08, 0x00, 0x64, 0x00, 0x64, 0x03, 0x01, 0x22, 0x00, // SOF0 (100x100)
       ]);
 
-      final (_, _, format) = DigitalSealStorageService.validateAndInspectImage(
+      final (w, h, format) = DigitalSealStorageService.validateAndInspectImage(
         jpegBytes,
       );
       expect(format, equals('jpeg'));
+      expect(w, equals(100));
+      expect(h, equals(100));
     });
 
     test('Rejects invalid file formats', () {

@@ -23,6 +23,7 @@ import '../models/tax_profile.dart';
 import '../models/currency.dart';
 import '../services/access/access_guard.dart';
 import '../services/access/permission_registry.dart';
+import '../services/access/session_manager.dart';
 import '../services/document_service.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
@@ -92,6 +93,15 @@ class QuickSaleScreen extends StatefulWidget {
 
     final sorted = results.toList()..sort();
     return sorted.take(4).toList();
+  }
+
+  static const String heldCartsPrefKey = 'quick_sale_held_carts';
+
+  static Future<void> clearHeldCarts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(heldCartsPrefKey);
+    } catch (_) {}
   }
 
   @override
@@ -245,6 +255,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   @override
   void initState() {
     super.initState();
+    SessionManager.onLogout = QuickSaleScreen.clearHeldCarts;
     CatalogEvents.pricesChanged.addListener(_onCatalogChanged);
     _load();
   }
@@ -775,7 +786,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     );
   }
 
-  static const String _heldCartsPrefKey = 'quick_sale_held_carts';
+  static const String _heldCartsPrefKey = QuickSaleScreen.heldCartsPrefKey;
 
   Future<void> _saveHeldCarts() async {
     try {
@@ -1797,57 +1808,78 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       decimalDigits: _cart.decimalDigits,
     );
 
-    if (_cart.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.shopping_cart_outlined, size: 56, color: cs.outline),
-              const SizedBox(height: 8),
-              Text(
-                l10n.posCartEmpty,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: cs.onSurfaceVariant),
+    final customerRow = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: InputChip(
+                avatar: Icon(
+                  _cart.customer != null
+                      ? Icons.person
+                      : Icons.person_add_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  _cart.customer?.name ?? l10n.selectCustomer,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                selected: _cart.customer != null,
+                onPressed: () => _selectCustomer(l10n, refresh),
+                onDeleted: _cart.customer != null
+                    ? () => update(() => _cart.setCustomer(null))
+                    : null,
               ),
-            ],
+            ),
           ),
-        ),
+          if (!_cart.isEmpty)
+            Text(
+              l10n.posItemsCount(FormatUtils.formatQuantity(_cart.itemCount)),
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontSize: 12,
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (_cart.isEmpty) {
+      return Column(
+        children: [
+          customerRow,
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.shopping_cart_outlined,
+                      size: 56,
+                      color: cs.outline,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.posCartEmpty,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: InputChip(
-                    avatar: Icon(
-                      _cart.customer != null
-                          ? Icons.person
-                          : Icons.person_add_outlined,
-                      size: 18,
-                    ),
-                    label: Text(
-                      _cart.customer?.name ?? l10n.selectCustomer,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    selected: _cart.customer != null,
-                    onPressed: () => _selectCustomer(l10n, refresh),
-                    onDeleted: _cart.customer != null
-                        ? () => update(() => _cart.setCustomer(null))
-                        : null,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        customerRow,
         if (WholesaleFeature.isEnabledForBusiness(_business))
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -2047,7 +2079,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: style),
+          Expanded(child: Text(label, style: style)),
           Text(value, style: style),
         ],
       ),

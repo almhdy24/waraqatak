@@ -88,6 +88,7 @@ void main() {
         ),
       );
       final prefs = await SharedPreferences.getInstance();
+      SessionManager.onLogout = QuickSaleScreen.clearHeldCarts;
       await prefs.setString('quick_sale_held_carts', '[{"id":"1"}]');
       expect(prefs.containsKey('quick_sale_held_carts'), isTrue);
 
@@ -117,6 +118,10 @@ void main() {
       // Advance by debounce duration
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Test Product'), findsOneWidget);
+
+      // Clean up overlay before test teardown
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
     });
 
     testWidgets(
