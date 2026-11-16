@@ -1,0 +1,6 @@
+What's new in version 1.2.0:
+• Enhanced privacy: Single unified "Contribute to app improvement" toggle for diagnostic data.
+• Clearer first-run consent dialog.
+• Digital Stamp and Signature are now Pro features, while fully preserving your existing files and settings.
+• Smoother UI, improved Right-to-Left (RTL) support, and enhanced stability.
+Thank you to everyone who participated in testing the Beta release!

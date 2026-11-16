@@ -5,6 +5,22 @@ All notable changes to the Waraqatak (ورقتك) project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-16
+
+### ما الجديد في الإصدار 1.2.0:
+• خصوصية أقوى: خيار واحد بعنوان "المساهمة في تحسين التطبيق" للتحكم ببيانات التشخيص.
+• رسالة موافقة أوضح عند أول تشغيل.
+• الختم الرقمي والتوقيع الرقمي أصبحا من مزايا Pro، مع الحفاظ الكامل على إعداداتك وملفاتك.
+• واجهة أنعم ودعم أفضل للاتجاه من اليمين إلى اليسار (RTL)، وأداء أكثر ثباتًا.
+شكرًا لكل من ساهم في اختبار النسخة التجريبية!
+
+### What's New in 1.2.0:
+• Enhanced privacy: Single unified "Contribute to app improvement" toggle for diagnostic data.
+• Clearer first-run consent dialog.
+• Digital Stamp and Signature are now Pro features, while fully preserving your existing files and settings.
+• Smoother UI, improved Right-to-Left (RTL) support, and enhanced stability.
+Thank you to everyone who participated in testing the Beta release!
+
 ## [1.2.0-beta.4] - 2026-11-16
 
 ### ما الجديد في هذا الإصدار (Google Play)

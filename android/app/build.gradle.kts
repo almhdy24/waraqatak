@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,8 +8,15 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 val hasReleaseKeystore =
-    System.getenv("KEYSTORE_PASSWORD") != null && file("upload-keystore.jks").exists()
+    (keystorePropertiesFile.exists() && keystoreProperties.getProperty("storeFile") != null) ||
+    (System.getenv("KEYSTORE_PASSWORD") != null && file("upload-keystore.jks").exists())
 
 android {
     namespace = "com.elmahdi.waraqatak"
@@ -30,10 +40,21 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("upload-keystore.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-            keyAlias = System.getenv("KEY_ALIAS") ?: ""
-            keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            if (keystorePropertiesFile.exists() && keystoreProperties.getProperty("storeFile") != null) {
+                keyAlias = keystoreProperties.getProperty("keyAlias") ?: ""
+                keyPassword = keystoreProperties.getProperty("keyPassword") ?: ""
+                storeFile = keystoreProperties.getProperty("storeFile")?.let { path ->
+                    val f1 = rootProject.file(path)
+                    val f2 = file(path)
+                    if (f1.exists()) f1 else f2
+                }
+                storePassword = keystoreProperties.getProperty("storePassword") ?: ""
+            } else {
+                storeFile = file("upload-keystore.jks")
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            }
         }
     }
 
@@ -59,7 +80,7 @@ gradle.taskGraph.whenReady {
         System.getenv("ALLOW_DEBUG_SIGNING") != "true"
     ) {
         throw GradleException(
-            "Release signing is not configured: set KEYSTORE_PASSWORD, " +
+            "Release signing is not configured: provide android/key.properties or set KEYSTORE_PASSWORD, " +
                 "KEY_ALIAS, KEY_PASSWORD and provide android/app/upload-keystore.jks, " +
                 "or set ALLOW_DEBUG_SIGNING=true for a local test build."
         )
