@@ -69,6 +69,7 @@ class DocumentItemForm extends StatefulWidget {
 }
 
 class _DocumentItemFormState extends State<DocumentItemForm> {
+  final FocusNode _quantityFocusNode = FocusNode();
   int? _selectedProductId;
   Product? _selectedProduct;
   List<ProductUnit> _availableUnits = [];
@@ -81,6 +82,12 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     if (widget.productId != null) {
       _loadProduct(widget.productId!);
     }
+  }
+
+  @override
+  void dispose() {
+    _quantityFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -162,6 +169,13 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
         );
         widget.onTaxableChanged(product.isTaxable);
       });
+      _quantityFocusNode.requestFocus();
+      if (widget.quantityController.text.isNotEmpty) {
+        widget.quantityController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: widget.quantityController.text.length,
+        );
+      }
     }
     widget.onProductChanged(product.id);
     widget.onProductSelected?.call(product);
@@ -529,6 +543,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                   flex: 3,
                   child: AmountField(
                     controller: widget.quantityController,
+                    focusNode: _quantityFocusNode,
                     decoration: InputDecoration(
                       labelText: l10n.itemQuantity,
                       contentPadding: const EdgeInsets.symmetric(

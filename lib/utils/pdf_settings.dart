@@ -35,8 +35,13 @@ class PdfStyleSettings {
   final bool showNotes;
   final bool showPaymentSummary;
   final bool showSignature;
+  final bool? showPrintedStamp;
   final bool showPageNumbers;
   final bool zebraRows;
+
+  /// Effective state for the printed stamp placeholder box.
+  /// Falls back to [showSignature] when null for backward compatibility.
+  bool get effectiveShowStampBox => showPrintedStamp ?? showSignature;
 
   /// Free text printed at the bottom of every page (e.g. thank-you note,
   /// bank details). Empty means no custom footer.
@@ -53,6 +58,7 @@ class PdfStyleSettings {
     this.showNotes = true,
     this.showPaymentSummary = true,
     this.showSignature = false,
+    this.showPrintedStamp,
     this.showPageNumbers = true,
     this.zebraRows = true,
     this.footerText = '',
@@ -85,6 +91,7 @@ class PdfStyleSettings {
     bool? showNotes,
     bool? showPaymentSummary,
     bool? showSignature,
+    bool? showPrintedStamp,
     bool? showPageNumbers,
     bool? zebraRows,
     String? footerText,
@@ -100,6 +107,7 @@ class PdfStyleSettings {
         showNotes: showNotes ?? this.showNotes,
         showPaymentSummary: showPaymentSummary ?? this.showPaymentSummary,
         showSignature: showSignature ?? this.showSignature,
+        showPrintedStamp: showPrintedStamp ?? this.showPrintedStamp,
         showPageNumbers: showPageNumbers ?? this.showPageNumbers,
         zebraRows: zebraRows ?? this.zebraRows,
         footerText: footerText ?? this.footerText,
@@ -116,6 +124,7 @@ class PdfStyleSettings {
         'showNotes': showNotes,
         'showPaymentSummary': showPaymentSummary,
         'showSignature': showSignature,
+        'showPrintedStamp': showPrintedStamp,
         'showPageNumbers': showPageNumbers,
         'zebraRows': zebraRows,
         'footerText': footerText,
@@ -140,6 +149,7 @@ class PdfStyleSettings {
       showPaymentSummary:
           pick<bool>('showPaymentSummary', d.showPaymentSummary),
       showSignature: pick<bool>('showSignature', d.showSignature),
+      showPrintedStamp: j['showPrintedStamp'] as bool?,
       showPageNumbers: pick<bool>('showPageNumbers', d.showPageNumbers),
       zebraRows: pick<bool>('zebraRows', d.zebraRows),
       footerText: pick<String>('footerText', d.footerText),

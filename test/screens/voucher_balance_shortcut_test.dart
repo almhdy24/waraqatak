@@ -179,4 +179,77 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Voucher screen: overpayment is prevented and shortcut auto-resolves excess',
+    (tester) async {
+      final l10n = AppLocalizations('ar');
+
+      await tester.pumpWidget(
+        buildApp(const VoucherScreen(type: VoucherType.paymentReceipt)),
+      );
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 60)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Select contact with debt (3,500)
+      final contactInput = find.descendant(
+        of: find.byType(ContactAutocompleteField),
+        matching: find.byType(TextFormField),
+      );
+      await tester.enterText(contactInput, 'عميل آجل');
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 60)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('عميل آجل').last);
+      await tester.pump();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Enter an overpayment amount: 5,000 (exceeds 3,500)
+      final amountInput = find.descendant(
+        of: find.byType(AmountField),
+        matching: find.byType(TextFormField),
+      );
+      await tester.enterText(amountInput, '5000');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Attempt save -> form validation rejects overpayment
+      await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+      await tester.pumpAndSettle();
+      final saveButton = find.widgetWithText(FilledButton, l10n.save);
+      await tester.tap(saveButton);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('المبلغ أكبر من المستحق'),
+        findsOneWidget,
+      );
+
+      // Now scroll back up and tap the full balance shortcut to fix the amount
+      await tester.drag(find.byType(ListView).first, const Offset(0, 600));
+      await tester.pumpAndSettle();
+      final payFullButton = find.widgetWithText(
+        TextButton,
+        l10n.voucherPayFullBalance,
+      );
+      expect(payFullButton, findsOneWidget);
+      await tester.tap(payFullButton);
+      await tester.pumpAndSettle();
+
+      // Amount is now 3,500 and overpayment error is resolved
+      expect(find.text(NumberInput.formatForInput(3500)), findsOneWidget);
+      expect(
+        find.textContaining('المبلغ أكبر من المستحق'),
+        findsNothing,
+      );
+    },
+  );
 }

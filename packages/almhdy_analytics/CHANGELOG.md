@@ -2,6 +2,21 @@
 
 All notable changes to the AlmHdy Analytics Flutter SDK will be documented in this file.
 
+## [1.2.0] - 2026-11-15
+
+### Added
+- **Centralized Reports & Monitoring Client:** Added `AlmHdyReportsClient` providing type-safe querying of the unified Analytics & Reports backend:
+  - `getOverview()`: Executive KPIs (DAU, WAU, MAU, total sessions, events).
+  - `getUnifiedMonitoring()`: Crash-free session rates, crash grouping, server errors, and infrastructure health.
+  - `getGeographicDistribution()`: Country and regional distribution metrics.
+  - `getDeviceIntelligence()`: Device hardware models, OS versions, platforms, and app versions.
+  - `getFunnels()`: Commercial funnel conversion tracking and trial conversion metrics.
+  - `getFeatures()`: Feature adoption segmentation (high, moderate, low adoption).
+  - `getCohorts()`: Weekly user cohort retention tracking.
+  - `exportData()`: Full analytics data export in structured JSON or CSV format.
+- **Client-Side Deduplication (`event_id`):** Every tracked event now automatically receives a client-generated UUID `event_id` (`ev_...`) enabling idempotent backend deduplication on retries.
+- **Hardware & Geographic Dimensions:** `AlmHdyAnalytics.initialize()` now accepts optional `deviceModel`, `country`, and `region` attributes, and `AlmHdyEvent` serializes them for unified backend aggregation.
+
 ## [1.1.0] - 2026-11-08
 
 ### Added

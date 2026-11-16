@@ -48,7 +48,18 @@ class _StocktakeScreenState extends State<StocktakeScreen> {
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.stocktake, entitlement)) {
       if (mounted) {
-        await ProUpgradeSheet.show(context, feature: Feature.stocktake);
+        final activated = await ProUpgradeSheet.show(
+          context,
+          feature: Feature.stocktake,
+        );
+        if (activated && mounted) {
+          final updated =
+              await LicenseService.instance.checkEntitlement(force: true);
+          if (FeatureAccess.canAccess(Feature.stocktake, updated)) {
+            await _load();
+            return;
+          }
+        }
         if (mounted) Navigator.of(context).pop();
       }
       return;

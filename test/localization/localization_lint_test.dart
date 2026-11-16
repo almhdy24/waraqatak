@@ -65,6 +65,10 @@ void main() {
       'EUR',
       'PNG',
       'JPG',
+      'Waraqatak',
+      'By',
+      'Elmahdi',
+      'Dev',
     };
     final bad = <String>[];
     for (final s in arabic) {

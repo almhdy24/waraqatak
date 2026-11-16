@@ -167,7 +167,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     final result = await ProUpgradeSheet.show(context, feature: feature);
     if (result == true && mounted) {
-      await _openActivationScreen();
+      _load();
+      final updated = await _refreshEntitlement();
+      if (FeatureAccess.canAccess(feature, updated)) {
+        await open();
+      }
     }
   }
 
@@ -589,12 +593,23 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             const Icon(Icons.warehouse_outlined, size: 20),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text(
-                                l10n.inventorySummary,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    l10n.inventorySummary,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  if (!FeatureAccess.canAccess(
+                                    Feature.inventory,
+                                    _entitlement,
+                                  )) ...[
+                                    const SizedBox(width: 6),
+                                    const ProBadge(),
+                                  ],
+                                ],
                               ),
                             ),
                             if (outOfStock > 0)

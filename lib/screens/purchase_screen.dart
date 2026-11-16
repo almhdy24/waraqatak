@@ -17,6 +17,7 @@ import '../widgets/app_section_header.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/app_totals_card.dart';
 import '../widgets/contact_autocomplete_field.dart';
+import '../widgets/discount_input_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -33,7 +34,7 @@ enum PurchasePaymentOption { fullyPaid, partial, credit }
 
 class _PurchaseScreenState extends State<PurchaseScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _discountController = TextEditingController(text: '0');
+  double _discount = 0.0;
   final _paidController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
 
@@ -61,13 +62,12 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     if (widget.preselectedContact != null) {
       _selectedContact = widget.preselectedContact;
     }
-    _discountController.addListener(() => setState(() {}));
+    // الاستماع لتغير المدفوع لتحديث الإجمالي لحظياً
     _paidController.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _discountController.dispose();
     _paidController.dispose();
     _notesController.dispose();
     for (final c in _descriptionControllers) {
@@ -116,8 +116,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   bool get _isDirty {
     return _selectedContact != null ||
         _notesController.text.isNotEmpty ||
-        (_discountController.text != '0' &&
-            _discountController.text.isNotEmpty) ||
+        _discount > 0 ||
         (_paidController.text != '0' && _paidController.text.isNotEmpty) ||
         _descriptionControllers.any((c) => c.text.isNotEmpty) ||
         _productIds.any((id) => id != null) ||
@@ -164,7 +163,6 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     });
   }
 
-  double get _discount => NumberInput.parse(_discountController.text) ?? 0;
   double _paidFor(double total) => switch (_paymentOption) {
     PurchasePaymentOption.fullyPaid => total,
     PurchasePaymentOption.credit => 0.0,
@@ -504,23 +502,14 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                AmountField(
-                  controller: _discountController,
-                  decoration: InputDecoration(
-                    labelText: l10n.discount,
-                    prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+                DiscountInputField(
+                  subtotal: subtotal,
+                  currencySymbol: _business?.currencySymbol ?? '',
+                  decimalDigits: Currency.decimalDigitsForCode(
+                    _business?.currencyCode,
                   ),
-                  textInputAction: TextInputAction.next,
-                  maxDecimals: 4,
-                  showMultipliers: true,
-                  onTap: () {
-                    if (_discountController.text.isNotEmpty) {
-                      _discountController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: _discountController.text.length,
-                      );
-                    }
-                  },
+                  initialDiscount: _discount,
+                  onDiscountChanged: (d) => setState(() => _discount = d),
                 ),
                 if (_paymentOption == PurchasePaymentOption.partial) ...[
                   const SizedBox(height: 12),

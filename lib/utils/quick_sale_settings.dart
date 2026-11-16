@@ -11,14 +11,19 @@ class QuickSaleSettings extends ChangeNotifier {
   static final QuickSaleSettings instance = QuickSaleSettings._();
 
   static const String prefKey = 'quick_sale_show_product_images';
+  static const String layoutPrefKey = 'quick_sale_is_grid_layout';
   static const String longPressHintDismissedKey =
       'quick_sale_long_press_hint_dismissed';
 
   bool _showProductImages = true;
+  bool _isGridLayout = true;
   bool _hasDismissedLongPressHint = false;
 
   /// Whether product thumbnails are displayed on Quick Sale product tiles.
   bool get showProductImages => _showProductImages;
+
+  /// Whether products are displayed in Grid layout (true) or List layout (false).
+  bool get isGridLayout => _isGridLayout;
 
   /// Whether the user has dismissed the discoverability hint for long-pressing.
   bool get hasDismissedLongPressHint => _hasDismissedLongPressHint;
@@ -28,6 +33,7 @@ class QuickSaleSettings extends ChangeNotifier {
     try {
       final p = prefs ?? await SharedPreferences.getInstance();
       _showProductImages = p.getBool(prefKey) ?? true;
+      _isGridLayout = p.getBool(layoutPrefKey) ?? true;
       _hasDismissedLongPressHint =
           p.getBool(longPressHintDismissedKey) ?? false;
       notifyListeners();
@@ -44,6 +50,19 @@ class QuickSaleSettings extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(prefKey, value);
+    } catch (_) {
+      // Best-effort persistence
+    }
+  }
+
+  /// Updates the layout mode (grid vs list), notifies listeners, and persists to [SharedPreferences].
+  Future<void> setIsGridLayout(bool value) async {
+    if (_isGridLayout == value) return;
+    _isGridLayout = value;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(layoutPrefKey, value);
     } catch (_) {
       // Best-effort persistence
     }
@@ -66,6 +85,13 @@ class QuickSaleSettings extends ChangeNotifier {
   @visibleForTesting
   void setShowProductImagesForTesting(bool value) {
     _showProductImages = value;
+    notifyListeners();
+  }
+
+  /// Testing helper to set the layout mode in-memory value directly.
+  @visibleForTesting
+  void setIsGridLayoutForTesting(bool value) {
+    _isGridLayout = value;
     notifyListeners();
   }
 

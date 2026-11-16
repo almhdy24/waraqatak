@@ -15,6 +15,7 @@ import '../widgets/app_section_header.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/app_totals_card.dart';
 import '../widgets/contact_autocomplete_field.dart';
+import '../widgets/discount_input_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -34,7 +35,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _notesController = TextEditingController();
   final _validityController = TextEditingController(text: '7');
-  final _discountController = TextEditingController();
+  double _discount = 0.0;
   bool _saving = false;
 
   final List<TextEditingController> _desc = [];
@@ -59,7 +60,6 @@ class _QuotationScreenState extends State<QuotationScreen> {
     super.initState();
     _loadBusiness();
     _addItem();
-    _discountController.addListener(() => setState(() {}));
     _validityController.addListener(() => setState(() {}));
   }
 
@@ -67,7 +67,6 @@ class _QuotationScreenState extends State<QuotationScreen> {
   void dispose() {
     _notesController.dispose();
     _validityController.dispose();
-    _discountController.dispose();
     for (final c in _desc) {
       c.dispose();
     }
@@ -173,10 +172,9 @@ class _QuotationScreenState extends State<QuotationScreen> {
     final effectiveTaxRate = (_business?.taxesEnabled ?? false)
         ? (_business?.taxRate ?? 0)
         : 0.0;
-    final discount = NumberInput.parse(_discountController.text) ?? 0.0;
     return DocumentService.calculateInvoiceTotals(
       items: items,
-      discount: discount,
+      discount: _discount,
       taxRate: effectiveTaxRate,
       pricesIncludeTax:
           (_business?.taxesEnabled ?? false) &&
@@ -231,7 +229,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
         business: _business!,
         contact: _contact,
         items: _buildItems(),
-        discount: NumberInput.parse(_discountController.text) ?? 0,
+        discount: _discount,
         notes: _notesController.text,
         date: documentDate,
         validUntil: validUntil,
@@ -475,29 +473,19 @@ class _QuotationScreenState extends State<QuotationScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                AmountField(
-                  controller: _discountController,
-                  decoration: InputDecoration(
-                    labelText: l10n.discount,
-                    prefixIcon: const Icon(Icons.percent_rounded, size: 20),
+                DiscountInputField(
+                  subtotal: totals.subtotal,
+                  currencySymbol: _business?.currencySymbol ?? '',
+                  decimalDigits: Currency.decimalDigitsForCode(
+                    _business?.currencyCode,
                   ),
-                  textInputAction: TextInputAction.next,
-                  maxDecimals: 4,
-                  showMultipliers: true,
-                  onChanged: (_) => setState(() {}),
-                  onTap: () {
-                    if (_discountController.text.isNotEmpty) {
-                      _discountController.selection = TextSelection(
-                        baseOffset: 0,
-                        extentOffset: _discountController.text.length,
-                      );
-                    }
-                  },
+                  initialDiscount: _discount,
+                  onDiscountChanged: (d) => setState(() => _discount = d),
                 ),
                 const SizedBox(height: 16),
                 AppTotalsCard(
                   subtotal: totals.subtotal,
-                  discount: NumberInput.parse(_discountController.text) ?? 0,
+                  discount: _discount,
                   taxAmount: totals.taxAmount,
                   taxRate: _business?.taxRate ?? 0,
                   total: totals.total,

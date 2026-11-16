@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_constants.dart';
+import '../core/feature_gate.dart';
 import '../core/theme_mode_scope.dart';
 import '../database/database_helper.dart';
 import '../features/reference_currency/reference_currency_feature.dart';
@@ -41,7 +42,6 @@ import '../widgets/access/permission_gate.dart';
 import '../widgets/access/sensitive_action_gate.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'access/users_list_screen.dart';
-import 'activation_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -348,12 +348,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           feature: Feature.multiUser,
         );
         if (res == true && mounted) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ActivationScreen()),
-          );
+          setState(() {});
+          final updated =
+              await LicenseService.instance.checkEntitlement(force: true);
+          if (!FeatureAccess.canAccess(Feature.multiUser, updated)) {
+            return;
+          }
+        } else {
+          return;
         }
-        return;
       }
     }
     if (!mounted) return;
@@ -421,14 +424,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Icon(Icons.lock_outline, size: 20),
                   ],
                 ),
-          onTap: () {
+          onTap: () async {
             if (ReferenceCurrencyFeature.isAvailable) {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ExchangeRatesScreen()),
               );
             } else {
-              ProUpgradeSheet.show(context, feature: Feature.referenceCurrency);
+              final res = await ProUpgradeSheet.show(
+                context,
+                feature: Feature.referenceCurrency,
+              );
+              if (res == true && mounted) {
+                setState(() {});
+              }
             }
           },
         ),
@@ -524,17 +533,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Icon(Icons.lock_outline, size: 20),
                   ],
                 ),
-                onTap: () => ProUpgradeSheet.show(
-                  context,
-                  feature: Feature.wholesalePricing,
-                ),
+                onTap: () async {
+                  final res = await ProUpgradeSheet.show(
+                    context,
+                    feature: Feature.wholesalePricing,
+                  );
+                  if (res == true && mounted) {
+                    setState(() {});
+                  }
+                },
               ),
       if (canUsersManage)
         ListTile(
           leading: const Icon(Icons.manage_accounts_outlined),
           title: Text(l10n.usersAndPermissions),
           subtitle: Text(l10n.usersAndPermissionsDesc),
-          trailing: Icon(chevronIcon),
+          trailing: FeatureGate.isAvailable(Feature.multiUser)
+              ? Icon(chevronIcon)
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ProBadge(),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.lock_outline, size: 20),
+                  ],
+                ),
           onTap: _openUsersAndPermissions,
         ),
     ];
@@ -736,14 +759,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // so it intentionally does NOT require an admin permission.
                     ListenableBuilder(
                       listenable: QuickSaleSettings.instance,
-                      builder: (context, _) => SwitchListTile(
-                        secondary: const Icon(Icons.photo_library_outlined),
-                        title: Text(l10n.quickSaleImagesSettingTitle),
-                        subtitle: Text(l10n.quickSaleImagesSettingDesc),
-                        value: QuickSaleSettings.instance.showProductImages,
-                        onChanged: (val) {
-                          QuickSaleSettings.instance.setShowProductImages(val);
-                        },
+                      builder: (context, _) => Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SwitchListTile(
+                            secondary: const Icon(Icons.photo_library_outlined),
+                            title: Text(l10n.quickSaleImagesSettingTitle),
+                            subtitle: Text(l10n.quickSaleImagesSettingDesc),
+                            value: QuickSaleSettings.instance.showProductImages,
+                            onChanged: (val) {
+                              QuickSaleSettings.instance.setShowProductImages(val);
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.dashboard_customize_outlined),
+                            title: Text(l10n.posLayoutSettingTitle),
+                            trailing: SegmentedButton<bool>(
+                              segments: [
+                                ButtonSegment<bool>(
+                                  value: true,
+                                  icon: const Icon(Icons.grid_view_outlined),
+                                  label: Text(l10n.posGridView),
+                                ),
+                                ButtonSegment<bool>(
+                                  value: false,
+                                  icon: const Icon(Icons.view_list_outlined),
+                                  label: Text(l10n.posListView),
+                                ),
+                              ],
+                              selected: {QuickSaleSettings.instance.isGridLayout},
+                              onSelectionChanged: (s) =>
+                                  QuickSaleSettings.instance.setIsGridLayout(s.first),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

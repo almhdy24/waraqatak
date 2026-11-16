@@ -348,6 +348,11 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
       currencyCode: business.currencyCode,
     );
 
+    final hasActiveOverlaySeals =
+        _paper != PaperSize.thermal80mm &&
+        ((_stampConfig?.isEnabled == true && _stampBytes != null) ||
+            (_sigConfig?.isEnabled == true && _sigBytes != null));
+
     return PdfDocumentBuilder.build(
       doc: doc,
       business: business,
@@ -355,7 +360,8 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
       l10n: l10n,
       paperSize: _paper,
       style: _style,
-      activeSealsPreview: (_stampConfig, _sigConfig),
+      activeSealsPreview:
+          hasActiveOverlaySeals ? null : (_stampConfig, _sigConfig),
     );
   }
 
@@ -653,12 +659,27 @@ class _OptionsList extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        type == SealType.stamp
+                            ? l10n.pdfDigitalStampDesc
+                            : l10n.pdfDigitalSignatureDesc,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Switch(
@@ -914,7 +935,7 @@ class _OptionsList extends StatelessWidget {
         ),
 
         // Digital Stamp & Signature Section
-        section(l10n.pdfSealsSection),
+        section(l10n.pdfDigitalSealsHeader),
         _buildSealCard(
           context: context,
           title: l10n.pdfSealStamp,
@@ -929,6 +950,56 @@ class _OptionsList extends StatelessWidget {
           config: sigConfig,
           bytes: sigBytes,
         ),
+
+        // Paper Placeholders Section
+        section(l10n.pdfPaperStampSignatureSection),
+        SwitchListTile(
+          title: Text(l10n.pdfShowSignatureLine),
+          subtitle: Text(
+            l10n.pdfShowSignatureLineDesc,
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          value: style.showSignature,
+          onChanged: (v) => onChanged(style.copyWith(showSignature: v)),
+        ),
+        SwitchListTile(
+          title: Text(l10n.pdfShowStampBox),
+          subtitle: Text(
+            l10n.pdfShowStampBoxDesc,
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          value: style.effectiveShowStampBox,
+          onChanged: (v) => onChanged(style.copyWith(showPrintedStamp: v)),
+        ),
+        if ((stampConfig?.isEnabled == true && stampBytes != null) &&
+            style.effectiveShowStampBox) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.pdfStampNoticeBoth,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
 
         section(l10n.pdfFields),
         toggle(
@@ -960,11 +1031,6 @@ class _OptionsList extends StatelessWidget {
           l10n.pdfZebraRows,
           style.zebraRows,
           (v) => style.copyWith(zebraRows: v),
-        ),
-        toggle(
-          l10n.pdfShowSignature,
-          style.showSignature,
-          (v) => style.copyWith(showSignature: v),
         ),
         toggle(
           l10n.pdfShowPageNumbers,

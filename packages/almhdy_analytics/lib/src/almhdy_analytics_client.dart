@@ -26,6 +26,9 @@ class AlmHdyAnalytics {
   String _appVersion = '1.0.0';
   String _platform = 'android';
   String? _platformVersion;
+  String? _deviceModel;
+  String? _country;
+  String? _region;
   String _installationId = '';
   String? _userPseudoId;
   int _batchSize = 10;
@@ -49,14 +52,35 @@ class AlmHdyAnalytics {
     'auth',
     'card',
     'cvv',
+    'credit_card',
     'ssn',
     'phone',
     'mobile',
     'whatsapp',
+    'phone_number',
     'name',
     'first_name',
     'last_name',
+    'full_name',
+    'customer_name',
+    'supplier_name',
+    'client_name',
+    'username',
     'email',
+    'amount',
+    'price',
+    'cost',
+    'total',
+    'subtotal',
+    'balance',
+    'grand_total',
+    'unit_price',
+    'tax_amount',
+    'vat_number',
+    'tax_number',
+    'national_id',
+    'license',
+    'license_key',
   ];
 
   /// Initializes the analytics client. Call early in main() before runApp().
@@ -67,6 +91,9 @@ class AlmHdyAnalytics {
     String? appVersion,
     String? platform,
     String? platformVersion,
+    String? deviceModel,
+    String? country,
+    String? region,
     int? batchSize,
     int? maxQueueSize,
     Duration? flushInterval,
@@ -75,8 +102,9 @@ class AlmHdyAnalytics {
   }) async {
     _projectKey = projectKey.trim();
     if (endpoint != null && endpoint.isNotEmpty) _endpoint = endpoint;
-    if (optOutEndpoint != null && optOutEndpoint.isNotEmpty)
+    if (optOutEndpoint != null && optOutEndpoint.isNotEmpty) {
       _optOutEndpoint = optOutEndpoint;
+    }
     if (appVersion != null && appVersion.isNotEmpty) _appVersion = appVersion;
     if (platform != null && platform.isNotEmpty) {
       _platform = platform.toLowerCase();
@@ -84,6 +112,9 @@ class AlmHdyAnalytics {
       _platform = _detectPlatform();
     }
     _platformVersion = platformVersion;
+    _deviceModel = deviceModel;
+    _country = country;
+    _region = region;
     if (batchSize != null) _batchSize = batchSize.clamp(1, 50);
     if (maxQueueSize != null && maxQueueSize > 0) _maxQueueSize = maxQueueSize;
     if (flushInterval != null) _flushInterval = flushInterval;
@@ -207,6 +238,9 @@ class AlmHdyAnalytics {
   /// Read-only snapshot of queued events (for inspection/testing).
   List<AlmHdyEvent> get queue => List.unmodifiable(_queue);
 
+  /// Resolved path of the underlying buffer file (if initialized).
+  String? get storageFilePath => _bufferFile?.path;
+
   /// Resolved path to the underlying offline buffer file on disk.
   String? get bufferFilePath => _bufferFile?.path;
 
@@ -222,11 +256,42 @@ class AlmHdyAnalytics {
     httpClient = null;
   }
 
+  /// Installation ID assigned to this client.
+  String get installationId => _installationId;
+
+  /// Current user pseudo ID if identified.
+  String? get userPseudoId => _userPseudoId;
+
+  /// Hardware device model.
+  String? get deviceModel => _deviceModel;
+
+  /// Geographic country code.
+  String? get country => _country;
+
+  /// Geographic region/subdivision.
+  String? get region => _region;
+
+  /// Platform OS version.
+  String? get platformVersion => _platformVersion;
+
+  /// Updates or enriches device technical metadata after initialization.
+  void setDeviceInfo({
+    String? deviceModel,
+    String? country,
+    String? region,
+    String? platformVersion,
+  }) {
+    if (deviceModel != null) _deviceModel = deviceModel;
+    if (country != null) _country = country;
+    if (region != null) _region = region;
+    if (platformVersion != null) _platformVersion = platformVersion;
+  }
+
   /// User opt-out from telemetry tracking.
   Future<void> optOut() async {
     _isOptedOut = true;
-    _queue.clear();
     _stopTimer();
+    _queue.clear();
     await _persistState();
     _log('User opted out of telemetry');
 
@@ -297,10 +362,14 @@ class AlmHdyAnalytics {
 
     final sanitizedProps = _sanitizeProperties(properties);
     final ev = AlmHdyEvent(
+      eventId: _generateUuid('ev_'),
       event: cleanEvent.length > 64 ? cleanEvent.substring(0, 64) : cleanEvent,
       platform: _platform,
       platformVersion: _platformVersion,
       appVersion: _appVersion,
+      deviceModel: _deviceModel,
+      country: _country,
+      region: _region,
       installationId: _installationId,
       sessionId: _sessionManager.sessionId,
       userPseudoId: _userPseudoId,

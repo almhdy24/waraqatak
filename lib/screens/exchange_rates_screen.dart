@@ -413,12 +413,17 @@ class _ExchangeRatesScreenState extends State<ExchangeRatesScreen> {
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
-                  icon: const Icon(Icons.stars),
-                  label: Text(l10n.proFeatureTitle),
-                  onPressed: () => ProUpgradeSheet.show(
-                    context,
-                    feature: Feature.referenceCurrency,
-                  ),
+                  icon: const Icon(Icons.vpn_key_outlined),
+                  label: Text(l10n.enterActivationKeyAction),
+                  onPressed: () async {
+                    final activated = await ProUpgradeSheet.show(
+                      context,
+                      feature: Feature.referenceCurrency,
+                    );
+                    if (activated && mounted) {
+                      _load();
+                    }
+                  },
                 ),
               ],
             ),

@@ -45,6 +45,7 @@ import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/app_status_colors.dart';
 import '../widgets/contact_autocomplete_field.dart';
+import '../widgets/discount_input_field.dart';
 import '../widgets/pos_product_tile.dart';
 import 'barcode_scanner_screen.dart';
 import 'document_detail_screen.dart';
@@ -62,10 +63,16 @@ class QuickSaleScreen extends StatefulWidget {
   ///   (or [1, 5, 10, 20, 50, 100] for decimal currencies with total < 100)
   /// - Distinct / deduplicated
   /// - Up to 4 suggestions
+  /// Suggests practical cash amounts for the given total:
+  /// - Exact total (always first)
+  /// - Convenient dynamic rounded amounts scaled to the currency and magnitude of the total
+  /// - Considers standard cash denominations and change-making convenience
+  /// - Distinct / deduplicated in ascending order
+  /// - Up to 4 suggestions
   static List<double> computeCashSuggestions({
     required double total,
     required int decimalDigits,
-    List<int> denominations = const [500, 1000, 5000, 10000],
+    List<int>? denominations,
   }) {
     if (total <= 0) return const [];
     final results = <double>{};
@@ -75,10 +82,54 @@ class QuickSaleScreen extends StatefulWidget {
     results.add(exact);
 
     final List<num> effectiveDenominations;
-    if (total < 100) {
-      effectiveDenominations = const [1, 5, 10, 20, 50, 100];
-    } else {
+    if (denominations != null && denominations.isNotEmpty) {
       effectiveDenominations = denominations;
+    } else if (decimalDigits > 0) {
+      // Decimal currency (e.g. USD, SAR, AED, EUR, EGP)
+      if (total < 1) {
+        effectiveDenominations = const [0.25, 0.5, 1, 2, 5];
+      } else if (total < 10) {
+        effectiveDenominations = const [1, 2, 5, 10, 20];
+      } else if (total < 50) {
+        effectiveDenominations = const [1, 5, 10, 20, 50, 100];
+      } else if (total < 200) {
+        effectiveDenominations = const [5, 10, 20, 50, 100, 200];
+      } else if (total < 1000) {
+        effectiveDenominations = const [10, 20, 50, 100, 200, 500, 1000];
+      } else {
+        final mag = math.pow(10, (math.log(total) / math.ln10).floor()).toDouble();
+        effectiveDenominations = [
+          mag * 0.05,
+          mag * 0.1,
+          mag * 0.2,
+          mag * 0.5,
+          mag,
+          mag * 2,
+        ];
+      }
+    } else {
+      // Zero-decimal currency (e.g. IQD, JPY, CLP, SDG)
+      if (total < 100) {
+        effectiveDenominations = const [1, 5, 10, 20, 50, 100];
+      } else if (total < 1000) {
+        effectiveDenominations = const [250, 500, 1000, 5000];
+      } else if (total < 10000) {
+        effectiveDenominations = const [500, 1000, 5000, 10000];
+      } else if (total < 50000) {
+        effectiveDenominations = const [500, 1000, 5000, 10000, 25000, 50000];
+      } else if (total < 250000) {
+        effectiveDenominations = const [5000, 10000, 25000, 50000, 100000, 250000];
+      } else {
+        final mag = math.pow(10, (math.log(total) / math.ln10).floor()).toDouble();
+        effectiveDenominations = [
+          mag * 0.05,
+          mag * 0.1,
+          mag * 0.25,
+          mag * 0.5,
+          mag,
+          mag * 2,
+        ];
+      }
     }
 
     for (final d in effectiveDenominations) {
@@ -251,6 +302,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
   bool _saving = false;
   String _query = '';
   int _loadGeneration = 0;
+  double? _customerDebt;
 
   static final _money = NumberFormat('#,##0.##');
 
@@ -371,6 +423,30 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
 
   String _fmt(double v) =>
       '${_money.format(v)} ${_business?.currencySymbol ?? ''}'.trim();
+
+  Future<void> _loadCustomerDebt(Contact? customer) async {
+    if (customer == null || customer.id == null) {
+      if (mounted) setState(() => _customerDebt = null);
+      return;
+    }
+    try {
+      final openDocs = await DatabaseHelper.instance.getOpenDocumentsForContact(
+        customer.id!,
+        'invoice',
+      );
+      final currency = _business?.currencyCode ?? 'SDG';
+      final decimals = Currency.decimalDigitsForCode(currency);
+      double debt = 0.0;
+      for (final d in openDocs) {
+        final rem = (d['remaining'] as num?)?.toDouble() ??
+            ((d['total'] as num).toDouble() - (d['paid'] as num).toDouble());
+        debt = MoneyUtils.round(debt + rem, decimals);
+      }
+      if (mounted) setState(() => _customerDebt = debt);
+    } catch (_) {
+      if (mounted) setState(() => _customerDebt = null);
+    }
+  }
 
   List<Product> get _filtered {
     final q = _query.trim();
@@ -704,6 +780,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   setState(() {
                     _cart.setCustomer(contact);
                   });
+                  _loadCustomerDebt(contact);
                   refresh?.call();
                   Navigator.pop(ctx);
                 },
@@ -714,6 +791,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   onPressed: () {
                     setState(() {
                       _cart.setCustomer(null);
+                      _customerDebt = null;
                     });
                     refresh?.call();
                     Navigator.pop(ctx);
@@ -986,6 +1064,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     setState(() {
       _cart.clear();
       _cart.setCustomer(null);
+      _customerDebt = null;
       _discountCtrl.clear();
       _receivedCtrl.clear();
     });
@@ -1049,7 +1128,17 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           context,
         ).popUntil((r) => r is! PopupRoute); // close cart sheet
       }
-      await _showDone(docId, total: total, change: change);
+      final isCredit = received != null && received < total;
+      final paidAmount = isCredit ? math.max(0.0, received) : total;
+      final remainingAmount = isCredit ? (total - paidAmount) : 0.0;
+      await _showDone(
+        docId,
+        total: total,
+        change: change,
+        paid: (isCredit && paidAmount > 0) ? paidAmount : null,
+        remaining: isCredit ? remainingAmount : null,
+        customerName: _cart.customer?.name,
+      );
       _resetSale();
       await _load(); // stock changed
     } catch (e) {
@@ -1064,6 +1153,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
     int docId, {
     required double total,
     required double change,
+    double? paid,
+    double? remaining,
+    String? customerName,
   }) async {
     final l10n = AppLocalizations.of(context);
     await showDialog<void>(
@@ -1072,6 +1164,9 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
       builder: (ctx) => _SaleDoneDialog(
         total: _fmt(total),
         change: change > 0 ? _fmt(change) : null,
+        paid: paid != null ? _fmt(paid) : null,
+        remaining: remaining != null && remaining > 0 ? _fmt(remaining) : null,
+        customerName: customerName,
         onPrint: () => _printReceipt(docId),
         onShare: () => _shareReceipt(docId),
         onView: () {
@@ -1177,11 +1272,14 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
               listenable: QuickSaleSettings.instance,
               builder: (context, _) {
                 final showImages = QuickSaleSettings.instance.showProductImages;
+                final isGrid = QuickSaleSettings.instance.isGridLayout;
                 return PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert),
                   tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
                   onSelected: (val) {
-                    if (val == 'toggle_images') {
+                    if (val == 'toggle_layout') {
+                      QuickSaleSettings.instance.setIsGridLayout(!isGrid);
+                    } else if (val == 'toggle_images') {
                       QuickSaleSettings.instance.setShowProductImages(
                         !showImages,
                       );
@@ -1192,6 +1290,21 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                     }
                   },
                   itemBuilder: (ctx) => [
+                    PopupMenuItem(
+                      value: 'toggle_layout',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          isGrid
+                              ? Icons.view_list_outlined
+                              : Icons.grid_view_outlined,
+                        ),
+                        title: Text(
+                          isGrid ? l10n.posListView : l10n.posGridView,
+                        ),
+                      ),
+                    ),
                     PopupMenuItem(
                       value: 'toggle_images',
                       child: ListTile(
@@ -1410,6 +1523,8 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   builder: (context, _) {
                     final showImages =
                         QuickSaleSettings.instance.showProductImages;
+                    final isGrid =
+                        QuickSaleSettings.instance.isGridLayout;
                     final textScale = MediaQuery.textScalerOf(
                       context,
                     ).scale(1.0);
@@ -1418,7 +1533,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                       textScale: textScale,
                     ).roundToDouble();
 
-                    if (showImages) {
+                    if (isGrid) {
                       return GridView.builder(
                         padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
@@ -1442,7 +1557,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                           return PosProductTile(
                             product: p,
                             cartQuantity: inCart.round(),
-                            showImage: true,
+                            showImage: showImages,
                             price: _fmt(p.salePrice),
                             availableQuantity: available,
                             isSoldOut: soldOut,
@@ -1472,7 +1587,7 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                         return PosProductTile(
                           product: p,
                           cartQuantity: inCart.round(),
-                          showImage: false,
+                          showImage: showImages,
                           price: _fmt(p.salePrice),
                           availableQuantity: available,
                           isSoldOut: soldOut,
@@ -1928,22 +2043,66 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           Expanded(
             child: Align(
               alignment: AlignmentDirectional.centerStart,
-              child: InputChip(
-                avatar: Icon(
-                  _cart.customer != null
-                      ? Icons.person
-                      : Icons.person_add_outlined,
-                  size: 18,
-                ),
-                label: Text(
-                  _cart.customer?.name ?? l10n.selectCustomer,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                selected: _cart.customer != null,
-                onPressed: () => _selectCustomer(l10n, refresh),
-                onDeleted: _cart.customer != null
-                    ? () => update(() => _cart.setCustomer(null))
-                    : null,
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                children: [
+                  InputChip(
+                    avatar: Icon(
+                      _cart.customer != null
+                          ? Icons.person
+                          : Icons.person_add_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      _cart.customer?.name ?? l10n.selectCustomer,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    selected: _cart.customer != null,
+                    onPressed: () => _selectCustomer(l10n, refresh),
+                    onDeleted: _cart.customer != null
+                        ? () => update(() {
+                              _cart.setCustomer(null);
+                              _customerDebt = null;
+                            })
+                        : null,
+                  ),
+                  if (_cart.customer != null &&
+                      _customerDebt != null &&
+                      _customerDebt! > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.errorContainer.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 14,
+                            color: cs.error,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              '${l10n.posCustomerDebt}: ${_fmt(_customerDebt!)}',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: cs.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -2057,21 +2216,83 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SegmentedButton<int>(
+                        segments: [
+                          ButtonSegment<int>(
+                            value: 0,
+                            label: Text(l10n.posPayCashFull),
+                            icon: const Icon(Icons.money, size: 16),
+                          ),
+                          ButtonSegment<int>(
+                            value: 1,
+                            label: Text(l10n.posPayCredit),
+                            icon: const Icon(
+                              Icons.assignment_ind_outlined,
+                              size: 16,
+                            ),
+                          ),
+                          ButtonSegment<int>(
+                            value: 2,
+                            label: Text(l10n.posPayPartial),
+                            icon: const Icon(Icons.payments_outlined, size: 16),
+                          ),
+                        ],
+                        selected: {
+                          if (received != null && received <= 0)
+                            1
+                          else if (received != null && received > 0 && received < t.total)
+                            2
+                          else
+                            0
+                        },
+                        onSelectionChanged: (set) {
+                          final mode = set.first;
+                          update(() {
+                            if (mode == 0) {
+                              _receivedCtrl.clear();
+                            } else if (mode == 1) {
+                              _receivedCtrl.text = '0';
+                              if (_cart.customer == null) {
+                                _selectCustomer(l10n, refresh);
+                              }
+                            } else if (mode == 2) {
+                              if (_receivedCtrl.text.isEmpty ||
+                                  received == 0 ||
+                                  received! >= t.total) {
+                                _receivedCtrl.text = NumberInput.formatForInput(
+                                  MoneyUtils.round(t.total / 2, _cart.decimalDigits),
+                                );
+                              }
+                              if (_cart.customer == null) {
+                                _selectCustomer(l10n, refresh);
+                              }
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Row(
                 children: [
                   Expanded(
-                    child: AmountField(
-                      controller: _discountCtrl,
+                    child: DiscountInputField(
+                      selectorType: DiscountSelectorType.dropdown,
+                      isDense: true,
+                      subtotal: _totals.subtotal,
+                      currencySymbol: _business?.currencySymbol ?? '',
+                      decimalDigits: _cart.decimalDigits,
+                      initialDiscount: _cart.discount,
                       enabled:
                           AccessGuard.can(PermissionRegistry.salesEditDiscount),
-                      maxDecimals: 4,
-                      showMultipliers: true,
-                      decoration: InputDecoration(
-                        labelText: l10n.discount,
-                        isDense: true,
-                      ),
-                      onChanged: (v) => update(
-                        () => _cart.discount = NumberInput.parse(v) ?? 0,
+                      onDiscountChanged: (d) => update(
+                        () => _cart.discount = d,
                       ),
                     ),
                   ),
@@ -2139,14 +2360,30 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                   _fmt(change),
                   color: AppDesignTokens.semanticSuccess(context),
                 ),
-              if (received != null &&
-                  received < t.total &&
-                  _cart.customer != null)
+              if (received != null && received < t.total) ...[
                 _totalRow(
-                  l10n.remaining,
-                  _fmt(t.total - received),
+                  l10n.paymentStatus,
+                  received <= 0 ? l10n.unpaidStatus : l10n.partialStatus,
                   color: Theme.of(context).colorScheme.error,
                 ),
+                if (received > 0)
+                  _totalRow(
+                    l10n.paid,
+                    _fmt(math.max(0.0, received)),
+                    color: AppDesignTokens.semanticSuccess(context),
+                  ),
+                _totalRow(
+                  l10n.remaining,
+                  _fmt(t.total - math.max(0.0, received)),
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                if (_customerDebt != null && _customerDebt! > 0)
+                  _totalRow(
+                    l10n.posCustomerTotalDebt,
+                    _fmt(_customerDebt! + (t.total - math.max(0.0, received))),
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+              ],
               const SizedBox(height: 10),
               SizedBox(
                 height: 54,
@@ -2162,9 +2399,19 @@ class _QuickSaleScreenState extends State<QuickSaleScreen> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.check_circle_outline),
+                      : Icon(
+                          (received != null && received <= 0)
+                              ? Icons.assignment_ind_outlined
+                              : ((received != null && received > 0 && received < t.total)
+                                  ? Icons.payments_outlined
+                                  : Icons.check_circle_outline),
+                        ),
                   label: Text(
-                    '${l10n.posCompleteSale} · ${_fmt(t.total)}',
+                    (received != null && received <= 0)
+                        ? '${l10n.posCompleteCreditSale} · ${_fmt(t.total)}'
+                        : ((received != null && received > 0 && received < t.total)
+                            ? '${l10n.posCompletePartialSale} · ${_fmt(math.max(0.0, received))}'
+                            : '${l10n.posCompleteSale} · ${_fmt(t.total)}'),
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
@@ -2267,6 +2514,9 @@ class _QtyStepper extends StatelessWidget {
 class _SaleDoneDialog extends StatelessWidget {
   final String total;
   final String? change;
+  final String? paid;
+  final String? remaining;
+  final String? customerName;
   final VoidCallback onPrint;
   final VoidCallback onShare;
   final VoidCallback onView;
@@ -2276,6 +2526,9 @@ class _SaleDoneDialog extends StatelessWidget {
   const _SaleDoneDialog({
     required this.total,
     required this.change,
+    this.paid,
+    this.remaining,
+    this.customerName,
     required this.onPrint,
     required this.onShare,
     required this.onView,
@@ -2301,6 +2554,45 @@ class _SaleDoneDialog extends StatelessWidget {
               color: cs.primary,
             ),
           ),
+          if (paid != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              '${l10n.paid}: $paid',
+              style: TextStyle(
+                fontSize: 14,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (remaining != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.errorContainer.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${l10n.posRemainingOnAccount}: $remaining',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: cs.error,
+                ),
+              ),
+            ),
+          ],
+          if (customerName != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              '${l10n.customer}: $customerName',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: cs.onSurfaceVariant,
+              ),
+            ),
+          ],
           if (change != null) ...[
             const SizedBox(height: 8),
             Text(

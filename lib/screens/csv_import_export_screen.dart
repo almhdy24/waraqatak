@@ -36,7 +36,17 @@ class _CsvImportExportScreenState extends State<CsvImportExportScreen> {
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.csvImportExport, entitlement)) {
       if (mounted) {
-        await ProUpgradeSheet.show(context, feature: Feature.csvImportExport);
+        final activated = await ProUpgradeSheet.show(
+          context,
+          feature: Feature.csvImportExport,
+        );
+        if (activated && mounted) {
+          final updated =
+              await LicenseService.instance.checkEntitlement(force: true);
+          if (FeatureAccess.canAccess(Feature.csvImportExport, updated)) {
+            return;
+          }
+        }
         if (mounted) Navigator.of(context).pop();
       }
     }
