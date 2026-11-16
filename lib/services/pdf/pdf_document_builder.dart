@@ -18,6 +18,8 @@ import '../../utils/pdf_settings.dart';
 import '../../utils/print_settings.dart';
 import '../digital_seal_storage_service.dart';
 import '../seal_geometry_engine.dart';
+import '../../core/feature_gate.dart';
+import '../feature_access.dart';
 import 'pdf_customer_builder.dart';
 import 'pdf_font_data.dart';
 import 'pdf_fonts.dart';
@@ -80,12 +82,14 @@ class PdfDocumentBuilder {
       } catch (_) {}
     }
 
-    if (snapshot != null) {
-      effectiveStamp = snapshot.stamp;
-      effectiveSignature = snapshot.signature;
-    } else if (activeSealsPreview != null) {
-      effectiveStamp = activeSealsPreview.$1;
-      effectiveSignature = activeSealsPreview.$2;
+    if (FeatureGate.isAvailable(Feature.digitalSeals)) {
+      if (snapshot != null) {
+        effectiveStamp = snapshot.stamp;
+        effectiveSignature = snapshot.signature;
+      } else if (activeSealsPreview != null) {
+        effectiveStamp = activeSealsPreview.$1;
+        effectiveSignature = activeSealsPreview.$2;
+      }
     }
 
     final businessId = business.id ?? 1;

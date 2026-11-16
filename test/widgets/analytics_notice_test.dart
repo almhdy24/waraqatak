@@ -4,12 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/services/access/session_manager.dart';
+import 'package:warqatek/services/analytics/analytics_service.dart';
 import 'package:warqatek/widgets/analytics_notice_dialog.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Widget buildTestApp({VoidCallback? onOpenSettings, String lang = 'en'}) {
+  Widget buildTestApp({VoidCallback? onOpenSettings, String lang = 'ar'}) {
     return LanguageProvider(
       langCode: lang,
       onChangeLanguage: (_) async {},
@@ -39,30 +40,64 @@ void main() {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
       SessionManager.instance.setMultiUserEnabledForTesting(false);
+      AnalyticsService.instance.resetForTesting();
     });
 
-    testWidgets('shows notice on first start and persists shown flag', (
+    testWidgets('shows notice in Arabic and pressing Agree sets diagnosticsConsent=true', (
       tester,
     ) async {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('analytics_first_run_notice_shown'), isNull);
 
-      await tester.pumpWidget(buildTestApp());
+      await tester.pumpWidget(buildTestApp(lang: 'ar'));
       await tester.tap(find.text('CHECK_NOTICE'));
       await tester.pumpAndSettle();
 
-      // Notice dialog is displayed
+      // Notice dialog is displayed with new Arabic title & body
       expect(find.byType(AlertDialog), findsOneWidget);
-      expect(find.text('Usage Statistics & Error Reports'), findsOneWidget);
+      expect(find.text('ساعدنا في تحسين ورقتك'), findsOneWidget);
+      expect(find.textContaining('نجمع بيانات تشغيلية مجهولة'), findsOneWidget);
+      expect(find.text('سياسة الخصوصية'), findsOneWidget);
+      expect(find.text('موافق'), findsOneWidget);
+      expect(find.text('ليس الآن'), findsOneWidget);
 
       // Flag is now persisted
       expect(prefs.getBool('analytics_first_run_notice_shown'), isTrue);
 
-      // Tap OK
-      await tester.tap(find.text('OK'));
+      // Tap Agree ("موافق")
+      await tester.tap(find.text('موافق'));
       await tester.pumpAndSettle();
 
       expect(find.byType(AlertDialog), findsNothing);
+      expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isTrue);
+      expect(AnalyticsService.instance.isDiagnosticsConsentGranted, isTrue);
+    });
+
+    testWidgets('shows notice in English and pressing Not now sets diagnosticsConsent=false', (
+      tester,
+    ) async {
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('analytics_first_run_notice_shown'), isNull);
+
+      await tester.pumpWidget(buildTestApp(lang: 'en'));
+      await tester.tap(find.text('CHECK_NOTICE'));
+      await tester.pumpAndSettle();
+
+      // Notice dialog is displayed with new English title & body
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Help us improve'), findsOneWidget);
+      expect(find.textContaining('We collect anonymous usage data'), findsOneWidget);
+      expect(find.text('Privacy Policy'), findsOneWidget);
+      expect(find.text('Agree'), findsOneWidget);
+      expect(find.text('Not now'), findsOneWidget);
+
+      // Tap Not now ("Not now")
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isFalse);
+      expect(AnalyticsService.instance.isDiagnosticsConsentGranted, isFalse);
     });
 
     testWidgets('does not show notice if already shown previously', (
@@ -93,29 +128,9 @@ void main() {
 
       // Dialog must NOT show
       expect(find.byType(AlertDialog), findsNothing);
-      // And flag must NOT be marked shown yet (will show after unlock)
       expect(prefs.getBool('analytics_first_run_notice_shown'), isNull);
 
       SessionManager.instance.setMultiUserEnabledForTesting(false);
-    });
-
-    testWidgets('Settings button navigates to settings callback', (
-      tester,
-    ) async {
-      bool settingsOpened = false;
-
-      await tester.pumpWidget(
-        buildTestApp(onOpenSettings: () => settingsOpened = true),
-      );
-      await tester.tap(find.text('CHECK_NOTICE'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(AlertDialog), findsOneWidget);
-      await tester.tap(find.text('Settings'));
-      await tester.pumpAndSettle();
-
-      expect(settingsOpened, isTrue);
-      expect(find.byType(AlertDialog), findsNothing);
     });
   });
 }

@@ -22,6 +22,7 @@ enum Feature {
   multiUser,
   referenceCurrency,
   wholesalePricing,
+  digitalSeals,
 }
 
 class FeatureAccess {
@@ -44,6 +45,7 @@ class FeatureAccess {
     Feature.inventoryAudit,
     Feature.referenceCurrency,
     Feature.wholesalePricing,
+    Feature.digitalSeals,
     if (multiUserRequiresPro) Feature.multiUser,
   };
 

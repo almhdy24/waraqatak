@@ -9,7 +9,6 @@ import '../localization/app_localizations.dart';
 import '../models/entitlement.dart';
 import '../services/backup_service.dart';
 import '../services/license_service.dart';
-import '../services/app_diagnostics_service.dart';
 import '../services/app_update_service.dart';
 import '../utils/url_launcher_utils.dart';
 import '../utils/date_format_utils.dart';
@@ -52,9 +51,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   EntitlementState? _entitlement;
-  late bool _errorReportingConsent =
-      AnalyticsService.instance.isErrorReportingEnabled;
-  late bool _analyticsConsent = AnalyticsService.instance.isUsageEnabled;
+  late bool _diagnosticsConsent =
+      AnalyticsService.instance.isDiagnosticsConsentGranted;
   bool _wholesalePricingEnabled = false;
   DateTime? _booksClosedThrough;
   DateTime? _lastBackupTime;
@@ -164,13 +162,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadConsent() async {
-    final analyticsGranted = AnalyticsService.instance.isUsageEnabled;
-    final errorReportingGranted =
-        AnalyticsService.instance.isErrorReportingEnabled;
+    final granted = AnalyticsService.instance.isDiagnosticsConsentGranted;
     if (mounted) {
       setState(() {
-        _errorReportingConsent = errorReportingGranted;
-        _analyticsConsent = analyticsGranted;
+        _diagnosticsConsent = granted;
       });
     }
   }
@@ -633,7 +628,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // ── Activation ──────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 4),
               child: Card(
                 elevation: 0,
                 color: cs.primaryContainer.withValues(alpha: 0.35),
@@ -729,29 +724,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: Text(l10n.themeModeLabel),
                     ),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: SegmentedButton<ThemeMode>(
-                        showSelectedIcon: false,
-                        segments: [
-                          ButtonSegment(
-                            value: ThemeMode.light,
-                            icon: const Icon(Icons.light_mode_outlined),
-                            label: Text(l10n.themeLight),
-                          ),
-                          ButtonSegment(
-                            value: ThemeMode.dark,
-                            icon: const Icon(Icons.dark_mode_outlined),
-                            label: Text(l10n.themeDark),
-                          ),
-                          ButtonSegment(
-                            value: ThemeMode.system,
-                            icon: const Icon(Icons.brightness_auto_outlined),
-                            label: Text(l10n.themeSystem),
-                          ),
-                        ],
-                        selected: {themeScope?.themeMode ?? ThemeMode.light},
-                        onSelectionChanged: (s) =>
-                            themeScope?.onChangeThemeMode(s.first),
+                      padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<ThemeMode>(
+                          showSelectedIcon: false,
+                          segments: [
+                            ButtonSegment(
+                              value: ThemeMode.light,
+                              icon: const Icon(Icons.light_mode_outlined),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(l10n.themeLight),
+                              ),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.dark,
+                              icon: const Icon(Icons.dark_mode_outlined),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(l10n.themeDark),
+                              ),
+                            ),
+                            ButtonSegment(
+                              value: ThemeMode.system,
+                              icon: const Icon(Icons.brightness_auto_outlined),
+                              label: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(l10n.themeSystem),
+                              ),
+                            ),
+                          ],
+                          selected: {themeScope?.themeMode ?? ThemeMode.light},
+                          onSelectionChanged: (s) =>
+                              themeScope?.onChangeThemeMode(s.first),
+                        ),
                       ),
                     ),
                     const Divider(height: 1, indent: 16, endIndent: 16),
@@ -771,25 +778,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               QuickSaleSettings.instance.setShowProductImages(val);
                             },
                           ),
-                          ListTile(
-                            leading: const Icon(Icons.dashboard_customize_outlined),
-                            title: Text(l10n.posLayoutSettingTitle),
-                            trailing: SegmentedButton<bool>(
-                              segments: [
-                                ButtonSegment<bool>(
-                                  value: true,
-                                  icon: const Icon(Icons.grid_view_outlined),
-                                  label: Text(l10n.posGridView),
+                          Padding(
+                            padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.dashboard_customize_outlined,
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        l10n.posLayoutSettingTitle,
+                                        style: Theme.of(context).textTheme.bodyLarge,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                ButtonSegment<bool>(
-                                  value: false,
-                                  icon: const Icon(Icons.view_list_outlined),
-                                  label: Text(l10n.posListView),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: SegmentedButton<bool>(
+                                    segments: [
+                                      ButtonSegment<bool>(
+                                        value: true,
+                                        icon: const Icon(Icons.grid_view_outlined),
+                                        label: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(l10n.posGridView),
+                                        ),
+                                      ),
+                                      ButtonSegment<bool>(
+                                        value: false,
+                                        icon: const Icon(Icons.view_list_outlined),
+                                        label: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(l10n.posListView),
+                                        ),
+                                      ),
+                                    ],
+                                    selected: {QuickSaleSettings.instance.isGridLayout},
+                                    onSelectionChanged: (s) =>
+                                        QuickSaleSettings.instance.setIsGridLayout(s.first),
+                                  ),
                                 ),
                               ],
-                              selected: {QuickSaleSettings.instance.isGridLayout},
-                              onSelectionChanged: (s) =>
-                                  QuickSaleSettings.instance.setIsGridLayout(s.first),
                             ),
                           ),
                         ],
@@ -848,33 +884,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SwitchListTile(
-                            secondary: const Icon(Icons.analytics_outlined),
-                            title: Text(l10n.analyticsConsentTitle),
-                            subtitle: Text(l10n.analyticsConsentDesc),
-                            value: _analyticsConsent,
+                            secondary: const Icon(Icons.volunteer_activism_outlined),
+                            title: Text(l10n.diagnosticsConsentTitle),
+                            subtitle: Text(l10n.diagnosticsConsentDesc),
+                            value: _diagnosticsConsent,
                             onChanged: (val) async {
-                              await AnalyticsService.instance.setUsageEnabled(
-                                val,
-                              );
+                              await AnalyticsService.instance.setConsent(val);
                               if (mounted) {
-                                setState(() => _analyticsConsent = val);
-                              }
-                            },
-                          ),
-                          const Divider(height: 1, indent: 16, endIndent: 16),
-                          SwitchListTile(
-                            secondary: const Icon(Icons.bug_report_outlined),
-                            title: Text(l10n.errorReportsConsentTitle),
-                            subtitle: Text(l10n.errorReportsConsentDesc),
-                            value: _errorReportingConsent,
-                            onChanged: (val) async {
-                              await AnalyticsService.instance
-                                  .setErrorReportingEnabled(val);
-                              await AppDiagnosticsService.instance.setConsent(
-                                val,
-                              );
-                              if (mounted) {
-                                setState(() => _errorReportingConsent = val);
+                                setState(() => _diagnosticsConsent = val);
                               }
                             },
                           ),
@@ -1031,7 +1048,7 @@ class _CurrentUserProfileCardState extends State<CurrentUserProfileCard> {
         }
 
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 16, 4),
           child: Card(
             elevation: 0,
             shape: RoundedRectangleBorder(

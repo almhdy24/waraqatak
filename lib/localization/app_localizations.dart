@@ -2908,28 +2908,24 @@ class AppLocalizations {
   );
 
   // ========== ANALYTICS & TELEMETRY ==========
-  String get analyticsConsentTitle =>
-      _t('إحصائيات الاستخدام المجهولة', 'Anonymous usage statistics');
-  String get analyticsConsentDesc => _t(
-    'مساعدة في تحسين التطبيق عبر بيانات تشغيلية مجهولة، بدون مبالغ أو أسماء أو فواتير',
-    'Help improve the app via anonymous telemetry, excluding amounts, names, and invoices',
+  String get diagnosticsConsentTitle =>
+      _t('المساهمة في تحسين التطبيق', 'Help improve the app');
+  String get diagnosticsConsentDesc => _t(
+    'إرسال بيانات استخدام وتقارير أعطال مجهولة، بدون مبالغ أو أسماء أو فواتير.',
+    'Share anonymous usage data and crash reports. Never includes amounts, names, or invoices.',
   );
-  String get errorReportsConsentTitle =>
-      _t('تقارير الأخطاء والأعطال', 'Error reports');
-  String get errorReportsConsentDesc => _t(
-    'إرسال تقارير تشخيصية مجهولة وخالية من أي بيانات شخصية أو تجارية عند حدوث أخطاء للمساعدة في إصلاحها',
-    'Send anonymous, sanitized crash and error diagnostics to help fix bugs',
+  String get consentDialogTitle =>
+      _t('ساعدنا في تحسين ورقتك', 'Help us improve');
+  String get consentDialogBody => _t(
+    'نجمع بيانات تشغيلية مجهولة وتقارير الأعطال لتحسين الأداء وإصلاح الأخطاء بسرعة. لا نجمع أي مبالغ أو أسماء عملاء أو فواتير أو بيانات شخصية. يمكنك تغيير اختيارك في أي وقت من الإعدادات.',
+    'We collect anonymous usage data and crash reports to improve performance and fix bugs faster. We never collect amounts, customer names, invoices, or personal data. You can change this anytime in Settings.',
   );
-  String get analyticsNoticeTitle => _t(
-    'بيانات الاستخدام وتقارير الأخطاء',
-    'Usage Statistics & Error Reports',
+  String get consentDialogAgree => _t('موافق', 'Agree');
+  String get consentDialogNotNow => _t('ليس الآن', 'Not now');
+  String get digitalSealsProUpgradeMessage => _t(
+    'الأختام والتوقيعات الرقمية ميزة حصرية في النسخة الاحترافية (Pro).',
+    'Digital stamps and signatures are exclusive to the Pro version.',
   );
-  String get analyticsNoticeBody => _t(
-    'يساعد جمع إحصائيات الاستخدام المجهولة وتقارير الأعطال في تحسين موثوقية وأداء ورقتك. لا يتم جمع أي بيانات شخصية أو تجارية على الإطلاق، ويمكنك إيقاف أي منهما في أي وقت من الإعدادات.',
-    'Anonymous usage statistics and error reports help improve the app\'s stability. No personal or business data is ever collected. You can turn them off anytime from Settings.',
-  );
-  String get analyticsNoticeSettings => _t('الإعدادات', 'Settings');
-  String get analyticsNoticeOk => _t('حسناً', 'OK');
   String get anonymousAnalyticsTitle =>
       _t('إحصائيات الاستخدام المجهولة', 'Anonymous Telemetry');
   String get anonymousAnalyticsSubtitle => _t(

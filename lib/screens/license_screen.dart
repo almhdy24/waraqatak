@@ -132,6 +132,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
     Feature.multiUser => l10n.multiUserTitle,
     Feature.referenceCurrency => l10n.featureReferenceCurrency,
     Feature.wholesalePricing => l10n.featureWholesalePricing,
+    Feature.digitalSeals => l10n.pdfSealsSection,
   };
 
   Future<void> _launchEmail(BuildContext context, AppLocalizations l10n) async {

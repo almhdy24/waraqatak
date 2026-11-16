@@ -5,6 +5,14 @@ All notable changes to the Waraqatak (ورقتك) project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0-beta.4] - 2026-11-16
+
+### ما الجديد في هذا الإصدار (Google Play)
+• دمج خيارات التشخيص في خيار موحد "المساهمة في تحسين التطبيق" لتعزيز حماية وخصوصية البيانات.
+• رسالة موافقة مبسطة وواضحة عند أول تشغيل.
+• توفير ميزتي الختم الرقمي والتوقيع الرقمي حصرياً لباقة برو (Pro) مع الحفاظ التام على إعدادات وملفات المستخدمين.
+• تحسينات شاملة في واجهة المستخدم ودعم الاتجاه من اليمين لليسار (RTL) وثبات الأداء.
+
 ## [1.2.0-beta.1] - 2026-11-08
 
 > **Note:** This is a pre-release beta build (`1.2.0-beta.1+23`) for testing telemetry, error reporting, and privacy controls prior to production rollout.

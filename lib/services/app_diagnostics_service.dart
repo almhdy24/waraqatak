@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/constants/app_constants.dart';
 import '../database/database_helper.dart';
 import '../models/diagnostic_report.dart';
+import 'analytics/analytics_service.dart';
 import 'app_ops_service.dart';
 
 /// Self-hosted, privacy-first diagnostic error reporting service.
@@ -24,7 +25,7 @@ class AppDiagnosticsService {
   AppDiagnosticsService._();
   static final AppDiagnosticsService instance = AppDiagnosticsService._();
 
-  static const String kConsentPrefKey = 'ops_diagnostic_consent_granted';
+  static const String kConsentPrefKey = AnalyticsService.kDiagnosticsConsentKey;
   static const String remoteConfigFlag = 'enable_diagnostics';
 
   // Allowed safe operation identifiers
@@ -115,15 +116,17 @@ class AppDiagnosticsService {
   /// If consent is revoked (false), immediately increments sync generation
   /// to abort any in-flight uploads and wipes any pending diagnostic reports.
   Future<void> setConsent(bool granted) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(kConsentPrefKey, granted);
+    await AnalyticsService.instance.setConsent(granted);
+  }
 
-      if (!granted) {
-        _syncGeneration++;
+  /// Hook called whenever master diagnostics consent changes.
+  Future<void> onConsentChanged(bool granted) async {
+    if (!granted) {
+      _syncGeneration++;
+      try {
         await DatabaseHelper.instance.clearAllDiagnosticReports();
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
   // ============================================================

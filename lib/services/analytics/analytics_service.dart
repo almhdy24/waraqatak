@@ -6,6 +6,7 @@ import 'package:almhdy_analytics/almhdy_analytics.dart' hide SessionManager;
 import '../../core/analytics/analytics_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../access/session_manager.dart';
+import '../app_diagnostics_service.dart';
 import '../license_service.dart';
 import 'error_sanitizer.dart';
 
@@ -118,8 +119,9 @@ class AnalyticsService {
 
   AnalyticsService._internal();
 
-  static const String _kConsentKey = 'analytics_enabled';
-  static const String _kErrorReportingKey = 'error_reporting_enabled';
+  static const String kDiagnosticsConsentKey = 'diagnosticsConsent';
+  static const String _kLegacyConsentKey = 'analytics_enabled';
+  static const String _kLegacyErrorReportingKey = 'error_reporting_enabled';
   static const String _kLegacyDiagnosticConsentKey =
       'ops_diagnostic_consent_granted';
   static const String _kFirstRunNoticeShownKey =
@@ -129,8 +131,7 @@ class AnalyticsService {
   static const String _kPendingMigrationOkKey = 'analytics_pending_mig_ok';
 
   AnalyticsSink _sink = AlmHdyAnalyticsSink();
-  bool _isUsageEnabled = true;
-  bool _isErrorReportingEnabled = true;
+  bool _isDiagnosticsConsentGranted = false;
   bool _isInitialized = false;
   String? _testProjectKey;
   String? _deviceModel;
@@ -138,11 +139,12 @@ class AnalyticsService {
   String? _region;
   String? _platformVersion;
 
-  bool get isUsageEnabled => _isUsageEnabled;
-  bool get isErrorReportingEnabled => _isErrorReportingEnabled;
+  bool get isDiagnosticsConsentGranted => _isDiagnosticsConsentGranted;
+  bool get isUsageEnabled => _isDiagnosticsConsentGranted;
+  bool get isErrorReportingEnabled => _isDiagnosticsConsentGranted;
 
-  /// Backward-compatible alias for [isUsageEnabled].
-  bool get isEnabled => _isUsageEnabled;
+  /// Backward-compatible alias for [isDiagnosticsConsentGranted].
+  bool get isEnabled => _isDiagnosticsConsentGranted;
   bool get isInitialized => _isInitialized;
 
   /// Resolved hardware device model.
@@ -336,8 +338,7 @@ class AnalyticsService {
   /// Resets internal state for unit tests.
   @visibleForTesting
   void resetForTesting() {
-    _isUsageEnabled = true;
-    _isErrorReportingEnabled = true;
+    _isDiagnosticsConsentGranted = false;
     _isInitialized = false;
     _testProjectKey = null;
     _sessionErrorCount = 0;
@@ -348,6 +349,41 @@ class AnalyticsService {
     _platformVersion = null;
     AnalyticsConfig.reset();
     _sink = AlmHdyAnalyticsSink();
+  }
+
+  /// Migrates legacy consent settings (analytics_enabled, error_reporting_enabled,
+  /// ops_diagnostic_consent_granted) to the unified `diagnosticsConsent` flag.
+  /// The new flag is true ONLY if BOTH old flags were true.
+  /// Legacy keys are removed after migration.
+  static Future<void> migrateConsentIfNeeded(SharedPreferences prefs) async {
+    if (prefs.containsKey(kDiagnosticsConsentKey)) {
+      // Already migrated: cleanup any leftover legacy keys
+      await prefs.remove(_kLegacyConsentKey);
+      await prefs.remove(_kLegacyErrorReportingKey);
+      await prefs.remove(_kLegacyDiagnosticConsentKey);
+      return;
+    }
+
+    final hasLegacyUsage = prefs.containsKey(_kLegacyConsentKey);
+    final hasLegacyError = prefs.containsKey(_kLegacyErrorReportingKey);
+    final hasLegacyDiag = prefs.containsKey(_kLegacyDiagnosticConsentKey);
+
+    if (hasLegacyUsage || hasLegacyError || hasLegacyDiag) {
+      final legacyUsageVal = prefs.getBool(_kLegacyConsentKey);
+      final legacyErrorVal = prefs.getBool(_kLegacyErrorReportingKey);
+      final legacyDiagVal = prefs.getBool(_kLegacyDiagnosticConsentKey);
+
+      final bool isUsageTrue = legacyUsageVal == true;
+      final bool isErrorTrue = legacyErrorVal == true ||
+          (legacyErrorVal == null && legacyDiagVal == true);
+
+      final bool newConsent = isUsageTrue && isErrorTrue;
+      await prefs.setBool(kDiagnosticsConsentKey, newConsent);
+
+      await prefs.remove(_kLegacyConsentKey);
+      await prefs.remove(_kLegacyErrorReportingKey);
+      await prefs.remove(_kLegacyDiagnosticConsentKey);
+    }
   }
 
   /// Initializes analytics in a safe, unawaited, non-blocking manner.
@@ -363,28 +399,14 @@ class AnalyticsService {
     try {
       // 1. Load persisted consent and perform legacy migration
       final prefs = await SharedPreferences.getInstance();
+      await migrateConsentIfNeeded(prefs);
 
-      if (prefs.containsKey(_kConsentKey)) {
-        final legacyUsage = prefs.getBool(_kConsentKey) ?? true;
-        if (!legacyUsage && !prefs.containsKey(_kErrorReportingKey)) {
-          await prefs.setBool(_kErrorReportingKey, false);
-        }
-      }
-      if (prefs.containsKey(_kLegacyDiagnosticConsentKey) &&
-          !prefs.containsKey(_kErrorReportingKey)) {
-        final legacyDiag =
-            prefs.getBool(_kLegacyDiagnosticConsentKey) ?? true;
-        if (!legacyDiag) {
-          await prefs.setBool(_kErrorReportingKey, false);
-        }
-      }
+      _isDiagnosticsConsentGranted =
+          forceEnable || (prefs.getBool(kDiagnosticsConsentKey) ?? false);
 
-      _isUsageEnabled = prefs.getBool(_kConsentKey) ?? true;
-      _isErrorReportingEnabled =
-          prefs.getBool(_kErrorReportingKey) ?? true;
-
-      if (!_isUsageEnabled && !_isErrorReportingEnabled) {
+      if (!_isDiagnosticsConsentGranted) {
         _isInitialized = false;
+        await _sink.optOut();
         return;
       }
 
@@ -433,65 +455,22 @@ class AnalyticsService {
       );
 
       _isInitialized = true;
+      await _sink.optIn();
 
-      // 5. Check and dispatch pending migration event if any exists and usage is enabled
-      if (_isUsageEnabled) {
-        await _dispatchPendingMigrationIfAny(prefs);
-      }
+      // 5. Check and dispatch pending migration event if any exists
+      await _dispatchPendingMigrationIfAny(prefs);
     } catch (_) {
       // Silent error boundary: failure must never impact app startup
       _isInitialized = false;
     }
   }
 
-  /// Sets user consent for anonymous usage statistics.
-  Future<void> setUsageEnabled(bool enabled) async {
+  /// Sets user consent for both usage statistics and error reports.
+  Future<void> setConsent(bool enabled) async {
     try {
-      _isUsageEnabled = enabled;
+      _isDiagnosticsConsentGranted = enabled;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kConsentKey, enabled);
-
-      if (!enabled) {
-        await prefs.remove(_kPendingMigrationFromKey);
-        await prefs.remove(_kPendingMigrationToKey);
-        await prefs.remove(_kPendingMigrationOkKey);
-      }
-
-      if (!_isUsageEnabled && !_isErrorReportingEnabled) {
-        await _sink.optOut();
-      } else {
-        await _sink.optIn();
-      }
-    } catch (_) {
-      // Silent error boundary
-    }
-  }
-
-  /// Sets user consent for error reports.
-  Future<void> setErrorReportingEnabled(bool enabled) async {
-    try {
-      _isErrorReportingEnabled = enabled;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kErrorReportingKey, enabled);
-
-      if (!_isUsageEnabled && !_isErrorReportingEnabled) {
-        await _sink.optOut();
-      } else {
-        await _sink.optIn();
-      }
-    } catch (_) {
-      // Silent error boundary
-    }
-  }
-
-  /// Sets master consent for both usage statistics and error reporting.
-  Future<void> setEnabled(bool enabled) async {
-    try {
-      _isUsageEnabled = enabled;
-      _isErrorReportingEnabled = enabled;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kConsentKey, enabled);
-      await prefs.setBool(_kErrorReportingKey, enabled);
+      await prefs.setBool(kDiagnosticsConsentKey, enabled);
 
       if (!enabled) {
         await prefs.remove(_kPendingMigrationFromKey);
@@ -499,12 +478,26 @@ class AnalyticsService {
         await prefs.remove(_kPendingMigrationOkKey);
         await _sink.optOut();
       } else {
-        await _sink.optIn();
+        if (!_isInitialized) {
+          await initialize();
+        } else {
+          await _sink.optIn();
+        }
       }
+      await AppDiagnosticsService.instance.onConsentChanged(enabled);
     } catch (_) {
       // Silent error boundary
     }
   }
+
+  /// Backward-compatible alias for [setConsent].
+  Future<void> setUsageEnabled(bool enabled) => setConsent(enabled);
+
+  /// Backward-compatible alias for [setConsent].
+  Future<void> setErrorReportingEnabled(bool enabled) => setConsent(enabled);
+
+  /// Backward-compatible alias for [setConsent].
+  Future<void> setEnabled(bool enabled) => setConsent(enabled);
 
   /// Checks if the one-time first-run privacy notice was already shown.
   Future<bool> isFirstRunNoticeShown() async {
@@ -564,7 +557,7 @@ class AnalyticsService {
   /// Tracks an allowlisted event with strict validation.
   /// Fire-and-forget; never awaited by callers.
   void track(AnalyticsEvent event, [Map<String, dynamic>? properties]) {
-    if (!_isUsageEnabled || !_isInitialized) return;
+    if (!_isDiagnosticsConsentGranted || !_isInitialized) return;
 
     // Drop all events if multi-user session is currently locked
     if (SessionManager.instance.isLocked) return;
@@ -588,7 +581,7 @@ class AnalyticsService {
     StackTrace? stackTrace,
     String? context,
   ]) {
-    if (!_isErrorReportingEnabled || !_isInitialized) return;
+    if (!_isDiagnosticsConsentGranted || !_isInitialized) return;
 
     // Drop all error reports if multi-user session is currently locked
     if (SessionManager.instance.isLocked) return;

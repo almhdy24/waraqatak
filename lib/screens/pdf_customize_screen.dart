@@ -19,6 +19,9 @@ import '../utils/print_settings.dart';
 import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/seal_editor_overlay.dart';
+import '../core/feature_gate.dart';
+import '../services/feature_access.dart';
+import '../widgets/pro_upgrade_sheet.dart';
 
 /// Settings → Document design. Live preview built from the business profile
 /// and sample invoice, with interactive digital stamp and signature editor.
@@ -348,7 +351,9 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
       currencyCode: business.currencyCode,
     );
 
+    final isPro = FeatureGate.isAvailable(Feature.digitalSeals);
     final hasActiveOverlaySeals =
+        isPro &&
         _paper != PaperSize.thermal80mm &&
         ((_stampConfig?.isEnabled == true && _stampBytes != null) ||
             (_sigConfig?.isEnabled == true && _sigBytes != null));
@@ -361,8 +366,19 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
       paperSize: _paper,
       style: _style,
       activeSealsPreview:
-          hasActiveOverlaySeals ? null : (_stampConfig, _sigConfig),
+          hasActiveOverlaySeals ? null : (isPro ? (_stampConfig, _sigConfig) : null),
     );
+  }
+
+  Future<void> _handleProUpgrade() async {
+    final res = await ProUpgradeSheet.show(
+      context,
+      feature: Feature.digitalSeals,
+    );
+    if (res == true && mounted) {
+      await FeatureGate.refresh(force: true);
+      setState(() => _previewRefreshKey++);
+    }
   }
 
   @override
@@ -375,6 +391,7 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
       );
     }
 
+    final isPro = FeatureGate.isAvailable(Feature.digitalSeals);
     final isArabic = l10n.langCode == 'ar';
 
     final preview = _PreviewPane(
@@ -416,6 +433,8 @@ class _PdfCustomizeScreenState extends State<PdfCustomizeScreen> {
       sigConfig: _sigConfig,
       stampBytes: _stampBytes,
       sigBytes: _sigBytes,
+      isPro: isPro,
+      onUpgradeRequested: _handleProUpgrade,
       onChanged: _update,
       onPaperChanged: _setPaper,
       onFooterChanged: (text) {
@@ -537,9 +556,11 @@ class _PreviewPane extends StatelessWidget {
       ),
     );
 
+    final isPro = FeatureGate.isAvailable(Feature.digitalSeals);
     final hasActiveSeals =
-        (stamp != null && stamp!.isEnabled && stampBytes != null) ||
-        (signature != null && signature!.isEnabled && signatureBytes != null);
+        isPro &&
+        ((stamp != null && stamp!.isEnabled && stampBytes != null) ||
+            (signature != null && signature!.isEnabled && signatureBytes != null));
 
     if (paper == PaperSize.thermal80mm || !hasActiveSeals) {
       return pdfPreview;
@@ -601,6 +622,8 @@ class _OptionsList extends StatelessWidget {
   final DigitalSealConfig? sigConfig;
   final Uint8List? stampBytes;
   final Uint8List? sigBytes;
+  final bool isPro;
+  final VoidCallback onUpgradeRequested;
   final ValueChanged<PdfStyleSettings> onChanged;
   final ValueChanged<PaperSize> onPaperChanged;
   final ValueChanged<String> onFooterChanged;
@@ -618,6 +641,8 @@ class _OptionsList extends StatelessWidget {
     required this.sigConfig,
     required this.stampBytes,
     required this.sigBytes,
+    required this.isPro,
+    required this.onUpgradeRequested,
     required this.onChanged,
     required this.onPaperChanged,
     required this.onFooterChanged,
@@ -662,12 +687,23 @@ class _OptionsList extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          if (!isPro) ...[
+                            const SizedBox(width: 8),
+                            const ProBadge(),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -682,13 +718,25 @@ class _OptionsList extends StatelessWidget {
                     ],
                   ),
                 ),
-                Switch(
-                  value: isEnabled && hasImage,
-                  onChanged: hasImage
-                      ? (v) =>
-                            onUpdateSealConfig(config!.copyWith(isEnabled: v))
-                      : null,
-                ),
+                if (!isPro)
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onUpgradeRequested,
+                    child: const IgnorePointer(
+                      child: Switch(
+                        value: false,
+                        onChanged: null,
+                      ),
+                    ),
+                  )
+                else
+                  Switch(
+                    value: isEnabled && hasImage,
+                    onChanged: hasImage
+                        ? (v) =>
+                              onUpdateSealConfig(config!.copyWith(isEnabled: v))
+                        : null,
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -721,7 +769,9 @@ class _OptionsList extends StatelessWidget {
                             OutlinedButton.icon(
                               icon: const Icon(Icons.sync, size: 16),
                               label: Text(l10n.pdfReplaceSeal),
-                              onPressed: () => onPickSeal(type),
+                              onPressed: isPro
+                                  ? () => onPickSeal(type)
+                                  : onUpgradeRequested,
                             ),
                             TextButton.icon(
                               icon: const Icon(Icons.delete_outline, size: 16),
@@ -729,12 +779,16 @@ class _OptionsList extends StatelessWidget {
                               style: TextButton.styleFrom(
                                 foregroundColor: cs.error,
                               ),
-                              onPressed: () => onRemoveSeal(type),
+                              onPressed: isPro
+                                  ? () => onRemoveSeal(type)
+                                  : null,
                             ),
                           ],
                         ),
                         TextButton(
-                          onPressed: () => onResetSealPosition(type),
+                          onPressed: isPro
+                              ? () => onResetSealPosition(type)
+                              : null,
                           child: Text(
                             l10n.pdfSealResetPosition,
                             style: const TextStyle(fontSize: 12),
@@ -755,8 +809,10 @@ class _OptionsList extends StatelessWidget {
                 min: 0.1,
                 max: 1.0,
                 divisions: 9,
-                onChanged: (v) =>
-                    onUpdateSealConfig(config.copyWith(opacity: v)),
+                onChanged: isPro
+                    ? (v) =>
+                          onUpdateSealConfig(config.copyWith(opacity: v))
+                    : null,
               ),
               const SizedBox(height: 4),
               Text(
@@ -772,36 +828,49 @@ class _OptionsList extends StatelessWidget {
                 segments: [
                   ButtonSegment(
                     value: SealPageRule.lastPage,
-                    label: Text(
-                      l10n.pdfSealPageLast,
-                      style: const TextStyle(fontSize: 11),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        l10n.pdfSealPageLast,
+                        style: const TextStyle(fontSize: 11),
+                      ),
                     ),
                   ),
                   ButtonSegment(
                     value: SealPageRule.firstPage,
-                    label: Text(
-                      l10n.pdfSealPageFirst,
-                      style: const TextStyle(fontSize: 11),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        l10n.pdfSealPageFirst,
+                        style: const TextStyle(fontSize: 11),
+                      ),
                     ),
                   ),
                   ButtonSegment(
                     value: SealPageRule.allPages,
-                    label: Text(
-                      l10n.pdfSealPageAll,
-                      style: const TextStyle(fontSize: 11),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        l10n.pdfSealPageAll,
+                        style: const TextStyle(fontSize: 11),
+                      ),
                     ),
                   ),
                 ],
                 selected: {config.pageRule},
-                onSelectionChanged: (s) =>
-                    onUpdateSealConfig(config.copyWith(pageRule: s.first)),
+                onSelectionChanged: isPro
+                    ? (s) =>
+                          onUpdateSealConfig(config.copyWith(pageRule: s.first))
+                    : null,
               ),
             ] else ...[
               Center(
                 child: OutlinedButton.icon(
                   icon: const Icon(Icons.upload_file),
                   label: Text(l10n.pdfUploadSeal),
-                  onPressed: () => onPickSeal(type),
+                  onPressed: isPro
+                      ? () => onPickSeal(type)
+                      : onUpgradeRequested,
                 ),
               ),
             ],

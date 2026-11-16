@@ -11,6 +11,7 @@ void main() {
     test('advancedReports is Pro', () => expect(FeatureAccess.isPro(Feature.advancedReports), isTrue));
     test('referenceCurrency is Pro', () => expect(FeatureAccess.isPro(Feature.referenceCurrency), isTrue));
     test('wholesalePricing is Pro', () => expect(FeatureAccess.isPro(Feature.wholesalePricing), isTrue));
+    test('digitalSeals is Pro', () => expect(FeatureAccess.isPro(Feature.digitalSeals), isTrue));
     test('invoices is Free', () => expect(FeatureAccess.isPro(Feature.invoices), isFalse));
     test('quotations is Free', () => expect(FeatureAccess.isPro(Feature.quotations), isFalse));
     test('vouchers is Free', () => expect(FeatureAccess.isPro(Feature.vouchers), isFalse));
@@ -195,6 +196,25 @@ void main() {
       expect(FeatureAccess.canAccess(Feature.wholesalePricing, expired), isFalse);
       expect(FeatureAccess.canAccess(Feature.wholesalePricing, revoked), isFalse);
       expect(FeatureAccess.canAccess(Feature.wholesalePricing, null), isFalse);
+    });
+
+    test('digitalSeals is gated for Pro users only', () {
+      final licensed = EntitlementState(
+          status: EntitlementStatus.licensed, deviceId: 'd');
+      final trial = EntitlementState(
+          status: EntitlementStatus.trialActive,
+          deviceId: 'd',
+          trialDaysRemaining: 5);
+      expect(FeatureAccess.canAccess(Feature.digitalSeals, licensed), isTrue);
+      expect(FeatureAccess.canAccess(Feature.digitalSeals, trial), isTrue);
+
+      final expired = EntitlementState(
+          status: EntitlementStatus.trialExpired, deviceId: 'd');
+      final revoked = EntitlementState(
+          status: EntitlementStatus.licenseRevoked, deviceId: 'd');
+      expect(FeatureAccess.canAccess(Feature.digitalSeals, expired), isFalse);
+      expect(FeatureAccess.canAccess(Feature.digitalSeals, revoked), isFalse);
+      expect(FeatureAccess.canAccess(Feature.digitalSeals, null), isFalse);
     });
 
     test('regular customer invoice action uses Feature.invoices (always free)', () {

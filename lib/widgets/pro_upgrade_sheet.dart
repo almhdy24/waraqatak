@@ -84,6 +84,8 @@ class ProUpgradeSheet extends StatelessWidget {
         return 'csv_import_export';
       case Feature.wholesalePricing:
         return 'wholesale_pricing';
+      case Feature.digitalSeals:
+        return 'digital_seals';
       default:
         return feature.name;
     }
@@ -230,6 +232,7 @@ class ProUpgradeSheet extends StatelessWidget {
       Feature.referenceCurrency => l10n.exchangeRates,
       Feature.wholesalePricing => l10n.wholesalePricing,
       Feature.multiUser => l10n.usersAndPermissions,
+      Feature.digitalSeals => l10n.pdfSealsSection,
       _ => l10n.proFeatureTitle,
     };
   }

@@ -67,39 +67,37 @@ void main() {
     );
   });
 
-  group('Settings dual toggles, consent persistence & role gating', () {
+  group('Single unified diagnosticsConsent & migration tests', () {
     test(
-      'separate toggles persist choices and sync opt-out when both disabled',
+      'single consent flag controls both analytics and error reporting, and syncs sink opt-out',
       () async {
         final prefs = await SharedPreferences.getInstance();
 
-        // Defaults are both enabled
+        // With forceEnable in setUp, consent is true
+        expect(AnalyticsService.instance.isDiagnosticsConsentGranted, isTrue);
         expect(AnalyticsService.instance.isUsageEnabled, isTrue);
         expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
 
-        // Turn off usage only
-        await AnalyticsService.instance.setUsageEnabled(false);
+        // Turn off consent
+        await AnalyticsService.instance.setConsent(false);
+        expect(AnalyticsService.instance.isDiagnosticsConsentGranted, isFalse);
         expect(AnalyticsService.instance.isUsageEnabled, isFalse);
-        expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
-        expect(prefs.getBool('analytics_enabled'), isFalse);
-        // Error reporting is still on, so sink is NOT opted out
-        expect(mockSink.isOptedOut, isFalse);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
+        expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isFalse);
+        expect(mockSink.isOptedOut, isTrue);
 
-        // Usage tracking attempts are silently dropped
+        // Event tracking is dropped
         AnalyticsService.instance.track(AnalyticsEvent.stocktakeFinalized);
         expect(mockSink.dispatched, isEmpty);
 
-        // Turn off error reports as well
-        await AnalyticsService.instance.setErrorReportingEnabled(false);
-        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
-        expect(prefs.getBool('error_reporting_enabled'), isFalse);
-        // Now both are off, sink is opted out
-        expect(mockSink.isOptedOut, isTrue);
+        // Error recording is dropped
+        AnalyticsService.instance.recordError(Exception('test_error'));
+        expect(mockSink.dispatched, isEmpty);
 
-        // Turn usage back on
-        await AnalyticsService.instance.setUsageEnabled(true);
-        expect(AnalyticsService.instance.isUsageEnabled, isTrue);
-        expect(prefs.getBool('analytics_enabled'), isTrue);
+        // Turn consent back on
+        await AnalyticsService.instance.setConsent(true);
+        expect(AnalyticsService.instance.isDiagnosticsConsentGranted, isTrue);
+        expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isTrue);
         expect(mockSink.isOptedOut, isFalse);
 
         AnalyticsService.instance.track(AnalyticsEvent.stocktakeFinalized);
@@ -107,20 +105,58 @@ void main() {
       },
     );
 
-    test('migrates legacy opt-out so existing opted-out user keeps both off', () async {
+    test('migration combo 1: both old flags true -> diagnosticsConsent is true, old keys removed', () async {
+      SharedPreferences.setMockInitialValues({
+        'analytics_enabled': true,
+        'error_reporting_enabled': true,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await AnalyticsService.migrateConsentIfNeeded(prefs);
+
+      expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isTrue);
+      expect(prefs.containsKey('analytics_enabled'), isFalse);
+      expect(prefs.containsKey('error_reporting_enabled'), isFalse);
+    });
+
+    test('migration combo 2: analytics true, error false -> diagnosticsConsent is false, old keys removed', () async {
+      SharedPreferences.setMockInitialValues({
+        'analytics_enabled': true,
+        'error_reporting_enabled': false,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await AnalyticsService.migrateConsentIfNeeded(prefs);
+
+      expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isFalse);
+      expect(prefs.containsKey('analytics_enabled'), isFalse);
+      expect(prefs.containsKey('error_reporting_enabled'), isFalse);
+    });
+
+    test('migration combo 3: analytics false, error true -> diagnosticsConsent is false, old keys removed', () async {
       SharedPreferences.setMockInitialValues({
         'analytics_enabled': false,
+        'error_reporting_enabled': true,
       });
-      AnalyticsService.instance.resetForTesting();
-      AnalyticsService.instance.setSinkForTesting(mockSink);
-      AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');
-
-      await AnalyticsService.instance.initialize(forceEnable: true);
-
       final prefs = await SharedPreferences.getInstance();
-      expect(AnalyticsService.instance.isUsageEnabled, isFalse);
-      expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
-      expect(prefs.getBool('error_reporting_enabled'), isFalse);
+      await AnalyticsService.migrateConsentIfNeeded(prefs);
+
+      expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isFalse);
+      expect(prefs.containsKey('analytics_enabled'), isFalse);
+      expect(prefs.containsKey('error_reporting_enabled'), isFalse);
+    });
+
+    test('migration combo 4: both old flags false -> diagnosticsConsent is false, old keys removed', () async {
+      SharedPreferences.setMockInitialValues({
+        'analytics_enabled': false,
+        'error_reporting_enabled': false,
+        'ops_diagnostic_consent_granted': false,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await AnalyticsService.migrateConsentIfNeeded(prefs);
+
+      expect(prefs.getBool(AnalyticsService.kDiagnosticsConsentKey), isFalse);
+      expect(prefs.containsKey('analytics_enabled'), isFalse);
+      expect(prefs.containsKey('error_reporting_enabled'), isFalse);
+      expect(prefs.containsKey('ops_diagnostic_consent_granted'), isFalse);
     });
 
     testWidgets('PermissionGate renders settings toggle when authorized', (
@@ -137,14 +173,12 @@ void main() {
         ),
       );
 
-      // In single-user mode (default), all permissions return true
       expect(find.text('ANALYTICS_SETTINGS_TOGGLE'), findsOneWidget);
     });
 
     testWidgets('PermissionGate hides settings toggle for locked-down roles', (
       tester,
     ) async {
-      // Enable multi-user mode and unlock with a restricted role (e.g. Salesperson lacking settings.manage)
       SessionManager.instance.setMultiUserEnabledForTesting(true);
       final restrictedUser = AppUser(
         id: 'user-sales',
@@ -156,7 +190,6 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
-      // Grant permissions that do NOT include settings.manage
       SessionManager.instance.unlock(restrictedUser, {
         PermissionRegistry.salesCreate,
         PermissionRegistry.salesView,
@@ -175,10 +208,8 @@ void main() {
         ),
       );
 
-      // The toggle must be hidden (not in widget tree)
       expect(find.text('ANALYTICS_SETTINGS_TOGGLE'), findsNothing);
 
-      // Clean up
       SessionManager.instance.setMultiUserEnabledForTesting(false);
     });
   });

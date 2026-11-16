@@ -100,15 +100,17 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
           fi
 
-      - name: Build release APKs
+      - name: Build release APK and App Bundle
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          # Test APK only: fall back to debug signing if the keystore secret is
+          # Test APK & AAB: fall back to debug signing if the keystore secret is
           # absent. release.yml (Play uploads) stays strict.
           ALLOW_DEBUG_SIGNING: 'false'
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
+          flutter build appbundle --release
 
       - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
@@ -117,12 +119,19 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
-      - name: Publish release APK asset
+      - name: Upload release App Bundle (AAB) artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-bundle
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Publish release assets
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="preview"
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Waraqatak Preview" --notes "Latest automated APK build." --prerelease
-          gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk --clobber
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Waraqatak Preview" --notes "Latest automated APK and AAB build." --prerelease
+          gh release upload "$TAG" build/app/outputs/flutter-apk/app-release.apk build/app/outputs/bundle/release/app-release.aab --clobber
           gh release edit "$TAG" --notes "Built from commit ${GITHUB_SHA:0:7} on $(date -u '+%Y-%m-%d %H:%M UTC')"
