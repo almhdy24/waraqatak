@@ -84,7 +84,9 @@ void main() {
   late FakeAnalyticsSink fakeSink;
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      AnalyticsService.kDiagnosticsConsentKey: true,
+    });
     fakeSink = FakeAnalyticsSink();
     AnalyticsService.instance.resetForTesting();
     AnalyticsService.instance.setSinkForTesting(fakeSink);
@@ -154,19 +156,21 @@ void main() {
     );
 
     test(
-      'turning usage off stops usage immediately, error toggle is independent',
+      'turning consent off stops usage and error reporting immediately',
       () async {
         AnalyticsService.instance.setProjectKeyForTesting('ak_live_test_key');
         await AnalyticsService.instance.initialize(forceEnable: true);
 
         expect(AnalyticsService.instance.isUsageEnabled, isTrue);
         expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
+        expect(AnalyticsService.instance.isDiagnosticsConsentGranted, isTrue);
 
-        // Turn off usage
-        await AnalyticsService.instance.setUsageEnabled(false);
+        // Turn off diagnostics consent
+        await AnalyticsService.instance.setConsent(false);
         expect(AnalyticsService.instance.isUsageEnabled, isFalse);
-        expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
-        expect(fakeSink.isOptedOut, isFalse); // error reports still active
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
+        expect(AnalyticsService.instance.isDiagnosticsConsentGranted, isFalse);
+        expect(fakeSink.isOptedOut, isTrue);
 
         // Usage track is dropped immediately
         AnalyticsService.instance.track(AnalyticsEvent.screenViewed, {
@@ -174,15 +178,18 @@ void main() {
         });
         expect(fakeSink.trackedEvents, isEmpty);
 
-        // Turn off error reporting
-        await AnalyticsService.instance.setErrorReportingEnabled(false);
-        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
-        expect(fakeSink.isOptedOut, isTrue); // both are now off
+        // Error track is dropped immediately
+        AnalyticsService.instance.recordError(
+          Exception('test error'),
+          StackTrace.current,
+          'sync',
+        );
+        expect(fakeSink.trackedEvents, isEmpty);
 
-        // Re-enable usage only
-        await AnalyticsService.instance.setUsageEnabled(true);
+        // Re-enable consent
+        await AnalyticsService.instance.setConsent(true);
         expect(AnalyticsService.instance.isUsageEnabled, isTrue);
-        expect(AnalyticsService.instance.isErrorReportingEnabled, isFalse);
+        expect(AnalyticsService.instance.isErrorReportingEnabled, isTrue);
         expect(fakeSink.isOptedOut, isFalse);
 
         AnalyticsService.instance.track(AnalyticsEvent.screenViewed, {
