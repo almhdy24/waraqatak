@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/catalog_events.dart';
+import '../core/feature_gate.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
@@ -13,7 +14,6 @@ import '../utils/format_utils.dart';
 import 'barcode_scanner_screen.dart';
 import 'inventory_screen.dart';
 import 'product_form_screen.dart';
-import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/app_confirm_dialog.dart';
@@ -259,12 +259,16 @@ class _ProductsScreenState extends State<ProductsScreen> {
         feature: feature,
       );
       if (result == true && mounted) {
-        await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (_) => const ActivationScreen()),
-        );
-        if (!mounted) return;
-        LicenseService.instance.invalidateCache();
+        _load();
+        final updated =
+            await LicenseService.instance.checkEntitlement(force: true);
+        if (mounted && FeatureAccess.canAccess(feature, updated)) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => build()),
+          );
+          if (mounted) _load();
+        }
       }
       return;
     }
@@ -318,7 +322,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   children: [
                     const Icon(Icons.price_change_outlined, size: 20),
                     const SizedBox(width: 8),
-                    Text(l10n.bulkPricingTitle),
+                    Expanded(child: Text(l10n.bulkPricingTitle)),
+                    if (!FeatureGate.isAvailable(Feature.bulkPriceUpdate)) ...[
+                      const SizedBox(width: 8),
+                      const ProBadge(),
+                    ],
                   ],
                 ),
               ),
@@ -328,7 +336,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   children: [
                     const Icon(Icons.import_export_outlined, size: 20),
                     const SizedBox(width: 8),
-                    Text(l10n.csvImportExportTitle),
+                    Expanded(child: Text(l10n.csvImportExportTitle)),
+                    if (!FeatureGate.isAvailable(Feature.csvImportExport)) ...[
+                      const SizedBox(width: 8),
+                      const ProBadge(),
+                    ],
                   ],
                 ),
               ),

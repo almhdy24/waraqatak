@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import '../core/feature_gate.dart';
 import '../database/database_helper.dart';
 import '../localization/app_localizations.dart';
 import '../models/product.dart';
@@ -18,7 +19,6 @@ import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/pro_upgrade_sheet.dart';
-import 'activation_screen.dart';
 import 'audit_history_screen.dart';
 import 'stocktake/stocktake_screen.dart';
 
@@ -705,12 +705,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         feature: Feature.stocktake,
       );
       if (result == true && mounted) {
-        await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (_) => const ActivationScreen()),
-        );
-        if (!mounted) return;
-        LicenseService.instance.invalidateCache();
+        _openStocktake();
       }
       return;
     }
@@ -732,12 +727,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         feature: Feature.inventoryAudit,
       );
       if (result == true && mounted) {
-        await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (_) => const ActivationScreen()),
-        );
-        if (!mounted) return;
-        LicenseService.instance.invalidateCache();
+        _openAuditHistory();
       }
       return;
     }
@@ -792,7 +782,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   children: [
                     const Icon(Icons.fact_check_outlined, size: 20),
                     const SizedBox(width: 8),
-                    Text(l10n.stocktakeTitle),
+                    Expanded(child: Text(l10n.stocktakeTitle)),
+                    if (!FeatureGate.isAvailable(Feature.stocktake)) ...[
+                      const SizedBox(width: 8),
+                      const ProBadge(),
+                    ],
                   ],
                 ),
               ),
@@ -802,7 +796,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   children: [
                     const Icon(Icons.history_edu_outlined, size: 20),
                     const SizedBox(width: 8),
-                    Text(l10n.auditHistoryTitle),
+                    Expanded(child: Text(l10n.auditHistoryTitle)),
+                    if (!FeatureGate.isAvailable(Feature.inventoryAudit)) ...[
+                      const SizedBox(width: 8),
+                      const ProBadge(),
+                    ],
                   ],
                 ),
               ),

@@ -1,4 +1,4 @@
 Source: ~/projects/api.almhdy24.com/sdk/flutter
-Git Commit: 4d847e61f5cbc6e164d1e307d4a260c394b5ee48
-Date: 2026-11-08
-Notes: Vendored unchanged into Waraqatak (SDK v1.1.0).
+Version: 1.2.0
+Date: 2026-11-15
+Notes: Unified AlmHdy Analytics & Reports SDK integration.

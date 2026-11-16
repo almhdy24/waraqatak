@@ -307,7 +307,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final entitlement = await LicenseService.instance.checkEntitlement();
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
-      await ProUpgradeSheet.show(context, feature: Feature.inventory);
+      final activated =
+          await ProUpgradeSheet.show(context, feature: Feature.inventory);
+      if (activated && mounted) {
+        _handleStockAdjustment();
+      }
       return;
     }
     final adjusted = await InventoryScreen.showAdjustDialog(

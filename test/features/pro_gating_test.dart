@@ -369,7 +369,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.lock_outline), findsOneWidget);
-      expect(find.byIcon(Icons.stars), findsOneWidget);
+      expect(find.byIcon(Icons.vpn_key_outlined), findsOneWidget);
     });
   });
 }

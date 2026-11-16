@@ -142,6 +142,9 @@ class _VoucherScreenState extends State<VoucherScreen> {
             _outstandingBalance = total;
             _isLoadingBalance = false;
           });
+          if (_amountController.text.isNotEmpty) {
+            _formKey.currentState?.validate();
+          }
         })
         .catchError((err) {
           if (!mounted || queryId != _balanceQuerySeq) return;
@@ -361,18 +364,32 @@ class _VoucherScreenState extends State<VoucherScreen> {
               if (!isZero)
                 TextButton.icon(
                   style: TextButton.styleFrom(
+                    backgroundColor:
+                        Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor:
+                        Theme.of(context).colorScheme.onPrimaryContainer,
                     visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   icon: const Icon(Icons.flash_on_rounded, size: 16),
-                  label: Text(l10n.voucherPayFullBalance),
+                  label: Text(
+                    l10n.voucherPayFullBalance,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   onPressed: () {
                     setState(() {
                       _amountController.text = NumberInput.formatForInput(
                         balance,
-                        maxDecimals: 4,
+                        maxDecimals: decimalDigits,
                       );
                     });
+                    _formKey.currentState?.validate();
                   },
                 ),
             ],
@@ -573,6 +590,34 @@ class _VoucherScreenState extends State<VoucherScreen> {
                             return null;
                           },
                         ),
+                        if (_selectedContact != null &&
+                            _outstandingBalance != null &&
+                            _outstandingBalance! > 0) ...[
+                          const SizedBox(height: 10),
+                          ActionChip(
+                            avatar: const Icon(Icons.flash_on_rounded, size: 16),
+                            label: Text(
+                              '${l10n.voucherPayFullBalance} (${_formatAmount(_outstandingBalance!, Currency.decimalDigitsForCode(_business?.currencyCode ?? 'SDG'))} ${Currency.symbolForCode(_business?.currencyCode ?? 'SDG')})',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            onPressed: () {
+                              final currency = _business?.currencyCode ?? 'SDG';
+                              final decimalDigits =
+                                  Currency.decimalDigitsForCode(currency);
+                              setState(() {
+                                _amountController.text =
+                                    NumberInput.formatForInput(
+                                      _outstandingBalance!,
+                                      maxDecimals: decimalDigits,
+                                    );
+                              });
+                              _formKey.currentState?.validate();
+                            },
+                          ),
+                        ],
                         if (_selectedContact != null) ...[
                           const SizedBox(height: 8),
                           Text(

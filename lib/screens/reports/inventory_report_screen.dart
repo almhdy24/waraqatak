@@ -12,6 +12,9 @@ import '../../utils/format_utils.dart';
 import '../../utils/number_input.dart';
 import '../../widgets/amount_field.dart';
 import '../inventory_screen.dart';
+import '../../services/feature_access.dart';
+import '../../services/license_service.dart';
+import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
@@ -401,10 +404,22 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           IconButton(
             icon: const Icon(Icons.warehouse_outlined),
             tooltip: l10n.inventory,
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const InventoryScreen()),
-            ).then((_) => _load()),
+            onPressed: () async {
+              final entitlement =
+                  await LicenseService.instance.checkEntitlement(force: true);
+              if (!context.mounted) return;
+              if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
+                final activated = await ProUpgradeSheet.show(
+                  context,
+                  feature: Feature.inventory,
+                );
+                if (!activated || !context.mounted) return;
+              }
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const InventoryScreen()),
+              ).then((_) => _load());
+            },
           ),
         ],
       ),

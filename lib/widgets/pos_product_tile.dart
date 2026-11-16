@@ -78,132 +78,62 @@ class PosProductTile extends StatelessWidget {
         ? AppDesignTokens.semanticWarning(context)
         : cs.onSurfaceVariant;
 
-    final offContent = ConstrainedBox(
-      constraints: const BoxConstraints(
-        minHeight: AppDesignTokens.minTouchTarget,
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 260;
-          if (isNarrow) {
-            return Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
+    Widget buildNarrowNoImage() {
+      return Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            product.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              color: soldOut ? cs.onSurfaceVariant : null,
-                            ),
-                          ),
-                        ),
-                        if (cartQuantity > 0) ...[
-                          const SizedBox(width: 4),
-                          Semantics(
-                            label: l10n.posItemsCount(
-                              FormatUtils.formatQuantity(cartQuantity),
-                            ),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cs.primary,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                FormatUtils.formatQuantity(cartQuantity),
-                                style: TextStyle(
-                                  color: cs.onPrimary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+                    child: Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: soldOut ? cs.onSurfaceVariant : null,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        displayPrice,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
+                  if (cartQuantity > 0) ...[
+                    const SizedBox(width: 4),
+                    Semantics(
+                      label: l10n.posItemsCount(
+                        FormatUtils.formatQuantity(cartQuantity),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
                           color: cs.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          FormatUtils.formatQuantity(cartQuantity),
+                          style: TextStyle(
+                            color: cs.onPrimary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        stockText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: stockColor,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
-            );
-          }
-
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Row(
+            ),
+            const SizedBox(height: 4),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: Opacity(
-                      opacity: (soldOut || blocked) ? 0.4 : 1.0,
-                      child: ProductImageThumbnail(
-                        imagePath: product.imagePath,
-                        isService: product.isService,
-                        size: 42,
-                        width: 42,
-                        height: 42,
-                        enableFullScreen: false,
-                        heroTag: null,
-                        excludeSemantics: true,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    product.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: soldOut ? cs.onSurfaceVariant : null,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
                 Text(
                   displayPrice,
                   maxLines: 1,
@@ -213,7 +143,7 @@ class PosProductTile extends StatelessWidget {
                     color: cs.primary,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(height: 2),
                 Text(
                   stockText,
                   maxLines: 1,
@@ -223,38 +153,102 @@ class PosProductTile extends StatelessWidget {
                     color: stockColor,
                   ),
                 ),
-                if (cartQuantity > 0) ...[
-                  const SizedBox(width: 8),
-                  Semantics(
-                    label: l10n.posItemsCount(
-                      FormatUtils.formatQuantity(cartQuantity),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        FormatUtils.formatQuantity(cartQuantity),
-                        style: TextStyle(
-                          color: cs.onPrimary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
-          );
-        },
-      ),
-    );
+          ],
+        ),
+      );
+    }
+
+    Widget buildWideRow({required bool withImage}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            if (withImage) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: Opacity(
+                    opacity: (soldOut || blocked) ? 0.4 : 1.0,
+                    child: ProductImageThumbnail(
+                      imagePath: product.imagePath,
+                      isService: product.isService,
+                      size: 42,
+                      width: 42,
+                      height: 42,
+                      enableFullScreen: false,
+                      heroTag: null,
+                      excludeSemantics: true,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                product.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: soldOut ? cs.onSurfaceVariant : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              displayPrice,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              stockText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                color: stockColor,
+              ),
+            ),
+            if (cartQuantity > 0) ...[
+              const SizedBox(width: 8),
+              Semantics(
+                label: l10n.posItemsCount(
+                  FormatUtils.formatQuantity(cartQuantity),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    FormatUtils.formatQuantity(cartQuantity),
+                    style: TextStyle(
+                      color: cs.onPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
 
     final onContent = Padding(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
@@ -398,7 +392,20 @@ class PosProductTile extends StatelessWidget {
         child: InkWell(
           onTap: blocked ? null : onTap,
           onLongPress: blocked ? null : onLongPress,
-          child: showImage ? onContent : offContent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppDesignTokens.minTouchTarget,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 260;
+                if (isNarrow) {
+                  return showImage ? onContent : buildNarrowNoImage();
+                }
+                return buildWideRow(withImage: showImage);
+              },
+            ),
+          ),
         ),
       ),
     );

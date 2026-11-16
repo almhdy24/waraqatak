@@ -40,7 +40,18 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
     final entitlement = await LicenseService.instance.checkEntitlement(force: true);
     if (!FeatureAccess.canAccess(Feature.inventoryAudit, entitlement)) {
       if (mounted) {
-        await ProUpgradeSheet.show(context, feature: Feature.inventoryAudit);
+        final activated = await ProUpgradeSheet.show(
+          context,
+          feature: Feature.inventoryAudit,
+        );
+        if (activated && mounted) {
+          final updated =
+              await LicenseService.instance.checkEntitlement(force: true);
+          if (FeatureAccess.canAccess(Feature.inventoryAudit, updated)) {
+            await _load();
+            return;
+          }
+        }
         if (mounted) Navigator.of(context).pop();
       }
       return;

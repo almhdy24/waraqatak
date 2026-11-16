@@ -11,7 +11,6 @@ import 'contact_form_screen.dart';
 import 'document_detail_screen.dart';
 import 'invoice_screen.dart';
 import 'purchase_screen.dart';
-import 'activation_screen.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
 import '../utils/error_utils.dart';
@@ -113,12 +112,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           feature: Feature.purchases,
         );
         if (result == true && mounted) {
-          await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(builder: (_) => const ActivationScreen()),
-          );
-          if (!mounted) return;
-          LicenseService.instance.invalidateCache();
+          _createDocument();
         }
         return;
       }
@@ -153,12 +147,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         feature: Feature.advancedReports,
       );
       if (result == true && mounted) {
-        await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(builder: (_) => const ActivationScreen()),
-        );
-        if (!mounted) return;
-        LicenseService.instance.invalidateCache();
+        _openStatement();
       }
       return;
     }

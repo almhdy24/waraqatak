@@ -62,7 +62,18 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
     if (!mounted) return;
     if (!FeatureAccess.canAccess(Feature.bulkPriceUpdate, entitlement)) {
       if (mounted) {
-        await ProUpgradeSheet.show(context, feature: Feature.bulkPriceUpdate);
+        final activated = await ProUpgradeSheet.show(
+          context,
+          feature: Feature.bulkPriceUpdate,
+        );
+        if (activated && mounted) {
+          final updated =
+              await LicenseService.instance.checkEntitlement(force: true);
+          if (FeatureAccess.canAccess(Feature.bulkPriceUpdate, updated)) {
+            await _load();
+            return;
+          }
+        }
         if (mounted) Navigator.of(context).pop();
       }
       return;

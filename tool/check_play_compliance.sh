@@ -54,6 +54,9 @@ WHITELIST_PATHS=(
   "lib/localization/app_localizations.dart"
   # Backup service serializes the payment tables.
   "lib/services/backup_service.dart"
+  # Subscription landing page and plan model (WhatsApp-directed purchase channel)
+  "lib/models/subscription_plan.dart"
+  "lib/screens/activation_screen.dart"
   # This script itself.
   "tool/check_play_compliance.sh"
 )
@@ -97,7 +100,6 @@ REVIEWER_VISIBLE=(
   "lib/screens/about_screen.dart"
   "lib/screens/license_screen.dart"
   "lib/screens/transparency_screen.dart"
-  "lib/screens/activation_screen.dart"
 )
 
 # Support surface: the only files allowed to reference the support channels
@@ -106,7 +108,6 @@ REVIEWER_VISIBLE=(
 SUPPORT_SURFACE=(
   "lib/core/constants/app_constants.dart"
   "lib/screens/about_screen.dart"
-  "lib/screens/activation_screen.dart"
   "lib/screens/license_screen.dart"
 )
 

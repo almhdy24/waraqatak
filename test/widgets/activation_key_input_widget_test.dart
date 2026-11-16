@@ -182,7 +182,10 @@ void main() {
         await tester.pumpAndSettle();
 
         final l10n = AppLocalizations('ar');
-        expect(find.text(l10n.activation), findsOneWidget);
+        expect(
+          find.widgetWithText(AppBar, l10n.proSubscriptionTitle),
+          findsOneWidget,
+        );
         expect(find.byType(BackButton), findsOneWidget);
       },
     );

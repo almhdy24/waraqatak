@@ -12,6 +12,11 @@ class FakeAnalyticsSink implements AnalyticsSink {
   Future<void> initialize({
     required String projectKey,
     String? appVersion,
+    String? platform,
+    String? platformVersion,
+    String? deviceModel,
+    String? country,
+    String? region,
     String? storagePath,
     int? maxQueueSize,
     bool debug = false,

@@ -16,7 +16,6 @@ import 'reports/purchases_report_screen.dart';
 import 'reports/sales_report_screen.dart';
 import 'reports/supplier_report_screen.dart';
 import 'stock_movements_screen.dart';
-import 'activation_screen.dart';
 import '../widgets/responsive.dart';
 import 'audit_history_screen.dart';
 import 'reports/advanced_inventory_analytics_screen.dart';
@@ -65,14 +64,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
         if (!mounted) return;
         final result = await ProUpgradeSheet.show(context, feature: feature);
         if (result == true && mounted) {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ActivationScreen()),
-          );
-          if (!mounted) return;
-          LicenseService.instance.invalidateCache();
           final e = await LicenseService.instance.checkEntitlement(force: true);
           if (mounted) setState(() => _entitlement = e);
+          if (FeatureAccess.canAccess(feature, e)) {
+            await _openReport(entry);
+          }
         }
         return;
       }
@@ -99,6 +95,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     if (screen is InventoryReportScreen) return 'inventory';
     if (screen is ProductReportScreen) return 'products';
     if (screen is AdvancedInventoryAnalyticsScreen) return 'advanced_inventory';
+    if (screen is PaymentsReportScreen) return 'payments';
+    if (screen is StockMovementsScreen) return 'inventory';
     if (screen is CustomerReportScreen || screen is SupplierReportScreen) {
       return 'statement';
     }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../localization/app_localizations.dart';
+import '../screens/activation_screen.dart';
 import '../services/analytics/analytics_service.dart';
 import '../services/feature_access.dart';
+import '../services/license_service.dart';
 
 class ProBadge extends StatelessWidget {
   const ProBadge({super.key});
@@ -33,14 +35,14 @@ class ProUpgradeSheet extends StatelessWidget {
 
   const ProUpgradeSheet({super.key, required this.feature});
 
-  static Future<bool?> show(BuildContext context, {required Feature feature}) {
+  static Future<bool> show(BuildContext context, {required Feature feature}) async {
     try {
       AnalyticsService.instance.track(AnalyticsEvent.paywallViewed, {
         'feature': _mapFeature(feature),
       });
     } catch (_) {}
 
-    return showModalBottomSheet<bool>(
+    final proceedToActivation = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -48,6 +50,18 @@ class ProUpgradeSheet extends StatelessWidget {
       ),
       builder: (_) => ProUpgradeSheet(feature: feature),
     );
+
+    if (proceedToActivation == true && context.mounted) {
+      final activated = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => const ActivationScreen()),
+      );
+      if (activated == true) {
+        LicenseService.instance.invalidateCache();
+        return true;
+      }
+    }
+    return false;
   }
 
   static String _mapFeature(Feature feature) {
@@ -81,7 +95,7 @@ class ProUpgradeSheet extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -215,6 +229,7 @@ class ProUpgradeSheet extends StatelessWidget {
       Feature.inventoryAudit => l10n.featureInventoryAudit,
       Feature.referenceCurrency => l10n.exchangeRates,
       Feature.wholesalePricing => l10n.wholesalePricing,
+      Feature.multiUser => l10n.usersAndPermissions,
       _ => l10n.proFeatureTitle,
     };
   }

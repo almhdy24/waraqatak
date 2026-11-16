@@ -4,6 +4,7 @@ import '../features/wholesale/wholesale_feature.dart';
 import '../localization/app_localizations.dart';
 import '../models/business.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/payment_method.dart';
 import '../models/product.dart';
@@ -15,6 +16,7 @@ import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/contact_autocomplete_field.dart';
+import '../widgets/discount_input_field.dart';
 import '../widgets/document_item_form.dart';
 import 'document_detail_screen.dart';
 import '../widgets/responsive.dart';
@@ -35,7 +37,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _notesController = TextEditingController();
-  final _discountController = TextEditingController(text: '0');
+  double _discount = 0.0;
   final _paidController = TextEditingController(text: '0');
   final _amountController = TextEditingController();
   final _validityDaysController = TextEditingController(text: '7');
@@ -77,7 +79,6 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   @override
   void dispose() {
     _notesController.dispose();
-    _discountController.dispose();
     _paidController.dispose();
     _amountController.dispose();
     _validityDaysController.dispose();
@@ -149,10 +150,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       _selectedDate = doc.date;
 
       _notesController.text = doc.notes ?? '';
-      _discountController.text = NumberInput.formatForInput(
-        doc.discount,
-        maxDecimals: 4,
-      );
+      _discount = doc.discount;
       _paidController.text = NumberInput.formatForInput(
         doc.paid,
         maxDecimals: 4,
@@ -367,7 +365,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     double discount = 0;
     double paid = 0;
     if (isInvoice || isPurchase) {
-      discount = NumberInput.parse(_discountController.text) ?? 0;
+      discount = _discount;
       paid = NumberInput.parse(_paidController.text) ?? 0;
     } else if (isFinancial) {
       paid = NumberInput.parse(_paidController.text) ?? 0;
@@ -432,6 +430,16 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  double get _subtotal {
+    double sum = 0;
+    for (int i = 0; i < _descriptionControllers.length; i++) {
+      final q = NumberInput.parse(_quantityControllers[i].text) ?? 0;
+      final p = NumberInput.parse(_priceControllers[i].text) ?? 0;
+      sum += q * p;
+    }
+    return sum;
   }
 
   @override
@@ -766,11 +774,14 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                   ),
                   const Divider(),
                   if (isInvoice || isPurchase || isQuotation) ...[
-                    AmountField(
-                      controller: _discountController,
-                      maxDecimals: 4,
-                      showMultipliers: true,
-                      decoration: InputDecoration(labelText: l10n.discount),
+                    DiscountInputField(
+                      subtotal: _subtotal,
+                      currencySymbol: _business?.currencySymbol ?? '',
+                      decimalDigits: Currency.decimalDigitsForCode(
+                        _business?.currencyCode,
+                      ),
+                      initialDiscount: _discount,
+                      onDiscountChanged: (d) => setState(() => _discount = d),
                     ),
                     if (!isQuotation) ...[
                       const SizedBox(height: 8),

@@ -8,6 +8,11 @@ class FakeAnalyticsSink implements AnalyticsSink {
   bool isInitialized = false;
   String? projectKey;
   String? appVersion;
+  String? platform;
+  String? platformVersion;
+  String? deviceModel;
+  String? country;
+  String? region;
   String? storagePath;
   int? maxQueueSize;
   bool isOptedOut = false;
@@ -20,6 +25,11 @@ class FakeAnalyticsSink implements AnalyticsSink {
   Future<void> initialize({
     required String projectKey,
     String? appVersion,
+    String? platform,
+    String? platformVersion,
+    String? deviceModel,
+    String? country,
+    String? region,
     String? storagePath,
     int? maxQueueSize,
     bool debug = false,
@@ -30,6 +40,11 @@ class FakeAnalyticsSink implements AnalyticsSink {
     isInitialized = true;
     this.projectKey = projectKey;
     this.appVersion = appVersion;
+    this.platform = platform;
+    this.platformVersion = platformVersion;
+    this.deviceModel = deviceModel;
+    this.country = country;
+    this.region = region;
     this.storagePath = storagePath;
     this.maxQueueSize = maxQueueSize;
   }
@@ -447,5 +462,83 @@ void main() {
         );
       },
     );
+  });
+
+  group('Unified AlmHdy Analytics & Centralized Reports Integration', () {
+    test('initialize captures and passes technical deviceModel, country, and region to sink', () async {
+      AnalyticsService.instance.setProjectKeyForTesting('ak_live_unified_key');
+      await AnalyticsService.instance.initialize(
+        deviceModel: 'Samsung Galaxy Tab S9',
+        country: 'SA',
+        region: 'Riyadh',
+        storagePath: 'unified_buffer.json',
+      );
+
+      expect(fakeSink.isInitialized, isTrue);
+      expect(fakeSink.deviceModel, equals('Samsung Galaxy Tab S9'));
+      expect(fakeSink.country, equals('SA'));
+      expect(fakeSink.region, equals('Riyadh'));
+      expect(fakeSink.platform, isNotNull);
+      expect(AnalyticsService.instance.deviceModel, equals('Samsung Galaxy Tab S9'));
+      expect(AnalyticsService.instance.country, equals('SA'));
+      expect(AnalyticsService.instance.region, equals('Riyadh'));
+    });
+
+    test('initialize does not masquerade locale country as verified device country when country is null', () async {
+      AnalyticsService.instance.setProjectKeyForTesting('ak_live_unified_key');
+      await AnalyticsService.instance.initialize(
+        deviceModel: 'Test Device',
+        storagePath: 'unified_buffer_null_country.json',
+      );
+
+      expect(fakeSink.isInitialized, isTrue);
+      expect(fakeSink.country, isNull);
+      expect(AnalyticsService.instance.country, isNull);
+    });
+
+    test('recordError includes device_model in error_report properties', () async {
+      AnalyticsService.instance.setProjectKeyForTesting('ak_live_unified_key');
+      await AnalyticsService.instance.initialize(
+        deviceModel: 'Pixel 9 Pro',
+        country: 'EG',
+      );
+
+      AnalyticsService.instance.recordError(
+        FormatException('Invalid payload data'),
+        StackTrace.current,
+        'pdf_export',
+      );
+
+      expect(fakeSink.trackedEvents.length, equals(1));
+      final errEvent = fakeSink.trackedEvents.first;
+      expect(errEvent['event'], equals('error_report'));
+      expect(errEvent['properties']['device_model'], equals('Pixel 9 Pro'));
+      expect(errEvent['properties']['error_type'], equals('FormatException'));
+    });
+
+    test('reportOpened allowlist accepts payments report', () async {
+      AnalyticsService.instance.setProjectKeyForTesting('ak_live_unified_key');
+      await AnalyticsService.instance.initialize(storagePath: 'buffer.json');
+
+      AnalyticsService.instance.track(AnalyticsEvent.reportOpened, {
+        'report': 'payments',
+      });
+
+      expect(fakeSink.trackedEvents.length, equals(1));
+      expect(fakeSink.trackedEvents.first['event'], equals('report_opened'));
+      expect(fakeSink.trackedEvents.first['properties'], equals({'report': 'payments'}));
+    });
+
+    test('createReportsClient builds AlmHdyReportsClient targeting centralized API', () {
+      final client = AnalyticsService.instance.createReportsClient(
+        baseUrl: 'https://api.almhdy24.com',
+        token: 'admin_bearer_pat_999',
+        projectId: 7,
+      );
+
+      expect(client.baseUrl, equals('https://api.almhdy24.com'));
+      expect(client.token, equals('admin_bearer_pat_999'));
+      expect(client.defaultProjectId, equals(7));
+    });
   });
 }

@@ -405,13 +405,15 @@ class PdfDocumentBuilder {
             ),
           ],
 
-          if (style.showSignature) ...[
+          if (style.showSignature || style.effectiveShowStampBox) ...[
             pw.SizedBox(height: 36),
             _buildSignatures(
               l10n: l10n,
               theme: theme,
               regular: regular,
               textDir: textDir,
+              showSignatureLine: style.showSignature,
+              showStampBox: style.effectiveShowStampBox,
             ),
           ],
         ],
@@ -493,6 +495,8 @@ class PdfDocumentBuilder {
     required PdfTheme theme,
     required pw.Font regular,
     required pw.TextDirection textDir,
+    bool showSignatureLine = true,
+    bool showStampBox = true,
   }) {
     pw.Widget box(String label) => pw.Expanded(
       child: pw.Column(
@@ -517,7 +521,15 @@ class PdfDocumentBuilder {
         ],
       ),
     );
-    return pw.Row(children: [box(l10n.pdfSignature), box(l10n.pdfStamp)]);
+
+    if (showSignatureLine && showStampBox) {
+      return pw.Row(children: [box(l10n.pdfSignature), box(l10n.pdfStamp)]);
+    } else if (showSignatureLine) {
+      return pw.Row(children: [box(l10n.pdfSignature), pw.Spacer()]);
+    } else if (showStampBox) {
+      return pw.Row(children: [pw.Spacer(), box(l10n.pdfStamp)]);
+    }
+    return pw.SizedBox();
   }
 
   static pw.Widget _buildInfoRow({

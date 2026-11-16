@@ -54,7 +54,7 @@ class _StocktakeHistoryScreenState extends State<StocktakeHistoryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.noStocktakeSessions.isEmpty ? l10n.stocktakeTitle : l10n.stocktakeTitle),
+        title: Text(l10n.stocktakeHistoryTitle),
       ),
       body: ResponsiveCenter(
         child: _loading

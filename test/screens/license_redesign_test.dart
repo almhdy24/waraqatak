@@ -74,13 +74,13 @@ void main() {
       expect(l10n.licenseScreenRedesignTitle, 'تفعيل ورقتك Pro');
       expect(
         l10n.trialActiveStatusWithDays(7),
-        'عندك تجربة مجانية لمدة 14 يوماً لكامل مميزات ورقتك Pro. متبقي 7 يوم.',
+        'لديك تجربة مجانية لمدة 14 يوماً لجميع مميزات ورقتك Pro. المتبقي: 7 يوم.',
       );
       expect(l10n.whatsappNotInstalled, 'واتساب غير مثبت على جهازك');
-      expect(l10n.alreadyHaveKeyTitle, 'عندك مفتاح؟');
+      expect(l10n.alreadyHaveKeyTitle, 'لديك مفتاح تفعيل؟');
       expect(
         l10n.activationSuccessDone,
-        'تم التفعيل بنجاح، مميزات Pro صارت متاحة لك.',
+        'تم التفعيل بنجاح. أصبحت مميزات Pro متاحة لك.',
       );
       expect(l10n.supportCardTitle, 'الدعم والمساعدة');
       expect(l10n.contactEmailAction, 'البريد الإلكتروني');

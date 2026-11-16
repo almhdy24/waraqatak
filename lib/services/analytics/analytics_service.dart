@@ -6,6 +6,7 @@ import 'package:almhdy_analytics/almhdy_analytics.dart' hide SessionManager;
 import '../../core/analytics/analytics_config.dart';
 import '../../core/constants/app_constants.dart';
 import '../access/session_manager.dart';
+import '../license_service.dart';
 import 'error_sanitizer.dart';
 
 /// Strictly allowlisted analytics events for Waraqatak.
@@ -41,6 +42,11 @@ abstract class AnalyticsSink {
   Future<void> initialize({
     required String projectKey,
     String? appVersion,
+    String? platform,
+    String? platformVersion,
+    String? deviceModel,
+    String? country,
+    String? region,
     String? storagePath,
     int? maxQueueSize,
     bool debug = false,
@@ -61,6 +67,11 @@ class AlmHdyAnalyticsSink implements AnalyticsSink {
   Future<void> initialize({
     required String projectKey,
     String? appVersion,
+    String? platform,
+    String? platformVersion,
+    String? deviceModel,
+    String? country,
+    String? region,
     String? storagePath,
     int? maxQueueSize,
     bool debug = false,
@@ -68,6 +79,11 @@ class AlmHdyAnalyticsSink implements AnalyticsSink {
     await AlmHdyAnalytics.instance.initialize(
       projectKey: projectKey,
       appVersion: appVersion,
+      platform: platform,
+      platformVersion: platformVersion,
+      deviceModel: deviceModel,
+      country: country,
+      region: region,
       storagePath: storagePath,
       maxQueueSize: maxQueueSize,
       debug: debug,
@@ -117,6 +133,10 @@ class AnalyticsService {
   bool _isErrorReportingEnabled = true;
   bool _isInitialized = false;
   String? _testProjectKey;
+  String? _deviceModel;
+  String? _country;
+  String? _region;
+  String? _platformVersion;
 
   bool get isUsageEnabled => _isUsageEnabled;
   bool get isErrorReportingEnabled => _isErrorReportingEnabled;
@@ -124,6 +144,31 @@ class AnalyticsService {
   /// Backward-compatible alias for [isUsageEnabled].
   bool get isEnabled => _isUsageEnabled;
   bool get isInitialized => _isInitialized;
+
+  /// Resolved hardware device model.
+  String? get deviceModel => _deviceModel;
+
+  /// Resolved geographic country code (e.g. SA, EG, SD).
+  String? get country => _country;
+
+  /// Resolved geographic region or subdivision.
+  String? get region => _region;
+
+  /// Resolved platform OS version.
+  String? get platformVersion => _platformVersion;
+
+  /// Creates an authenticated reporting client for querying the centralized AlmHdy Analytics & Reports API.
+  AlmHdyReportsClient createReportsClient({
+    String baseUrl = 'https://api.almhdy24.com',
+    String? token,
+    int projectId = 1,
+  }) {
+    return AlmHdyReportsClient(
+      baseUrl: baseUrl,
+      token: token,
+      defaultProjectId: projectId,
+    );
+  }
 
   // --- Allowed property values sets ---
   static const Set<String> _allowedLanguages = {'ar', 'en'};
@@ -153,6 +198,7 @@ class AnalyticsService {
     'accounting',
     'statement',
     'tax',
+    'payments',
   };
   static const Set<String> _allowedPdfKinds = {
     'document',
@@ -296,6 +342,10 @@ class AnalyticsService {
     _testProjectKey = null;
     _sessionErrorCount = 0;
     _seenErrorSignatures.clear();
+    _deviceModel = null;
+    _country = null;
+    _region = null;
+    _platformVersion = null;
     AnalyticsConfig.reset();
     _sink = AlmHdyAnalyticsSink();
   }
@@ -305,6 +355,10 @@ class AnalyticsService {
     String? storagePath,
     int? maxQueueSize,
     bool forceEnable = false,
+    String? deviceModel,
+    String? country,
+    String? region,
+    String? platformVersion,
   }) async {
     try {
       // 1. Load persisted consent and perform legacy migration
@@ -343,10 +397,36 @@ class AnalyticsService {
         return;
       }
 
-      // 3. Initialize sink (SDK auto-resolves mobile storagePath if null)
+      // 3. Resolve technical device metadata
+      _deviceModel = deviceModel;
+      if (_deviceModel == null) {
+        try {
+          _deviceModel = await LicenseService.instance.getDeviceModel();
+        } catch (_) {}
+      }
+
+      // Geographic country and region are only recorded if explicitly provided
+      // from a verified location source. Locale format (locale.countryCode) is
+      // not a physical device location and must never be presented as verified geo.
+      // When null, the server authoritatively resolves network GeoIP / CF headers.
+      _country = country;
+      _region = region;
+      _platformVersion = platformVersion;
+      if (_platformVersion == null) {
+        try {
+          _platformVersion = Platform.operatingSystemVersion;
+        } catch (_) {}
+      }
+
+      // 4. Initialize sink (SDK auto-resolves mobile storagePath if null)
       await _sink.initialize(
         projectKey: key,
         appVersion: AppConstants.appVersion,
+        platform: Platform.operatingSystem,
+        platformVersion: _platformVersion,
+        deviceModel: _deviceModel,
+        country: _country,
+        region: _region,
         storagePath: storagePath,
         maxQueueSize: maxQueueSize ?? AnalyticsConfig.defaultMaxQueueSize,
         debug: kDebugMode,
@@ -354,7 +434,7 @@ class AnalyticsService {
 
       _isInitialized = true;
 
-      // 4. Check and dispatch pending migration event if any exists and usage is enabled
+      // 5. Check and dispatch pending migration event if any exists and usage is enabled
       if (_isUsageEnabled) {
         await _dispatchPendingMigrationIfAny(prefs);
       }
@@ -543,6 +623,10 @@ class AnalyticsService {
         'sanitized_stack': stack,
       };
 
+      if (_deviceModel != null && _deviceModel!.isNotEmpty) {
+        props['device_model'] = _deviceModel;
+      }
+
       if (context != null && context.isNotEmpty) {
         props['context'] = ErrorSanitizer.sanitizeExceptionType(context);
       }
@@ -727,6 +811,7 @@ class AnalyticsService {
         if (key == 'platform' && val is String) return;
         if (key == 'os_version' && val is String) return;
         if (key == 'app_version' && val is String) return;
+        if (key == 'device_model' && val is String) return;
         if (key == 'context' && val is String) return;
         break;
     }

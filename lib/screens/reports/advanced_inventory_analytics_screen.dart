@@ -53,7 +53,18 @@ class _AdvancedInventoryAnalyticsScreenState
     final entitlement = await LicenseService.instance.checkEntitlement(force: true);
     if (!FeatureAccess.canAccess(Feature.advancedReports, entitlement)) {
       if (mounted) {
-        await ProUpgradeSheet.show(context, feature: Feature.advancedReports);
+        final activated = await ProUpgradeSheet.show(
+          context,
+          feature: Feature.advancedReports,
+        );
+        if (activated && mounted) {
+          final updated =
+              await LicenseService.instance.checkEntitlement(force: true);
+          if (FeatureAccess.canAccess(Feature.advancedReports, updated)) {
+            await _load();
+            return;
+          }
+        }
         if (mounted) Navigator.of(context).pop();
       }
       return;
