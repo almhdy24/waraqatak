@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -58,7 +57,6 @@ Future<void> main() async {
       };
 
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      FlutterCryptography.enable();
       final prefs = await SharedPreferences.getInstance();
       final lastRecordedDbVersion = prefs.getInt('last_app_db_version');
       await DatabaseHelper.instance.database;
