@@ -388,6 +388,10 @@ void main() {
       expect(find.text('Item Two'), findsWidgets);
 
       FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
       await tester.pumpAndSettle();
 
       final deleteBtnItem1 = find.descendant(

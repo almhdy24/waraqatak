@@ -60,7 +60,8 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
 
   @override
   void deactivate() {
-    _focusNode.unfocus();
+    _debounceTimer?.cancel();
+    _requestSequence++;
     super.deactivate();
   }
 
