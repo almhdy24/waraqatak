@@ -75,6 +75,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField>
   Widget build(BuildContext context) {
     super.build(context);
     return Autocomplete<Product>(
+      key: ValueKey(_effectiveController),
       focusNode: _focusNode,
       textEditingController: _effectiveController,
       displayStringForOption: (product) => product.name,
