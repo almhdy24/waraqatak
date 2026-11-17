@@ -158,15 +158,11 @@ class _QuotationScreenState extends State<QuotationScreen> {
       if (!proceed) return;
     }
     if (!mounted) return;
+    final nameCtrl = _productNames.removeAt(index);
+    final descCtrl = _desc.removeAt(index);
+    final qtyCtrl = _qty.removeAt(index);
+    final priceCtrl = _price.removeAt(index);
     setState(() {
-      _productNames[index].dispose();
-      _desc[index].dispose();
-      _qty[index].dispose();
-      _price[index].dispose();
-      _productNames.removeAt(index);
-      _desc.removeAt(index);
-      _qty.removeAt(index);
-      _price.removeAt(index);
       _taxable.removeAt(index);
       _productIds.removeAt(index);
       _taxRates.removeAt(index);
@@ -175,6 +171,12 @@ class _QuotationScreenState extends State<QuotationScreen> {
       _cachedProducts.removeAt(index);
       _saleUnits.removeAt(index);
       _conversionFactors.removeAt(index);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      nameCtrl.dispose();
+      descCtrl.dispose();
+      qtyCtrl.dispose();
+      priceCtrl.dispose();
     });
   }
 

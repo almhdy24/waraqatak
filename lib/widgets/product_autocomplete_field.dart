@@ -65,9 +65,6 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField>
   @override
   void dispose() {
     _debounceTimer?.cancel();
-    if (_focusNode.hasFocus) {
-      _focusNode.unfocus(disposition: UnfocusDisposition.scope);
-    }
     _focusNode.dispose();
     _effectiveController.removeListener(_onControllerTextChanged);
     _internalController?.dispose();

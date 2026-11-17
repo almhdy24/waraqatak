@@ -177,16 +177,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       if (!proceed) return;
     }
     if (!mounted) return;
+    final nameCtrl = _productNameControllers.removeAt(index);
+    final descCtrl = _descriptionControllers.removeAt(index);
+    final qtyCtrl = _quantityControllers.removeAt(index);
+    final priceCtrl = _priceControllers.removeAt(index);
     setState(() {
-      _productNameControllers[index].dispose();
-      _descriptionControllers[index].dispose();
-      _quantityControllers[index].dispose();
-      _priceControllers[index].dispose();
-
-      _productNameControllers.removeAt(index);
-      _descriptionControllers.removeAt(index);
-      _quantityControllers.removeAt(index);
-      _priceControllers.removeAt(index);
       _taxableList.removeAt(index);
       _productIds.removeAt(index);
       _taxRates.removeAt(index);
@@ -195,6 +190,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       _cachedProducts.removeAt(index);
       _saleUnits.removeAt(index);
       _conversionFactors.removeAt(index);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      nameCtrl.dispose();
+      descCtrl.dispose();
+      qtyCtrl.dispose();
+      priceCtrl.dispose();
     });
   }
 
