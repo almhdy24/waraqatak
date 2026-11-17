@@ -142,6 +142,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   }
 
   Future<void> _removeItem(int index) async {
+    FocusScope.of(context).unfocus();
     final hasContent =
         _productNameControllers[index].text.isNotEmpty ||
         _descriptionControllers[index].text.isNotEmpty ||

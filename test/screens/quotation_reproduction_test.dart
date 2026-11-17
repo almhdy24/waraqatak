@@ -387,6 +387,9 @@ void main() {
       expect(find.text('Item One'), findsWidgets);
       expect(find.text('Item Two'), findsWidgets);
 
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
       final deleteBtnItem1 = find.descendant(
         of: forms.at(1),
         matching: find.byIcon(Icons.delete_outline),

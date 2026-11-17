@@ -325,6 +325,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   }
 
   Future<void> _removeItem(int index) async {
+    FocusScope.of(context).unfocus();
     final hasContent =
         _descriptionControllers[index].text.isNotEmpty ||
         _productIds[index] != null;

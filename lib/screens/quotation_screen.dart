@@ -143,6 +143,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   }
 
   Future<void> _removeItem(int index) async {
+    FocusScope.of(context).unfocus();
     final hasContent =
         _productNames[index].text.isNotEmpty ||
         _desc[index].text.isNotEmpty ||

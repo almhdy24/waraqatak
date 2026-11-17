@@ -162,6 +162,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   }
 
   Future<void> _removeItem(int index) async {
+    FocusScope.of(context).unfocus();
     final hasContent =
         _productNameControllers[index].text.isNotEmpty ||
         _descriptionControllers[index].text.isNotEmpty ||
