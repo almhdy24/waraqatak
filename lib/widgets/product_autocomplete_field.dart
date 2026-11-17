@@ -23,6 +23,7 @@ class ProductAutocompleteField extends StatefulWidget {
 }
 
 class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
+  final FocusNode _focusNode = FocusNode();
   TextEditingController? _internalController;
   int _requestSequence = 0;
   Timer? _debounceTimer;
@@ -58,8 +59,15 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   }
 
   @override
+  void deactivate() {
+    _focusNode.unfocus();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     _debounceTimer?.cancel();
+    _focusNode.dispose();
     _effectiveController.removeListener(_onControllerTextChanged);
     _internalController?.dispose();
     super.dispose();
@@ -69,6 +77,7 @@ class _ProductAutocompleteFieldState extends State<ProductAutocompleteField> {
   Widget build(BuildContext context) {
     return Autocomplete<Product>(
       key: ValueKey(_effectiveController),
+      focusNode: _focusNode,
       textEditingController: _effectiveController,
       displayStringForOption: (product) => product.name,
       optionsBuilder: (textEditingValue) {
