@@ -36,6 +36,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _validityKey = GlobalKey();
   final _validityFocusNode = FocusNode();
+  final _customerController = TextEditingController();
   final _notesController = TextEditingController();
   final _validityController = TextEditingController(text: '7');
   double _discount = 0.0;
@@ -70,6 +71,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
   @override
   void dispose() {
     _validityFocusNode.dispose();
+    _customerController.dispose();
     _notesController.dispose();
     _validityController.dispose();
     for (final c in _productNames) {
@@ -121,6 +123,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
   bool get _isDirty {
     return _contact != null ||
+        _customerController.text.trim().isNotEmpty ||
         _notesController.text.isNotEmpty ||
         (_validityController.text != '7' &&
             _validityController.text.isNotEmpty) ||
@@ -266,6 +269,10 @@ class _QuotationScreenState extends State<QuotationScreen> {
         type: 'quotation',
         business: _business!,
         contact: _contact,
+        recipientName: _contact?.name ??
+            (_customerController.text.trim().isNotEmpty
+                ? _customerController.text.trim()
+                : null),
         items: _buildItems(),
         discount: _discount,
         notes: _notesController.text,
@@ -390,6 +397,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
                   label: l10n.customer,
                   type: 'customer',
                   initialContact: _contact,
+                  controller: _customerController,
                   onContactChanged: (contact) async {
                     setState(() => _contact = contact);
                     if (WholesaleFeature.isEnabledForBusiness(_business)) {

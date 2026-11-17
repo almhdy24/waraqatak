@@ -35,6 +35,7 @@ enum PurchasePaymentOption { fullyPaid, partial, credit }
 class _PurchaseScreenState extends State<PurchaseScreen> {
   final _formKey = GlobalKey<FormState>();
   double _discount = 0.0;
+  final _supplierController = TextEditingController();
   final _paidController = TextEditingController(text: '0');
   final _notesController = TextEditingController();
 
@@ -69,6 +70,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   @override
   void dispose() {
+    _supplierController.dispose();
     _paidController.dispose();
     _notesController.dispose();
     for (final c in _productNameControllers) {
@@ -120,6 +122,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   bool get _isDirty {
     return _selectedContact != null ||
+        _supplierController.text.trim().isNotEmpty ||
         _notesController.text.isNotEmpty ||
         _discount > 0 ||
         (_paidController.text != '0' && _paidController.text.isNotEmpty) ||
@@ -265,6 +268,10 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         type: 'purchase',
         business: _business!,
         contact: _selectedContact,
+        recipientName: _selectedContact?.name ??
+            (_supplierController.text.trim().isNotEmpty
+                ? _supplierController.text.trim()
+                : null),
         items: _buildItems(),
         discount: _discount,
         paid: _paidFor(totals.total),
@@ -399,6 +406,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   label: l10n.supplier,
                   type: 'supplier',
                   initialContact: _selectedContact,
+                  controller: _supplierController,
                   onContactChanged: (contact) => setState(() => _selectedContact = contact),
                 ),
                 const SizedBox(height: 16),

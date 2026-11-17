@@ -48,6 +48,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
 
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
+  final _contactController = TextEditingController();
 
   final List<TextEditingController> _productNameControllers = [];
   final List<TextEditingController> _descriptionControllers = [];
@@ -90,6 +91,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     _validityDaysController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _contactController.dispose();
 
     for (final c in _productNameControllers) {
       c.dispose();
@@ -171,6 +173,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       _enabledMethods = enabledMethods;
       _selectedContact = contact;
       _contactName = contact?.name ?? doc.recipientName;
+      _contactController.text = _contactName ?? '';
       _phoneController.text = contact?.phone ?? doc.recipientPhone ?? '';
       _addressController.text = contact?.address ?? '';
       _selectedDate = doc.date;
@@ -394,11 +397,15 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final isCustom = type == 'custom';
 
     Contact? contact;
+    final resolvedContactName = _selectedContact?.name ??
+        (_contactController.text.trim().isNotEmpty
+            ? _contactController.text.trim()
+            : _contactName?.trim());
     if (_selectedContact != null) {
       contact = _selectedContact;
-    } else if (_contactName != null && _contactName!.trim().isNotEmpty) {
+    } else if (resolvedContactName != null && resolvedContactName.isNotEmpty) {
       contact = Contact(
-        name: _contactName!.trim(),
+        name: resolvedContactName,
         phone: _phoneController.text.trim().isEmpty
             ? null
             : _phoneController.text.trim(),
@@ -489,7 +496,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         type: type,
         business: _business!,
         contact: contact,
-        recipientName: _selectedContact?.name ?? _contactName,
+        recipientName: resolvedContactName,
         recipientPhone: _selectedContact?.phone ??
             (_phoneController.text.trim().isEmpty
                 ? null
@@ -602,6 +609,8 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                           const SizedBox(height: 12),
                           ContactAutocompleteField(
                             initialContact: _selectedContact,
+                            initialText: _contactName,
+                            controller: _contactController,
                             label: isSupplier ? l10n.supplier : l10n.customer,
                             type: isSupplier ? 'supplier' : 'customer',
                             onContactChanged: (contact) async {
@@ -712,6 +721,8 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                           const SizedBox(height: 12),
                           ContactAutocompleteField(
                             initialContact: _selectedContact,
+                            initialText: _contactName,
+                            controller: _contactController,
                             label: type == 'expense_voucher'
                                 ? l10n.paidTo
                                 : l10n.receivedFrom,

@@ -4,6 +4,8 @@ import '../models/contact.dart';
 
 class ContactAutocompleteField extends StatefulWidget {
   final Contact? initialContact;
+  final String? initialText;
+  final TextEditingController? controller;
   final String label;
   final String type;
   final ValueChanged<Contact?> onContactChanged;
@@ -12,6 +14,8 @@ class ContactAutocompleteField extends StatefulWidget {
   const ContactAutocompleteField({
     super.key,
     this.initialContact,
+    this.initialText,
+    this.controller,
     required this.label,
     required this.type,
     required this.onContactChanged,
@@ -23,27 +27,77 @@ class ContactAutocompleteField extends StatefulWidget {
       _ContactAutocompleteFieldState();
 }
 
-class _ContactAutocompleteFieldState extends State<ContactAutocompleteField> {
+class _ContactAutocompleteFieldState extends State<ContactAutocompleteField>
+    with AutomaticKeepAliveClientMixin {
+  final FocusNode _focusNode = FocusNode();
+  TextEditingController? _internalController;
   Contact? _selectedContact;
+
+  TextEditingController get _effectiveController =>
+      widget.controller ??
+      (_internalController ??= TextEditingController(
+        text: widget.initialText ?? widget.initialContact?.name ?? '',
+      ));
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
     _selectedContact = widget.initialContact;
+    if (widget.controller == null) {
+      _internalController = TextEditingController(
+        text: widget.initialText ?? widget.initialContact?.name ?? '',
+      );
+    } else {
+      if (widget.controller!.text.isEmpty) {
+        final text = widget.initialText ?? widget.initialContact?.name;
+        if (text != null && text.isNotEmpty) {
+          widget.controller!.text = text;
+        }
+      }
+    }
   }
 
   @override
   void didUpdateWidget(covariant ContactAutocompleteField oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      if (widget.controller == null && _internalController == null) {
+        _internalController = TextEditingController(
+          text: widget.initialText ?? widget.initialContact?.name ?? '',
+        );
+      }
+    }
+
     if (oldWidget.initialContact != widget.initialContact) {
       _selectedContact = widget.initialContact;
+      if (widget.initialContact != null &&
+          _effectiveController.text != widget.initialContact!.name) {
+        _effectiveController.text = widget.initialContact!.name;
+      }
+    } else if (oldWidget.initialText != widget.initialText &&
+        widget.initialText != null &&
+        _effectiveController.text != widget.initialText) {
+      _effectiveController.text = widget.initialText!;
     }
   }
 
   @override
+  void dispose() {
+    _focusNode.dispose();
+    _internalController?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Autocomplete<Contact>(
-      initialValue: TextEditingValue(text: widget.initialContact?.name ?? ''),
+      key: ValueKey(_effectiveController),
+      focusNode: _focusNode,
+      textEditingController: _effectiveController,
       displayStringForOption: (contact) => contact.name,
       optionsBuilder: (textEditingValue) async {
         final query = textEditingValue.text.trim();
@@ -62,7 +116,9 @@ class _ContactAutocompleteFieldState extends State<ContactAutocompleteField> {
         setState(() {
           _selectedContact = contact;
         });
+        _effectiveController.text = contact.name;
         widget.onContactChanged(contact);
+        widget.onTextChanged?.call(contact.name);
       },
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {

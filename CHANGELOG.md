@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Customer & Supplier Name Persistence on Scroll:**
+  - Added `AutomaticKeepAliveClientMixin` to `ContactAutocompleteField` to preserve state and text when scrolled offscreen.
+  - Added persistent controllers and initial text synchronization across `QuotationScreen`, `InvoiceScreen`, `PurchaseScreen`, and `EditDocumentScreen`.
+  - Fixed custom recipient name persistence when saving documents without selecting an existing contact.
+
+### Fixed
 - **Quotation & Document Creation/Editing:**
   - Fixed product name input disappearing when typing custom/unlisted items (`ProductAutocompleteField` & `DocumentItemForm` state persistence with `AutomaticKeepAliveClientMixin`, dedicated text controller, and synchronization to item description).
   - Prevented keyboard enter/submission from silently overwriting typed product names with autocomplete suggestions.
