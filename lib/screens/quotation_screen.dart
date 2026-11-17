@@ -159,6 +159,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
       if (!proceed) return;
     }
     if (!mounted) return;
+    FocusScope.of(context).unfocus();
     final nameCtrl = _productNames.removeAt(index);
     final descCtrl = _desc.removeAt(index);
     final qtyCtrl = _qty.removeAt(index);

@@ -158,6 +158,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
       if (!proceed) return;
     }
     if (!mounted) return;
+    FocusScope.of(context).unfocus();
     final nameCtrl = _productNameControllers.removeAt(index);
     final descCtrl = _descriptionControllers.removeAt(index);
     final qtyCtrl = _quantityControllers.removeAt(index);

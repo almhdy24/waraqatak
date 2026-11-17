@@ -340,6 +340,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       if (!proceed) return;
     }
     if (!mounted) return;
+    FocusScope.of(context).unfocus();
     _hasChanges = true;
     final nameCtrl = _productNameControllers.removeAt(index);
     final descCtrl = _descriptionControllers.removeAt(index);
