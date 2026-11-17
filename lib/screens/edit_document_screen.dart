@@ -24,6 +24,8 @@ import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
 import '../widgets/app_date_picker.dart';
 import '../utils/date_format_utils.dart';
+import '../services/access/access_guard.dart';
+import '../services/access/permission_registry.dart';
 
 class EditDocumentScreen extends StatefulWidget {
   final int documentId;
@@ -35,6 +37,8 @@ class EditDocumentScreen extends StatefulWidget {
 
 class _EditDocumentScreenState extends State<EditDocumentScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _validityKey = GlobalKey();
+  final _validityFocusNode = FocusNode();
 
   final _notesController = TextEditingController();
   double _discount = 0.0;
@@ -45,6 +49,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   final _phoneController = TextEditingController();
   final _addressController = TextEditingController();
 
+  final List<TextEditingController> _productNameControllers = [];
   final List<TextEditingController> _descriptionControllers = [];
   final List<TextEditingController> _quantityControllers = [];
   final List<TextEditingController> _priceControllers = [];
@@ -78,6 +83,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
 
   @override
   void dispose() {
+    _validityFocusNode.dispose();
     _notesController.dispose();
     _paidController.dispose();
     _amountController.dispose();
@@ -85,6 +91,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     _phoneController.dispose();
     _addressController.dispose();
 
+    for (final c in _productNameControllers) {
+      c.dispose();
+    }
     for (final c in _descriptionControllers) {
       c.dispose();
     }
@@ -110,6 +119,23 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       final doc = await db.getDocumentById(widget.documentId);
       if (doc == null) {
         if (mounted) Navigator.pop(context);
+        return;
+      }
+
+      final isPurchaseDoc = doc.type == 'purchase';
+      final requiredPerm = isPurchaseDoc
+          ? PermissionRegistry.purchasesEdit
+          : PermissionRegistry.salesEdit;
+      if (!AccessGuard.can(requiredPerm)) {
+        if (mounted) {
+          final l10n = AppLocalizations.of(context);
+          AppSnackBar.show(
+            context,
+            l10n.accessDeniedMissingPerm(requiredPerm),
+            severity: AppSnackBarSeverity.error,
+          );
+          Navigator.pop(context);
+        }
         return;
       }
 
@@ -162,11 +188,16 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         _ensureValidPaymentMethod();
       } else if (doc.type == 'quotation') {
         if (doc.validUntil != null) {
-          final days = doc.validUntil!.difference(doc.date).inDays;
+          final days = DocumentService.calendarDaysBetween(
+            doc.date,
+            doc.validUntil!,
+          );
           _validityDaysController.text = NumberInput.formatForInput(
             days.toDouble(),
             maxDecimals: 0,
           );
+        } else {
+          _validityDaysController.text = '';
         }
       } else if (doc.type == 'custom') {
         _amountController.text = NumberInput.formatForInput(
@@ -178,6 +209,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
       if (doc.type == 'invoice' ||
           doc.type == 'quotation' ||
           doc.type == 'purchase') {
+        for (final c in _productNameControllers) {
+          c.dispose();
+        }
         for (final c in _descriptionControllers) {
           c.dispose();
         }
@@ -187,6 +221,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         for (final c in _priceControllers) {
           c.dispose();
         }
+        _productNameControllers.clear();
         _descriptionControllers.clear();
         _quantityControllers.clear();
         _priceControllers.clear();
@@ -199,9 +234,23 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         _conversionFactors.clear();
 
         for (final item in items) {
-          _descriptionControllers.add(
-            TextEditingController(text: item.description),
-          );
+          String name = '';
+          String desc = item.description;
+          if (item.productId != null) {
+            name = '';
+            desc = item.description;
+          } else {
+            if (item.description.contains('\n')) {
+              final idx = item.description.indexOf('\n');
+              name = item.description.substring(0, idx).trim();
+              desc = item.description.substring(idx + 1).trim();
+            } else {
+              name = item.description;
+              desc = '';
+            }
+          }
+          _productNameControllers.add(TextEditingController(text: name));
+          _descriptionControllers.add(TextEditingController(text: desc));
           _quantityControllers.add(
             TextEditingController(
               text: NumberInput.formatForInput(item.quantity, maxDecimals: 4),
@@ -241,7 +290,9 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   }
 
   void _addItem() {
+    _hasChanges = true;
     setState(() {
+      _productNameControllers.add(TextEditingController());
       _descriptionControllers.add(TextEditingController());
       _quantityControllers.add(TextEditingController(text: '1'));
       _priceControllers.add(TextEditingController());
@@ -290,10 +341,12 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     if (!mounted) return;
     _hasChanges = true;
     setState(() {
+      _productNameControllers[index].dispose();
       _descriptionControllers[index].dispose();
       _quantityControllers[index].dispose();
       _priceControllers[index].dispose();
 
+      _productNameControllers.removeAt(index);
       _descriptionControllers.removeAt(index);
       _quantityControllers.removeAt(index);
       _priceControllers.removeAt(index);
@@ -308,7 +361,24 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
   }
 
   Future<void> _save() async {
-    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_saving) return;
+    final isQuoPreCheck = _document?.type == 'quotation';
+    if (!_formKey.currentState!.validate()) {
+      if (isQuoPreCheck) {
+        final days = NumberInput.parse(_validityDaysController.text)?.toInt();
+        if (days == null || days < 1) {
+          if (_validityKey.currentContext != null) {
+            Scrollable.ensureVisible(
+              _validityKey.currentContext!,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          }
+          _validityFocusNode.requestFocus();
+        }
+      }
+      return;
+    }
     if (_document == null || _business == null) return;
 
     setState(() => _saving = true);
@@ -341,6 +411,14 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
     final items = <DocumentItemInput>[];
     if (isInvoice || isQuotation || isPurchase) {
       for (int i = 0; i < _descriptionControllers.length; i++) {
+        final name = i < _productNameControllers.length
+            ? _productNameControllers[i].text.trim()
+            : '';
+        final desc = _descriptionControllers[i].text.trim();
+        final effectiveDesc =
+            (name.isNotEmpty && desc.isNotEmpty && name != desc)
+                ? '$name\n$desc'
+                : (name.isNotEmpty ? name : desc);
         final q = NumberInput.parse(_quantityControllers[i].text) ?? 0;
         final factor = i < _conversionFactors.length
             ? _conversionFactors[i]
@@ -348,7 +426,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
         final unit = i < _saleUnits.length ? _saleUnits[i] : null;
         items.add(
           DocumentItemInput(
-            description: _descriptionControllers[i].text.trim(),
+            description: effectiveDesc,
             quantity: q,
             price: NumberInput.parse(_priceControllers[i].text) ?? 0,
             taxable: _taxableList[i],
@@ -364,8 +442,10 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
 
     double discount = 0;
     double paid = 0;
-    if (isInvoice || isPurchase) {
+    if (isInvoice || isPurchase || isQuotation) {
       discount = _discount;
+    }
+    if (isInvoice || isPurchase) {
       paid = NumberInput.parse(_paidController.text) ?? 0;
     } else if (isFinancial) {
       paid = NumberInput.parse(_paidController.text) ?? 0;
@@ -375,9 +455,20 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
 
     DateTime? validUntil;
     if (isQuotation) {
-      final days =
-          NumberInput.parse(_validityDaysController.text)?.toInt() ?? 0;
-      validUntil = (_selectedDate ?? _document!.date).add(Duration(days: days));
+      final days = NumberInput.parse(_validityDaysController.text)?.toInt();
+      if (days == null || days < 1) {
+        if (_validityKey.currentContext != null) {
+          Scrollable.ensureVisible(
+            _validityKey.currentContext!,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
+        _validityFocusNode.requestFocus();
+        return;
+      }
+      final docDate = _selectedDate ?? _document!.date;
+      validUntil = docDate.add(Duration(days: days));
     }
 
     String? finalPaymentMethod;
@@ -721,6 +812,11 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                   ...List.generate(
                     _descriptionControllers.length,
                     (index) => DocumentItemForm(
+                      key: ObjectKey(_descriptionControllers[index]),
+                      productNameController:
+                          index < _productNameControllers.length
+                              ? _productNameControllers[index]
+                              : null,
                       descriptionController: _descriptionControllers[index],
                       quantityController: _quantityControllers[index],
                       priceController: _priceControllers[index],
@@ -794,11 +890,68 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                     ],
                   ],
                   if (isQuotation) ...[
-                    AmountField(
-                      controller: _validityDaysController,
-                      maxDecimals: 0,
-                      showMultipliers: false,
-                      decoration: InputDecoration(labelText: l10n.validityDays),
+                    Builder(
+                      builder: (ctx) {
+                        final days =
+                            NumberInput.parse(_validityDaysController.text)
+                                ?.toInt() ??
+                            7;
+                        final effectiveDays = days > 0 ? days : 7;
+                        final docDate = _selectedDate ?? _document!.date;
+                        final expiryDate =
+                            docDate.add(Duration(days: effectiveDays));
+                        return AmountField(
+                          key: _validityKey,
+                          controller: _validityDaysController,
+                          focusNode: _validityFocusNode,
+                          maxDecimals: 0,
+                          showMultipliers: false,
+                          validator: (v) {
+                            final d = NumberInput.parse(v ?? '')?.toInt();
+                            if (d == null || d <= 0) {
+                              return l10n.errorValidityMinDays;
+                            }
+                            return null;
+                          },
+                          decoration: InputDecoration(
+                            labelText: l10n.validityDays,
+                            hintText: l10n.validityHint,
+                            helperText:
+                                '${l10n.validUntil}: ${AppDateUtils.formatDate(expiryDate)}',
+                            helperStyle: TextStyle(
+                              color: Theme.of(ctx).colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            prefixIcon: IconButton(
+                              icon: const Icon(
+                                Icons.calendar_month_outlined,
+                                size: 20,
+                              ),
+                              tooltip: l10n.selectDate,
+                              onPressed: () async {
+                                final picked = await AppDatePicker.show(
+                                  context: ctx,
+                                  initialDate: expiryDate,
+                                  firstDate:
+                                      docDate.add(const Duration(days: 1)),
+                                  lastDate:
+                                      docDate.add(const Duration(days: 3650)),
+                                );
+                                if (picked != null) {
+                                  final diff =
+                                      DocumentService.calendarDaysBetween(
+                                        docDate,
+                                        picked,
+                                      );
+                                  final pickedDays = diff > 0 ? diff : 1;
+                                  _validityDaysController.text =
+                                      pickedDays.toString();
+                                }
+                              },
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                   TextFormField(

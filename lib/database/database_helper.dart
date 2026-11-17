@@ -5352,6 +5352,14 @@ class DatabaseHelper {
           }
         }
       }
+
+      await logAuditEvent(
+        'document_edited',
+        entityType: 'document',
+        entityId: doc.id,
+        details: 'type=${doc.type} num=${doc.documentNumber}',
+        txn: txn,
+      );
     });
   }
 

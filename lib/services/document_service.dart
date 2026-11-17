@@ -69,6 +69,14 @@ class DocumentItemInput {
 }
 
 class DocumentService {
+  /// Computes the whole calendar day difference between two dates safely in UTC,
+  /// ignoring local time of day, timestamps, and timezone hour shifts.
+  static int calendarDaysBetween(DateTime a, DateTime b) {
+    final da = DateTime.utc(a.year, a.month, a.day);
+    final db = DateTime.utc(b.year, b.month, b.day);
+    return db.difference(da).inDays;
+  }
+
   /// Creates a new document.
   /// [isDraft] — if true, the document is saved as a draft (invoice/quotation only);
   /// stock is not deducted and the document is excluded from financial summaries.
@@ -163,26 +171,37 @@ class DocumentService {
       remaining = 0;
       total = canonicalPaid;
     } else if (isQuotation) {
-      if (validUntil == null || !validUntil.isAfter(documentDate)) {
+      if (validUntil == null) {
+        throw ArgumentError('Valid until date is required for quotations');
+      }
+      final days = calendarDaysBetween(documentDate, validUntil);
+      if (days == 0) {
+        throw ArgumentError('Quotation validity period must be at least 1 day');
+      }
+      if (days < 0) {
         throw ArgumentError('Valid until must be after document date');
       }
       subtotal = MoneyUtils.round(
         _calculateSubtotal(effectiveItems),
         decimalDigits,
       );
-      discountApplied = 0;
-      taxRate = effectiveTaxRate;
-      taxAmount = _calculateTaxMultiRate(
-        effectiveItems,
-        discountApplied,
-        taxRate,
-        subtotal,
-        effectivePricesIncludeTax,
+      discountApplied = MoneyUtils.round(discount, decimalDigits);
+      if (discountApplied < 0) {
+        throw ArgumentError('Discount cannot be negative');
+      }
+      if (MoneyUtils.isOverpayment(discountApplied, subtotal, decimalDigits)) {
+        throw ArgumentError('Discount cannot exceed subtotal');
+      }
+      final totals = calculateInvoiceTotals(
+        items: effectiveItems,
+        discount: discountApplied,
+        taxRate: effectiveTaxRate,
+        pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      total = effectivePricesIncludeTax
-          ? subtotal
-          : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
+      taxRate = effectiveTaxRate;
+      taxAmount = totals.taxAmount;
+      total = totals.total;
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {
@@ -412,26 +431,37 @@ class DocumentService {
       remaining = 0;
       total = canonicalPaid;
     } else if (isQuotation) {
-      if (validUntil == null || !validUntil.isAfter(documentDate)) {
+      if (validUntil == null) {
+        throw ArgumentError('Valid until date is required for quotations');
+      }
+      final days = calendarDaysBetween(documentDate, validUntil);
+      if (days == 0) {
+        throw ArgumentError('Quotation validity period must be at least 1 day');
+      }
+      if (days < 0) {
         throw ArgumentError('Valid until must be after document date');
       }
       subtotal = MoneyUtils.round(
         _calculateSubtotal(effectiveItems),
         decimalDigits,
       );
-      discountApplied = 0;
-      taxRate = effectiveTaxRate;
-      taxAmount = _calculateTaxMultiRate(
-        effectiveItems,
-        discountApplied,
-        taxRate,
-        subtotal,
-        effectivePricesIncludeTax,
+      discountApplied = MoneyUtils.round(discount, decimalDigits);
+      if (discountApplied < 0) {
+        throw ArgumentError('Discount cannot be negative');
+      }
+      if (MoneyUtils.isOverpayment(discountApplied, subtotal, decimalDigits)) {
+        throw ArgumentError('Discount cannot exceed subtotal');
+      }
+      final totals = calculateInvoiceTotals(
+        items: effectiveItems,
+        discount: discountApplied,
+        taxRate: effectiveTaxRate,
+        pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      total = effectivePricesIncludeTax
-          ? subtotal
-          : MoneyUtils.round(subtotal + taxAmount, decimalDigits);
+      taxRate = effectiveTaxRate;
+      taxAmount = totals.taxAmount;
+      total = totals.total;
       finalPaid = 0;
       remaining = total;
     } else if (isInvoice || isPurchase) {

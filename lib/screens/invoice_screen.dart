@@ -47,6 +47,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   String _paymentMethod = 'cash';
   List<PaymentMethod> _enabledMethods = [];
 
+  final List<TextEditingController> _productNameControllers = [];
   final List<TextEditingController> _descriptionControllers = [];
   final List<TextEditingController> _quantityControllers = [];
   final List<TextEditingController> _priceControllers = [];
@@ -81,6 +82,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   void dispose() {
     _paidController.dispose();
     _notesController.dispose();
+    for (final c in _productNameControllers) {
+      c.dispose();
+    }
     for (final c in _descriptionControllers) {
       c.dispose();
     }
@@ -115,6 +119,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   void _addItem() {
     setState(() {
+      _productNameControllers.add(TextEditingController());
       _descriptionControllers.add(TextEditingController());
       _quantityControllers.add(TextEditingController(text: '1'));
       _priceControllers.add(TextEditingController());
@@ -138,6 +143,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         _notesController.text.isNotEmpty ||
         _discount > 0 ||
         (_paidController.text != '0' && _paidController.text.isNotEmpty) ||
+        _productNameControllers.any((c) => c.text.isNotEmpty) ||
         _descriptionControllers.any((c) => c.text.isNotEmpty) ||
         _productIds.any((id) => id != null) ||
         _descriptionControllers.length > 1;
@@ -157,6 +163,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   Future<void> _removeItem(int index) async {
     final hasContent =
+        _productNameControllers[index].text.isNotEmpty ||
         _descriptionControllers[index].text.isNotEmpty ||
         _productIds[index] != null;
     if (hasContent) {
@@ -171,10 +178,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     }
     if (!mounted) return;
     setState(() {
+      _productNameControllers[index].dispose();
       _descriptionControllers[index].dispose();
       _quantityControllers[index].dispose();
       _priceControllers[index].dispose();
 
+      _productNameControllers.removeAt(index);
       _descriptionControllers.removeAt(index);
       _quantityControllers.removeAt(index);
       _priceControllers.removeAt(index);
@@ -216,13 +225,21 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
   List<DocumentItemInput> _buildItems() =>
       List.generate(_descriptionControllers.length, (i) {
+        final name = i < _productNameControllers.length
+            ? _productNameControllers[i].text.trim()
+            : '';
+        final desc = _descriptionControllers[i].text.trim();
+        final effectiveDesc =
+            (name.isNotEmpty && desc.isNotEmpty && name != desc)
+                ? '$name\n$desc'
+                : (name.isNotEmpty ? name : desc);
         final q = NumberInput.parse(_quantityControllers[i].text) ?? 0;
         final factor = i < _conversionFactors.length
             ? _conversionFactors[i]
             : 1.0;
         final unit = i < _saleUnits.length ? _saleUnits[i] : null;
         return DocumentItemInput(
-          description: _descriptionControllers[i].text.trim(),
+          description: effectiveDesc,
           quantity: q,
           price: NumberInput.parse(_priceControllers[i].text) ?? 0,
           taxable: _taxableList[i],
@@ -499,6 +516,11 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 ...List.generate(
                   _descriptionControllers.length,
                   (index) => DocumentItemForm(
+                    key: ObjectKey(_descriptionControllers[index]),
+                    productNameController:
+                        index < _productNameControllers.length
+                            ? _productNameControllers[index]
+                            : null,
                     descriptionController: _descriptionControllers[index],
                     quantityController: _quantityControllers[index],
                     priceController: _priceControllers[index],

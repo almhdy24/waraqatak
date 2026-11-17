@@ -23,6 +23,7 @@ import '../utils/date_format_utils.dart';
 import '../utils/error_utils.dart';
 import '../utils/number_input.dart';
 import '../widgets/amount_field.dart';
+import '../widgets/app_date_picker.dart';
 
 class QuotationScreen extends StatefulWidget {
   const QuotationScreen({super.key});
@@ -33,11 +34,14 @@ class QuotationScreen extends StatefulWidget {
 
 class _QuotationScreenState extends State<QuotationScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _validityKey = GlobalKey();
+  final _validityFocusNode = FocusNode();
   final _notesController = TextEditingController();
   final _validityController = TextEditingController(text: '7');
   double _discount = 0.0;
   bool _saving = false;
 
+  final List<TextEditingController> _productNames = [];
   final List<TextEditingController> _desc = [];
   final List<TextEditingController> _qty = [];
   final List<TextEditingController> _price = [];
@@ -65,8 +69,12 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
   @override
   void dispose() {
+    _validityFocusNode.dispose();
     _notesController.dispose();
     _validityController.dispose();
+    for (final c in _productNames) {
+      c.dispose();
+    }
     for (final c in _desc) {
       c.dispose();
     }
@@ -96,6 +104,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
   void _addItem() {
     setState(() {
+      _productNames.add(TextEditingController());
       _desc.add(TextEditingController());
       _qty.add(TextEditingController(text: '1'));
       _price.add(TextEditingController());
@@ -115,6 +124,7 @@ class _QuotationScreenState extends State<QuotationScreen> {
         _notesController.text.isNotEmpty ||
         (_validityController.text != '7' &&
             _validityController.text.isNotEmpty) ||
+        _productNames.any((c) => c.text.isNotEmpty) ||
         _desc.any((c) => c.text.isNotEmpty) ||
         _productIds.any((id) => id != null) ||
         _desc.length > 1;
@@ -134,7 +144,9 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
   Future<void> _removeItem(int index) async {
     final hasContent =
-        _desc[index].text.isNotEmpty || _productIds[index] != null;
+        _productNames[index].text.isNotEmpty ||
+        _desc[index].text.isNotEmpty ||
+        _productIds[index] != null;
     if (hasContent) {
       final l10n = AppLocalizations.of(context);
       final proceed = await AppConfirmDialog.show(
@@ -147,9 +159,11 @@ class _QuotationScreenState extends State<QuotationScreen> {
     }
     if (!mounted) return;
     setState(() {
+      _productNames[index].dispose();
       _desc[index].dispose();
       _qty[index].dispose();
       _price[index].dispose();
+      _productNames.removeAt(index);
       _desc.removeAt(index);
       _qty.removeAt(index);
       _price.removeAt(index);
@@ -184,11 +198,16 @@ class _QuotationScreenState extends State<QuotationScreen> {
   }
 
   List<DocumentItemInput> _buildItems() => List.generate(_desc.length, (i) {
+    final name = i < _productNames.length ? _productNames[i].text.trim() : '';
+    final desc = _desc[i].text.trim();
+    final effectiveDesc = (name.isNotEmpty && desc.isNotEmpty && name != desc)
+        ? '$name\n$desc'
+        : (name.isNotEmpty ? name : desc);
     final q = NumberInput.parse(_qty[i].text) ?? 1;
     final factor = i < _conversionFactors.length ? _conversionFactors[i] : 1.0;
     final unit = i < _saleUnits.length ? _saleUnits[i] : null;
     return DocumentItemInput(
-      description: _desc[i].text.trim(),
+      description: effectiveDesc,
       quantity: q,
       price: NumberInput.parse(_price[i].text) ?? 0,
       taxable: _taxable[i],
@@ -204,7 +223,21 @@ class _QuotationScreenState extends State<QuotationScreen> {
   });
 
   Future<void> _save({bool isDraft = false}) async {
-    if (_saving || !_formKey.currentState!.validate()) return;
+    if (_saving) return;
+    if (!_formKey.currentState!.validate()) {
+      final days = NumberInput.parse(_validityController.text)?.toInt();
+      if (days == null || days < 1) {
+        if (_validityKey.currentContext != null) {
+          Scrollable.ensureVisible(
+            _validityKey.currentContext!,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        }
+        _validityFocusNode.requestFocus();
+      }
+      return;
+    }
     if (_business == null) return;
 
     if (_desc.isEmpty) {
@@ -218,8 +251,9 @@ class _QuotationScreenState extends State<QuotationScreen> {
 
     setState(() => _saving = true);
 
-    final int validityDays =
+    final int rawDays =
         NumberInput.parse(_validityController.text)?.toInt() ?? 7;
+    final int validityDays = rawDays > 0 ? rawDays : 7;
     final DateTime documentDate = DateTime.now();
     final DateTime validUntil = documentDate.add(Duration(days: validityDays));
 
@@ -298,11 +332,15 @@ class _QuotationScreenState extends State<QuotationScreen> {
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      AppAmountText(
-                        amount: totals.total,
-                        currencySymbol: _business?.currencySymbol ?? '',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: AppAmountText(
+                          amount: totals.total,
+                          currencySymbol: _business?.currencySymbol ?? '',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
                     ],
                   ),
@@ -400,6 +438,9 @@ class _QuotationScreenState extends State<QuotationScreen> {
                 ...List.generate(
                   _desc.length,
                   (i) => DocumentItemForm(
+                    key: ObjectKey(_desc[i]),
+                    productNameController:
+                        i < _productNames.length ? _productNames[i] : null,
                     descriptionController: _desc[i],
                     quantityController: _qty[i],
                     priceController: _price[i],
@@ -504,29 +545,54 @@ class _QuotationScreenState extends State<QuotationScreen> {
                     final days =
                         NumberInput.parse(_validityController.text)?.toInt() ??
                         7;
-                    final expiryDate = DateTime.now().add(Duration(days: days));
+                    final effectiveDays = days > 0 ? days : 7;
+                    final expiryDate =
+                        DateTime.now().add(Duration(days: effectiveDays));
                     return AmountField(
+                      key: _validityKey,
                       controller: _validityController,
+                      focusNode: _validityFocusNode,
                       maxDecimals: 0,
                       showMultipliers: false,
                       validator: (v) {
                         final d = NumberInput.parse(v ?? '')?.toInt();
-                        if (d == null || d < 1 || d > 3650) {
-                          return l10n.invalidQuantity;
+                        if (d == null || d <= 0) {
+                          return l10n.errorValidityMinDays;
                         }
                         return null;
                       },
                       decoration: InputDecoration(
                         labelText: l10n.validityDays,
+                        hintText: l10n.validityHint,
                         helperText:
                             '${l10n.validUntil}: ${AppDateUtils.formatDate(expiryDate)}',
                         helperStyle: TextStyle(
                           color: Theme.of(ctx).colorScheme.primary,
                           fontWeight: FontWeight.w500,
                         ),
-                        prefixIcon: const Icon(
-                          Icons.calendar_month_outlined,
-                          size: 20,
+                        prefixIcon: IconButton(
+                          icon: const Icon(
+                            Icons.calendar_month_outlined,
+                            size: 20,
+                          ),
+                          tooltip: l10n.selectDate,
+                          onPressed: () async {
+                            final now = DateTime.now();
+                            final picked = await AppDatePicker.show(
+                              context: ctx,
+                              initialDate: expiryDate,
+                              firstDate: now.add(const Duration(days: 1)),
+                              lastDate: now.add(const Duration(days: 3650)),
+                            );
+                            if (picked != null) {
+                              final diff = DocumentService.calendarDaysBetween(
+                                now,
+                                picked,
+                              );
+                              final pickedDays = diff > 0 ? diff : 1;
+                              _validityController.text = pickedDays.toString();
+                            }
+                          },
                         ),
                       ),
                     );

@@ -16,6 +16,7 @@ import 'product_autocomplete_field.dart';
 
 class DocumentItemForm extends StatefulWidget {
   final TextEditingController descriptionController;
+  final TextEditingController? productNameController;
   final TextEditingController quantityController;
   final TextEditingController priceController;
   final bool taxable;
@@ -41,6 +42,7 @@ class DocumentItemForm extends StatefulWidget {
   const DocumentItemForm({
     super.key,
     required this.descriptionController,
+    this.productNameController,
     required this.quantityController,
     required this.priceController,
     required this.taxable,
@@ -68,17 +70,32 @@ class DocumentItemForm extends StatefulWidget {
   State<DocumentItemForm> createState() => _DocumentItemFormState();
 }
 
-class _DocumentItemFormState extends State<DocumentItemForm> {
+class _DocumentItemFormState extends State<DocumentItemForm>
+    with AutomaticKeepAliveClientMixin {
   final FocusNode _quantityFocusNode = FocusNode();
+  TextEditingController? _internalProductNameController;
+  TextEditingController get _effectiveProductNameController =>
+      widget.productNameController ??
+      (_internalProductNameController ??= TextEditingController());
+  String _lastSyncedProductName = '';
   int? _selectedProductId;
   Product? _selectedProduct;
   List<ProductUnit> _availableUnits = [];
   ProductUnit? _selectedUnit;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
     _selectedProductId = widget.productId;
+    if (_effectiveProductNameController.text.isEmpty &&
+        widget.descriptionController.text.isNotEmpty &&
+        widget.productNameController == null) {
+      _effectiveProductNameController.text = widget.descriptionController.text;
+      _lastSyncedProductName = widget.descriptionController.text;
+    }
     if (widget.productId != null) {
       _loadProduct(widget.productId!);
     }
@@ -87,6 +104,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
   @override
   void dispose() {
     _quantityFocusNode.dispose();
+    _internalProductNameController?.dispose();
     super.dispose();
   }
 
@@ -97,6 +115,13 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
       _selectedProductId = widget.productId;
       if (widget.productId != null) {
         _loadProduct(widget.productId!);
+        if (_effectiveProductNameController.text.isEmpty &&
+            widget.descriptionController.text.isNotEmpty &&
+            widget.productNameController == null) {
+          _effectiveProductNameController.text =
+              widget.descriptionController.text;
+          _lastSyncedProductName = widget.descriptionController.text;
+        }
       } else {
         _selectedProduct = null;
         _availableUnits = [];
@@ -162,7 +187,12 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
     if (mounted) {
       setState(() {
         _selectedProductId = product.id;
-        widget.descriptionController.text = product.name;
+        _effectiveProductNameController.text = product.name;
+        _lastSyncedProductName = product.name;
+        if (widget.descriptionController.text.isEmpty ||
+            widget.descriptionController.text == _lastSyncedProductName) {
+          widget.descriptionController.text = product.name;
+        }
         widget.priceController.text = NumberInput.formatForInput(
           price,
           maxDecimals: 4,
@@ -213,6 +243,8 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
       _selectedProduct = null;
       _availableUnits = [];
       _selectedUnit = null;
+      _effectiveProductNameController.clear();
+      _lastSyncedProductName = '';
     });
     widget.onProductChanged(null);
     widget.onProductSelected?.call(null);
@@ -316,6 +348,7 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
     final qty = NumberInput.parse(widget.quantityController.text) ?? 0.0;
@@ -350,7 +383,9 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                   Expanded(
                     child: ProductAutocompleteField(
                       label: l10n.productName,
+                      controller: _effectiveProductNameController,
                       onProductSelected: _onProductSelected,
+                      onTextChanged: (_) => widget.onChanged?.call(),
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -380,9 +415,11 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        widget.descriptionController.text.isNotEmpty
-                            ? widget.descriptionController.text
-                            : l10n.item,
+                        _effectiveProductNameController.text.isNotEmpty
+                            ? _effectiveProductNameController.text
+                            : (widget.descriptionController.text.isNotEmpty
+                                ? widget.descriptionController.text
+                                : l10n.item),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -409,7 +446,13 @@ class _DocumentItemFormState extends State<DocumentItemForm> {
                 ),
                 border: const OutlineInputBorder(),
               ),
-              validator: (v) => v == null || v.isEmpty ? l10n.required : null,
+              validator: (v) {
+                final hasName =
+                    _effectiveProductNameController.text.trim().isNotEmpty;
+                final hasDesc = v != null && v.trim().isNotEmpty;
+                if (!hasName && !hasDesc) return l10n.required;
+                return null;
+              },
               onChanged: (_) => widget.onChanged?.call(),
             ),
             if (WholesaleFeature.isWholesaleActive(

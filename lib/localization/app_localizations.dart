@@ -227,6 +227,10 @@ class AppLocalizations {
   String get validUntil => _t('صالح حتى', 'Valid Until');
   String get validityDays =>
       _t('مدة صلاحية العرض', 'Quotation Validity Period');
+  String get validityHint => _t(
+    'أدخل عدد الأيام حتى تاريخ انتهاء العرض (مثال: 7)',
+    'Enter number of days until expiry (e.g. 7)',
+  );
   String get title => _t('عنوان المستند', 'Title');
   String get content => _t('المحتوى', 'Content');
 
@@ -2544,6 +2548,10 @@ class AppLocalizations {
   String get errorValidUntilBeforeDate => _t(
     'يجب ألا يسبق تاريخ انتهاء العرض تاريخ الإصدار',
     'Valid-until date must be on or after issue date',
+  );
+  String get errorValidityMinDays => _t(
+    'مدة صلاحية العرض يجب أن تكون يوماً واحداً على الأقل',
+    'Quotation validity period must be at least 1 day',
   );
 
   String get pdfTaxIdLabel => _t('الرقم الضريبي:', 'Tax ID:');

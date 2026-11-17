@@ -5,6 +5,19 @@ All notable changes to the Waraqatak (ورقتك) project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Quotation & Document Creation/Editing:**
+  - Fixed product name input disappearing when typing custom/unlisted items (`ProductAutocompleteField` & `DocumentItemForm` state persistence with `AutomaticKeepAliveClientMixin`, dedicated text controller, and synchronization to item description).
+  - Prevented keyboard enter/submission from silently overwriting typed product names with autocomplete suggestions.
+  - Added support for separate custom product name and description persistence across quotation, invoice, purchase, and document edit flows.
+  - Added stable keys (`ObjectKey`) to item forms across quotation, invoice, purchase, and edit document screens to prevent state corruption when deleting or reordering items.
+  - Fixed offer validity date validation with a unified rule (>= 1 calendar day, timezone-safe UTC date difference), interactive calendar date picker with `firstDate` restriction, localized Arabic error messages (`errorValidityMinDays`, `errorValidUntilBeforeDate`), and automatic scroll-to-field on validation failure.
+  - Fixed quotation discounts being zeroed out upon save in `DocumentService` (`createDocument` and `updateDocument`).
+  - Added audit logging (`document_edited`) for document updates in `DatabaseHelper` and permission checks (`salesEdit`, `purchasesEdit`) on edit document screens.
+  - Fixed 32px flex overflow in `AppTotalsCard` and bottom bar amount text overflow on narrow (384px) screens.
+
 ## [1.2.0] - 2026-11-16
 
 ### ما الجديد في الإصدار 1.2.0:

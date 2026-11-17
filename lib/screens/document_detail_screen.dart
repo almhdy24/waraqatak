@@ -677,7 +677,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     final canConvert = isQuotation && !isCancelled && _convertedInvoice == null;
     final canCancel = !isCancelled && !isDraft;
     final canDelete = isDraft || isCancelled;
-    final canEdit = !isCancelled && !_isAllocatedVoucher;
+    final canEdit = !isCancelled &&
+        !_isAllocatedVoucher &&
+        (isPurchase
+            ? AccessGuard.can(PermissionRegistry.purchasesEdit)
+            : AccessGuard.can(PermissionRegistry.salesEdit));
 
     // FAB priority: record payment > issue > convert
     Widget? fab;

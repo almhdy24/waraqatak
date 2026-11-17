@@ -63,11 +63,14 @@ class AppTotalsCard extends StatelessWidget {
             children: [
               Icon(Icons.calculate_outlined, size: 20, color: cs.primary),
               const SizedBox(width: AppDesignTokens.space8),
-              Text(
-                l10n.financialSummaryCardTitle,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
+              Expanded(
+                child: Text(
+                  l10n.financialSummaryCardTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

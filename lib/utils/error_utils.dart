@@ -131,8 +131,17 @@ class ErrorUtils {
         msg.contains('cannot be negative')) {
       return l10n.errorNegativeAmount;
     }
+    if (lower.contains('at least 1 day') ||
+        lower.contains('validity period must be') ||
+        lower.contains('valid until date is required')) {
+      return l10n.errorValidityMinDays;
+    }
     if (msg.contains('validUntil must be on or after date') ||
-        msg.contains('Valid-until date cannot be before')) {
+        msg.contains('Valid-until date cannot be before') ||
+        msg.contains('Valid until must be after document date') ||
+        lower.contains('valid until') ||
+        lower.contains('validuntil') ||
+        lower.contains('valid-until')) {
       return l10n.errorValidUntilBeforeDate;
     }
 

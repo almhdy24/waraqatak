@@ -42,6 +42,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   String _paymentMethod = 'cash';
   List<PaymentMethod> _enabledMethods = [];
 
+  final List<TextEditingController> _productNameControllers = [];
   final List<TextEditingController> _descriptionControllers = [];
   final List<TextEditingController> _quantityControllers = [];
   final List<TextEditingController> _priceControllers = [];
@@ -70,6 +71,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   void dispose() {
     _paidController.dispose();
     _notesController.dispose();
+    for (final c in _productNameControllers) {
+      c.dispose();
+    }
     for (final c in _descriptionControllers) {
       c.dispose();
     }
@@ -104,6 +108,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   void _addItem() {
     setState(() {
+      _productNameControllers.add(TextEditingController());
       _descriptionControllers.add(TextEditingController());
       _quantityControllers.add(TextEditingController(text: '1'));
       _priceControllers.add(TextEditingController());
@@ -118,6 +123,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         _notesController.text.isNotEmpty ||
         _discount > 0 ||
         (_paidController.text != '0' && _paidController.text.isNotEmpty) ||
+        _productNameControllers.any((c) => c.text.isNotEmpty) ||
         _descriptionControllers.any((c) => c.text.isNotEmpty) ||
         _productIds.any((id) => id != null) ||
         _descriptionControllers.length > 1;
@@ -137,6 +143,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   Future<void> _removeItem(int index) async {
     final hasContent =
+        _productNameControllers[index].text.isNotEmpty ||
         _descriptionControllers[index].text.isNotEmpty ||
         _productIds[index] != null;
     if (hasContent) {
@@ -151,9 +158,11 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     }
     if (!mounted) return;
     setState(() {
+      _productNameControllers[index].dispose();
       _descriptionControllers[index].dispose();
       _quantityControllers[index].dispose();
       _priceControllers[index].dispose();
+      _productNameControllers.removeAt(index);
       _descriptionControllers.removeAt(index);
       _quantityControllers.removeAt(index);
       _priceControllers.removeAt(index);
@@ -190,14 +199,24 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
   List<DocumentItemInput> _buildItems() => List.generate(
     _descriptionControllers.length,
-    (i) => DocumentItemInput(
-      description: _descriptionControllers[i].text.trim(),
-      quantity: NumberInput.parse(_quantityControllers[i].text) ?? 0,
-      price: NumberInput.parse(_priceControllers[i].text) ?? 0,
-      taxable: _taxableList[i],
-      productId: _productIds[i],
-      taxRate: _taxRates[i],
-    ),
+    (i) {
+      final name = i < _productNameControllers.length
+          ? _productNameControllers[i].text.trim()
+          : '';
+      final desc = _descriptionControllers[i].text.trim();
+      final effectiveDesc =
+          (name.isNotEmpty && desc.isNotEmpty && name != desc)
+              ? '$name\n$desc'
+              : (name.isNotEmpty ? name : desc);
+      return DocumentItemInput(
+        description: effectiveDesc,
+        quantity: NumberInput.parse(_quantityControllers[i].text) ?? 0,
+        price: NumberInput.parse(_priceControllers[i].text) ?? 0,
+        taxable: _taxableList[i],
+        productId: _productIds[i],
+        taxRate: _taxRates[i],
+      );
+    },
   );
 
   Future<void> _save({bool isDraft = false}) async {
@@ -387,6 +406,11 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 ...List.generate(
                   _descriptionControllers.length,
                   (index) => DocumentItemForm(
+                    key: ObjectKey(_descriptionControllers[index]),
+                    productNameController:
+                        index < _productNameControllers.length
+                            ? _productNameControllers[index]
+                            : null,
                     descriptionController: _descriptionControllers[index],
                     quantityController: _quantityControllers[index],
                     priceController: _priceControllers[index],
