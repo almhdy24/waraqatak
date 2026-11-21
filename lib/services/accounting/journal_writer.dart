@@ -164,17 +164,11 @@ class JournalWriter {
         );
       } catch (_) {}
 
-      try {
-        final reportsEnabled =
-            await DatabaseHelper.instance.isJournalReportsEnabled(txn: txn);
-        if (reportsEnabled) {
-          await DatabaseHelper.instance.setSetting(
-            'journal_reports_enabled',
-            'false',
-            txn: txn,
-          );
-        }
-      } catch (_) {}
+      final reportsEnabled =
+          await DatabaseHelper.instance.isJournalReportsEnabled(txn: txn);
+      if (reportsEnabled) {
+        rethrow;
+      }
 
       return fallback;
     }
