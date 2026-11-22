@@ -1,11 +1,15 @@
 import 'package:sqflite/sqflite.dart';
 import '../database/database_helper.dart';
+import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
 import '../utils/money_utils.dart';
 import 'access/audit_service.dart';
+import 'accounting/journal_draft.dart';
+import 'accounting/journal_writer.dart';
+import 'accounting/ledger.dart';
 import 'accounting/stock_ledger.dart';
 
 /// Summary of current inventory valuation at cost.
@@ -323,6 +327,48 @@ class InventoryCostingService {
       details:
           'product="$name" new_cost=$newUnitCost stock=$stock${notes != null ? " reason=$notes" : ""}',
     );
+
+    // Bring the reconciled inventory asset onto the balance sheet (Dr 1140 / Cr 3100)
+    if (stock > 0 && newUnitCost > 0) {
+      final bRows = await txn.query(
+        'businesses',
+        columns: ['currency_code'],
+        limit: 1,
+      );
+      final currencyCode = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+      final valMinor = MoneyUtils.toMinorUnits(stock * newUnitCost, decimalDigits);
+
+      if (valMinor > 0) {
+        final now = DateTime.now();
+        final draft = JournalEntryDraft(
+          entryNo: 'JE-OPN-$productId-${now.microsecondsSinceEpoch}',
+          effectiveDate: now,
+          postedAt: now,
+          sourceType: 'opening_stock',
+          sourceId: productId,
+          memo: notes != null && notes.isNotEmpty
+              ? '$notes ($name opening stock @ $newUnitCost)'
+              : 'Opening stock valuation for $name ($stock @ $newUnitCost)',
+          origin: 'cost_reconciliation',
+          lines: [
+            JournalLineDraft(
+              accountCode: Accounts.inventory.code,
+              debitMinor: valMinor,
+              productId: productId,
+            ),
+            JournalLineDraft(
+              accountCode: Accounts.openingEquity.code,
+              creditMinor: valMinor,
+              productId: productId,
+            ),
+          ],
+        );
+        await JournalWriter.write(txn, draft);
+      }
+    }
   }
 
   /// Returns overall inventory valuation at cost.
