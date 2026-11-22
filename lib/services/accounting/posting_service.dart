@@ -126,68 +126,68 @@ class PostingService {
     final taxMinor = MoneyUtils.toMinorUnits(doc.taxAmount, decimalDigits);
     final netMinor = totalMinor - taxMinor;
 
-    if (totalMinor <= 0) return;
-
-    final lines = <JournalLineDraft>[
-      JournalLineDraft(
-        accountCode: Accounts.receivables.code,
-        debitMinor: totalMinor,
-        contactId: doc.contactId,
-      ),
-      if (netMinor > 0)
+    if (totalMinor > 0) {
+      final lines = <JournalLineDraft>[
         JournalLineDraft(
-          accountCode: Accounts.salesRevenue.code,
-          creditMinor: netMinor,
+          accountCode: Accounts.receivables.code,
+          debitMinor: totalMinor,
+          contactId: doc.contactId,
         ),
-      if (taxMinor > 0)
-        JournalLineDraft(
-          accountCode: Accounts.vatOutput.code,
-          creditMinor: taxMinor,
-        ),
-    ];
+        if (netMinor > 0)
+          JournalLineDraft(
+            accountCode: Accounts.salesRevenue.code,
+            creditMinor: netMinor,
+          ),
+        if (taxMinor > 0)
+          JournalLineDraft(
+            accountCode: Accounts.vatOutput.code,
+            creditMinor: taxMinor,
+          ),
+      ];
 
-    if (lines.isNotEmpty) {
-      out.add(
-        JournalEntryDraft(
-          entryNo: nextEntryNo('JE-INV'),
-          effectiveDate: doc.date,
-          postedAt: timestamp,
-          sourceType: sourceInvoice,
-          sourceId: doc.id,
-          memo: 'Invoice ${doc.documentNumber}',
-          origin: origin,
-          lines: lines,
-        ),
-      );
-    }
+      if (lines.isNotEmpty) {
+        out.add(
+          JournalEntryDraft(
+            entryNo: nextEntryNo('JE-INV'),
+            effectiveDate: doc.date,
+            postedAt: timestamp,
+            sourceType: sourceInvoice,
+            sourceId: doc.id,
+            memo: 'Invoice ${doc.documentNumber}',
+            origin: origin,
+            lines: lines,
+          ),
+        );
+      }
 
-    // Upfront settlement recorded with invoice
-    final effectiveUpfrontPaid = upfrontPaid ?? doc.paid;
-    final paidMinor = MoneyUtils.toMinorUnits(effectiveUpfrontPaid, decimalDigits);
-    if (paidMinor > 0) {
-      final moneyAccount = Accounts.forPaymentMethod(doc.paymentMethod);
-      out.add(
-        JournalEntryDraft(
-          entryNo: nextEntryNo('JE-PAY'),
-          effectiveDate: doc.date,
-          postedAt: timestamp,
-          sourceType: sourcePayment,
-          sourceId: doc.id,
-          memo: 'Settlement for Invoice ${doc.documentNumber}',
-          origin: origin,
-          lines: [
-            JournalLineDraft(
-              accountCode: moneyAccount.code,
-              debitMinor: paidMinor,
-            ),
-            JournalLineDraft(
-              accountCode: Accounts.receivables.code,
-              creditMinor: paidMinor,
-              contactId: doc.contactId,
-            ),
-          ],
-        ),
-      );
+      // Upfront settlement recorded with invoice
+      final effectiveUpfrontPaid = upfrontPaid ?? doc.paid;
+      final paidMinor = MoneyUtils.toMinorUnits(effectiveUpfrontPaid, decimalDigits);
+      if (paidMinor > 0) {
+        final moneyAccount = Accounts.forPaymentMethod(doc.paymentMethod);
+        out.add(
+          JournalEntryDraft(
+            entryNo: nextEntryNo('JE-PAY'),
+            effectiveDate: doc.date,
+            postedAt: timestamp,
+            sourceType: sourcePayment,
+            sourceId: doc.id,
+            memo: 'Settlement for Invoice ${doc.documentNumber}',
+            origin: origin,
+            lines: [
+              JournalLineDraft(
+                accountCode: moneyAccount.code,
+                debitMinor: paidMinor,
+              ),
+              JournalLineDraft(
+                accountCode: Accounts.receivables.code,
+                creditMinor: paidMinor,
+                contactId: doc.contactId,
+              ),
+            ],
+          ),
+        );
+      }
     }
 
     // Cost of Goods Sold for stocked items with known cost
