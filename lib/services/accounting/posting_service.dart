@@ -39,6 +39,7 @@ class PostingService {
     String origin = 'live',
     Document? parentDoc,
     bool isAllocated = false,
+    double? upfrontPaid,
   }) {
     // Drafts and quotations post nothing
     if (doc.status == DocumentStatus.draft ||
@@ -62,6 +63,7 @@ class PostingService {
           nextEntryNo: nextEntryNo,
           origin: origin,
           out: results,
+          upfrontPaid: upfrontPaid,
         );
         break;
 
@@ -75,6 +77,7 @@ class PostingService {
           nextEntryNo: nextEntryNo,
           origin: origin,
           out: results,
+          upfrontPaid: upfrontPaid,
         );
         break;
 
@@ -117,6 +120,7 @@ class PostingService {
     required String Function(String prefix) nextEntryNo,
     required String origin,
     required List<JournalEntryDraft> out,
+    double? upfrontPaid,
   }) {
     final totalMinor = MoneyUtils.toMinorUnits(doc.total, decimalDigits);
     final taxMinor = MoneyUtils.toMinorUnits(doc.taxAmount, decimalDigits);
@@ -158,7 +162,8 @@ class PostingService {
     }
 
     // Upfront settlement recorded with invoice
-    final paidMinor = MoneyUtils.toMinorUnits(doc.paid, decimalDigits);
+    final effectiveUpfrontPaid = upfrontPaid ?? doc.paid;
+    final paidMinor = MoneyUtils.toMinorUnits(effectiveUpfrontPaid, decimalDigits);
     if (paidMinor > 0) {
       final moneyAccount = Accounts.forPaymentMethod(doc.paymentMethod);
       out.add(
@@ -242,6 +247,7 @@ class PostingService {
     required String Function(String prefix) nextEntryNo,
     required String origin,
     required List<JournalEntryDraft> out,
+    double? upfrontPaid,
   }) {
     final totalMinor = MoneyUtils.toMinorUnits(doc.total, decimalDigits);
     final taxMinor = MoneyUtils.toMinorUnits(doc.taxAmount, decimalDigits);
@@ -330,7 +336,8 @@ class PostingService {
     }
 
     // Upfront settlement recorded with purchase
-    final paidMinor = MoneyUtils.toMinorUnits(doc.paid, decimalDigits);
+    final effectiveUpfrontPaid = upfrontPaid ?? doc.paid;
+    final paidMinor = MoneyUtils.toMinorUnits(effectiveUpfrontPaid, decimalDigits);
     if (paidMinor > 0) {
       final moneyAccount = Accounts.forPaymentMethod(doc.paymentMethod);
       out.add(

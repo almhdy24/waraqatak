@@ -199,6 +199,7 @@ class JournalWriter {
     Document? parentDoc,
     DateTime? now,
     String origin = 'live',
+    double? upfrontPaid,
   }) async {
     return await _runIsolatedShadow(
       txn,
@@ -209,6 +210,37 @@ class JournalWriter {
             doc.status == DocumentStatus.cancelled ||
             doc.type == 'quotation') {
           return const <int>[];
+        }
+
+        double? effectiveUpfrontPaid = upfrontPaid;
+        if (effectiveUpfrontPaid == null &&
+            doc.id != null &&
+            (doc.type == 'invoice' || doc.type == 'purchase')) {
+          final rows = await txn.rawQuery('''
+            SELECT 
+              COALESCE(SUM(CASE 
+                WHEN receipt_document_id IS NOT NULL 
+                  OR payment_origin = 'receipt' 
+                THEN amount ELSE 0 END), 0.0) AS linked_amount,
+              COALESCE(SUM(CASE 
+                WHEN receipt_document_id IS NULL 
+                  AND payment_origin != 'upfront' 
+                  AND payment_origin != 'reversal'
+                THEN amount ELSE 0 END), 0.0) AS standalone_amount
+            FROM document_payments
+            WHERE document_id = ?
+              AND (payment_origin IS NULL OR payment_origin != 'reversal')
+          ''', [doc.id]);
+
+          if (rows.isNotEmpty) {
+            final linkedAmount =
+                (rows.first['linked_amount'] as num?)?.toDouble() ?? 0.0;
+            final standaloneAmount =
+                (rows.first['standalone_amount'] as num?)?.toDouble() ?? 0.0;
+            final nonUpfront = linkedAmount + standaloneAmount;
+            effectiveUpfrontPaid =
+                (doc.paid - nonUpfront).clamp(0.0, doc.paid);
+          }
         }
 
         final productIds =
@@ -263,6 +295,7 @@ class JournalWriter {
           products: products,
           parentDoc: effectiveParentDoc,
           isAllocated: isAllocated,
+          upfrontPaid: effectiveUpfrontPaid,
           nextEntryNo: (prefix) =>
               '$prefix-${doc.id ?? 0}-${DateTime.now().microsecondsSinceEpoch}-${entrySeq++}',
           now: now,
@@ -309,11 +342,14 @@ class JournalWriter {
 
   /// Authoritatively reverses all active journal entries for a document (D3).
   /// Reversals are effective-dated at the original entry's effective_date.
+  /// When [reverseLinkedPayments] is false (e.g. document item edits), standalone
+  /// payments linked via document_payments are preserved.
   static Future<List<int>> reverseDocument(
     DatabaseExecutor txn,
     int documentId, {
     DateTime? now,
     String? memo,
+    bool reverseLinkedPayments = true,
   }) async {
     return await _runIsolatedShadow(
       txn,
@@ -322,14 +358,28 @@ class JournalWriter {
       action: () async {
         final timestamp = now ?? DateTime.now();
 
-        final entryRows = await txn.rawQuery('''
+        final String sql;
+        if (reverseLinkedPayments) {
+          sql = '''
       SELECT e.* FROM journal_entries e
       WHERE (e.source_id = ? AND e.source_type IN ('invoice', 'purchase', 'receipt', 'voucher', 'cogs', 'payment'))
          OR (e.source_type = 'payment' AND e.source_id IN (
               SELECT id FROM document_payments WHERE document_id = ?
             ))
       ORDER BY e.id ASC
-    ''', [documentId, documentId]);
+    ''';
+        } else {
+          sql = '''
+      SELECT e.* FROM journal_entries e
+      WHERE (e.source_id = ? AND e.source_type IN ('invoice', 'purchase', 'receipt', 'voucher', 'cogs', 'payment'))
+      ORDER BY e.id ASC
+    ''';
+        }
+
+        final entryRows = await txn.rawQuery(
+          sql,
+          reverseLinkedPayments ? [documentId, documentId] : [documentId],
+        );
 
         if (entryRows.isEmpty) return const <int>[];
 

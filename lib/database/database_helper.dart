@@ -5330,7 +5330,11 @@ class DatabaseHelper {
           );
 
           if (!isMetadataOnly) {
-            await JournalWriter.reverseDocument(txn, doc.id!);
+            await JournalWriter.reverseDocument(
+              txn,
+              doc.id!,
+              reverseLinkedPayments: false,
+            );
             final itemRows = await txn.query(
               'document_items',
               where: 'document_id = ?',
