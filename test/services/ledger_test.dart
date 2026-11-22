@@ -602,8 +602,8 @@ void main() {
       expect(balanceOf(entries, Accounts.receivables), 0.0);
       // No sales revenue recognized for cancelled invoice
       expect(balanceOf(entries, Accounts.salesRevenue), 0.0);
-      // Funds held are classified as customer advance / refund liability in payables
-      expect(balanceOf(entries, Accounts.payables), 1000.0);
+      // Funds held are classified as customer advance / refund liability in customerDeposits
+      expect(balanceOf(entries, Accounts.customerDeposits), 1000.0);
     });
 
     test('3. A partially paid invoice that is cancelled keeps AR at zero and records paid amount as payables', () {
@@ -623,7 +623,7 @@ void main() {
       expect(balanceOf(entries, Accounts.bank), 400.0);
       expect(balanceOf(entries, Accounts.receivables), 0.0);
       expect(balanceOf(entries, Accounts.salesRevenue), 0.0);
-      expect(balanceOf(entries, Accounts.payables), 400.0);
+      expect(balanceOf(entries, Accounts.customerDeposits), 400.0);
     });
 
     test('4. Multiple receipts against one invoice followed by cancellation record full cash and payables', () {
@@ -645,7 +645,7 @@ void main() {
       expect(balanceOf(entries, Accounts.cash), 350.0);
       expect(balanceOf(entries, Accounts.bank), 250.0);
       expect(balanceOf(entries, Accounts.receivables), 0.0);
-      expect(balanceOf(entries, Accounts.payables), 600.0);
+      expect(balanceOf(entries, Accounts.customerDeposits), 600.0);
     });
 
     test('5. Cancellation followed by receipt reversal clears customer advance and cash', () {
@@ -709,9 +709,9 @@ void main() {
       expect(balanceOf(entries, Accounts.receivables), statement.closingBalance);
       expect(balanceOf(entries, Accounts.receivables), 500.0);
 
-      // Customer credit from cancelled invoice is held in Payables (liability), matching explanatory section
-      expect(balanceOf(entries, Accounts.payables), statement.cancelledInvoiceReceipts[0].amount);
-      expect(balanceOf(entries, Accounts.payables), 400.0);
+      // Customer credit from cancelled invoice is held in customerDeposits (liability), matching explanatory section
+      expect(balanceOf(entries, Accounts.customerDeposits), statement.cancelledInvoiceReceipts[0].amount);
+      expect(balanceOf(entries, Accounts.customerDeposits), 400.0);
 
       // Cash and Bank reflect the actual funds received
       expect(balanceOf(entries, Accounts.cash), 400.0);
@@ -758,8 +758,8 @@ void main() {
       expect(balanceOf(afterEntries, Accounts.salesRevenue), 0.0);
       // Cash is retained
       expect(balanceOf(afterEntries, Accounts.cash), 400.0);
-      // 400 is reclassified from receivable offset to customer advance in payables
-      expect(balanceOf(afterEntries, Accounts.payables), 400.0);
+      // 400 is reclassified from receivable offset to customer advance in customerDeposits
+      expect(balanceOf(afterEntries, Accounts.customerDeposits), 400.0);
     });
 
     test('8. Cancelled purchase with expense voucher debits refund receivable and credits cash', () {
@@ -888,7 +888,7 @@ void main() {
       expectBalanced(usdEntries);
       expect(balanceOf(usdEntries, Accounts.bank), 200.0);
       expect(balanceOf(usdEntries, Accounts.receivables), 0.0);
-      expect(balanceOf(usdEntries, Accounts.payables), 200.0);
+      expect(balanceOf(usdEntries, Accounts.customerDeposits), 200.0);
 
       // Build SDG book
       final sdgDocs = docs.where((d) => d.currencyCode == 'SDG').toList();

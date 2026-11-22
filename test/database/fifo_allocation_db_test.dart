@@ -484,16 +484,18 @@ void main() {
       });
 
       try {
-        // Creating a receipt in SDG should fail because there are no SDG invoices
-        expect(
-          () async => await makeReceipt(
-            contactId: cid,
-            total: 100,
-            date: DateTime(2026, 1, 2),
-            currency: 'SDG',
-          ),
-          throwsA(anything),
+        // Receipt in SDG must NOT allocate to USD invoice
+        final recId = await makeReceipt(
+          contactId: cid,
+          total: 100,
+          date: DateTime(2026, 1, 2),
+          currency: 'SDG',
         );
+        final allocations = await getDocumentPaymentsByReceipt(recId);
+        expect(allocations, isEmpty);
+        final inv = (await db.getDocumentById(invId))!;
+        expect(inv.paid, 0);
+        expect(inv.remaining, 100);
       } finally {
         await rawDb.delete('documents', where: 'id = ?', whereArgs: [invId]);
       }

@@ -63,6 +63,7 @@ void main() {
       'Pro',
       'PIN',
       'EUR',
+      'USD',
       'PNG',
       'JPG',
       'Waraqatak',

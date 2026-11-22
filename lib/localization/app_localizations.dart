@@ -506,7 +506,7 @@ class AppLocalizations {
     'The amount is applied to the supplier\'s open purchase invoices, oldest first.',
   );
   String voucherAmountExceedsOutstanding(String amount) => _t(
-    'المبلغ يتجاوز المستحق (${_iso(amount)}).',
+    'المبلغ أكبر من المستحق (${_iso(amount)}).',
     'The amount exceeds the outstanding balance (${_iso(amount)}).',
   );
   String get voucherNoOpenDocuments => _t(
@@ -518,7 +518,7 @@ class AppLocalizations {
     'The amount was split across several documents (${_iso(count)}); a receipt was created for each.',
   );
   String get errorPaymentExceedsOutstanding => _t(
-    'المبلغ يتجاوز المستحق على الطرف.',
+    'المبلغ أكبر من المستحق على الطرف.',
     'The amount exceeds the outstanding balance.',
   );
   String get errorDocumentAlreadyCancelled =>
@@ -1253,7 +1253,7 @@ class AppLocalizations {
   String get licenseScreenRedesignTitle =>
       _t('تفعيل ورقتك Pro', 'Activate Waraqatak Pro');
   String trialActiveStatusWithDays(int days) => _t(
-    'لديك تجربة مجانية لمدة 14 يوماً لجميع ميزات ورقتك Pro. المتبقي: $days يوم.',
+    'لديك تجربة مجانية لمدة 14 يوماً لجميع مميزات ورقتك Pro. المتبقي: $days يوم.',
     'You have a 14-day free trial for all Waraqatak Pro features. $days day(s) remaining.',
   );
   String get trialExpiredStatusMessage => _t(
@@ -1332,7 +1332,7 @@ class AppLocalizations {
   String get proUnlockedWholesale =>
       _t('أسعار الجملة والوحدات المتعددة', 'Wholesale pricing & multi-units');
   String get whatProUnlockedTitle =>
-      _t('الميزات المتاحة مع Pro:', 'Features available with Pro:');
+      _t('المميزات المتاحة مع Pro:', 'Features available with Pro:');
   String get helpAndSupport => _t('المساعدة والدعم', 'Help & Support');
   String get activationSuccessDone => _t(
     'تم التفعيل بنجاح. أصبحت ميزات Pro متاحة لك.',
@@ -2962,7 +2962,7 @@ class AppLocalizations {
     'Share anonymous usage data and crash reports. Never includes amounts, names, or invoices.',
   );
   String get consentDialogTitle =>
-      _t('ساعدنا في تحسين ورقتك', 'Help Us Improve Waraqatak');
+      _t('ساعدنا في تحسين ورقتك', 'Help us improve');
   String get consentDialogBody => _t(
     'نجمع بيانات تشغيلية مجهولة وتقارير الأعطال لتحسين الأداء وإصلاح الأخطاء بسرعة. لا نجمع أي مبالغ أو أسماء عملاء أو فواتير أو بيانات شخصية. يمكنك تغيير اختيارك في أي وقت من الإعدادات.',
     'We collect anonymous usage data and crash reports to improve performance and fix bugs faster. We never collect amounts, customer names, invoices, or personal data. You can change this anytime in Settings.',
@@ -4206,7 +4206,7 @@ class AppLocalizations {
 
   // ── Pro Subscription Landing Page ───────────────────────────────────────
   String get proSubscriptionBrand =>
-      _t('ورقتك | Waraqatak by Elmahdi Dev', 'Waraqatak by Elmahdi Dev');
+      _t('ورقتك | Waraqatak By Elmahdi Dev', 'Waraqatak by Elmahdi Dev');
   String get proSubscriptionTitle =>
       _t('باقات اشتراك ورقتك Pro', 'Waraqatak Pro Subscription Plans');
   String get proSubscriptionSubtitle => _t(
@@ -4258,5 +4258,5 @@ class AppLocalizations {
   );
   String get myDeviceIdLabel => _t('معرّف جهازك:', 'Your Device ID:');
   String get copyDeviceIdAction => _t('نسخ المعرف', 'Copy ID');
-  String get deviceIdCopiedSnack => _t('تم نسخ معرّف الجهاز', 'Device ID copied to clipboard');
+  String get deviceIdCopiedSnack => _t('تم نسخ معرف الجهاز', 'Device ID copied to clipboard');
 }
