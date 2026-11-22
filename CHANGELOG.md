@@ -5,7 +5,42 @@ All notable changes to the Waraqatak (ورقتك) project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.1] - 2026-11-22
+
+### ما الجديد في الإصدار 1.2.1:
+• تحسينات محاسبية شاملة لدقة التكاليف، والضرائب، وتسجيل الدفعات، وسلامة كشوف الحسابات.
+• تحسين تجربة إدخال رمز PIN وتوافق الشاشة في الوضع الأفقي وعلى الشاشات الصغيرة.
+• مرونة وسلاسة أكبر في تعديل بيانات العملاء وأسعار المنتجات.
+• تحسين توافق الواجهة مع إعدادات تكبير الخط وإمكانية الوصول.
+• تنقيح الترجمة العربية والإنجليزية وتحسينات شاملة في الاستقرار وسرعة الأداء.
+
+### Accounting Hardening & Audit Remediation (ACC-01..12)
+- **Net Unit Cost for Tax-Inclusive Purchases (ACC-02):** Deduct input VAT before writing stock movement cost so stock ledger reflects true net cost.
+- **Customer Deposits Liability for Unallocated Receipts (ACC-09):** Direct unallocated customer payment receipts to Account 2130 (Customer Deposits) instead of payables or revenue.
+- **Inventory Opening Equity Entry on Cost Reconciliation (ACC-10):** Post opening equity balanced journal entries for historical inventory discrepancies.
+- **Sale Return Cost Restoration (ACC-12):** Restore inventory valuation using exact historical sale line snapshot unit cost on sales item reduction or cancellation.
+- **Standalone Voucher Reporting (ACC-03):** Include standalone expense and receipt vouchers in period financial summaries and cash flow reports.
+- **Customer Statements Completeness (ACC-05):** Include unallocated customer payment advances on customer statements.
+- **Voucher Deletion Safety Guard (ACC-06):** Prohibit hard deletion of allocated payment vouchers with guided cancellation instructions.
+- **Multi-Rate Tax Representation (ACC-11):** Prevent misleading single-rate tax display on documents featuring items with differing tax rates.
+- **Zero-Total Invoices COGS & Inventory Posting (ACC-04):** Post inventory and cost of goods sold for zero-total 100% discount promotions.
+- **Stock Adjustment Currency Decimals (ACC-08):** Ensure stock adjustment valuations use accurate currency minor units.
+
+### User Experience & Interface Refinements (UX-01..16)
+- **Landscape PIN Screen (UX-01):** Made PIN lock screen scrollable to eliminate layout overflow in landscape orientation.
+- **Customer Details Navigation Lifecycle (UX-02):** Reload customer details in place after edit without popping back to directory.
+- **Controller Lifecycle Management (UX-03, UX-07):** Wrap dialogs and bottom sheets in dedicated StatefulWidgets to prevent post-dispose controller use.
+- **Bulk Pricing Undo SnackBar (UX-04):** Preserve undo SnackBar throughout batch price modifications.
+- **Button Accessibility Font Scaling (UX-05):** Replace rigid fixed button heights with flexible minimum constraints to accommodate larger accessibility font scales.
+- **Activation Screen Streamlined Entry (UX-06):** Responsive activation layout with autofocus on key entry.
+- **Currency Validation & Localization (UX-08):** Fixed currency validation error messages and localized custom currency symbols.
+- **Confirmation Flow Simplification (UX-14):** Eliminate duplicate dialog prompts on sensitive actions with single re-authentication flow.
+- **Cancellation Impact Notices (UX-15):** Clear localized explanations of inventory and accounting reversals when cancelling invoices or purchases.
+- **Phone Input Keyboard Type (UX-16):** Set `TextInputType.phone` on document recipient phone inputs.
+
+### Localization & Consistency Polish
+- Comprehensive Arabic and English translation refinement.
+- Strictly aligned PIN validation instructions and error messages to 4-6 digits across all views.
 
 ### Fixed
 - **Customer & Supplier Name Persistence on Scroll:**

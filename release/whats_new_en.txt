@@ -1,6 +1,6 @@
-What's new in version 1.2.0:
-• Enhanced privacy: Single unified "Contribute to app improvement" toggle for diagnostic data.
-• Clearer first-run consent dialog.
-• Digital Stamp and Signature are now Pro features, while fully preserving your existing files and settings.
-• Smoother UI, improved Right-to-Left (RTL) support, and enhanced stability.
-Thank you to everyone who participated in testing the Beta release!
+What's new in version 1.2.1:
+• Comprehensive accounting improvements for costing accuracy, taxes, deposit recording, and ledger integrity.
+• Enhanced PIN entry flow with landscape and small screen responsiveness.
+• Smoother editing experience for customer details and bulk pricing updates.
+• Improved UI accessibility and button layouts under large font scaling.
+• Polished Arabic and English localization with overall stability and performance enhancements.
