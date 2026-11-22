@@ -482,13 +482,25 @@ class _PinLockScreenState extends State<PinLockScreen> {
       canPop: false,
       child: Scaffold(
         body: SafeArea(
-          child: ResponsiveCenter(
-            maxWidth: 420,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isCompact = constraints.maxHeight < 560;
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: ResponsiveCenter(
+                    maxWidth: 420,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: isCompact ? 8 : 16,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          children: [
+                            SizedBox(height: isCompact ? 8 : 16),
 
                   // User Selector Badge
                   if (user != null)
@@ -662,7 +674,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
                       ),
                     ),
 
-                    const Spacer(),
+                    if (isCompact) const SizedBox(height: 8) else const Spacer(),
 
                     // Global LTR Keypad
                     PinKeypad(
@@ -679,13 +691,16 @@ class _PinLockScreenState extends State<PinLockScreen> {
                       ),
                     ),
 
-                    const Spacer(),
+                    if (isCompact) const SizedBox(height: 8) else const Spacer(),
                   ],
 
                   // Actions: Password Login & Recovery
                   if (!hasNoPin)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
                         TextButton.icon(
                           icon: const Icon(Icons.password_outlined, size: 18),
@@ -693,7 +708,6 @@ class _PinLockScreenState extends State<PinLockScreen> {
                           onPressed: _showPasswordLoginDialog,
                         ),
                         if (_selectedUser?.isOwner == true) ...[
-                          const Text(' • '),
                           TextButton(
                             child: Text(l10n.forgotPassword),
                             onPressed: () => Navigator.push(
@@ -714,5 +728,10 @@ class _PinLockScreenState extends State<PinLockScreen> {
         ),
       ),
     );
+  },
+),
+),
+),
+);
   }
 }
