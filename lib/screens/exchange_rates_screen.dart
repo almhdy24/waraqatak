@@ -679,6 +679,7 @@ class _AddCurrencySheet extends StatefulWidget {
 
 class _AddCurrencySheetState extends State<_AddCurrencySheet> {
   bool _isCustom = false;
+  bool _isSubmitting = false;
   ReferenceCurrencyItem? _selectedBuiltIn;
 
   final _codeCtrl = TextEditingController();
@@ -696,6 +697,8 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
   }
 
   void _submit() {
+    if (_isSubmitting) return;
+
     final l10n = AppLocalizations.of(context);
     final rate = ReferencePricingMath.parseRate(_rateCtrl.text);
     if (rate == null) {
@@ -713,15 +716,24 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
       final symbol = _symbolCtrl.text.trim();
 
       final codeReg = RegExp(r'^[A-Z]{2,5}$');
-      if (!codeReg.hasMatch(code) || name.isEmpty || symbol.isEmpty) {
+      if (!codeReg.hasMatch(code)) {
         AppSnackBar.show(
           context,
-          l10n.refErrInvalidPrice,
+          l10n.currencyCodeInvalid,
+          severity: AppSnackBarSeverity.warning,
+        );
+        return;
+      }
+      if (name.isEmpty || symbol.isEmpty) {
+        AppSnackBar.show(
+          context,
+          l10n.currencyFieldsRequired,
           severity: AppSnackBarSeverity.warning,
         );
         return;
       }
 
+      setState(() => _isSubmitting = true);
       final entry = ExchangeRate(
         code: code,
         nameAr: name,
@@ -735,12 +747,13 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
       if (_selectedBuiltIn == null) {
         AppSnackBar.show(
           context,
-          l10n.refErrInvalidPrice,
+          l10n.selectCurrencyFirst,
           severity: AppSnackBarSeverity.warning,
         );
         return;
       }
 
+      setState(() => _isSubmitting = true);
       final item = _selectedBuiltIn!;
       final entry = ExchangeRate(
         code: item.code,
@@ -833,7 +846,7 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
                   labelText: l10n.currencyCode,
-                  helperText: 'e.g. USD, EUR (2-5 letters)',
+                  helperText: l10n.currencyCodeHelper,
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -841,7 +854,7 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
               TextFormField(
                 controller: _nameCtrl,
                 decoration: InputDecoration(
-                  labelText: l10n.methodLabelAr,
+                  labelText: l10n.currencyNameArField,
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -873,7 +886,10 @@ class _AddCurrencySheetState extends State<_AddCurrencySheet> {
             SizedBox(
               width: double.infinity,
               height: 48,
-              child: FilledButton(onPressed: _submit, child: Text(l10n.save)),
+              child: FilledButton(
+                onPressed: _isSubmitting ? null : _submit,
+                child: Text(l10n.save),
+              ),
             ),
           ],
         ),

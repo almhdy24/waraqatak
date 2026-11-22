@@ -2718,6 +2718,20 @@ class AppLocalizations {
   );
   String get currencySymbolField =>
       _t('رمز العرض (اختياري، مثل: €)', 'Display symbol (optional, e.g. €)');
+  String get currencyCodeHelper =>
+      _t('مثال: USD, EUR (2-5 أحرف)', 'e.g. USD, EUR (2-5 letters)');
+  String get currencyCodeInvalid => _t(
+    'رمز العملة يجب أن يتكون من 2 إلى 5 أحرف إنجليزية',
+    'Currency code must be 2-5 English letters',
+  );
+  String get currencyFieldsRequired => _t(
+    'يرجى ملء جميع حقول العملة المطلوبة',
+    'Please fill all required currency fields',
+  );
+  String get selectCurrencyFirst => _t(
+    'يرجى اختيار العملة أولاً',
+    'Please select a currency first',
+  );
   String get currencyRateField => _t('سعر الصرف', 'Exchange rate');
   String get currencyRateHelper => _t(
     'كم وحدة من عملتك الأساسية تساوي 1 من هذه العملة',
