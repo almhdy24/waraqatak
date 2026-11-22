@@ -20,7 +20,7 @@
 | **ACC-07** | Silent Shadow-Posting Failure Swallows Errors and Disables Reports | High | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_07_test.dart` | `f404195` | APPROVE | Shadow errors now rethrow when journal_reports_enabled=true; fallback preserved when false |
 | **ACC-08** | Hardcoded 2 Decimals in Stock Adjustments Shadow Posting | Medium | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_08_test.dart` | `e9a6078` | APPROVE | Dynamic currency decimal lookup added to StockLedger.record and ISO 4217 lookup to Currency.decimalDigitsForCode |
 | **ACC-09** | Standalone Payment Receipts Credited to Other Income (4900) | Medium | Phase 2 | A2 (posting-engine) | Done (Posting Closed) | Confirmed | `test/regression/audit_acc_09_test.dart` | `77da0fc` | APPROVE | Credit Account 2130 (Customer Deposits) with contactId; full lifecycle settlement tracked in CUSTOMER-ADVANCE-ALLOCATION |
-| **ACC-10** | Manual Cost Reconciliation Leaves Inventory Account Distorted Without GL Entry | Medium | Phase 3 | A3 (inventory-costing) | Red-test | Confirmed | `test/regression/audit_acc_10_test.dart` | - | - | Average cost adjusted on existing stock without balancing entry in GL 1140 |
+| **ACC-10** | Manual Cost Reconciliation Leaves Inventory Account Distorted Without GL Entry | Medium | Phase 3 | A3 (inventory-costing) | Done | Confirmed | `test/regression/audit_acc_10_test.dart` | `5cbd21c` | APPROVE | Post Dr 1140 (Inventory) / Cr 3100 (Opening Equity) in JournalWriter for positive reconciled stock |
 | **ACC-11** | Multi-Rate Tax Invoice Displays Global Fallback Tax Rate on PDF | Low | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_11_test.dart` | - | - | Misleading single tax rate shown on document totals for mixed-rate invoices |
 | **ACC-12** | Edit Quantity Reduction Restores Stock at Current Average Cost Instead of Sale Snapshot Cost | Low | Phase 3 | A3 (inventory-costing) | Red-test | Confirmed | `test/regression/audit_acc_12_test.dart` | - | - | Restores stock using current product average cost instead of sale snapshot cost |
 | **UX-01** | Unscrollable PIN Lock Screen Overflows in Landscape (< 550dp) | Critical | Phase 5 | A6 (ux-critical) | Red-test | Confirmed | `test/widgets/audit_ux_01_test.dart` | - | - | Unscrollable column with spacer and 324dp keypad overflows in landscape |
@@ -93,7 +93,7 @@
 - [x] Entry criteria: Phase 2 merged
 - [x] DECISION GATE 3: Tax-inclusive purchase non-recoverable tax & existing product average cost
 - [x] Fix ACC-02 (Net unit cost for tax-inclusive purchases)
-- [ ] Fix ACC-10 (GL entry for cost reconciliation)
+- [x] Fix ACC-10 (GL entry for cost reconciliation)
 - [ ] Fix ACC-12 (Snapshot unit cost for sale reduction)
 - [ ] Independent Reviewer (A9) APPROVE
 - [ ] Exit criteria: Stock valuation vs. GL reconciliation green across tax-inclusive, tax-exclusive, and no-tax
