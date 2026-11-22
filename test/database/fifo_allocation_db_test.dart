@@ -485,8 +485,8 @@ void main() {
 
       try {
         // Creating a receipt in SDG should fail because there are no SDG invoices
-        expect(
-          () async => await makeReceipt(
+        await expectLater(
+          makeReceipt(
             contactId: cid,
             total: 100,
             date: DateTime(2026, 1, 2),
