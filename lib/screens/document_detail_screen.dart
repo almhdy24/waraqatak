@@ -1086,7 +1086,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     _totalRow(l10n.discount, doc.discount, sym),
                   if (doc.taxAmount > 0)
                     _totalRow(
-                      '${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})',
+                      doc.taxRate > 0
+                          ? '${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})'
+                          : l10n.tax,
                       doc.taxAmount,
                       sym,
                     ),

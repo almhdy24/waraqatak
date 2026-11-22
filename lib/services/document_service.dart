@@ -199,7 +199,10 @@ class DocumentService {
         pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      taxRate = effectiveTaxRate;
+      taxRate = _resolveDocumentTaxRate(
+        items: effectiveItems,
+        fallbackTaxRate: effectiveTaxRate,
+      );
       taxAmount = totals.taxAmount;
       total = totals.total;
       finalPaid = 0;
@@ -223,7 +226,10 @@ class DocumentService {
         pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      taxRate = effectiveTaxRate;
+      taxRate = _resolveDocumentTaxRate(
+        items: effectiveItems,
+        fallbackTaxRate: effectiveTaxRate,
+      );
       taxAmount = totals.taxAmount;
       total = totals.total;
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
@@ -459,7 +465,10 @@ class DocumentService {
         pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      taxRate = effectiveTaxRate;
+      taxRate = _resolveDocumentTaxRate(
+        items: effectiveItems,
+        fallbackTaxRate: effectiveTaxRate,
+      );
       taxAmount = totals.taxAmount;
       total = totals.total;
       finalPaid = 0;
@@ -483,7 +492,10 @@ class DocumentService {
         pricesIncludeTax: effectivePricesIncludeTax,
         decimalDigits: decimalDigits,
       );
-      taxRate = effectiveTaxRate;
+      taxRate = _resolveDocumentTaxRate(
+        items: effectiveItems,
+        fallbackTaxRate: effectiveTaxRate,
+      );
       taxAmount = totals.taxAmount;
       total = totals.total;
       final canonicalPaid = MoneyUtils.round(paid, decimalDigits);
@@ -969,6 +981,27 @@ class DocumentService {
             decimalDigits,
           );
     return (subtotal: subtotal, taxAmount: taxAmount, total: total);
+  }
+
+  /// Resolves document-level tax rate for display/summary.
+  /// Returns the single rate if all items share the exact same rate;
+  /// returns 0.0 if items have heterogeneous rates to prevent misleading rate display.
+  static double _resolveDocumentTaxRate({
+    required List<DocumentItemInput> items,
+    required double fallbackTaxRate,
+  }) {
+    if (items.isEmpty) return fallbackTaxRate;
+    final rates = <double>{};
+    for (final item in items) {
+      if (item.total > 0) {
+        final rate = item.taxRate ?? (item.taxable ? fallbackTaxRate : 0.0);
+        rates.add(rate);
+      }
+    }
+    if (rates.length == 1) {
+      return rates.first;
+    }
+    return 0.0;
   }
 
   /// Per-item tax calculation with proportional discount and inclusive/exclusive support.
