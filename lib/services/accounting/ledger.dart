@@ -369,6 +369,8 @@ class LedgerBuilder {
       creditAccount = Accounts.receivables;
     } else if (d.relatedDocumentId != null && parent?.type == 'invoice') {
       creditAccount = Accounts.receivables;
+    } else if (d.contactId != null) {
+      creditAccount = Accounts.payables; // Customer advance liability
     } else {
       creditAccount = Accounts.otherIncome;
     }

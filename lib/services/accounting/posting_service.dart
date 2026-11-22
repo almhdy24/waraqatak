@@ -389,6 +389,8 @@ class PostingService {
       }
     } else if (isAllocated) {
       creditAccountCode = Accounts.receivables.code;
+    } else if (doc.contactId != null) {
+      creditAccountCode = Accounts.payables.code; // Customer advance liability
     } else {
       creditAccountCode = Accounts.otherIncome.code;
     }
