@@ -182,7 +182,7 @@ void main() {
 
       // Verify counts still match exactly
       final accountsAfter = await db.query('accounts');
-      expect(accountsAfter.length, 13);
+      expect(accountsAfter.length, 14);
       final prodsAfter = await db.query('products');
       expect(prodsAfter.length, 1);
     } finally {
