@@ -4241,7 +4241,7 @@ class AppLocalizations {
   String get save5kBadge => _t('وفر 5,000 ج.س', 'Save 5,000 SDG');
   String get discount33PercentBadge => _t('خصم 33%', '33% OFF');
   String get equivalentMonthly10k =>
-      _t('يعادل 10,000 ج.س فقط في الشهر', 'Only 10,000 SDG per month');
+      _t('يعادل 10,000 ج.س / شهرياً فقط', 'Equivalent to only 10,000 SDG / month');
   String get originalAnnualPriceCrossing => _t('180,000 ج.س', '180,000 SDG');
 
   // Subscription Actions & Instructions
