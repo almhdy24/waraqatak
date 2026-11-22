@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../../database/database_helper.dart';
+import '../../models/currency.dart';
 import '../../models/stock_movement.dart';
 import '../access/access_context.dart';
 import '../access/access_guard.dart';
@@ -122,13 +123,22 @@ class StockLedger {
     if (referenceDocumentId == null && deltaQuantity != 0) {
       final shadowEnabled = await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: txn);
       if (shadowEnabled && (type == StockMovement.typeAdjustment || type == StockMovement.typeOpening)) {
+        final bRows = await txn.query(
+          'businesses',
+          columns: ['currency_code'],
+          limit: 1,
+        );
+        final currencyCode = bRows.isNotEmpty
+            ? (bRows.first['currency_code'] as String? ?? 'SDG')
+            : 'SDG';
+        final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
         final effectiveReason = reason ?? (type == StockMovement.typeOpening ? 'opening_stock' : (deltaQuantity > 0 ? 'count_gain' : 'count_loss'));
         final draft = PostingService.postStockAdjusted(
           productId: productId,
           quantity: deltaQuantity,
           unitCost: unitCost ?? 0.0,
           reason: effectiveReason,
-          decimalDigits: 2,
+          decimalDigits: decimalDigits,
           date: movementDate,
           nextEntryNo: (prefix) => '$prefix-MOV-$movementId',
           memo: notes != null && notes.isNotEmpty
