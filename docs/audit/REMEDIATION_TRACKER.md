@@ -12,14 +12,14 @@
 | ID | Title | Severity | Phase | Owner Agent | Status | Verified | Test File | Commit | Reviewer Verdict | Notes |
 |:---|:---|:---|:---|:---|:---|:---|:---|:---|:---|:---|
 | **ACC-01** | Duplicate Payment Posting on Document Edit | Critical | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_01_test.dart` | `6cba2b8` | APPROVE | Post upfront payments only if genuine unbacked upfront payment exists; reverseLinkedPayments: false on edit preserves standalone payments |
-| **ACC-02** | Tax-Inclusive Purchases Record Gross Unit Cost in Stock Ledger vs. Net in GL | Critical | Phase 3 | A3 (inventory-costing) | Red-test | Confirmed | `test/regression/audit_acc_02_test.dart` | - | - | Stock ledger stores price including VAT; GL 1140 stores net. COGS depletes 1140 faster |
+| **ACC-02** | Tax-Inclusive Purchases Record Gross Unit Cost in Stock Ledger vs. Net in GL | Critical | Phase 3 | A3 (inventory-costing) | Done | Confirmed | `test/regression/audit_acc_02_test.dart` | `e414292` | APPROVE | Stripped recoverable VAT from unitCost before recording into StockLedger; net unit cost stored in stock_movements |
 | **ACC-03** | Standalone Expense Vouchers Omitted from Dashboard & Payments Report | Critical | Phase 4 | A4 (reporting-integrity) | Red-test | Partially Confirmed | `test/regression/audit_acc_03_test.dart` | - | - | Omission confirmed; naive audit fix double-counts allocated vouchers. Needs selective standalone filter |
 | **ACC-04** | Zero-Total Invoices Bypass COGS & Inventory Reduction in GL | High | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_04_test.dart` | `66ab987` | APPROVE | Decoupled COGS loop from totalMinor <= 0 guard; COGS and inventory posted correctly for zero-total invoices |
 | **ACC-05** | Customer Statements Drop Unallocated Receipts & Advances | High | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_05_test.dart` | - | - | Modern path iterates invoices only; unallocated receipts excluded |
 | **ACC-06** | Hard Deletion of Allocated Vouchers Crashes SQLite Foreign Key Constraint | High | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_06_test.dart` | - | - | Checked `document_id` instead of `receipt_document_id` before deleting |
 | **ACC-07** | Silent Shadow-Posting Failure Swallows Errors and Disables Reports | High | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_07_test.dart` | `f404195` | APPROVE | Shadow errors now rethrow when journal_reports_enabled=true; fallback preserved when false |
 | **ACC-08** | Hardcoded 2 Decimals in Stock Adjustments Shadow Posting | Medium | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_08_test.dart` | `e9a6078` | APPROVE | Dynamic currency decimal lookup added to StockLedger.record and ISO 4217 lookup to Currency.decimalDigitsForCode |
-| **ACC-09** | Standalone Payment Receipts Credited to Other Income (4900) | Medium | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_09_test.dart` | `77da0fc` | APPROVE | Credit Account 2130 (Customer Deposits / دفعات مقدمة من العملاء) with contactId when unallocated |
+| **ACC-09** | Standalone Payment Receipts Credited to Other Income (4900) | Medium | Phase 2 | A2 (posting-engine) | Done (Posting Closed) | Confirmed | `test/regression/audit_acc_09_test.dart` | `77da0fc` | APPROVE | Credit Account 2130 (Customer Deposits) with contactId; full lifecycle settlement tracked in CUSTOMER-ADVANCE-ALLOCATION |
 | **ACC-10** | Manual Cost Reconciliation Leaves Inventory Account Distorted Without GL Entry | Medium | Phase 3 | A3 (inventory-costing) | Red-test | Confirmed | `test/regression/audit_acc_10_test.dart` | - | - | Average cost adjusted on existing stock without balancing entry in GL 1140 |
 | **ACC-11** | Multi-Rate Tax Invoice Displays Global Fallback Tax Rate on PDF | Low | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_11_test.dart` | - | - | Misleading single tax rate shown on document totals for mixed-rate invoices |
 | **ACC-12** | Edit Quantity Reduction Restores Stock at Current Average Cost Instead of Sale Snapshot Cost | Low | Phase 3 | A3 (inventory-costing) | Red-test | Confirmed | `test/regression/audit_acc_12_test.dart` | - | - | Restores stock using current product average cost instead of sale snapshot cost |
@@ -90,9 +90,9 @@
 - [x] Exit criteria: All Phase 2 tests green; INV-14..18 green; parity check green
 
 ### Phase 3: Costing & Valuation (A3, Sequential)
-- [ ] Entry criteria: Phase 2 merged
-- [ ] DECISION GATE 3: Tax-inclusive purchase non-recoverable tax & existing product average cost
-- [ ] Fix ACC-02 (Net unit cost for tax-inclusive purchases)
+- [x] Entry criteria: Phase 2 merged
+- [x] DECISION GATE 3: Tax-inclusive purchase non-recoverable tax & existing product average cost
+- [x] Fix ACC-02 (Net unit cost for tax-inclusive purchases)
 - [ ] Fix ACC-10 (GL entry for cost reconciliation)
 - [ ] Fix ACC-12 (Snapshot unit cost for sale reduction)
 - [ ] Independent Reviewer (A9) APPROVE
@@ -190,3 +190,11 @@
 - A8 Log: `docs/audit/agent_logs/rtl-a11y-polish.md`
 - A9 Log: `docs/audit/agent_logs/independent-reviewer.md`
 - A10 Log: `docs/audit/agent_logs/data-repair.md`
+
+---
+
+## G) Tracked Architectural Features & Backlog
+
+| Feature Key | Title | Target Phase | Status | Description |
+|:---|:---|:---|:---|:---|
+| **CUSTOMER-ADVANCE-ALLOCATION** | Complete Customer Advance Lifecycle & Invoice Allocation | Backlog / Post-Remediation | OPEN / NOT IMPLEMENTED | Allocation of existing unallocated customer advances (Account 2130) to subsequently issued invoices. Scope: partial/multiple allocations, balanced settlement entries (`Dr 2130 / Cr 1130`), customer ownership validation, available balance validation, immutable reversal support, contactId audit preservation, and ledger parity. |
