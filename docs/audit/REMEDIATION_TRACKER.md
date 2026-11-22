@@ -15,7 +15,7 @@
 | **ACC-02** | Tax-Inclusive Purchases Record Gross Unit Cost in Stock Ledger vs. Net in GL | Critical | Phase 3 | A3 (inventory-costing) | Done | Confirmed | `test/regression/audit_acc_02_test.dart` | `e414292` | APPROVE | Stripped recoverable VAT from unitCost before recording into StockLedger; net unit cost stored in stock_movements |
 | **ACC-03** | Standalone Expense Vouchers Omitted from Dashboard & Payments Report | Critical | Phase 4 | A4 (reporting-integrity) | Done | Confirmed | `test/regression/audit_acc_03_test.dart` | `e781950` | APPROVE | Standalone vouchers included via UNION ALL in getPaymentReport and 2b in getPeriodSummary without double-counting |
 | **ACC-04** | Zero-Total Invoices Bypass COGS & Inventory Reduction in GL | High | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_04_test.dart` | `66ab987` | APPROVE | Decoupled COGS loop from totalMinor <= 0 guard; COGS and inventory posted correctly for zero-total invoices |
-| **ACC-05** | Customer Statements Drop Unallocated Receipts & Advances | High | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_05_test.dart` | - | - | Modern path iterates invoices only; unallocated receipts excluded |
+| **ACC-05** | Customer Statements Drop Unallocated Receipts & Advances | High | Phase 4 | A4 (reporting-integrity) | Done | Confirmed | `test/regression/audit_acc_05_test.dart` | `4746a18` | APPROVE | Included unallocated remainder of customer receipts in modern statement path |
 | **ACC-06** | Hard Deletion of Allocated Vouchers Crashes SQLite Foreign Key Constraint | High | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_06_test.dart` | - | - | Checked `document_id` instead of `receipt_document_id` before deleting |
 | **ACC-07** | Silent Shadow-Posting Failure Swallows Errors and Disables Reports | High | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_07_test.dart` | `f404195` | APPROVE | Shadow errors now rethrow when journal_reports_enabled=true; fallback preserved when false |
 | **ACC-08** | Hardcoded 2 Decimals in Stock Adjustments Shadow Posting | Medium | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_08_test.dart` | `e9a6078` | APPROVE | Dynamic currency decimal lookup added to StockLedger.record and ISO 4217 lookup to Currency.decimalDigitsForCode |
@@ -101,7 +101,7 @@
 ### Phase 4: Reporting & Integrity (A4, Sequential)
 - [x] Entry criteria: Phase 3 merged
 - [x] Fix ACC-03 (Standalone vouchers in dashboard and payment reports)
-- [ ] Fix ACC-05 (Unallocated receipts on customer statements)
+- [x] Fix ACC-05 (Unallocated receipts on customer statements)
 - [ ] Fix ACC-06 (Pre-delete allocation check for vouchers)
 - [ ] Fix ACC-11 (PDF tax rate label for mixed-rate invoices)
 - [ ] Independent Reviewer (A9) APPROVE
