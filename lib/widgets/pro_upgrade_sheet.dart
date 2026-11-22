@@ -54,7 +54,9 @@ class ProUpgradeSheet extends StatelessWidget {
     if (proceedToActivation == true && context.mounted) {
       final activated = await Navigator.push<bool>(
         context,
-        MaterialPageRoute(builder: (_) => const ActivationScreen()),
+        MaterialPageRoute(
+          builder: (_) => const ActivationScreen(initialFocusKeyInput: true),
+        ),
       );
       if (activated == true) {
         LicenseService.instance.invalidateCache();

@@ -17,6 +17,7 @@ class ActivationKeyInputWidget extends StatefulWidget {
   final ValueChanged<ActivationOutcome>? onOutcome;
   final ValueChanged<bool>? onLoadingChanged;
   final bool showHeader;
+  final bool autofocus;
 
   const ActivationKeyInputWidget({
     super.key,
@@ -24,6 +25,7 @@ class ActivationKeyInputWidget extends StatefulWidget {
     this.onOutcome,
     this.onLoadingChanged,
     this.showHeader = true,
+    this.autofocus = false,
   });
 
   @override
@@ -284,7 +286,7 @@ class _ActivationKeyInputWidgetState extends State<ActivationKeyInputWidget> {
           readOnly: _loading,
           minLines: 2,
           maxLines: 3,
-          autofocus: false,
+          autofocus: widget.autofocus,
           autocorrect: false,
           enableSuggestions: false,
           textDirection: TextDirection.ltr,

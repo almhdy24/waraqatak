@@ -89,7 +89,9 @@ class LockedFeatureScreen extends StatelessWidget {
                             final result = await Navigator.push<bool>(
                               context,
                               MaterialPageRoute(
-                                  builder: (_) => const ActivationScreen()),
+                                  builder: (_) => const ActivationScreen(
+                                    initialFocusKeyInput: true,
+                                  )),
                             );
                             if (result == true && context.mounted) {
                               Navigator.pop(context, true);

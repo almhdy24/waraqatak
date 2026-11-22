@@ -21,7 +21,12 @@ import '../widgets/responsive.dart';
 /// - Blocks back navigation via [PopScope] while key verification is in flight.
 /// - On activation success: displays animated celebration and unlocks Pro, returning `true` to callers.
 class ActivationScreen extends StatefulWidget {
-  const ActivationScreen({super.key});
+  const ActivationScreen({
+    super.key,
+    this.initialFocusKeyInput = false,
+  });
+
+  final bool initialFocusKeyInput;
 
   @override
   State<ActivationScreen> createState() => _ActivationScreenState();
@@ -171,11 +176,18 @@ class _ActivationScreenState extends State<ActivationScreen> {
     ColorScheme cs,
     TextTheme textTheme,
   ) {
+    final showKeyFirst = widget.initialFocusKeyInput;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (showKeyFirst) ...[
+            _buildAlreadyHaveKeySection(l10n, cs, textTheme),
+            const SizedBox(height: 24),
+          ],
+
           // ── Hero & Value Proposition ─────────────────────────────────────
           _buildHeroHeader(l10n, cs, textTheme),
           const SizedBox(height: 24),
@@ -210,8 +222,10 @@ class _ActivationScreenState extends State<ActivationScreen> {
           const SizedBox(height: 24),
 
           // ── "Already Have Key?" Section ─────────────────────────────────
-          _buildAlreadyHaveKeySection(l10n, cs, textTheme),
-          const SizedBox(height: 32),
+          if (!showKeyFirst) ...[
+            _buildAlreadyHaveKeySection(l10n, cs, textTheme),
+            const SizedBox(height: 32),
+          ],
         ],
       ),
     );
@@ -385,12 +399,15 @@ class _ActivationScreenState extends State<ActivationScreen> {
                 children: [
                   const Icon(Icons.star_rounded, size: 16, color: Colors.white),
                   const SizedBox(width: 6),
-                  Text(
-                    l10n.plan1YearFeaturedBadge,
-                    style: textTheme.labelMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.3,
+                  Flexible(
+                    child: Text(
+                      l10n.plan1YearFeaturedBadge,
+                      style: textTheme.labelMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -437,9 +454,10 @@ class _ActivationScreenState extends State<ActivationScreen> {
                 const SizedBox(height: 12),
 
                 // Pricing Row
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 4,
                   children: [
                     Text(
                       priceStr,
@@ -448,7 +466,6 @@ class _ActivationScreenState extends State<ActivationScreen> {
                         color: isFeatured ? cs.primary : cs.onSurface,
                       ),
                     ),
-                    const SizedBox(width: 6),
                     Text(
                       l10n.planCurrencySdg,
                       style: textTheme.titleSmall?.copyWith(
@@ -457,7 +474,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
                       ),
                     ),
                     if (plan.originalPriceSdg != null) ...[
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 6),
                       Text(
                         l10n.originalAnnualPriceCrossing,
                         style: textTheme.bodyMedium?.copyWith(
@@ -596,11 +613,13 @@ class _ActivationScreenState extends State<ActivationScreen> {
             children: [
               Icon(Icons.info_outline_rounded, size: 20, color: cs.primary),
               const SizedBox(width: 8),
-              Text(
-                l10n.howToActivateTitle,
-                style: textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: cs.primary,
+              Expanded(
+                child: Text(
+                  l10n.howToActivateTitle,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: cs.primary,
+                  ),
                 ),
               ),
             ],
@@ -725,6 +744,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
           // Embedded key input widget
           ActivationKeyInputWidget(
             showHeader: false,
+            autofocus: widget.initialFocusKeyInput,
             onLoadingChanged: (loading) {
               if (mounted) setState(() => _loading = loading);
             },
