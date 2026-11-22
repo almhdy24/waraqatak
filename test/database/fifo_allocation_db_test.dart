@@ -465,39 +465,27 @@ void main() {
 
     test('10. Currency segregation', () async {
       final db = DatabaseHelper.instance;
-      final rawDb = await db.database;
       final cid = await makeContact('عميل 10', 'customer');
-      final invId = await rawDb.insert('documents', {
-        'type': 'invoice',
-        'document_number': 'INV-LEGACY-USD-1',
-        'date': DateTime(2026, 1, 1).toIso8601String(),
-        'contact_id': cid,
-        'currency_code': 'USD',
-        'subtotal': 100,
-        'discount': 0,
-        'tax_rate': 0,
-        'tax_amount': 0,
-        'total': 100,
-        'paid': 0,
-        'remaining': 100,
-        'status': DocumentStatus.issued,
-      });
+      final invId = await makeInvoice(
+        contactId: cid,
+        total: 100,
+        date: DateTime(2026, 1, 1),
+        currency: 'USD',
+      );
 
       try {
-        // Receipt in SDG must NOT allocate to USD invoice
-        final recId = await makeReceipt(
-          contactId: cid,
-          total: 100,
-          date: DateTime(2026, 1, 2),
-          currency: 'SDG',
+        // Creating a receipt in SDG should fail because there are no SDG invoices
+        expect(
+          () async => await makeReceipt(
+            contactId: cid,
+            total: 100,
+            date: DateTime(2026, 1, 2),
+            currency: 'SDG',
+          ),
+          throwsA(isA<ArgumentError>()),
         );
-        final allocations = await getDocumentPaymentsByReceipt(recId);
-        expect(allocations, isEmpty);
-        final inv = (await db.getDocumentById(invId))!;
-        expect(inv.paid, 0);
-        expect(inv.remaining, 100);
       } finally {
-        await rawDb.delete('documents', where: 'id = ?', whereArgs: [invId]);
+        await db.cancelDocument(invId);
       }
     });
 

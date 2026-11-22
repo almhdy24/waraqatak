@@ -1335,7 +1335,7 @@ class AppLocalizations {
       _t('المميزات المتاحة مع Pro:', 'Features available with Pro:');
   String get helpAndSupport => _t('المساعدة والدعم', 'Help & Support');
   String get activationSuccessDone => _t(
-    'تم التفعيل بنجاح. أصبحت ميزات Pro متاحة لك.',
+    'تم التفعيل بنجاح. أصبحت مميزات Pro متاحة لك.',
     'Activated successfully! Pro features are now available to you.',
   );
   String get activationFailureGuidance => _t(
@@ -2968,7 +2968,7 @@ class AppLocalizations {
     'We collect anonymous usage data and crash reports to improve performance and fix bugs faster. We never collect amounts, customer names, invoices, or personal data. You can change this anytime in Settings.',
   );
   String get consentDialogAgree => _t('موافق', 'Agree');
-  String get consentDialogNotNow => _t('ليس الآن', 'Not Now');
+  String get consentDialogNotNow => _t('ليس الآن', 'Not now');
   String get digitalSealsProUpgradeMessage => _t(
     'الأختام والتوقيعات الرقمية ميزة حصرية في النسخة الاحترافية (Pro).',
     'Digital stamps and signatures are exclusive to the Pro version.',
@@ -4208,7 +4208,7 @@ class AppLocalizations {
   String get proSubscriptionBrand =>
       _t('ورقتك | Waraqatak By Elmahdi Dev', 'Waraqatak by Elmahdi Dev');
   String get proSubscriptionTitle =>
-      _t('باقات اشتراك ورقتك Pro', 'Waraqatak Pro Subscription Plans');
+      _t('باقات اشتراك ورقتك برو', 'Waraqatak Pro Subscription Plans');
   String get proSubscriptionSubtitle => _t(
     'اختر الباقة المناسبة لنشاطك التجاري واستفد من الإمكانات الكاملة لإدارة فواتيرك ومخزونك باحترافية',
     'Choose the plan that fits your business and unlock the full power of invoicing and inventory management',
