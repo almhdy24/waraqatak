@@ -74,7 +74,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         final c = (r['currency_code'] as String?)?.trim() ?? 'SDG';
         final code = c.isNotEmpty ? c : 'SDG';
         final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
-        final isIn = r['doc_type'] == 'invoice';
+        final isIn = r['doc_type'] == 'invoice' || r['doc_type'] == 'payment_receipt';
         final prev = totalsByCurrency[code] ?? (inAmount: 0.0, outAmount: 0.0);
         totalsByCurrency[code] = (
           inAmount: prev.inAmount + (isIn ? amt : 0.0),
@@ -216,7 +216,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
       itemBuilder: (ctx, i) {
         final row = _rows![i];
         final amount = (row['amount'] as num).toDouble();
-        final isIn = row['doc_type'] == 'invoice';
+        final isIn = row['doc_type'] == 'invoice' || row['doc_type'] == 'payment_receipt';
         final color = isIn ? AppStatusColors.fg(context, AppStatus.success) : AppStatusColors.fg(context, AppStatus.warning);
         final method = row['payment_method'] as String?;
         final cCode = (row['currency_code'] as String?)?.trim() ?? '';

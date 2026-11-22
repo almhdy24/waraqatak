@@ -7752,6 +7752,27 @@ class DatabaseHelper {
       [fromStr, toStr],
     );
 
+    // 2b. Standalone vouchers (operating expenses & unallocated receipts without parent allocation)
+    final standaloneVoucherRows = await db.rawQuery(
+      '''
+      SELECT
+        currency_code,
+        COALESCE(SUM(CASE WHEN type = 'payment_receipt' THEN paid ELSE 0 END), 0) AS standaloneIn,
+        COALESCE(SUM(CASE WHEN type = 'expense_voucher' THEN paid ELSE 0 END), 0) AS standaloneOut
+      FROM documents
+      WHERE status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+        AND type IN ('payment_receipt', 'expense_voucher')
+        AND id NOT IN (
+          SELECT DISTINCT receipt_document_id
+          FROM document_payments
+          WHERE receipt_document_id IS NOT NULL
+        )
+        AND date >= ? AND date <= ?
+      GROUP BY currency_code
+    ''',
+      [fromStr, toStr],
+    );
+
     // 3. All-time outstanding balances grouped by currency
     final balRows = await db.rawQuery('''
       SELECT
@@ -7784,6 +7805,20 @@ class DatabaseHelper {
         payMap[code] = (
           paymentsIn: (r['paymentsIn'] as num?)?.toDouble() ?? 0.0,
           paymentsOut: (r['paymentsOut'] as num?)?.toDouble() ?? 0.0,
+        );
+      }
+    }
+
+    for (final r in standaloneVoucherRows) {
+      final code = (r['currency_code'] as String?)?.trim() ?? 'SDG';
+      if (code.isNotEmpty) {
+        allCurrencies.add(code);
+        final existing = payMap[code] ?? (paymentsIn: 0.0, paymentsOut: 0.0);
+        final sIn = (r['standaloneIn'] as num?)?.toDouble() ?? 0.0;
+        final sOut = (r['standaloneOut'] as num?)?.toDouble() ?? 0.0;
+        payMap[code] = (
+          paymentsIn: existing.paymentsIn + sIn,
+          paymentsOut: existing.paymentsOut + sOut,
         );
       }
     }
@@ -7992,14 +8027,31 @@ class DatabaseHelper {
     String? currencyCode,
   }) async {
     final db = await database;
-    final whereBuffer = StringBuffer(
+    final fromStr = from.toIso8601String();
+    final toStr = to.toIso8601String();
+
+    final dpWhere = StringBuffer(
       "d.status != '${DocumentStatus.cancelled}' AND dp.date >= ? AND dp.date <= ?",
     );
-    final args = <Object?>[from.toIso8601String(), to.toIso8601String()];
+    final vWhere = StringBuffer(
+      "v.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}') "
+      "AND v.type IN ('payment_receipt', 'expense_voucher') "
+      "AND v.id NOT IN (SELECT DISTINCT receipt_document_id FROM document_payments WHERE receipt_document_id IS NOT NULL) "
+      "AND v.date >= ? AND v.date <= ?",
+    );
+
+    final dpArgs = <Object?>[fromStr, toStr];
+    final vArgs = <Object?>[fromStr, toStr];
+
     if (currencyCode != null && currencyCode.isNotEmpty) {
-      whereBuffer.write(' AND d.currency_code = ?');
-      args.add(currencyCode);
+      dpWhere.write(' AND d.currency_code = ?');
+      dpArgs.add(currencyCode);
+      vWhere.write(' AND v.currency_code = ?');
+      vArgs.add(currencyCode);
     }
+
+    final combinedArgs = [...dpArgs, ...vArgs];
+
     return db.rawQuery('''
       SELECT
         dp.id, dp.amount, dp.payment_method, dp.date, dp.notes,
@@ -8008,9 +8060,20 @@ class DatabaseHelper {
         d.currency_code
       FROM document_payments dp
       JOIN documents d ON d.id = dp.document_id
-      WHERE $whereBuffer
-      ORDER BY dp.date DESC
-    ''', args);
+      WHERE $dpWhere
+
+      UNION ALL
+
+      SELECT
+        v.id, v.paid AS amount, v.payment_method, v.date, v.notes,
+        v.id AS document_id,
+        v.document_number, v.type AS doc_type, v.recipient_name,
+        v.currency_code
+      FROM documents v
+      WHERE $vWhere
+
+      ORDER BY date DESC
+    ''', combinedArgs);
   }
 
   Future<void> logAuditEvent(
