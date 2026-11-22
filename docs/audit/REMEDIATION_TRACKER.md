@@ -13,7 +13,7 @@
 |:---|:---|:---|:---|:---|:---|:---|:---|:---|:---|:---|
 | **ACC-01** | Duplicate Payment Posting on Document Edit | Critical | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_01_test.dart` | `6cba2b8` | APPROVE | Post upfront payments only if genuine unbacked upfront payment exists; reverseLinkedPayments: false on edit preserves standalone payments |
 | **ACC-02** | Tax-Inclusive Purchases Record Gross Unit Cost in Stock Ledger vs. Net in GL | Critical | Phase 3 | A3 (inventory-costing) | Done | Confirmed | `test/regression/audit_acc_02_test.dart` | `e414292` | APPROVE | Stripped recoverable VAT from unitCost before recording into StockLedger; net unit cost stored in stock_movements |
-| **ACC-03** | Standalone Expense Vouchers Omitted from Dashboard & Payments Report | Critical | Phase 4 | A4 (reporting-integrity) | Red-test | Partially Confirmed | `test/regression/audit_acc_03_test.dart` | - | - | Omission confirmed; naive audit fix double-counts allocated vouchers. Needs selective standalone filter |
+| **ACC-03** | Standalone Expense Vouchers Omitted from Dashboard & Payments Report | Critical | Phase 4 | A4 (reporting-integrity) | Done | Confirmed | `test/regression/audit_acc_03_test.dart` | `e781950` | APPROVE | Standalone vouchers included via UNION ALL in getPaymentReport and 2b in getPeriodSummary without double-counting |
 | **ACC-04** | Zero-Total Invoices Bypass COGS & Inventory Reduction in GL | High | Phase 2 | A2 (posting-engine) | Done | Confirmed | `test/regression/audit_acc_04_test.dart` | `66ab987` | APPROVE | Decoupled COGS loop from totalMinor <= 0 guard; COGS and inventory posted correctly for zero-total invoices |
 | **ACC-05** | Customer Statements Drop Unallocated Receipts & Advances | High | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_05_test.dart` | - | - | Modern path iterates invoices only; unallocated receipts excluded |
 | **ACC-06** | Hard Deletion of Allocated Vouchers Crashes SQLite Foreign Key Constraint | High | Phase 4 | A4 (reporting-integrity) | Red-test | Confirmed | `test/regression/audit_acc_06_test.dart` | - | - | Checked `document_id` instead of `receipt_document_id` before deleting |
@@ -99,8 +99,8 @@
 - [x] Exit criteria: Stock valuation vs. GL reconciliation green across tax-inclusive, tax-exclusive, and no-tax
 
 ### Phase 4: Reporting & Integrity (A4, Sequential)
-- [ ] Entry criteria: Phase 3 merged
-- [ ] Fix ACC-03 (Standalone vouchers in dashboard and payment reports)
+- [x] Entry criteria: Phase 3 merged
+- [x] Fix ACC-03 (Standalone vouchers in dashboard and payment reports)
 - [ ] Fix ACC-05 (Unallocated receipts on customer statements)
 - [ ] Fix ACC-06 (Pre-delete allocation check for vouchers)
 - [ ] Fix ACC-11 (PDF tax rate label for mixed-rate invoices)
