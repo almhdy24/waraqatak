@@ -257,13 +257,22 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         chosenRefundStatus = res.refundStatus;
       }
     } else {
+      final String cancelMessage;
+      if (isReceipt) {
+        cancelMessage = l10n.cancelReceiptMessage;
+      } else if (doc.type == 'invoice') {
+        cancelMessage = l10n.cancelInvoiceInventoryNotice;
+      } else if (doc.type == 'purchase') {
+        cancelMessage = l10n.cancelPurchaseInventoryNotice;
+      } else {
+        cancelMessage = l10n.cancelDocumentMessage;
+      }
+
       final res = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(l10n.confirmCancel),
-          content: Text(
-            isReceipt ? l10n.cancelReceiptMessage : l10n.cancelDocumentMessage,
-          ),
+          content: Text(cancelMessage),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),

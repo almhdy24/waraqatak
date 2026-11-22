@@ -460,6 +460,14 @@ class AppLocalizations {
     'إلغاء هذا الإيصال سيعكس الدفعة المرتبطة به ويُحدّث حالة الفاتورة.',
     'Cancelling this receipt will reverse its payment and update the invoice.',
   );
+  String get cancelInvoiceInventoryNotice => _t(
+    'إلغاء هذه الفاتورة سيعيد الأصناف تلقائياً إلى المخزون ويعكس القيود المحاسبية. لا يمكن التراجع عن هذا الإجراء.',
+    'Cancelling this invoice will automatically return items to stock and reverse accounting entries. This cannot be undone.',
+  );
+  String get cancelPurchaseInventoryNotice => _t(
+    'إلغاء فاتورة الشراء سيخصم الأصناف من المخزون ويعكس حساب المورد. لا يمكن التراجع عن هذا الإجراء.',
+    'Cancelling this purchase will deduct items from stock and reverse the supplier account. This cannot be undone.',
+  );
   String cannotCancelWithActiveVouchers(String voucherNumbers) => _t(
     'لا يمكن إلغاء المستند لوجود سندات قبض/صرف نشطة مرتبطة به (${_iso(voucherNumbers)}). ألغِ هذه السندات أولاً.',
     'Cannot cancel document with active payment receipts/vouchers ($voucherNumbers). Please cancel these vouchers first.',
