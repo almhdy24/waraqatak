@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_confirm_dialog.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/app_user.dart';
@@ -44,6 +45,40 @@ abstract final class SensitiveActionGate {
     );
 
     return result == true;
+  }
+
+  /// Confirms a sensitive or destructive action with the user.
+  ///
+  /// In multi-user mode: prompts the user (or requires Owner) to enter their password/PIN
+  /// alongside the confirmation message in a single re-authentication dialog.
+  /// In single-user mode: displays [AppConfirmDialog.show] with the confirmation message.
+  ///
+  /// Guarantees that users are never presented with two redundant confirmation dialogs in succession.
+  static Future<bool> confirmOrReauthenticate(
+    BuildContext context, {
+    required String title,
+    required String message,
+    String? confirmLabel,
+    String? cancelLabel,
+    bool isDestructive = false,
+    bool requireOwner = false,
+  }) async {
+    if (SessionManager.instance.isMultiUserEnabled) {
+      return reauthenticate(
+        context,
+        title: title,
+        message: message,
+        requireOwner: requireOwner,
+      );
+    }
+    return AppConfirmDialog.show(
+      context,
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel,
+      cancelLabel: cancelLabel,
+      isDestructive: isDestructive,
+    );
   }
 }
 

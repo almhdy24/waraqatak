@@ -348,7 +348,6 @@ class _GoogleDriveBackupScreenState extends State<GoogleDriveBackupScreen> {
     final authed = await SensitiveActionGate.reauthenticate(
       context,
       title: l10n.confirmRestore,
-      message: l10n.restoreWarning,
       requireOwner: true,
     );
     if (!authed || !mounted) return;

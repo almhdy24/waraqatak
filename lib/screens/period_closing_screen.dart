@@ -5,7 +5,6 @@ import '../localization/app_localizations.dart';
 import '../utils/date_format_utils.dart';
 import '../utils/error_utils.dart';
 import '../widgets/access/sensitive_action_gate.dart';
-import '../widgets/app_confirm_dialog.dart';
 import '../widgets/app_date_picker.dart';
 import '../widgets/app_design_tokens.dart';
 import '../widgets/app_loading_view.dart';
@@ -70,7 +69,7 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
     final confirmMsg = l10n.confirmSetPeriodLockWithDate(
       AppDateUtils.formatDate(picked),
     );
-    final confirmed = await AppConfirmDialog.show(
+    final confirmed = await SensitiveActionGate.confirmOrReauthenticate(
       context,
       title: l10n.confirmSetPeriodLockTitle,
       message: confirmMsg,
@@ -78,13 +77,6 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
       isDestructive: false,
     );
     if (!confirmed || !mounted) return;
-
-    final authed = await SensitiveActionGate.reauthenticate(
-      context,
-      title: l10n.confirmSetPeriodLockTitle,
-      message: confirmMsg,
-    );
-    if (!authed || !mounted) return;
 
     await DatabaseHelper.instance.setBooksClosedThrough(picked);
     await _load();
@@ -98,7 +90,7 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
 
   Future<void> _clearLockDate() async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await AppConfirmDialog.show(
+    final confirmed = await SensitiveActionGate.confirmOrReauthenticate(
       context,
       title: l10n.confirmClearPeriodLockTitle,
       message: l10n.confirmClearPeriodLockMessage,
@@ -106,13 +98,6 @@ class _PeriodClosingScreenState extends State<PeriodClosingScreen> {
       isDestructive: true,
     );
     if (!confirmed || !mounted) return;
-
-    final authed = await SensitiveActionGate.reauthenticate(
-      context,
-      title: l10n.confirmClearPeriodLockTitle,
-      message: l10n.confirmClearPeriodLockMessage,
-    );
-    if (!authed || !mounted) return;
 
     await DatabaseHelper.instance.setBooksClosedThrough(null);
     await _load();
