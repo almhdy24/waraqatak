@@ -23,22 +23,22 @@
 | **ACC-10** | Manual Cost Reconciliation Leaves Inventory Account Distorted Without GL Entry | Medium | Phase 3 | A3 (inventory-costing) | Done | Confirmed | `test/regression/audit_acc_10_test.dart` | `5cbd21c` | APPROVE | Post Dr 1140 (Inventory) / Cr 3100 (Opening Equity) in JournalWriter for positive reconciled stock |
 | **ACC-11** | Multi-Rate Tax Invoice Displays Global Fallback Tax Rate on PDF | Low | Phase 4 | A4 (reporting-integrity) | Done | Confirmed | `test/regression/audit_acc_11_test.dart` | `643078e` | APPROVE | Set document taxRate to 0.0 for mixed-rate items, omitting misleading rate percentage on PDF and UI |
 | **ACC-12** | Edit Quantity Reduction Restores Stock at Current Average Cost Instead of Sale Snapshot Cost | Low | Phase 3 | A3 (inventory-costing) | Done | Confirmed | `test/regression/audit_acc_12_test.dart` | `9e51552` | APPROVE | Restores stock at original sale snapshot unit cost from oldItems; preserves snapshot unit cost on persisted items |
-| **UX-01** | Unscrollable PIN Lock Screen Overflows in Landscape (< 550dp) | Critical | Phase 5 | A6 (ux-critical) | Red-test | Confirmed | `test/widgets/audit_ux_01_test.dart` | - | - | Unscrollable column with spacer and 324dp keypad overflows in landscape |
-| **UX-02** | Editing Contact Prematurely Pops Customer Detail Screen Back to List | High | Phase 5 | A6 (ux-critical) | Red-test | Confirmed | `test/widgets/audit_ux_02_test.dart` | - | - | `Navigator.pop(context, true)` in `_editContact` prematurely exits screen |
-| **UX-03** | `TextEditingController` Disposed Before Reading Text in Custom Payment Dialog | Medium | Phase 5 | A6 (ux-critical) | Todo | Partially Confirmed | `test/widgets/payment_methods_screen_test.dart` | - | - | Getter `.text` doesn't throw immediate assert in release, but is an unsafe antipattern. Downgraded to Medium |
-| **UX-04** | Immediate SnackBar Overwrite Cancels Undo Affordance on Bulk Price Update | High | Phase 5 | A6 (ux-critical) | Red-test | Confirmed | `test/widgets/audit_ux_04_test.dart` | - | - | Second snackbar immediately replaces and dismisses undo snackbar |
-| **UX-05** | Fixed Height `SizedBox(52)` Overflows on Accessibility Font Scaling | High | Phase 5 | A6 (ux-critical) | Red-test | Confirmed | `test/widgets/audit_ux_05_test.dart` | - | - | Height 52 overflows when font scale >= 1.3x |
-| **UX-06** | "Enter Activation Key" Workflow Lands on Marketing Page With Input Buried at Bottom | High | Phase 5 | A7 (ux-flows) | Todo | Confirmed | Manual verification | - | - | Missing direct route/scroll to activation key input |
-| **UX-07** | Record Payment Sheet Lacks In-Flight Double-Submit Lock & Leaks Raw SQLite Exceptions | High | Phase 5 | A7 (ux-flows) | Red-test | Confirmed | `test/widgets/audit_ux_07_test.dart` | - | - | Double-tap creates duplicate payments; raw exception text shown to user |
-| **UX-08** | Misleading Price Error on Currency Validation & Hardcoded English Copy | High | Phase 5 | A7 (ux-flows) | Verifying | Confirmed | Manual verification | - | - | Invalid code/name triggers `refErrInvalidPrice`; English helper string |
+| **UX-01** | Unscrollable PIN Lock Screen Overflows in Landscape (< 550dp) | Critical | Phase 5 | A6 (ux-critical) | Done | Confirmed | `test/widgets/audit_ux_01_test.dart` | `9df3bd8` | APPROVE | Made PinLockScreen scrollable with LayoutBuilder + SingleChildScrollView to prevent landscape overflow |
+| **UX-02** | Editing Contact Prematurely Pops Customer Detail Screen Back to List | High | Phase 5 | A6 (ux-critical) | Done | Confirmed | `test/widgets/audit_ux_02_test.dart` | `6a5fe5d` | APPROVE | Reload contact on edit without popping customer detail screen |
+| **UX-03** | `TextEditingController` Disposed Before Reading Text in Custom Payment Dialog | Medium | Phase 5 | A6 (ux-critical) | Done | Confirmed | `test/widgets/audit_ux_03_test.dart` | `7bba3ff` | APPROVE | Encapsulated custom payment method controllers in dialog stateful widget with safe dispose lifecycle |
+| **UX-04** | Immediate SnackBar Overwrite Cancels Undo Affordance on Bulk Price Update | High | Phase 5 | A6 (ux-critical) | Done | Confirmed | `test/widgets/audit_ux_04_test.dart` | `bbc29f9` | APPROVE | Preserved undo snackbar by merging counts and showing snackbar after async reload |
+| **UX-05** | Fixed Height `SizedBox(52)` Overflows on Accessibility Font Scaling | High | Phase 5 | A6 (ux-critical) | Done | Confirmed | `test/widgets/audit_ux_05_test.dart` | `66f9a51` | APPROVE | Replaced fixed button height with minHeight BoxConstraints and added scale-down wrappers |
+| **UX-06** | "Enter Activation Key" Workflow Lands on Marketing Page With Input Buried at Bottom | High | Phase 5 | A7 (ux-flows) | Done | Confirmed | `test/widgets/audit_ux_06_test.dart` | `508c619` | APPROVE | Streamlined activation key input at top with autofocus when initialFocusKeyInput: true and responsive layout |
+| **UX-07** | Record Payment Sheet Lacks In-Flight Double-Submit Lock & Leaks Raw SQLite Exceptions | High | Phase 5 | A7 (ux-flows) | Done | Confirmed | `test/widgets/audit_ux_07_test.dart` | `66e6a71` | APPROVE | Added double-submit lock on payment sheet, sanitized error messages, and managed sheet controller lifecycle |
+| **UX-08** | Misleading Price Error on Currency Validation & Hardcoded English Copy | High | Phase 5 | A7 (ux-flows) | Done | Confirmed | `test/widgets/audit_ux_08_test.dart` | `f7c0d1b` | APPROVE | Corrected currency validation error messages, localized helper copy, and fixed Arabic name label |
 | **UX-09** | Technical Dart Class Name in Arabic Copy & Unmirrored Back Arrow in AccessDeniedView | Medium | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | Leaks class name and uses non-adaptive arrow |
 | **UX-10** | Hardcoded `Icons.chevron_right` in Multi-User Screens Points Backward in RTL | Medium | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | Should use `Icons.adaptive.chevron_right` or mirror in RTL |
 | **UX-11** | Missing `PopScope` Unsaved Dirty Changes Warning Guards on Setup & Pricing Forms | Medium | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | User can accidentally lose typed data |
 | **UX-12** | Currency Names Hardcoded to Arabic (`nameAr`) in Dropdowns Ignoring English Locale | Medium | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | Hardcoded `nameAr` instead of localized name |
 | **UX-13** | Raw Loading, Empty, and Error State Widgets Bypass Standardized Components | Medium | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | Standardize on `AppLoadingView`, `AppEmptyState`, `AppErrorState` |
-| **UX-14** | Redundant Duplicate Back-to-Back Confirmation Dialogs in Sensitive Operations | Medium | Phase 5 | A7 (ux-flows) | Verifying | Confirmed | Manual verification | - | - | Confirm dialog followed immediately by SensitiveActionGate reauth dialog |
-| **UX-15** | Cancellation Dialog Lacks Explanation of Inventory Return & Journal Reversal | Medium | Phase 5 | A7 (ux-flows) | Verifying | Confirmed | Manual verification | - | - | Unpaid document cancel lacks clear impact explanation |
-| **UX-16** | Missing `TextInputType.phone` on Contact Phone Field Forces Standard QWERTY | Medium | Phase 5 | A7 (ux-flows) | Verifying | Confirmed | Manual verification | - | - | Phone field should show telephone keypad |
+| **UX-14** | Redundant Duplicate Back-to-Back Confirmation Dialogs in Sensitive Operations | Medium | Phase 5 | A7 (ux-flows) | Done | Confirmed | `test/widgets/audit_ux_14_test.dart` | `04d70e5` | APPROVE | Eliminated redundant back-to-back dialogs via SensitiveActionGate.confirmOrReauthenticate |
+| **UX-15** | Cancellation Dialog Lacks Explanation of Inventory Return & Journal Reversal | Medium | Phase 5 | A7 (ux-flows) | Done | Confirmed | `test/widgets/audit_ux_15_test.dart` | `e6d2041` | APPROVE | Clarified document cancellation inventory return and accounting reversal effects |
+| **UX-16** | Missing `TextInputType.phone` on Contact Phone Field Forces Standard QWERTY | Medium | Phase 5 | A7 (ux-flows) | Done | Confirmed | `test/widgets/audit_ux_16_test.dart` | `d236624` | APPROVE | Added TextInputType.phone on recipient phone field in EditDocumentScreen |
 | **UX-17** | Pricing Tier Choice Chips Undersized Below 48x48dp Touch Target (~24dp Height) | Low | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | Fails WCAG minimum touch target size |
 | **UX-18** | PDF Accent Color Swatch Pickers Undersized at 40x40dp Touch Target | Low | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | Swatches should expand to at least 48x48dp |
 | **UX-19** | Icon-Only Password Visibility and Dialog Close Buttons Lack Tooltips & Semantics | Low | Phase 6 | A8 (rtl-a11y-polish) | Verifying | Confirmed | Manual verification | - | - | Accessibility screen readers cannot announce button purpose |
@@ -108,12 +108,12 @@
 - [x] Exit criteria: Reports reconcile with General Ledger
 
 ### Phase 5: UX Critical & High (A5 then A6 & A7)
-- [ ] Entry criteria: Phase 4 merged
-- [ ] A5: Add new localization keys in batch
-- [ ] A6: Fix UX-01, UX-02, UX-03, UX-04, UX-05
-- [ ] A7: Fix UX-06, UX-07, UX-08, UX-14, UX-15, UX-16
-- [ ] Independent Reviewer (A9) APPROVE
-- [ ] Exit criteria: Widget tests green; manual verification checklist verified
+- [x] Entry criteria: Phase 4 merged
+- [x] A5: Add new localization keys in batch
+- [x] A6: Fix UX-01, UX-02, UX-03, UX-04, UX-05
+- [x] A7: Fix UX-06, UX-07, UX-08, UX-14, UX-15, UX-16
+- [x] Independent Reviewer (A9) APPROVE
+- [x] Exit criteria: Widget tests green; manual verification checklist verified
 
 ### Phase 6: UX Medium & Low (A5 then A8)
 - [ ] Entry criteria: Phase 5 merged
