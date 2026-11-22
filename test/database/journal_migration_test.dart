@@ -44,13 +44,13 @@ void main() {
       expect(tableNames.contains('journal_lines'), isTrue);
       expect(tableNames.contains('app_settings'), isTrue);
 
-      // 2. Verify 13 standard accounts seeded
+      // 2. Verify 14 standard accounts seeded
       final accounts = await db.query('accounts');
-      expect(accounts.length, 13);
+      expect(accounts.length, 14);
       final accountCodes = accounts.map((a) => a['code'] as String).toSet();
       expect(accountCodes, containsAll([
         '1110', '1120', '1130', '1140', '1150',
-        '2110', '2120', '3100', '4100', '4900',
+        '2110', '2120', '2130', '3100', '4100', '4900',
         '5100', '5200', '6100',
       ]));
 
@@ -163,7 +163,7 @@ void main() {
 
       // Verify accounts and settings seeded
       final accounts = await db.query('accounts');
-      expect(accounts.length, 13);
+      expect(accounts.length, 14);
 
       final shadowWrite = await DatabaseHelper.instance.isJournalShadowWriteEnabled(txn: db);
       expect(shadowWrite, isTrue);

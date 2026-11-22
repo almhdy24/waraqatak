@@ -279,14 +279,74 @@ class CustomerStatementService {
           }
         }
       }
+
+      // 6. Include unallocated customer payment receipts (advance deposits)
+      final coveredReceiptIds = <int>{};
+      for (final pList in paymentsByDocId.values) {
+        for (final p in pList) {
+          if (p.receiptDocumentId != null) {
+            coveredReceiptIds.add(p.receiptDocumentId!);
+          }
+        }
+      }
+
+      for (final doc in documents) {
+        if (doc.type != 'payment_receipt') continue;
+        if (doc.status == DocumentStatus.cancelled ||
+            doc.status == DocumentStatus.draft) {
+          continue;
+        }
+        if (doc.id != null && coveredReceiptIds.contains(doc.id!)) {
+          continue;
+        }
+        final docCurrency = doc.currencyCode.trim().isNotEmpty
+            ? doc.currencyCode
+            : businessCurrencyCode;
+        if (docCurrency != targetCurrency) continue;
+
+        rawEntries.add(
+          StatementEntry(
+            date: doc.date,
+            documentNumber: doc.documentNumber,
+            description: doc.documentNumber,
+            type: StatementEntryType.receipt,
+            debit: 0.0,
+            credit: doc.total,
+            runningBalance: 0.0,
+            documentId: doc.id,
+          ),
+        );
+      }
     } else {
       // Legacy fallback path: classify payment receipts assuming single parent link
       final activeLinkedReceipts = <Document>[];
 
       for (final doc in documents) {
         if (doc.type != 'payment_receipt') continue;
-        if (doc.status == DocumentStatus.cancelled) continue;
-        if (doc.relatedDocumentId == null) continue;
+        if (doc.status == DocumentStatus.cancelled ||
+            doc.status == DocumentStatus.draft) {
+          continue;
+        }
+        if (doc.relatedDocumentId == null) {
+          final docCurrency = doc.currencyCode.trim().isNotEmpty
+              ? doc.currencyCode
+              : businessCurrencyCode;
+          if (docCurrency == targetCurrency) {
+            rawEntries.add(
+              StatementEntry(
+                date: doc.date,
+                documentNumber: doc.documentNumber,
+                description: doc.documentNumber,
+                type: StatementEntryType.receipt,
+                debit: 0.0,
+                credit: doc.total,
+                runningBalance: 0.0,
+                documentId: doc.id,
+              ),
+            );
+          }
+          continue;
+        }
 
         final parent = byId[doc.relatedDocumentId];
         if (parent == null || parent.type != 'invoice') continue;

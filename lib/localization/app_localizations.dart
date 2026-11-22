@@ -1671,6 +1671,7 @@ class AppLocalizations {
     '1150' => _t('ضريبة مستردة (مدخلات)', 'Tax receivable (input)'),
     '2110' => _t('الموردون (ذمم دائنة)', 'Accounts payable'),
     '2120' => _t('ضريبة مستحقة (مخرجات)', 'Tax payable (output)'),
+    '2130' => _t('دفعات مقدمة من العملاء', 'Customer deposits'),
     '3100' => _t('رأس المال / أرصدة افتتاحية', 'Opening balance equity'),
     '4100' => _t('إيرادات المبيعات', 'Sales revenue'),
     '4900' => _t('إيرادات أخرى', 'Other income'),

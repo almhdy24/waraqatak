@@ -383,14 +383,14 @@ class PostingService {
     if (parentDoc != null) {
       if (parentDoc.status == DocumentStatus.cancelled ||
           parentDoc.status == DocumentStatus.draft) {
-        creditAccountCode = Accounts.payables.code; // Customer advance liability
+        creditAccountCode = Accounts.customerDeposits.code; // Customer advance liability (2130)
       } else {
         creditAccountCode = Accounts.receivables.code;
       }
     } else if (isAllocated) {
       creditAccountCode = Accounts.receivables.code;
     } else if (doc.contactId != null) {
-      creditAccountCode = Accounts.payables.code; // Customer advance liability
+      creditAccountCode = Accounts.customerDeposits.code; // Customer advance liability (2130)
     } else {
       creditAccountCode = Accounts.otherIncome.code;
     }

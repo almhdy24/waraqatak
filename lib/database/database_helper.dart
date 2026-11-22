@@ -42,7 +42,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 33;
+  static const int dbVersion = 34;
 
   static Database? _database;
 
@@ -1557,6 +1557,27 @@ class DatabaseHelper {
     if (oldVersion < 33 && newVersion >= 33) {
       await _upgradeToProductImageBasenameSchema(db);
     }
+
+    if (oldVersion < 34 && newVersion >= 34) {
+      await _upgradeToCustomerDepositsAccountSchema(db);
+    }
+  }
+
+  static Future<void> _upgradeToCustomerDepositsAccountSchema(
+    DatabaseExecutor db,
+  ) async {
+    await db.insert(
+      'accounts',
+      {
+        'code': '2130',
+        'name_ar': 'دفعات مقدمة من العملاء',
+        'name_en': 'Customer deposits',
+        'type': 'liability',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
   }
 
   static Future<void> _upgradeToProductImageBasenameSchema(
@@ -1810,6 +1831,14 @@ class DatabaseHelper {
         'code': '2120',
         'name_ar': 'ضريبة مستحقة (مخرجات)',
         'name_en': 'Tax payable (output)',
+        'type': 'liability',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      {
+        'code': '2130',
+        'name_ar': 'دفعات مقدمة من العملاء',
+        'name_en': 'Customer deposits',
         'type': 'liability',
         'normal_side': 'credit',
         'is_system': 1,
@@ -6233,9 +6262,9 @@ class DatabaseHelper {
     );
 
     if (allOpenRows.isEmpty) {
-      throw StateError(
-        'No eligible outstanding $targetType documents found for contact.',
-      );
+      // If there are no open documents to allocate against,
+      // it remains an unallocated customer deposit (advance).
+      return;
     }
 
     // 2. Currency segregation check
