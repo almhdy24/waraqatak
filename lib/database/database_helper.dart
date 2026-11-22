@@ -3988,6 +3988,13 @@ class DatabaseHelper {
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
+      final isTaxesEnabled = bRows.isNotEmpty &&
+          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax = bRows.isNotEmpty &&
+          (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
+      final businessFallbackTaxRate = bRows.isNotEmpty
+          ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
+          : 0.0;
       if (doc.currencyCode != baseCurrency) {
         throw ArgumentError(
           'Document currency (${doc.currencyCode}) must match business base currency ($baseCurrency).',
@@ -4157,7 +4164,16 @@ class DatabaseHelper {
                   Product.costStatusUnknown;
 
               final incomingQty = item.quantity;
-              final incomingUnitCost = item.price;
+              final incomingUnitCost =
+                  InventoryCostingService.resolvePurchaseNetUnitCost(
+                    price: item.price,
+                    taxRate: item.taxRate,
+                    isTaxesEnabled: isTaxesEnabled,
+                    isPricesIncludeTax: isPricesIncludeTax,
+                    docTaxAmount: doc.taxAmount,
+                    docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                    isTaxable: item.taxable,
+                  );
               itemUnitCost = incomingUnitCost;
               itemTotalCost = incomingQty * incomingUnitCost;
 
@@ -4690,12 +4706,20 @@ class DatabaseHelper {
         );
       }
 
+      final bRows = await txn.query('businesses', limit: 1);
+      final baseCurrency = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      final isTaxesEnabled = bRows.isNotEmpty &&
+          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax = bRows.isNotEmpty &&
+          (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
+      final businessFallbackTaxRate = bRows.isNotEmpty
+          ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
+          : 0.0;
+
       final newIsDraft = doc.status == DocumentStatus.draft;
       if (oldStatus == DocumentStatus.draft && !newIsDraft) {
-        final bRows = await txn.query('businesses', limit: 1);
-        final baseCurrency = bRows.isNotEmpty
-            ? (bRows.first['currency_code'] as String? ?? 'SDG')
-            : 'SDG';
         if (doc.currencyCode != baseCurrency) {
           throw ArgumentError(
             'Cannot finalize draft with currency (${doc.currencyCode}) that does not match business base currency ($baseCurrency).',
@@ -5178,7 +5202,16 @@ class DatabaseHelper {
                     Product.costStatusUnknown;
 
                 final incomingQty = item.quantity;
-                final incomingUnitCost = item.price;
+                final incomingUnitCost =
+                    InventoryCostingService.resolvePurchaseNetUnitCost(
+                      price: item.price,
+                      taxRate: item.taxRate,
+                      isTaxesEnabled: isTaxesEnabled,
+                      isPricesIncludeTax: isPricesIncludeTax,
+                      docTaxAmount: doc.taxAmount,
+                      docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                      isTaxable: item.taxable,
+                    );
                 itemUnitCost = incomingUnitCost;
                 itemTotalCost = incomingQty * incomingUnitCost;
 
@@ -5268,8 +5301,18 @@ class DatabaseHelper {
                 }
               }
             } else if (doc.type == 'purchase') {
-              itemUnitCost = item.price;
-              itemTotalCost = item.quantity * item.price;
+              final netPrice =
+                  InventoryCostingService.resolvePurchaseNetUnitCost(
+                    price: item.price,
+                    taxRate: item.taxRate,
+                    isTaxesEnabled: isTaxesEnabled,
+                    isPricesIncludeTax: isPricesIncludeTax,
+                    docTaxAmount: doc.taxAmount,
+                    docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                    isTaxable: item.taxable,
+                  );
+              itemUnitCost = netPrice;
+              itemTotalCost = item.quantity * netPrice;
             }
           }
         }
@@ -7018,6 +7061,13 @@ class DatabaseHelper {
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
+      final isTaxesEnabled = bRows.isNotEmpty &&
+          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax = bRows.isNotEmpty &&
+          (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
+      final businessFallbackTaxRate = bRows.isNotEmpty
+          ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
+          : 0.0;
       if (doc.currencyCode != baseCurrency) {
         throw ArgumentError(
           'Cannot issue draft with currency (${doc.currencyCode}) that does not match business base currency ($baseCurrency).',
@@ -7128,7 +7178,19 @@ class DatabaseHelper {
                 Product.costStatusUnknown;
 
             final incomingQty = qty;
-            final incomingUnitCost = (item['price'] as num?)?.toDouble() ?? 0.0;
+            final incomingPrice = (item['price'] as num?)?.toDouble() ?? 0.0;
+            final itemTaxRate = (item['tax_rate'] as num?)?.toDouble();
+            final isTaxable = (item['taxable'] as int? ?? 1) == 1;
+            final incomingUnitCost =
+                InventoryCostingService.resolvePurchaseNetUnitCost(
+                  price: incomingPrice,
+                  taxRate: itemTaxRate,
+                  isTaxesEnabled: isTaxesEnabled,
+                  isPricesIncludeTax: isPricesIncludeTax,
+                  docTaxAmount: doc.taxAmount,
+                  docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                  isTaxable: isTaxable,
+                );
             final itemTotalCost = incomingQty * incomingUnitCost;
 
             final double newAvgCost;

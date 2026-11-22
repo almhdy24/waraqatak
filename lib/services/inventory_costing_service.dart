@@ -4,6 +4,7 @@ import '../models/document.dart';
 import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
+import '../utils/money_utils.dart';
 import 'access/audit_service.dart';
 import 'accounting/stock_ledger.dart';
 
@@ -141,6 +142,34 @@ class InventoryCostingService {
     final newStock = currentStock + incomingQty;
     if (newStock <= 0) return incomingUnitCost;
     return (currentValue + incomingValue) / newStock;
+  }
+
+  /// Resolves the net inventory cost for incoming purchase items (ACC-02).
+  ///
+  /// When a business operates with tax-inclusive pricing ([isPricesIncludeTax] = true)
+  /// and recoverable taxes are enabled ([isTaxesEnabled] = true), the recoverable tax
+  /// portion is deducted so inventory is valued at net cost in accordance with IAS 2
+  /// and matching the General Ledger debit to Account 1140.
+  static double resolvePurchaseNetUnitCost({
+    required double price,
+    required double? taxRate,
+    required bool isTaxesEnabled,
+    required bool isPricesIncludeTax,
+    required double docTaxAmount,
+    double docFallbackTaxRate = 0.0,
+    bool isTaxable = true,
+    int decimalDigits = 4,
+  }) {
+    if (!isTaxesEnabled || !isPricesIncludeTax || docTaxAmount <= 0) {
+      return price;
+    }
+    final rawRate = taxRate ?? (isTaxable ? docFallbackTaxRate : 0.0);
+    final effectiveRate = rawRate > 1.0 ? rawRate / 100.0 : rawRate;
+    if (effectiveRate <= 0) {
+      return price;
+    }
+    final rawNet = price / (1.0 + effectiveRate);
+    return MoneyUtils.round(rawNet, decimalDigits);
   }
 
   /// Calculates the new perpetual moving weighted-average cost after removing or cancelling a purchase.
