@@ -209,21 +209,25 @@ class _BulkPricingScreenState extends State<BulkPricingScreen> {
           target: _target,
         );
         if (!mounted) return;
-        AppSnackBar.showUndo(
-          context,
-          l10n.pricesUpdatedSuccess,
-          actionLabel: l10n.undo,
-          onUndo: () => _undoPriceChanges(revertSnapshots),
-        );
-        if (result.skippedCount > 0) {
+        await _load();
+        if (!mounted) return;
+        if (result.affectedCount > 0) {
+          final message = result.skippedCount > 0
+              ? '${l10n.pricesUpdatedSuccess} (${l10n.bulkSkippedReference(result.skippedCount)})'
+              : l10n.pricesUpdatedSuccess;
+          AppSnackBar.showUndo(
+            context,
+            message,
+            actionLabel: l10n.undo,
+            onUndo: () => _undoPriceChanges(revertSnapshots),
+          );
+        } else if (result.skippedCount > 0) {
           AppSnackBar.show(
             context,
             l10n.bulkSkippedReference(result.skippedCount),
             severity: AppSnackBarSeverity.info,
           );
         }
-        await _load();
-        if (!mounted) return;
       } catch (e) {
         if (!mounted) return;
         AppSnackBar.show(

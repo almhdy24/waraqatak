@@ -36,6 +36,7 @@ class CustomerDetailScreen extends StatefulWidget {
 }
 
 class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
+  late Contact _contact;
   List<Document>? _documents;
   Business? _business;
   double _outstanding = 0;
@@ -45,11 +46,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   static final _fmt = NumberFormat('#,##0');
   static final _dateFmt = DateFormat('dd/MM/yyyy');
 
-  bool get _isSupplier => widget.contact.type == 'supplier';
+  bool get _isSupplier => _contact.type == 'supplier';
 
   @override
   void initState() {
     super.initState();
+    _contact = widget.contact;
     _load();
   }
 
@@ -64,18 +66,24 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     try {
       final db = DatabaseHelper.instance;
       final docType = _isSupplier ? 'purchase' : 'invoice';
+      final contactId = _contact.id;
       final results = await Future.wait([
         db.getFirstBusiness(),
-        db.getDocumentsByContact(widget.contact.id!),
-        db.getContactOutstandingByCurrency(widget.contact.id!, docType),
+        if (contactId != null) db.getDocumentsByContact(contactId) else Future.value(<Document>[]),
+        if (contactId != null) db.getContactOutstandingByCurrency(contactId, docType) else Future.value(<String, double>{}),
+        if (contactId != null) db.getContactById(contactId) else Future.value(null),
       ]);
       if (!mounted) return;
       final biz = results[0] as Business?;
       final byCurrency = results[2] as Map<String, double>;
       final baseCurrency = biz?.currencyCode ?? 'SDG';
       final baseOutstanding = byCurrency[baseCurrency] ?? 0.0;
+      final freshContact = results[3] as Contact?;
 
       setState(() {
+        if (freshContact != null) {
+          _contact = freshContact;
+        }
         _business = biz;
         _documents = results[1] as List<Document>;
         _outstandingByCurrency = byCurrency;
@@ -91,12 +99,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => ContactFormScreen(contact: widget.contact),
+        builder: (_) => ContactFormScreen(contact: _contact),
       ),
     );
     if (result == true && mounted) {
       _load();
-      Navigator.pop(context, true);
     }
   }
 
@@ -120,14 +127,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PurchaseScreen(preselectedContact: widget.contact),
+          builder: (_) => PurchaseScreen(preselectedContact: _contact),
         ),
       );
     } else {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => InvoiceScreen(preselectedContact: widget.contact),
+          builder: (_) => InvoiceScreen(preselectedContact: _contact),
         ),
       );
     }
@@ -152,7 +159,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       return;
     }
     if (!mounted) return;
-    CustomerStatementDialog.show(context, contact: widget.contact);
+    CustomerStatementDialog.show(context, contact: _contact);
   }
 
   @override
@@ -163,7 +170,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.contact.name),
+        title: Text(_contact.name),
         centerTitle: true,
         actions: [
           IconButton(
@@ -223,7 +230,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         .where((e) => e.key != baseCurrencyCode && e.value > 0)
         .toList();
 
-    final avatarColor = _contactColor(widget.contact.name, cs);
+    final avatarColor = _contactColor(_contact.name, cs);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
@@ -258,7 +265,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        initialOf(widget.contact.name),
+                        initialOf(_contact.name),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -267,7 +274,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                       ),
                     ),
                   ),
-                  if (!widget.contact.active)
+                  if (!_contact.active)
                     PositionedDirectional(
                       bottom: 0,
                       end: 0,
@@ -293,7 +300,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                widget.contact.name,
+                _contact.name,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 20,
@@ -331,36 +338,36 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   ],
                 ),
               ),
-              if (widget.contact.phone != null ||
-                  widget.contact.email != null) ...[
+              if (_contact.phone != null ||
+                  _contact.email != null) ...[
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
                   alignment: WrapAlignment.center,
                   children: [
-                    if (widget.contact.phone != null)
+                    if (_contact.phone != null)
                       _InfoChip(
                         Icons.phone_outlined,
-                        widget.contact.phone!,
+                        _contact.phone!,
                         onTap: () => UrlLauncherUtils.launchUri(
                           context,
-                          Uri(scheme: 'tel', path: widget.contact.phone!),
+                          Uri(scheme: 'tel', path: _contact.phone!),
                         ),
                       ),
-                    if (widget.contact.email != null)
+                    if (_contact.email != null)
                       _InfoChip(
                         Icons.email_outlined,
-                        widget.contact.email!,
+                        _contact.email!,
                         onTap: () => UrlLauncherUtils.launchUri(
                           context,
-                          Uri(scheme: 'mailto', path: widget.contact.email!),
+                          Uri(scheme: 'mailto', path: _contact.email!),
                         ),
                       ),
-                    if (widget.contact.address != null)
+                    if (_contact.address != null)
                       _InfoChip(
                         Icons.location_on_outlined,
-                        widget.contact.address!,
+                        _contact.address!,
                       ),
                   ],
                 ),
@@ -471,7 +478,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         const SizedBox(height: 16),
 
         // ── Notes ─────────────────────────────────────────────────────────
-        if (widget.contact.notes != null) ...[
+        if (_contact.notes != null) ...[
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -490,7 +497,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    widget.contact.notes!,
+                    _contact.notes!,
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),

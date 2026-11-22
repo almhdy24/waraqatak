@@ -257,13 +257,22 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         chosenRefundStatus = res.refundStatus;
       }
     } else {
+      final String cancelMessage;
+      if (isReceipt) {
+        cancelMessage = l10n.cancelReceiptMessage;
+      } else if (doc.type == 'invoice') {
+        cancelMessage = l10n.cancelInvoiceInventoryNotice;
+      } else if (doc.type == 'purchase') {
+        cancelMessage = l10n.cancelPurchaseInventoryNotice;
+      } else {
+        cancelMessage = l10n.cancelDocumentMessage;
+      }
+
       final res = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text(l10n.confirmCancel),
-          content: Text(
-            isReceipt ? l10n.cancelReceiptMessage : l10n.cancelDocumentMessage,
-          ),
+          content: Text(cancelMessage),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -426,12 +435,6 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
   Future<void> _showRecordPaymentSheet() async {
     final l10n = AppLocalizations.of(context);
     final doc = _document!;
-    final amountController = TextEditingController(
-      text: NumberInput.formatForInput(doc.remaining, maxDecimals: 4),
-    );
-    String? selectedMethod = _enabledMethods.isNotEmpty
-        ? _enabledMethods.first.key
-        : null;
 
     await showModalBottomSheet(
       context: context,
@@ -439,181 +442,45 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (sheetCtx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheet) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    16,
-                    20,
-                    (MediaQuery.viewInsetsOf(ctx).bottom > 0
-                            ? MediaQuery.viewInsetsOf(ctx).bottom
-                            : MediaQuery.viewPaddingOf(ctx).bottom) +
-                        24,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        l10n.recordPayment,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${l10n.remaining}: ${_fmt.format(doc.remaining)} ${doc.currencySymbol}',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          TextButton.icon(
-                            style: TextButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                            ),
-                            icon: const Icon(Icons.flash_on_rounded, size: 16),
-                            label: Text(l10n.voucherPayFullBalance),
-                            onPressed: () {
-                              setSheet(() {
-                                amountController.text =
-                                    NumberInput.formatForInput(
-                                      doc.remaining,
-                                      maxDecimals: 4,
-                                    );
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      AmountField(
-                        controller: amountController,
-                        maxDecimals: 4,
-                        showMultipliers: true,
-                        decoration: InputDecoration(
-                          labelText: l10n.paymentAmountLabel,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          suffixText: doc.currencySymbol,
-                        ),
-                        autofocus: true,
-                      ),
-                      if (_enabledMethods.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _enabledMethods.map((m) {
-                            return ChoiceChip(
-                              label: Text(m.label(l10n.langCode)),
-                              selected: selectedMethod == m.key,
-                              onSelected: (_) =>
-                                  setSheet(() => selectedMethod = m.key),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      FilledButton(
-                        onPressed: () async {
-                          final amount =
-                              NumberInput.parse(amountController.text) ?? 0;
-                          final decimalDigits = Currency.decimalDigitsForCode(
-                            doc.currencyCode,
-                          );
-                          if (amount <= 0) {
-                            AppSnackBar.show(
-                              context,
-                              l10n.invalidAmount,
-                              severity: AppSnackBarSeverity.warning,
-                            );
-                            return;
-                          }
-                          if (MoneyUtils.isOverpayment(
-                            amount,
-                            doc.remaining,
-                            decimalDigits,
-                          )) {
-                            AppSnackBar.show(
-                              context,
-                              l10n.voucherAmountExceedsOutstanding(
-                                _fmt.format(doc.remaining),
-                              ),
-                              severity: AppSnackBarSeverity.warning,
-                            );
-                            return;
-                          }
-                          Navigator.pop(sheetCtx);
-                          try {
-                            final receiptId =
-                                await DocumentService.recordPayment(
-                                  documentId: doc.id!,
-                                  amount: amount,
-                                  paymentMethod: selectedMethod,
-                                );
-                            if (!mounted) return;
-                            AppSnackBar.show(
-                              context,
-                              l10n.paymentRecorded,
-                              actionLabel: l10n.viewReceipt,
-                              onAction: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => DocumentDetailScreen(
-                                      documentId: receiptId,
-                                    ),
-                                  ),
-                                );
-                              },
-                            );
-                            _load();
-                          } catch (e) {
-                            if (!mounted) return;
-                            AppSnackBar.show(
-                              context,
-                              '${l10n.operationFailed}: $e',
-                              severity: AppSnackBarSeverity.error,
-                            );
-                          }
-                        },
-                        child: Text(l10n.recordPayment),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+      builder: (sheetCtx) => _RecordPaymentSheet(
+        document: doc,
+        enabledMethods: _enabledMethods,
+        onSubmit: (amount, selectedMethod) async {
+          Navigator.pop(sheetCtx);
+          try {
+            final receiptId = await DocumentService.recordPayment(
+              documentId: doc.id!,
+              amount: amount,
+              paymentMethod: selectedMethod,
             );
-          },
-        );
-      },
+            if (!mounted) return;
+            AppSnackBar.show(
+              context,
+              l10n.paymentRecorded,
+              actionLabel: l10n.viewReceipt,
+              onAction: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => DocumentDetailScreen(
+                      documentId: receiptId,
+                    ),
+                  ),
+                );
+              },
+            );
+            _load();
+          } catch (e) {
+            if (!mounted) return;
+            AppSnackBar.show(
+              context,
+              ErrorUtils.getFriendlyErrorMessage(e, l10n: l10n),
+              severity: AppSnackBarSeverity.error,
+            );
+          }
+        },
+      ),
     );
-    amountController.dispose();
   }
 
   String _methodLabel(String key, AppLocalizations l10n) {
@@ -1086,7 +953,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     _totalRow(l10n.discount, doc.discount, sym),
                   if (doc.taxAmount > 0)
                     _totalRow(
-                      '${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})',
+                      doc.taxRate > 0
+                          ? '${l10n.tax} (${FormatUtils.formatTaxRate(doc.taxRate)})'
+                          : l10n.tax,
                       doc.taxAmount,
                       sym,
                     ),
@@ -1459,5 +1328,186 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       'custom' => l10n.customDocument,
       _ => type,
     };
+  }
+}
+
+
+class _RecordPaymentSheet extends StatefulWidget {
+  const _RecordPaymentSheet({
+    required this.document,
+    required this.enabledMethods,
+    required this.onSubmit,
+  });
+
+  final Document document;
+  final List<PaymentMethod> enabledMethods;
+  final Future<void> Function(double amount, String? method) onSubmit;
+
+  @override
+  State<_RecordPaymentSheet> createState() => _RecordPaymentSheetState();
+}
+
+class _RecordPaymentSheetState extends State<_RecordPaymentSheet> {
+  static final _fmt = NumberFormat('#,##0.00');
+  late final TextEditingController _amountController;
+  String? _selectedMethod;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(
+      text: NumberInput.formatForInput(widget.document.remaining, maxDecimals: 4),
+    );
+    _selectedMethod = widget.enabledMethods.isNotEmpty
+        ? widget.enabledMethods.first.key
+        : null;
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final doc = widget.document;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 8),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.outlineVariant,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            16,
+            20,
+            (MediaQuery.viewInsetsOf(context).bottom > 0
+                    ? MediaQuery.viewInsetsOf(context).bottom
+                    : MediaQuery.viewPaddingOf(context).bottom) +
+                24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.recordPayment,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${l10n.remaining}: ${_fmt.format(doc.remaining)} ${doc.currencySymbol}',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    icon: const Icon(Icons.flash_on_rounded, size: 16),
+                    label: Text(l10n.voucherPayFullBalance),
+                    onPressed: () {
+                      setState(() {
+                        _amountController.text = NumberInput.formatForInput(
+                          doc.remaining,
+                          maxDecimals: 4,
+                        );
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              AmountField(
+                controller: _amountController,
+                maxDecimals: 4,
+                showMultipliers: true,
+                decoration: InputDecoration(
+                  labelText: l10n.paymentAmountLabel,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  suffixText: doc.currencySymbol,
+                ),
+                autofocus: true,
+              ),
+              if (widget.enabledMethods.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: widget.enabledMethods.map((m) {
+                    return ChoiceChip(
+                      label: Text(m.label(l10n.langCode)),
+                      selected: _selectedMethod == m.key,
+                      onSelected: (_) =>
+                          setState(() => _selectedMethod = m.key),
+                    );
+                  }).toList(),
+                ),
+              ],
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: _isSubmitting
+                    ? null
+                    : () async {
+                        if (_isSubmitting) return;
+                        final amount =
+                            NumberInput.parse(_amountController.text) ?? 0;
+                        final decimalDigits = Currency.decimalDigitsForCode(
+                          doc.currencyCode,
+                        );
+                        if (amount <= 0) {
+                          AppSnackBar.show(
+                            context,
+                            l10n.invalidAmount,
+                            severity: AppSnackBarSeverity.warning,
+                          );
+                          return;
+                        }
+                        if (MoneyUtils.isOverpayment(
+                          amount,
+                          doc.remaining,
+                          decimalDigits,
+                        )) {
+                          AppSnackBar.show(
+                            context,
+                            l10n.voucherAmountExceedsOutstanding(
+                              _fmt.format(doc.remaining),
+                            ),
+                            severity: AppSnackBarSeverity.warning,
+                          );
+                          return;
+                        }
+                        setState(() => _isSubmitting = true);
+                        await widget.onSubmit(amount, _selectedMethod);
+                      },
+                child: Text(l10n.recordPayment),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

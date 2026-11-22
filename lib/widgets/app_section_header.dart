@@ -31,37 +31,48 @@ class AppSectionHeader extends StatelessWidget {
     return Padding(
       padding: padding,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: cs.onSurface,
-              letterSpacing: -0.1,
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: cs.onSurface,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ),
+                if (count != null) ...[
+                  const SizedBox(width: AppDesignTokens.space8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDesignTokens.space8,
+                      vertical: AppDesignTokens.space2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHighest,
+                      borderRadius: AppDesignTokens.brPill,
+                    ),
+                    child: Text(
+                      '$count',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (count != null) ...[
-            const SizedBox(width: AppDesignTokens.space8),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDesignTokens.space8,
-                vertical: AppDesignTokens.space2,
-              ),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest,
-                borderRadius: AppDesignTokens.brPill,
-              ),
-              child: Text(
-                '$count',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-          const Spacer(),
-          if (actionLabel != null && onAction != null)
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 8),
             TextButton.icon(
               onPressed: onAction,
               style: TextButton.styleFrom(
@@ -79,6 +90,7 @@ class AppSectionHeader extends StatelessWidget {
                 ),
               ),
             ),
+          ],
         ],
       ),
     );

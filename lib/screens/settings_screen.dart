@@ -243,23 +243,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _restoreBackup(AppLocalizations l10n) async {
     if (_isRestoring) return;
-    final confirmed = await AppConfirmDialog.show(
+    final confirmed = await SensitiveActionGate.confirmOrReauthenticate(
       context,
       title: l10n.confirmRestore,
       message: l10n.restoreWarning,
       confirmLabel: l10n.restore,
       cancelLabel: l10n.cancel,
       isDestructive: true,
-    );
-    if (confirmed != true || !mounted) return;
-
-    final authed = await SensitiveActionGate.reauthenticate(
-      context,
-      title: l10n.confirmRestore,
-      message: l10n.restoreWarning,
       requireOwner: true,
     );
-    if (!authed || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _isRestoring = true);
     try {

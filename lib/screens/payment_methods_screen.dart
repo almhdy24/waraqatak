@@ -80,74 +80,15 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
 
   Future<void> _addCustom() async {
     final l10n = AppLocalizations.of(context);
-    final arCtrl = TextEditingController();
-    final enCtrl = TextEditingController();
-    String? errorText;
-
-    final confirmed = await showDialog<bool>(
+    final result = await showDialog<({String ar, String en})>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(l10n.addPaymentMethod),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: arCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.methodLabelAr,
-                  hintText: l10n.paymentMethodHintAr,
-                  errorText: errorText,
-                  border: const OutlineInputBorder(),
-                ),
-                textDirection: TextDirection.rtl,
-                autofocus: true,
-                onChanged: (_) {
-                  if (errorText != null) {
-                    setDialogState(() => errorText = null);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: enCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.methodLabelEn,
-                  hintText: l10n.paymentMethodHintEn,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () {
-                final ar = arCtrl.text.trim();
-                final en = enCtrl.text.trim();
-                if (ar.isEmpty && en.isEmpty) {
-                  setDialogState(() {
-                    errorText = l10n.methodNameRequired;
-                  });
-                  return;
-                }
-                Navigator.pop(ctx, true);
-              },
-              child: Text(l10n.save),
-            ),
-          ],
-        ),
+      builder: (_) => _CustomPaymentMethodDialog(
+        title: l10n.addPaymentMethod,
       ),
     );
-    arCtrl.dispose();
-    enCtrl.dispose();
-    if (confirmed != true || !mounted) return;
-    final ar = arCtrl.text.trim();
-    final en = enCtrl.text.trim();
+    if (result == null || !mounted) return;
+    final ar = result.ar;
+    final en = result.en;
     if (ar.isEmpty && en.isEmpty) return;
     final key = 'custom_${DateTime.now().millisecondsSinceEpoch}';
     await DatabaseHelper.instance.insertCustomPaymentMethod(
@@ -160,71 +101,17 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
 
   Future<void> _editCustom(PaymentMethod method) async {
     final l10n = AppLocalizations.of(context);
-    final arCtrl = TextEditingController(text: method.labelAr);
-    final enCtrl = TextEditingController(text: method.labelEn);
-    String? errorText;
-
-    final confirmed = await showDialog<bool>(
+    final result = await showDialog<({String ar, String en})>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(l10n.editPaymentMethod),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: arCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.methodLabelAr,
-                  errorText: errorText,
-                  border: const OutlineInputBorder(),
-                ),
-                textDirection: TextDirection.rtl,
-                onChanged: (_) {
-                  if (errorText != null) {
-                    setDialogState(() => errorText = null);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: enCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.methodLabelEn,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: () {
-                final ar = arCtrl.text.trim();
-                final en = enCtrl.text.trim();
-                if (ar.isEmpty && en.isEmpty) {
-                  setDialogState(() {
-                    errorText = l10n.methodNameRequired;
-                  });
-                  return;
-                }
-                Navigator.pop(ctx, true);
-              },
-              child: Text(l10n.save),
-            ),
-          ],
-        ),
+      builder: (_) => _CustomPaymentMethodDialog(
+        title: l10n.editPaymentMethod,
+        initialAr: method.labelAr,
+        initialEn: method.labelEn,
       ),
     );
-    arCtrl.dispose();
-    enCtrl.dispose();
-    if (confirmed != true || !mounted) return;
-    final ar = arCtrl.text.trim();
-    final en = enCtrl.text.trim();
+    if (result == null || !mounted) return;
+    final ar = result.ar;
+    final en = result.en;
     if (ar.isEmpty && en.isEmpty) return;
     await DatabaseHelper.instance.updatePaymentMethodLabel(
       method.id!,
@@ -545,3 +432,102 @@ class _MethodTile extends StatelessWidget {
     );
   }
 }
+
+class _CustomPaymentMethodDialog extends StatefulWidget {
+  final String title;
+  final String? initialAr;
+  final String? initialEn;
+
+  const _CustomPaymentMethodDialog({
+    required this.title,
+    this.initialAr,
+    this.initialEn,
+  });
+
+  @override
+  State<_CustomPaymentMethodDialog> createState() =>
+      _CustomPaymentMethodDialogState();
+}
+
+class _CustomPaymentMethodDialogState
+    extends State<_CustomPaymentMethodDialog> {
+  late final TextEditingController _arCtrl;
+  late final TextEditingController _enCtrl;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _arCtrl = TextEditingController(text: widget.initialAr);
+    _enCtrl = TextEditingController(text: widget.initialEn);
+  }
+
+  @override
+  void dispose() {
+    _arCtrl.dispose();
+    _enCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _arCtrl,
+              decoration: InputDecoration(
+                labelText: l10n.methodLabelAr,
+                hintText: l10n.paymentMethodHintAr,
+                errorText: _errorText,
+                border: const OutlineInputBorder(),
+              ),
+              textDirection: TextDirection.rtl,
+              autofocus: true,
+              onChanged: (_) {
+                if (_errorText != null) {
+                  setState(() => _errorText = null);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _enCtrl,
+              decoration: InputDecoration(
+                labelText: l10n.methodLabelEn,
+                hintText: l10n.paymentMethodHintEn,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l10n.cancel),
+        ),
+        FilledButton(
+          onPressed: () {
+            final ar = _arCtrl.text.trim();
+            final en = _enCtrl.text.trim();
+            if (ar.isEmpty && en.isEmpty) {
+              setState(() {
+                _errorText = l10n.methodNameRequired;
+              });
+              return;
+            }
+            Navigator.pop(context, (ar: ar, en: en));
+          },
+          child: Text(l10n.save),
+        ),
+      ],
+    );
+  }
+}
+

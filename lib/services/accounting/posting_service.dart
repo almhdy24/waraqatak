@@ -39,6 +39,7 @@ class PostingService {
     String origin = 'live',
     Document? parentDoc,
     bool isAllocated = false,
+    double? upfrontPaid,
   }) {
     // Drafts and quotations post nothing
     if (doc.status == DocumentStatus.draft ||
@@ -62,6 +63,7 @@ class PostingService {
           nextEntryNo: nextEntryNo,
           origin: origin,
           out: results,
+          upfrontPaid: upfrontPaid,
         );
         break;
 
@@ -75,6 +77,7 @@ class PostingService {
           nextEntryNo: nextEntryNo,
           origin: origin,
           out: results,
+          upfrontPaid: upfrontPaid,
         );
         break;
 
@@ -117,72 +120,74 @@ class PostingService {
     required String Function(String prefix) nextEntryNo,
     required String origin,
     required List<JournalEntryDraft> out,
+    double? upfrontPaid,
   }) {
     final totalMinor = MoneyUtils.toMinorUnits(doc.total, decimalDigits);
     final taxMinor = MoneyUtils.toMinorUnits(doc.taxAmount, decimalDigits);
     final netMinor = totalMinor - taxMinor;
 
-    if (totalMinor <= 0) return;
-
-    final lines = <JournalLineDraft>[
-      JournalLineDraft(
-        accountCode: Accounts.receivables.code,
-        debitMinor: totalMinor,
-        contactId: doc.contactId,
-      ),
-      if (netMinor > 0)
+    if (totalMinor > 0) {
+      final lines = <JournalLineDraft>[
         JournalLineDraft(
-          accountCode: Accounts.salesRevenue.code,
-          creditMinor: netMinor,
+          accountCode: Accounts.receivables.code,
+          debitMinor: totalMinor,
+          contactId: doc.contactId,
         ),
-      if (taxMinor > 0)
-        JournalLineDraft(
-          accountCode: Accounts.vatOutput.code,
-          creditMinor: taxMinor,
-        ),
-    ];
+        if (netMinor > 0)
+          JournalLineDraft(
+            accountCode: Accounts.salesRevenue.code,
+            creditMinor: netMinor,
+          ),
+        if (taxMinor > 0)
+          JournalLineDraft(
+            accountCode: Accounts.vatOutput.code,
+            creditMinor: taxMinor,
+          ),
+      ];
 
-    if (lines.isNotEmpty) {
-      out.add(
-        JournalEntryDraft(
-          entryNo: nextEntryNo('JE-INV'),
-          effectiveDate: doc.date,
-          postedAt: timestamp,
-          sourceType: sourceInvoice,
-          sourceId: doc.id,
-          memo: 'Invoice ${doc.documentNumber}',
-          origin: origin,
-          lines: lines,
-        ),
-      );
-    }
+      if (lines.isNotEmpty) {
+        out.add(
+          JournalEntryDraft(
+            entryNo: nextEntryNo('JE-INV'),
+            effectiveDate: doc.date,
+            postedAt: timestamp,
+            sourceType: sourceInvoice,
+            sourceId: doc.id,
+            memo: 'Invoice ${doc.documentNumber}',
+            origin: origin,
+            lines: lines,
+          ),
+        );
+      }
 
-    // Upfront settlement recorded with invoice
-    final paidMinor = MoneyUtils.toMinorUnits(doc.paid, decimalDigits);
-    if (paidMinor > 0) {
-      final moneyAccount = Accounts.forPaymentMethod(doc.paymentMethod);
-      out.add(
-        JournalEntryDraft(
-          entryNo: nextEntryNo('JE-PAY'),
-          effectiveDate: doc.date,
-          postedAt: timestamp,
-          sourceType: sourcePayment,
-          sourceId: doc.id,
-          memo: 'Settlement for Invoice ${doc.documentNumber}',
-          origin: origin,
-          lines: [
-            JournalLineDraft(
-              accountCode: moneyAccount.code,
-              debitMinor: paidMinor,
-            ),
-            JournalLineDraft(
-              accountCode: Accounts.receivables.code,
-              creditMinor: paidMinor,
-              contactId: doc.contactId,
-            ),
-          ],
-        ),
-      );
+      // Upfront settlement recorded with invoice
+      final effectiveUpfrontPaid = upfrontPaid ?? doc.paid;
+      final paidMinor = MoneyUtils.toMinorUnits(effectiveUpfrontPaid, decimalDigits);
+      if (paidMinor > 0) {
+        final moneyAccount = Accounts.forPaymentMethod(doc.paymentMethod);
+        out.add(
+          JournalEntryDraft(
+            entryNo: nextEntryNo('JE-PAY'),
+            effectiveDate: doc.date,
+            postedAt: timestamp,
+            sourceType: sourcePayment,
+            sourceId: doc.id,
+            memo: 'Settlement for Invoice ${doc.documentNumber}',
+            origin: origin,
+            lines: [
+              JournalLineDraft(
+                accountCode: moneyAccount.code,
+                debitMinor: paidMinor,
+              ),
+              JournalLineDraft(
+                accountCode: Accounts.receivables.code,
+                creditMinor: paidMinor,
+                contactId: doc.contactId,
+              ),
+            ],
+          ),
+        );
+      }
     }
 
     // Cost of Goods Sold for stocked items with known cost
@@ -242,6 +247,7 @@ class PostingService {
     required String Function(String prefix) nextEntryNo,
     required String origin,
     required List<JournalEntryDraft> out,
+    double? upfrontPaid,
   }) {
     final totalMinor = MoneyUtils.toMinorUnits(doc.total, decimalDigits);
     final taxMinor = MoneyUtils.toMinorUnits(doc.taxAmount, decimalDigits);
@@ -330,7 +336,8 @@ class PostingService {
     }
 
     // Upfront settlement recorded with purchase
-    final paidMinor = MoneyUtils.toMinorUnits(doc.paid, decimalDigits);
+    final effectiveUpfrontPaid = upfrontPaid ?? doc.paid;
+    final paidMinor = MoneyUtils.toMinorUnits(effectiveUpfrontPaid, decimalDigits);
     if (paidMinor > 0) {
       final moneyAccount = Accounts.forPaymentMethod(doc.paymentMethod);
       out.add(
@@ -376,12 +383,14 @@ class PostingService {
     if (parentDoc != null) {
       if (parentDoc.status == DocumentStatus.cancelled ||
           parentDoc.status == DocumentStatus.draft) {
-        creditAccountCode = Accounts.payables.code; // Customer advance liability
+        creditAccountCode = Accounts.customerDeposits.code; // Customer advance liability (2130)
       } else {
         creditAccountCode = Accounts.receivables.code;
       }
     } else if (isAllocated) {
       creditAccountCode = Accounts.receivables.code;
+    } else if (doc.contactId != null) {
+      creditAccountCode = Accounts.customerDeposits.code; // Customer advance liability (2130)
     } else {
       creditAccountCode = Accounts.otherIncome.code;
     }

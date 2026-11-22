@@ -279,14 +279,84 @@ class CustomerStatementService {
           }
         }
       }
+
+      // 6. Include unallocated customer payment receipts (advance deposits)
+      final allocatedAmountByReceiptId = <int, double>{};
+      for (final pList in paymentsByDocId.values) {
+        for (final p in pList) {
+          if (p.receiptDocumentId != null &&
+              p.paymentOrigin != PaymentOrigin.reversal &&
+              p.amount > _eps) {
+            allocatedAmountByReceiptId.update(
+              p.receiptDocumentId!,
+              (v) => v + p.amount,
+              ifAbsent: () => p.amount,
+            );
+          }
+        }
+      }
+
+      for (final doc in documents) {
+        if (doc.type != 'payment_receipt') continue;
+        if (doc.status == DocumentStatus.cancelled ||
+            doc.status == DocumentStatus.draft) {
+          continue;
+        }
+        final docCurrency = doc.currencyCode.trim().isNotEmpty
+            ? doc.currencyCode
+            : businessCurrencyCode;
+        if (docCurrency != targetCurrency) continue;
+
+        final allocated = doc.id != null
+            ? (allocatedAmountByReceiptId[doc.id!] ?? 0.0)
+            : 0.0;
+        final unallocated = doc.total - allocated;
+
+        if (unallocated > _eps) {
+          rawEntries.add(
+            StatementEntry(
+              date: doc.date,
+              documentNumber: doc.documentNumber,
+              description: doc.documentNumber,
+              type: StatementEntryType.receipt,
+              debit: 0.0,
+              credit: unallocated,
+              runningBalance: 0.0,
+              documentId: doc.id,
+            ),
+          );
+        }
+      }
     } else {
       // Legacy fallback path: classify payment receipts assuming single parent link
       final activeLinkedReceipts = <Document>[];
 
       for (final doc in documents) {
         if (doc.type != 'payment_receipt') continue;
-        if (doc.status == DocumentStatus.cancelled) continue;
-        if (doc.relatedDocumentId == null) continue;
+        if (doc.status == DocumentStatus.cancelled ||
+            doc.status == DocumentStatus.draft) {
+          continue;
+        }
+        if (doc.relatedDocumentId == null) {
+          final docCurrency = doc.currencyCode.trim().isNotEmpty
+              ? doc.currencyCode
+              : businessCurrencyCode;
+          if (docCurrency == targetCurrency) {
+            rawEntries.add(
+              StatementEntry(
+                date: doc.date,
+                documentNumber: doc.documentNumber,
+                description: doc.documentNumber,
+                type: StatementEntryType.receipt,
+                debit: 0.0,
+                credit: doc.total,
+                runningBalance: 0.0,
+                documentId: doc.id,
+              ),
+            );
+          }
+          continue;
+        }
 
         final parent = byId[doc.relatedDocumentId];
         if (parent == null || parent.type != 'invoice') continue;

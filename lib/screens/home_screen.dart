@@ -406,17 +406,20 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 if (_buildSubscriptionBanner(l10n) case final banner?) banner,
 
                 // Quick actions
-                SizedBox(
-                  height: 52,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 52),
                   child: Row(
                     children: [
                       Expanded(
                         child: FilledButton.icon(
                           onPressed: () => _openScreen(const QuickSaleScreen()),
                           icon: const Icon(Icons.point_of_sale),
-                          label: Text(
-                            l10n.posQuickSale,
-                            style: const TextStyle(fontSize: 16),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              l10n.posQuickSale,
+                              style: const TextStyle(fontSize: 16),
+                            ),
                           ),
                           style: FilledButton.styleFrom(
                             backgroundColor: primaryColor,
@@ -431,9 +434,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         child: FilledButton.tonalIcon(
                           onPressed: () => _openScreen(const InvoiceScreen()),
                           icon: const Icon(Icons.receipt_long),
-                          label: Text(
-                            l10n.createInvoice,
-                            style: const TextStyle(fontSize: 16),
+                          label: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              l10n.createInvoice,
+                              style: const TextStyle(fontSize: 16),
+                            ),
                           ),
                         ),
                       ),

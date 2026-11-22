@@ -165,7 +165,7 @@ void main() {
 
     // Verify system accounts were seeded
     final accounts = await rawDb.query('accounts');
-    expect(accounts.length, 13);
+    expect(accounts.length, 14);
 
     // Verify default settings were seeded
     final shadowWrite = await db.isJournalShadowWriteEnabled();

@@ -42,7 +42,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
   DatabaseHelper._privateConstructor();
 
-  static const int dbVersion = 33;
+  static const int dbVersion = 34;
 
   static Database? _database;
 
@@ -1557,6 +1557,27 @@ class DatabaseHelper {
     if (oldVersion < 33 && newVersion >= 33) {
       await _upgradeToProductImageBasenameSchema(db);
     }
+
+    if (oldVersion < 34 && newVersion >= 34) {
+      await _upgradeToCustomerDepositsAccountSchema(db);
+    }
+  }
+
+  static Future<void> _upgradeToCustomerDepositsAccountSchema(
+    DatabaseExecutor db,
+  ) async {
+    await db.insert(
+      'accounts',
+      {
+        'code': '2130',
+        'name_ar': 'دفعات مقدمة من العملاء',
+        'name_en': 'Customer deposits',
+        'type': 'liability',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore,
+    );
   }
 
   static Future<void> _upgradeToProductImageBasenameSchema(
@@ -1810,6 +1831,14 @@ class DatabaseHelper {
         'code': '2120',
         'name_ar': 'ضريبة مستحقة (مخرجات)',
         'name_en': 'Tax payable (output)',
+        'type': 'liability',
+        'normal_side': 'credit',
+        'is_system': 1,
+      },
+      {
+        'code': '2130',
+        'name_ar': 'دفعات مقدمة من العملاء',
+        'name_en': 'Customer deposits',
         'type': 'liability',
         'normal_side': 'credit',
         'is_system': 1,
@@ -3988,6 +4017,13 @@ class DatabaseHelper {
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
+      final isTaxesEnabled = bRows.isNotEmpty &&
+          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax = bRows.isNotEmpty &&
+          (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
+      final businessFallbackTaxRate = bRows.isNotEmpty
+          ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
+          : 0.0;
       if (doc.currencyCode != baseCurrency) {
         throw ArgumentError(
           'Document currency (${doc.currencyCode}) must match business base currency ($baseCurrency).',
@@ -4157,7 +4193,16 @@ class DatabaseHelper {
                   Product.costStatusUnknown;
 
               final incomingQty = item.quantity;
-              final incomingUnitCost = item.price;
+              final incomingUnitCost =
+                  InventoryCostingService.resolvePurchaseNetUnitCost(
+                    price: item.price,
+                    taxRate: item.taxRate,
+                    isTaxesEnabled: isTaxesEnabled,
+                    isPricesIncludeTax: isPricesIncludeTax,
+                    docTaxAmount: doc.taxAmount,
+                    docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                    isTaxable: item.taxable,
+                  );
               itemUnitCost = incomingUnitCost;
               itemTotalCost = incomingQty * incomingUnitCost;
 
@@ -4321,6 +4366,7 @@ class DatabaseHelper {
   }) async {
     final oldQtyByProduct = <int, double>{};
     final oldCostByProduct = <int, double>{};
+    final oldUnitCostByProduct = <int, double?>{};
     for (final old in oldItems) {
       final pid = old['product_id'] as int?;
       if (pid == null) continue;
@@ -4332,6 +4378,10 @@ class DatabaseHelper {
       if (baseQty > 0) {
         oldQtyByProduct[pid] = (oldQtyByProduct[pid] ?? 0.0) + baseQty;
         oldCostByProduct[pid] = (oldCostByProduct[pid] ?? 0.0) + (qty * price);
+      }
+      final uCost = (old['unit_cost'] as num?)?.toDouble();
+      if (uCost != null) {
+        oldUnitCostByProduct[pid] = uCost;
       }
     }
 
@@ -4597,8 +4647,12 @@ class DatabaseHelper {
           }
         } else if (deltaQty < -0.0001) {
           final restoreQty = -deltaQty;
-          final movementCost = isCostKnown ? restoreQty * avgCost : null;
-          final movementCostStatus = isCostKnown
+          final snapshotUnitCost =
+              oldUnitCostByProduct[pid] ?? (isCostKnown ? avgCost : null);
+          final isRestoredCostKnown = snapshotUnitCost != null;
+          final movementCost =
+              isRestoredCostKnown ? restoreQty * snapshotUnitCost : null;
+          final movementCostStatus = isRestoredCostKnown
               ? StockMovement.costStatusKnown
               : StockMovement.costStatusUnknown;
 
@@ -4611,7 +4665,7 @@ class DatabaseHelper {
             productId: pid,
             type: StockMovement.typeCancellation,
             quantity: restoreQty,
-            unitCost: isCostKnown ? avgCost : null,
+            unitCost: snapshotUnitCost,
             totalCost: movementCost,
             costStatus: movementCostStatus,
             provenance: 'sale_reversal',
@@ -4647,6 +4701,13 @@ class DatabaseHelper {
         where: 'document_id = ?',
         whereArgs: [doc.id],
       );
+      final oldUnitCostByProduct = <int, double?>{};
+      for (final old in oldItems) {
+        final pid = old['product_id'] as int?;
+        if (pid != null && old['unit_cost'] != null) {
+          oldUnitCostByProduct[pid] = (old['unit_cost'] as num).toDouble();
+        }
+      }
       final existingRows = await txn.query(
         'documents',
         where: 'id = ?',
@@ -4690,12 +4751,20 @@ class DatabaseHelper {
         );
       }
 
+      final bRows = await txn.query('businesses', limit: 1);
+      final baseCurrency = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      final isTaxesEnabled = bRows.isNotEmpty &&
+          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax = bRows.isNotEmpty &&
+          (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
+      final businessFallbackTaxRate = bRows.isNotEmpty
+          ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
+          : 0.0;
+
       final newIsDraft = doc.status == DocumentStatus.draft;
       if (oldStatus == DocumentStatus.draft && !newIsDraft) {
-        final bRows = await txn.query('businesses', limit: 1);
-        final baseCurrency = bRows.isNotEmpty
-            ? (bRows.first['currency_code'] as String? ?? 'SDG')
-            : 'SDG';
         if (doc.currencyCode != baseCurrency) {
           throw ArgumentError(
             'Cannot finalize draft with currency (${doc.currencyCode}) that does not match business base currency ($baseCurrency).',
@@ -5178,7 +5247,16 @@ class DatabaseHelper {
                     Product.costStatusUnknown;
 
                 final incomingQty = item.quantity;
-                final incomingUnitCost = item.price;
+                final incomingUnitCost =
+                    InventoryCostingService.resolvePurchaseNetUnitCost(
+                      price: item.price,
+                      taxRate: item.taxRate,
+                      isTaxesEnabled: isTaxesEnabled,
+                      isPricesIncludeTax: isPricesIncludeTax,
+                      docTaxAmount: doc.taxAmount,
+                      docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                      isTaxable: item.taxable,
+                    );
                 itemUnitCost = incomingUnitCost;
                 itemTotalCost = incomingQty * incomingUnitCost;
 
@@ -5262,14 +5340,27 @@ class DatabaseHelper {
                 final costStatus =
                     pRows.first['cost_status'] as String? ??
                     Product.costStatusUnknown;
-                if (costStatus == Product.costStatusKnown && avgCost != null) {
-                  itemUnitCost = avgCost;
-                  itemTotalCost = item.effectiveBaseQuantity * avgCost;
+                final snapshotCost = oldUnitCostByProduct[item.productId];
+                final effectiveCost = snapshotCost ??
+                    (costStatus == Product.costStatusKnown ? avgCost : null);
+                if (effectiveCost != null) {
+                  itemUnitCost = effectiveCost;
+                  itemTotalCost = item.effectiveBaseQuantity * effectiveCost;
                 }
               }
             } else if (doc.type == 'purchase') {
-              itemUnitCost = item.price;
-              itemTotalCost = item.quantity * item.price;
+              final netPrice =
+                  InventoryCostingService.resolvePurchaseNetUnitCost(
+                    price: item.price,
+                    taxRate: item.taxRate,
+                    isTaxesEnabled: isTaxesEnabled,
+                    isPricesIncludeTax: isPricesIncludeTax,
+                    docTaxAmount: doc.taxAmount,
+                    docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                    isTaxable: item.taxable,
+                  );
+              itemUnitCost = netPrice;
+              itemTotalCost = item.quantity * netPrice;
             }
           }
         }
@@ -5330,7 +5421,11 @@ class DatabaseHelper {
           );
 
           if (!isMetadataOnly) {
-            await JournalWriter.reverseDocument(txn, doc.id!);
+            await JournalWriter.reverseDocument(
+              txn,
+              doc.id!,
+              reverseLinkedPayments: false,
+            );
             final itemRows = await txn.query(
               'document_items',
               where: 'document_id = ?',
@@ -6186,9 +6281,9 @@ class DatabaseHelper {
     );
 
     if (allOpenRows.isEmpty) {
-      throw StateError(
-        'No eligible outstanding $targetType documents found for contact.',
-      );
+      // If there are no open documents to allocate against,
+      // it remains an unallocated customer deposit (advance).
+      return;
     }
 
     // 2. Currency segregation check
@@ -7014,6 +7109,13 @@ class DatabaseHelper {
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
+      final isTaxesEnabled = bRows.isNotEmpty &&
+          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax = bRows.isNotEmpty &&
+          (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
+      final businessFallbackTaxRate = bRows.isNotEmpty
+          ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
+          : 0.0;
       if (doc.currencyCode != baseCurrency) {
         throw ArgumentError(
           'Cannot issue draft with currency (${doc.currencyCode}) that does not match business base currency ($baseCurrency).',
@@ -7124,7 +7226,19 @@ class DatabaseHelper {
                 Product.costStatusUnknown;
 
             final incomingQty = qty;
-            final incomingUnitCost = (item['price'] as num?)?.toDouble() ?? 0.0;
+            final incomingPrice = (item['price'] as num?)?.toDouble() ?? 0.0;
+            final itemTaxRate = (item['tax_rate'] as num?)?.toDouble();
+            final isTaxable = (item['taxable'] as int? ?? 1) == 1;
+            final incomingUnitCost =
+                InventoryCostingService.resolvePurchaseNetUnitCost(
+                  price: incomingPrice,
+                  taxRate: itemTaxRate,
+                  isTaxesEnabled: isTaxesEnabled,
+                  isPricesIncludeTax: isPricesIncludeTax,
+                  docTaxAmount: doc.taxAmount,
+                  docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                  isTaxable: isTaxable,
+                );
             final itemTotalCost = incomingQty * incomingUnitCost;
 
             final double newAvgCost;
@@ -7638,6 +7752,27 @@ class DatabaseHelper {
       [fromStr, toStr],
     );
 
+    // 2b. Standalone vouchers (operating expenses & unallocated receipts without parent allocation)
+    final standaloneVoucherRows = await db.rawQuery(
+      '''
+      SELECT
+        currency_code,
+        COALESCE(SUM(CASE WHEN type = 'payment_receipt' THEN paid ELSE 0 END), 0) AS standaloneIn,
+        COALESCE(SUM(CASE WHEN type = 'expense_voucher' THEN paid ELSE 0 END), 0) AS standaloneOut
+      FROM documents
+      WHERE status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}')
+        AND type IN ('payment_receipt', 'expense_voucher')
+        AND id NOT IN (
+          SELECT DISTINCT receipt_document_id
+          FROM document_payments
+          WHERE receipt_document_id IS NOT NULL
+        )
+        AND date >= ? AND date <= ?
+      GROUP BY currency_code
+    ''',
+      [fromStr, toStr],
+    );
+
     // 3. All-time outstanding balances grouped by currency
     final balRows = await db.rawQuery('''
       SELECT
@@ -7670,6 +7805,20 @@ class DatabaseHelper {
         payMap[code] = (
           paymentsIn: (r['paymentsIn'] as num?)?.toDouble() ?? 0.0,
           paymentsOut: (r['paymentsOut'] as num?)?.toDouble() ?? 0.0,
+        );
+      }
+    }
+
+    for (final r in standaloneVoucherRows) {
+      final code = (r['currency_code'] as String?)?.trim() ?? 'SDG';
+      if (code.isNotEmpty) {
+        allCurrencies.add(code);
+        final existing = payMap[code] ?? (paymentsIn: 0.0, paymentsOut: 0.0);
+        final sIn = (r['standaloneIn'] as num?)?.toDouble() ?? 0.0;
+        final sOut = (r['standaloneOut'] as num?)?.toDouble() ?? 0.0;
+        payMap[code] = (
+          paymentsIn: existing.paymentsIn + sIn,
+          paymentsOut: existing.paymentsOut + sOut,
         );
       }
     }
@@ -7878,14 +8027,31 @@ class DatabaseHelper {
     String? currencyCode,
   }) async {
     final db = await database;
-    final whereBuffer = StringBuffer(
+    final fromStr = from.toIso8601String();
+    final toStr = to.toIso8601String();
+
+    final dpWhere = StringBuffer(
       "d.status != '${DocumentStatus.cancelled}' AND dp.date >= ? AND dp.date <= ?",
     );
-    final args = <Object?>[from.toIso8601String(), to.toIso8601String()];
+    final vWhere = StringBuffer(
+      "v.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}') "
+      "AND v.type IN ('payment_receipt', 'expense_voucher') "
+      "AND v.id NOT IN (SELECT DISTINCT receipt_document_id FROM document_payments WHERE receipt_document_id IS NOT NULL) "
+      "AND v.date >= ? AND v.date <= ?",
+    );
+
+    final dpArgs = <Object?>[fromStr, toStr];
+    final vArgs = <Object?>[fromStr, toStr];
+
     if (currencyCode != null && currencyCode.isNotEmpty) {
-      whereBuffer.write(' AND d.currency_code = ?');
-      args.add(currencyCode);
+      dpWhere.write(' AND d.currency_code = ?');
+      dpArgs.add(currencyCode);
+      vWhere.write(' AND v.currency_code = ?');
+      vArgs.add(currencyCode);
     }
+
+    final combinedArgs = [...dpArgs, ...vArgs];
+
     return db.rawQuery('''
       SELECT
         dp.id, dp.amount, dp.payment_method, dp.date, dp.notes,
@@ -7894,9 +8060,20 @@ class DatabaseHelper {
         d.currency_code
       FROM document_payments dp
       JOIN documents d ON d.id = dp.document_id
-      WHERE $whereBuffer
-      ORDER BY dp.date DESC
-    ''', args);
+      WHERE $dpWhere
+
+      UNION ALL
+
+      SELECT
+        v.id, v.paid AS amount, v.payment_method, v.date, v.notes,
+        v.id AS document_id,
+        v.document_number, v.type AS doc_type, v.recipient_name,
+        v.currency_code
+      FROM documents v
+      WHERE $vWhere
+
+      ORDER BY date DESC
+    ''', combinedArgs);
   }
 
   Future<void> logAuditEvent(

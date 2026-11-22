@@ -62,6 +62,33 @@ class Currency {
 
   static int decimalDigitsForCode(String? code) {
     if (code == null || code.trim().isEmpty) return 2;
-    return fromCode(code).decimalDigits;
+    final upper = code.trim().toUpperCase();
+    for (final c in supportedCurrencies) {
+      if (c.code == upper) return c.decimalDigits;
+    }
+    // Standard ISO 4217 3-decimal currencies (Kuwait, Bahrain, Oman, Jordan, Iraq, Tunisia, Libya)
+    if (upper == 'KWD' ||
+        upper == 'BHD' ||
+        upper == 'OMR' ||
+        upper == 'JOD' ||
+        upper == 'IQD' ||
+        upper == 'TND' ||
+        upper == 'LYD') {
+      return 3;
+    }
+    // Standard ISO 4217 0-decimal currencies (Japan, South Korea, etc.)
+    if (upper == 'JPY' ||
+        upper == 'KRW' ||
+        upper == 'CLP' ||
+        upper == 'VND' ||
+        upper == 'BIF' ||
+        upper == 'DJF' ||
+        upper == 'GNF' ||
+        upper == 'KMF' ||
+        upper == 'RWF' ||
+        upper == 'UGX') {
+      return 0;
+    }
+    return 2;
   }
 }

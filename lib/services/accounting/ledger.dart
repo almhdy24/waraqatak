@@ -31,6 +31,7 @@ class Accounts {
   static const vatInput = Account('1150', AccountType.asset);
   static const payables = Account('2110', AccountType.liability);
   static const vatOutput = Account('2120', AccountType.liability);
+  static const customerDeposits = Account('2130', AccountType.liability);
   static const openingEquity = Account('3100', AccountType.equity);
   static const salesRevenue = Account('4100', AccountType.revenue);
   static const otherIncome = Account('4900', AccountType.revenue);
@@ -46,6 +47,7 @@ class Accounts {
     vatInput,
     payables,
     vatOutput,
+    customerDeposits,
     openingEquity,
     salesRevenue,
     otherIncome,
@@ -66,7 +68,13 @@ class JournalLine {
   final Account account;
   final double debit;
   final double credit;
-  const JournalLine(this.account, {this.debit = 0, this.credit = 0});
+  final int? contactId;
+  const JournalLine(
+    this.account, {
+    this.debit = 0,
+    this.credit = 0,
+    this.contactId,
+  });
 }
 
 /// What produced a journal entry.
@@ -364,11 +372,13 @@ class LedgerBuilder {
     final Account creditAccount;
     if (isParentCancelledOrDraftInvoice) {
       // Customer advance / credit balance owed back to customer
-      creditAccount = Accounts.payables;
+      creditAccount = Accounts.customerDeposits;
     } else if (d.id != null && activeLinkIds.contains(d.id!)) {
       creditAccount = Accounts.receivables;
     } else if (d.relatedDocumentId != null && parent?.type == 'invoice') {
       creditAccount = Accounts.receivables;
+    } else if (d.contactId != null) {
+      creditAccount = Accounts.customerDeposits; // Customer advance liability (2130)
     } else {
       creditAccount = Accounts.otherIncome;
     }
@@ -387,6 +397,7 @@ class LedgerBuilder {
           JournalLine(
             creditAccount,
             credit: d.total,
+            contactId: d.contactId,
           ),
         ],
       ),

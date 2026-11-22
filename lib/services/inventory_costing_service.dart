@@ -1,10 +1,15 @@
 import 'package:sqflite/sqflite.dart';
 import '../database/database_helper.dart';
+import '../models/currency.dart';
 import '../models/document.dart';
 import '../models/document_status.dart';
 import '../models/product.dart';
 import '../models/stock_movement.dart';
+import '../utils/money_utils.dart';
 import 'access/audit_service.dart';
+import 'accounting/journal_draft.dart';
+import 'accounting/journal_writer.dart';
+import 'accounting/ledger.dart';
 import 'accounting/stock_ledger.dart';
 
 /// Summary of current inventory valuation at cost.
@@ -141,6 +146,34 @@ class InventoryCostingService {
     final newStock = currentStock + incomingQty;
     if (newStock <= 0) return incomingUnitCost;
     return (currentValue + incomingValue) / newStock;
+  }
+
+  /// Resolves the net inventory cost for incoming purchase items (ACC-02).
+  ///
+  /// When a business operates with tax-inclusive pricing ([isPricesIncludeTax] = true)
+  /// and recoverable taxes are enabled ([isTaxesEnabled] = true), the recoverable tax
+  /// portion is deducted so inventory is valued at net cost in accordance with IAS 2
+  /// and matching the General Ledger debit to Account 1140.
+  static double resolvePurchaseNetUnitCost({
+    required double price,
+    required double? taxRate,
+    required bool isTaxesEnabled,
+    required bool isPricesIncludeTax,
+    required double docTaxAmount,
+    double docFallbackTaxRate = 0.0,
+    bool isTaxable = true,
+    int decimalDigits = 4,
+  }) {
+    if (!isTaxesEnabled || !isPricesIncludeTax || docTaxAmount <= 0) {
+      return price;
+    }
+    final rawRate = taxRate ?? (isTaxable ? docFallbackTaxRate : 0.0);
+    final effectiveRate = rawRate > 1.0 ? rawRate / 100.0 : rawRate;
+    if (effectiveRate <= 0) {
+      return price;
+    }
+    final rawNet = price / (1.0 + effectiveRate);
+    return MoneyUtils.round(rawNet, decimalDigits);
   }
 
   /// Calculates the new perpetual moving weighted-average cost after removing or cancelling a purchase.
@@ -294,6 +327,48 @@ class InventoryCostingService {
       details:
           'product="$name" new_cost=$newUnitCost stock=$stock${notes != null ? " reason=$notes" : ""}',
     );
+
+    // Bring the reconciled inventory asset onto the balance sheet (Dr 1140 / Cr 3100)
+    if (stock > 0 && newUnitCost > 0) {
+      final bRows = await txn.query(
+        'businesses',
+        columns: ['currency_code'],
+        limit: 1,
+      );
+      final currencyCode = bRows.isNotEmpty
+          ? (bRows.first['currency_code'] as String? ?? 'SDG')
+          : 'SDG';
+      final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
+      final valMinor = MoneyUtils.toMinorUnits(stock * newUnitCost, decimalDigits);
+
+      if (valMinor > 0) {
+        final now = DateTime.now();
+        final draft = JournalEntryDraft(
+          entryNo: 'JE-OPN-$productId-${now.microsecondsSinceEpoch}',
+          effectiveDate: now,
+          postedAt: now,
+          sourceType: 'opening_stock',
+          sourceId: productId,
+          memo: notes != null && notes.isNotEmpty
+              ? '$notes ($name opening stock @ $newUnitCost)'
+              : 'Opening stock valuation for $name ($stock @ $newUnitCost)',
+          origin: 'cost_reconciliation',
+          lines: [
+            JournalLineDraft(
+              accountCode: Accounts.inventory.code,
+              debitMinor: valMinor,
+              productId: productId,
+            ),
+            JournalLineDraft(
+              accountCode: Accounts.openingEquity.code,
+              creditMinor: valMinor,
+              productId: productId,
+            ),
+          ],
+        );
+        await JournalWriter.write(txn, draft);
+      }
+    }
   }
 
   /// Returns overall inventory valuation at cost.
