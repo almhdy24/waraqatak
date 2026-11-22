@@ -688,6 +688,7 @@ class _EditDocumentScreenState extends State<EditDocumentScreen> {
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: _phoneController,
+                            keyboardType: TextInputType.phone,
                             decoration: InputDecoration(labelText: l10n.phone),
                           ),
                           const SizedBox(height: 8),
