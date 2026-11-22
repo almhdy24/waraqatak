@@ -4366,6 +4366,7 @@ class DatabaseHelper {
   }) async {
     final oldQtyByProduct = <int, double>{};
     final oldCostByProduct = <int, double>{};
+    final oldUnitCostByProduct = <int, double?>{};
     for (final old in oldItems) {
       final pid = old['product_id'] as int?;
       if (pid == null) continue;
@@ -4377,6 +4378,10 @@ class DatabaseHelper {
       if (baseQty > 0) {
         oldQtyByProduct[pid] = (oldQtyByProduct[pid] ?? 0.0) + baseQty;
         oldCostByProduct[pid] = (oldCostByProduct[pid] ?? 0.0) + (qty * price);
+      }
+      final uCost = (old['unit_cost'] as num?)?.toDouble();
+      if (uCost != null) {
+        oldUnitCostByProduct[pid] = uCost;
       }
     }
 
@@ -4642,8 +4647,12 @@ class DatabaseHelper {
           }
         } else if (deltaQty < -0.0001) {
           final restoreQty = -deltaQty;
-          final movementCost = isCostKnown ? restoreQty * avgCost : null;
-          final movementCostStatus = isCostKnown
+          final snapshotUnitCost =
+              oldUnitCostByProduct[pid] ?? (isCostKnown ? avgCost : null);
+          final isRestoredCostKnown = snapshotUnitCost != null;
+          final movementCost =
+              isRestoredCostKnown ? restoreQty * snapshotUnitCost : null;
+          final movementCostStatus = isRestoredCostKnown
               ? StockMovement.costStatusKnown
               : StockMovement.costStatusUnknown;
 
@@ -4656,7 +4665,7 @@ class DatabaseHelper {
             productId: pid,
             type: StockMovement.typeCancellation,
             quantity: restoreQty,
-            unitCost: isCostKnown ? avgCost : null,
+            unitCost: snapshotUnitCost,
             totalCost: movementCost,
             costStatus: movementCostStatus,
             provenance: 'sale_reversal',
@@ -4692,6 +4701,13 @@ class DatabaseHelper {
         where: 'document_id = ?',
         whereArgs: [doc.id],
       );
+      final oldUnitCostByProduct = <int, double?>{};
+      for (final old in oldItems) {
+        final pid = old['product_id'] as int?;
+        if (pid != null && old['unit_cost'] != null) {
+          oldUnitCostByProduct[pid] = (old['unit_cost'] as num).toDouble();
+        }
+      }
       final existingRows = await txn.query(
         'documents',
         where: 'id = ?',
@@ -5324,9 +5340,12 @@ class DatabaseHelper {
                 final costStatus =
                     pRows.first['cost_status'] as String? ??
                     Product.costStatusUnknown;
-                if (costStatus == Product.costStatusKnown && avgCost != null) {
-                  itemUnitCost = avgCost;
-                  itemTotalCost = item.effectiveBaseQuantity * avgCost;
+                final snapshotCost = oldUnitCostByProduct[item.productId];
+                final effectiveCost = snapshotCost ??
+                    (costStatus == Product.costStatusKnown ? avgCost : null);
+                if (effectiveCost != null) {
+                  itemUnitCost = effectiveCost;
+                  itemTotalCost = item.effectiveBaseQuantity * effectiveCost;
                 }
               }
             } else if (doc.type == 'purchase') {
