@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:warqatek/database/database_helper.dart';
-import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/models/business.dart';
 import 'package:warqatek/screens/home_screen.dart';
 import 'package:warqatek/services/license_service.dart';

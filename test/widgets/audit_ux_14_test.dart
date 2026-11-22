@@ -4,10 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:warqatek/database/database_helper.dart';
 import 'package:warqatek/localization/app_localizations.dart';
 import 'package:warqatek/models/app_user.dart';
-import 'package:warqatek/screens/period_closing_screen.dart';
 import 'package:warqatek/services/access/permission_registry.dart';
 import 'package:warqatek/services/access/session_manager.dart';
 import 'package:warqatek/widgets/access/sensitive_action_gate.dart';
@@ -53,7 +51,6 @@ void main() {
       addTearDown(() => AppSnackBar.resetForTest());
       SessionManager.instance.resetForTesting();
 
-      int dialogShowCount = 0;
       bool? result;
 
       await tester.pumpWidget(
