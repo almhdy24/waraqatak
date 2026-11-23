@@ -156,6 +156,36 @@ class CsvService {
     return text;
   }
 
+  /// Formats generic tabular report data into CSV bytes with UTF-8 BOM (\uFEFF)
+  /// ensuring Excel/Sheets compatibility and proper Arabic encoding.
+  Uint8List exportReportToCsv({
+    required List<String> headers,
+    required List<List<dynamic>> rows,
+  }) {
+    AccessGuard.require(PermissionRegistry.dataExportCsv);
+    final buffer = StringBuffer();
+    // UTF-8 BOM for Excel Arabic encoding
+    buffer.write('\uFEFF');
+
+    String formatCell(dynamic val) {
+      if (val == null) return '';
+      if (val is DateTime) {
+        return sanitizeCell(val.toIso8601String());
+      }
+      if (val is num) {
+        return sanitizeCell(val.toString());
+      }
+      return sanitizeCell(val.toString());
+    }
+
+    buffer.writeln(headers.map(sanitizeCell).join(','));
+    for (final row in rows) {
+      buffer.writeln(row.map(formatCell).join(','));
+    }
+
+    return Uint8List.fromList(utf8.encode(buffer.toString()));
+  }
+
   /// Exports product catalog to UTF-8 CSV bytes with BOM (\uFEFF) for Arabic Excel compatibility.
   Future<Uint8List> exportProducts({bool templateOnly = false}) async {
     if (!templateOnly) {

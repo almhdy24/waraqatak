@@ -5,6 +5,7 @@ import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/date_range_filter.dart';
 import '../../services/business_reporting_service.dart';
+import '../../services/csv_service.dart';
 import '../../services/feature_access.dart';
 import '../../services/license_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
@@ -13,6 +14,7 @@ import '../../utils/format_utils.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
+import '../../widgets/report_export_menu.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -108,12 +110,7 @@ class _AdvancedInventoryAnalyticsScreenState
     }
   }
 
-  Future<void> _exportPdf() async {
-    if (_metrics == null) return;
-    final l10n = AppLocalizations.of(context);
-    final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null) return;
-
+  PdfReportData _buildPdfData(AppLocalizations l10n) {
     final columns = [
       PdfReportColumn(title: l10n.product, flex: 2.2),
       PdfReportColumn(title: l10n.category, flex: 1.4),
@@ -150,7 +147,7 @@ class _AdvancedInventoryAnalyticsScreenState
       ];
     }).toList();
 
-    final data = PdfReportData(
+    return PdfReportData(
       title: l10n.advancedInventoryAnalytics,
       dateRange: _range.label(l10n),
       summaryCards: [
@@ -174,11 +171,86 @@ class _AdvancedInventoryAnalyticsScreenState
       columns: columns,
       rows: rows,
     );
+  }
 
-    await PdfService.printOrShareReportPdf(
-      data: data,
-      business: business,
-      l10n: l10n,
+  Future<void> _exportPdf({required bool isShare}) async {
+    if (_metrics == null) return;
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null) return;
+    final data = _buildPdfData(l10n);
+
+    try {
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          data: data,
+          business: business,
+          l10n: l10n,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          data: data,
+          business: business,
+          l10n: l10n,
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _shareWhatsApp(AppLocalizations l10n) async {
+    final metrics = _metrics;
+    if (metrics == null) return;
+    final text =
+        '${l10n.advancedInventoryAnalytics} · ${_range.label(l10n)}\n'
+        '${l10n.inventoryTurnover}: ${metrics.inventoryTurnoverRatio.toStringAsFixed(2)}\n'
+        '${l10n.tiedUpCapital}: ${_numFmt.format(metrics.totalTiedUpCapitalInSlowMoving)}\n'
+        '${l10n.reorderRecommendations}: ${metrics.reorderCount}';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n) async {
+    final metrics = _metrics;
+    if (metrics == null) return;
+    final headers = [
+      l10n.product,
+      l10n.category,
+      l10n.stock,
+      l10n.salesVelocity,
+      l10n.estimatedDaysRemaining,
+      l10n.reorderRecommendations,
+    ];
+    final csvRows = metrics.velocityItems.map((item) {
+      return [
+        item.product.name,
+        item.product.category ?? '',
+        item.stockQuantity,
+        item.salesVelocity,
+        item.estimatedDaysRemaining ?? '',
+        item.reorderSuggestion,
+      ];
+    }).toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'inventory_analytics_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (_) {}
+  }
+
+  void _openExportMenu(BuildContext context, AppLocalizations l10n) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.advancedInventoryAnalytics,
+      onPrintPdf: () => _exportPdf(isShare: false),
+      onSharePdf: () => _exportPdf(isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n),
+      onExportCsv: () => _exportCsv(l10n),
     );
   }
 
@@ -196,7 +268,9 @@ class _AdvancedInventoryAnalyticsScreenState
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: _metrics != null ? _exportPdf : null,
+              onPressed: _metrics != null
+                  ? () => _openExportMenu(context, l10n)
+                  : null,
             ),
           ],
           bottom: TabBar(

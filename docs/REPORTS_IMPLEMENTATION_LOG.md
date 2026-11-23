@@ -11,7 +11,7 @@
 - [x] **Batch A** - Performance and correctness
 - [x] **Batch B** - Permissions and gates
 - [x] **Batch C** - Localization cleanup
-- [ ] **Batch D** - Export and share foundation
+- [x] **Batch D** - Export and share foundation
 - [ ] **Batch E** - Shared date range across reports
 - [ ] **Batch F** - Daily closing (end-of-day) report [new]
 - [ ] **Batch G** - Receivables and payables aging [new]
@@ -78,4 +78,34 @@
 - **Validation:**
   - `dart format`: 5 files formatted.
   - `dart analyze`: Clean (0 issues).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch D: Export and share foundation
+
+- **Batch ID:** `batch-d`
+- **Files Changed:**
+  - `lib/services/csv_service.dart`: Added `exportReportToCsv` supporting UTF-8 BOM (`\uFEFF`), RFC 4180 field quoting, and CSV formula injection protection (prefixes `@`, `=`, `+`, `-` with `'`).
+  - `lib/services/pdf/pdf_report_builder.dart`: Added `pageFormat` support (`PdfPageFormat.a4` vs `PdfPageFormat.roll80`).
+  - `lib/services/pdf_service.dart`: Added `shareReportPdf`, `shareText`, `shareCsv`, and `pageFormat` parameter on `generateReportPdf` / `printOrShareReportPdf`.
+  - `lib/widgets/report_export_menu.dart`: Created reusable modal export sheet offering PDF (A4), PDF (Receipt 80mm), CSV, and WhatsApp / Text sharing.
+  - `lib/localization/app_localizations.dart`: Added `exportReceipt80mm`, `exportWhatsApp`, `exportShareText`.
+  - `lib/screens/reports/payments_report_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/reports/accounting_screen.dart`: Integrated export menu across all accounting tabs and ledger drill-down.
+  - `lib/screens/reports/customer_report_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/reports/supplier_report_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/reports/sales_report_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/reports/purchases_report_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/reports/inventory_report_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/reports/product_report_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/stock_movements_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/audit_history_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `lib/screens/reports/advanced_inventory_analytics_screen.dart`: Integrated export menu with PDF, CSV, and text share.
+  - `test/services/csv_report_export_test.dart`: Added unit test covering UTF-8 BOM, RFC 4180 escaping, and formula injection sanitization.
+- **Decisions Taken:**
+  - Export modal bottom sheet standardizes export triggers and options across all reports.
+  - WhatsApp share leverages `PdfService.shareText` which invokes system sharing (SharePlus) to support direct WhatsApp delivery on Android without hardcoded WhatsApp URLs (preserving Play Store compliance).
+  - Formula injection protection neutralizes spreadsheet execution risks for exported CSV files.
+- **Validation:**
+  - `dart format`: 17 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.

@@ -4,12 +4,14 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/currency.dart';
+import '../../services/csv_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
+import '../../widgets/report_export_menu.dart';
 import '../../widgets/responsive.dart';
 
 class CustomerReportScreen extends StatefulWidget {
@@ -80,11 +82,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
-    final l10n = AppLocalizations.of(context);
-    final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null || _rows == null) return;
-
+  PdfReportData _buildPdfData(AppLocalizations l10n) {
     final totalAmount = _rows!.fold(
       0.0,
       (s, r) => s + ((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble(),
@@ -114,7 +112,7 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
         .map((r) => CustomerReportScreen.buildPdfRow(r, _numFmt))
         .toList();
 
-    final data = PdfReportData(
+    return PdfReportData(
       title: l10n.customerReport,
       dateRange: DateFormat('dd/MM/yyyy').format(DateTime.now()),
       summaryCards: [
@@ -133,13 +131,28 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
         numFmt: _numFmt,
       ),
     );
+  }
+
+  Future<void> _exportPdf({required bool isShare}) async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _rows == null) return;
+    final data = _buildPdfData(l10n);
 
     try {
-      await PdfService.printOrShareReportPdf(
-        business: business,
-        l10n: l10n,
-        data: data,
-      );
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.show(
@@ -148,6 +161,73 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
         severity: AppSnackBarSeverity.error,
       );
     }
+  }
+
+  Future<void> _shareWhatsApp(
+    AppLocalizations l10n,
+    double totalOutstanding,
+  ) async {
+    final text =
+        '${l10n.customerReport}\n'
+        '${l10n.totalOutstanding}: ${_numFmt.format(totalOutstanding)} $_currencySymbol';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n) async {
+    if (_rows == null) return;
+    final headers = [
+      l10n.customer,
+      l10n.phone,
+      l10n.total,
+      l10n.paid,
+      l10n.remaining,
+    ];
+    final csvRows = _rows!
+        .map(
+          (r) => [
+            r['name'] as String? ?? '',
+            r['phone'] as String? ?? '',
+            (r['total_amount'] ?? r['total'] ?? 0) as num,
+            (r['total_paid'] ?? r['paid'] ?? 0) as num,
+            (r['outstanding'] ?? 0) as num,
+          ],
+        )
+        .toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'customer_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          '${l10n.operationFailed}: $e',
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExportMenu(
+    BuildContext context,
+    AppLocalizations l10n,
+    double totalOutstanding,
+  ) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.customerReport,
+      onPrintPdf: () => _exportPdf(isShare: false),
+      onSharePdf: () => _exportPdf(isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n, totalOutstanding),
+      onExportCsv: () => _exportCsv(l10n),
+    );
   }
 
   @override
@@ -168,7 +248,9 @@ class _CustomerReportScreenState extends State<CustomerReportScreen> {
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: _rows != null && _rows!.isNotEmpty ? _exportPdf : null,
+              onPressed: _rows != null && _rows!.isNotEmpty
+                  ? () => _openExportMenu(context, l10n, totalOutstanding)
+                  : null,
             ),
           ],
         ),

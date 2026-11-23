@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/widgets.dart' as pw;
+import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../services/accounting/ledger.dart';
 import '../../services/accounting/ledger_service.dart';
+import '../../services/csv_service.dart';
+import '../../services/pdf/pdf_report_builder.dart';
+import '../../services/pdf_service.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
+import '../../widgets/report_export_menu.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -45,16 +52,27 @@ class AccountingScreen extends StatefulWidget {
   State<AccountingScreen> createState() => _AccountingScreenState();
 }
 
-class _AccountingScreenState extends State<AccountingScreen> {
+class _AccountingScreenState extends State<AccountingScreen>
+    with SingleTickerProviderStateMixin {
   late DateRangeFilter _range =
       widget.initialRange ?? DateRangeFilter.thisMonth();
   LedgerBook? _book;
   bool _failed = false;
+  late final TabController _tabController = TabController(
+    length: 4,
+    vsync: this,
+  );
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -69,30 +87,420 @@ class _AccountingScreenState extends State<AccountingScreen> {
     }
   }
 
+  PdfReportData _buildActiveTabPdfData(
+    AppLocalizations l10n,
+    LedgerBook book,
+    String symbol,
+    String asOf,
+  ) {
+    final entries = book.entries;
+    final tabIndex = _tabController.index;
+
+    if (tabIndex == 0) {
+      final statement = AccountingReports.incomeStatement(
+        entries,
+        from: _range.from,
+        to: _range.to,
+      );
+      return PdfReportData(
+        title: l10n.incomeStatement,
+        dateRange: _range.label(l10n),
+        summaryCards: [
+          PdfReportSummaryCard(
+            label: l10n.revenueSection,
+            value: '${formatAmount(statement.salesRevenue)} $symbol',
+          ),
+          PdfReportSummaryCard(
+            label: l10n.cogs,
+            value: '${formatAmount(statement.costOfSales)} $symbol',
+          ),
+          PdfReportSummaryCard(
+            label: l10n.grossProfit,
+            value: '${formatAmount(statement.grossProfit)} $symbol',
+          ),
+          PdfReportSummaryCard(
+            label: l10n.netProfit,
+            value: '${formatAmount(statement.netProfit)} $symbol',
+          ),
+        ],
+        columns: [
+          PdfReportColumn(title: l10n.accountColumn, flex: 2.5),
+          PdfReportColumn(
+            title: l10n.accountBalance,
+            flex: 1.5,
+            align: pw.TextAlign.right,
+          ),
+        ],
+        rows: [
+          [
+            l10n.revenueSection,
+            '${formatAmount(statement.salesRevenue)} $symbol',
+          ],
+          if (statement.otherIncome > 0)
+            ['Other Income', '${formatAmount(statement.otherIncome)} $symbol'],
+          [l10n.cogs, '${formatAmount(statement.costOfSales)} $symbol'],
+          [l10n.grossProfit, '${formatAmount(statement.grossProfit)} $symbol'],
+          if (statement.operatingExpenses > 0)
+            [
+              l10n.expensesSection,
+              '${formatAmount(statement.operatingExpenses)} $symbol',
+            ],
+          [l10n.netProfit, '${formatAmount(statement.netProfit)} $symbol'],
+        ],
+      );
+    } else if (tabIndex == 1) {
+      final sheet = AccountingReports.balanceSheet(entries, asOf: _range.to);
+      return PdfReportData(
+        title: l10n.balanceSheet,
+        dateRange: asOf,
+        summaryCards: [
+          PdfReportSummaryCard(
+            label: l10n.totalAssets,
+            value: '${formatAmount(sheet.totalAssets)} $symbol',
+          ),
+          PdfReportSummaryCard(
+            label: l10n.totalLiabilitiesEquity,
+            value:
+                '${formatAmount(sheet.totalLiabilities + sheet.totalEquity)} $symbol',
+          ),
+        ],
+        columns: [
+          PdfReportColumn(title: l10n.accountColumn, flex: 2.5),
+          PdfReportColumn(
+            title: l10n.accountBalance,
+            flex: 1.5,
+            align: pw.TextAlign.right,
+          ),
+        ],
+        rows: [
+          ...sheet.assets.entries.map(
+            (e) => [
+              l10n.accountName(e.key.code),
+              '${formatAmount(e.value)} $symbol',
+            ],
+          ),
+          ...sheet.liabilities.entries.map(
+            (e) => [
+              l10n.accountName(e.key.code),
+              '${formatAmount(e.value)} $symbol',
+            ],
+          ),
+          ...sheet.equity.entries.map(
+            (e) => [
+              l10n.accountName(e.key.code),
+              '${formatAmount(e.value)} $symbol',
+            ],
+          ),
+          if (sheet.retainedEarnings != 0)
+            [
+              l10n.retainedEarnings,
+              '${formatAmount(sheet.retainedEarnings)} $symbol',
+            ],
+        ],
+      );
+    } else if (tabIndex == 2) {
+      final trial = AccountingReports.trialBalance(entries, to: _range.to);
+      return PdfReportData(
+        title: l10n.trialBalance,
+        dateRange: asOf,
+        summaryCards: [
+          PdfReportSummaryCard(
+            label: l10n.debit,
+            value: '${formatAmount(trial.totalDebit)} $symbol',
+          ),
+          PdfReportSummaryCard(
+            label: l10n.credit,
+            value: '${formatAmount(trial.totalCredit)} $symbol',
+          ),
+        ],
+        columns: [
+          PdfReportColumn(title: l10n.accountCode, flex: 1.0),
+          PdfReportColumn(title: l10n.accountColumn, flex: 2.2),
+          PdfReportColumn(
+            title: l10n.debit,
+            flex: 1.4,
+            align: pw.TextAlign.right,
+          ),
+          PdfReportColumn(
+            title: l10n.credit,
+            flex: 1.4,
+            align: pw.TextAlign.right,
+          ),
+        ],
+        rows: trial.rows
+            .map(
+              (r) => [
+                r.account.code,
+                l10n.accountName(r.account.code),
+                r.debit > 0 ? formatAmount(r.debit) : '—',
+                r.credit > 0 ? formatAmount(r.credit) : '—',
+              ],
+            )
+            .toList(),
+      );
+    } else {
+      final accounts = Accounts.all;
+      return PdfReportData(
+        title: l10n.chartOfAccounts,
+        dateRange: asOf,
+        columns: [
+          PdfReportColumn(title: l10n.accountCode, flex: 1.0),
+          PdfReportColumn(title: l10n.accountColumn, flex: 2.5),
+          PdfReportColumn(title: l10n.status, flex: 1.5),
+        ],
+        rows: accounts
+            .map(
+              (a) => [
+                a.code,
+                l10n.accountName(a.code),
+                _accountTypeName(a.type, l10n),
+              ],
+            )
+            .toList(),
+      );
+    }
+  }
+
+  Future<void> _exportPdf(
+    AppLocalizations l10n,
+    LedgerBook book,
+    String symbol,
+    String asOf, {
+    required bool isShare,
+  }) async {
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null) return;
+    final data = _buildActiveTabPdfData(l10n, book, symbol, asOf);
+    try {
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _shareWhatsApp(
+    AppLocalizations l10n,
+    LedgerBook book,
+    String symbol,
+    String asOf,
+  ) async {
+    final entries = book.entries;
+    final tabIndex = _tabController.index;
+    String text;
+    if (tabIndex == 0) {
+      final st = AccountingReports.incomeStatement(
+        entries,
+        from: _range.from,
+        to: _range.to,
+      );
+      text =
+          '${l10n.incomeStatement} · ${_range.label(l10n)}\n'
+          '${l10n.revenueSection}: ${formatAmount(st.salesRevenue)} $symbol\n'
+          '${l10n.cogs}: ${formatAmount(st.costOfSales)} $symbol\n'
+          '${l10n.grossProfit}: ${formatAmount(st.grossProfit)} $symbol\n'
+          '${l10n.netProfit}: ${formatAmount(st.netProfit)} $symbol';
+    } else if (tabIndex == 1) {
+      final sh = AccountingReports.balanceSheet(entries, asOf: _range.to);
+      text =
+          '${l10n.balanceSheet} · $asOf\n'
+          '${l10n.totalAssets}: ${formatAmount(sh.totalAssets)} $symbol\n'
+          '${l10n.liabilitiesSection}: ${formatAmount(sh.totalLiabilities)} $symbol\n'
+          '${l10n.equitySection}: ${formatAmount(sh.totalEquity)} $symbol';
+    } else if (tabIndex == 2) {
+      final tb = AccountingReports.trialBalance(entries, to: _range.to);
+      text =
+          '${l10n.trialBalance} · $asOf\n'
+          '${l10n.debit}: ${formatAmount(tb.totalDebit)} $symbol\n'
+          '${l10n.credit}: ${formatAmount(tb.totalCredit)} $symbol';
+    } else {
+      text = '${l10n.chartOfAccounts} · $asOf\n${Accounts.all.length} accounts';
+    }
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(
+    AppLocalizations l10n,
+    LedgerBook book,
+    String symbol,
+    String asOf,
+  ) async {
+    final entries = book.entries;
+    final tabIndex = _tabController.index;
+    late List<String> headers;
+    late List<List<dynamic>> rows;
+    late String fileName;
+
+    if (tabIndex == 0) {
+      final st = AccountingReports.incomeStatement(
+        entries,
+        from: _range.from,
+        to: _range.to,
+      );
+      headers = [l10n.accountColumn, l10n.amount, l10n.currency];
+      rows = [
+        [l10n.revenueSection, st.salesRevenue, book.currencyCode],
+        if (st.otherIncome > 0)
+          ['Other Income', st.otherIncome, book.currencyCode],
+        [l10n.cogs, st.costOfSales, book.currencyCode],
+        [l10n.grossProfit, st.grossProfit, book.currencyCode],
+        if (st.operatingExpenses > 0)
+          [l10n.expensesSection, st.operatingExpenses, book.currencyCode],
+        [l10n.netProfit, st.netProfit, book.currencyCode],
+      ];
+      fileName =
+          'income_statement_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv';
+    } else if (tabIndex == 1) {
+      final sh = AccountingReports.balanceSheet(entries, asOf: _range.to);
+      headers = [l10n.accountColumn, l10n.amount, l10n.currency];
+      rows = [
+        ...sh.assets.entries.map(
+          (e) => [l10n.accountName(e.key.code), e.value, book.currencyCode],
+        ),
+        ...sh.liabilities.entries.map(
+          (e) => [l10n.accountName(e.key.code), e.value, book.currencyCode],
+        ),
+        ...sh.equity.entries.map(
+          (e) => [l10n.accountName(e.key.code), e.value, book.currencyCode],
+        ),
+        if (sh.retainedEarnings != 0)
+          [l10n.retainedEarnings, sh.retainedEarnings, book.currencyCode],
+      ];
+      fileName =
+          'balance_sheet_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv';
+    } else if (tabIndex == 2) {
+      final tb = AccountingReports.trialBalance(entries, to: _range.to);
+      headers = [l10n.accountCode, l10n.accountColumn, l10n.debit, l10n.credit];
+      rows = tb.rows
+          .map(
+            (r) => [
+              r.account.code,
+              l10n.accountName(r.account.code),
+              r.debit,
+              r.credit,
+            ],
+          )
+          .toList();
+      fileName =
+          'trial_balance_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv';
+    } else {
+      headers = [l10n.accountCode, l10n.accountColumn, l10n.status];
+      rows = Accounts.all
+          .map(
+            (a) => [
+              a.code,
+              l10n.accountName(a.code),
+              _accountTypeName(a.type, l10n),
+            ],
+          )
+          .toList();
+      fileName =
+          'chart_of_accounts_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv';
+    }
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: rows,
+      );
+      await PdfService.shareCsv(bytes: bytes, fileName: fileName);
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  String _accountTypeName(AccountType type, AppLocalizations l10n) {
+    switch (type) {
+      case AccountType.asset:
+        return l10n.assetsSection;
+      case AccountType.liability:
+        return l10n.liabilitiesSection;
+      case AccountType.equity:
+        return l10n.equitySection;
+      case AccountType.revenue:
+        return l10n.revenueSection;
+      case AccountType.expense:
+        return l10n.expensesSection;
+    }
+  }
+
+  void _openExportMenu(
+    BuildContext context,
+    AppLocalizations l10n,
+    LedgerBook book,
+    String symbol,
+    String asOf,
+  ) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.accounting,
+      onPrintPdf: () => _exportPdf(l10n, book, symbol, asOf, isShare: false),
+      onSharePdf: () => _exportPdf(l10n, book, symbol, asOf, isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n, book, symbol, asOf),
+      onExportCsv: () => _exportCsv(l10n, book, symbol, asOf),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final book = _book;
+    final symbol = book != null
+        ? Currency.symbolForCode(book.currencyCode)
+        : 'SDG';
+    final asOf = l10n.asOfDate(_dateFmt.format(_range.to));
+
     return ScreenAccessGate(
       screenType: AccountingScreen,
-      child: DefaultTabController(
-        length: 4,
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(l10n.accounting),
-            centerTitle: true,
-            bottom: TabBar(
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              tabs: [
-                Tab(text: l10n.incomeStatement),
-                Tab(text: l10n.balanceSheet),
-                Tab(text: l10n.trialBalance),
-                Tab(text: l10n.chartOfAccounts),
-              ],
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.accounting),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: book != null && book.entries.isNotEmpty
+                  ? () => _openExportMenu(context, l10n, book, symbol, asOf)
+                  : null,
             ),
+          ],
+          bottom: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: [
+              Tab(text: l10n.incomeStatement),
+              Tab(text: l10n.balanceSheet),
+              Tab(text: l10n.trialBalance),
+              Tab(text: l10n.chartOfAccounts),
+            ],
           ),
-          body: ResponsiveCenter(child: _body(context, l10n)),
         ),
+        body: ResponsiveCenter(child: _body(context, l10n)),
       ),
     );
   }
@@ -147,6 +555,7 @@ class _AccountingScreenState extends State<AccountingScreen> {
           child: entries.isEmpty
               ? _EmptyBooks(message: l10n.noEntriesYet)
               : TabBarView(
+                  controller: _tabController,
                   children: [
                     _IncomeStatementView(
                       statement: AccountingReports.incomeStatement(
@@ -743,6 +1152,15 @@ class AccountLedgerScreen extends StatelessWidget {
         appBar: AppBar(
           title: Text(l10n.accountName(account.code)),
           centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: gl.lines.isNotEmpty
+                  ? () => _openExportMenu(context, l10n, gl)
+                  : null,
+            ),
+          ],
         ),
         body: ResponsiveCenter(
           child: ListView(
@@ -810,6 +1228,156 @@ class AccountLedgerScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  PdfReportData _buildPdfData(AppLocalizations l10n, GeneralLedger gl) {
+    return PdfReportData(
+      title:
+          '${l10n.accountStatement} - ${l10n.accountName(account.code)} (${account.code})',
+      dateRange: range.label(l10n),
+      summaryCards: [
+        PdfReportSummaryCard(
+          label: l10n.openingBalance,
+          value: '${formatAmount(gl.openingBalance)} $symbol',
+        ),
+        PdfReportSummaryCard(
+          label: l10n.closingBalance,
+          value: '${formatAmount(gl.closingBalance)} $symbol',
+        ),
+      ],
+      columns: [
+        PdfReportColumn(title: l10n.date, flex: 1.2),
+        PdfReportColumn(title: l10n.documentNumber, flex: 1.8),
+        PdfReportColumn(
+          title: l10n.debit,
+          flex: 1.3,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.credit,
+          flex: 1.3,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.accountBalance,
+          flex: 1.5,
+          align: pw.TextAlign.right,
+        ),
+      ],
+      rows: gl.lines
+          .map(
+            (l) => [
+              _dateFmt.format(l.entry.date),
+              '${entrySourceLabel(l.entry.source, l10n)} ${l.entry.reference}',
+              l.debit > 0 ? formatAmount(l.debit) : '—',
+              l.credit > 0 ? formatAmount(l.credit) : '—',
+              formatAmount(l.runningBalance),
+            ],
+          )
+          .toList(),
+    );
+  }
+
+  Future<void> _exportPdf(
+    BuildContext context,
+    AppLocalizations l10n,
+    GeneralLedger gl, {
+    required bool isShare,
+  }) async {
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null) return;
+    final data = _buildPdfData(l10n, gl);
+    try {
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _shareWhatsApp(AppLocalizations l10n, GeneralLedger gl) async {
+    final text =
+        '${l10n.accountStatement} - ${l10n.accountName(account.code)} (${account.code})\n'
+        '${range.label(l10n)}\n'
+        '${l10n.openingBalance}: ${formatAmount(gl.openingBalance)} $symbol\n'
+        '${l10n.closingBalance}: ${formatAmount(gl.closingBalance)} $symbol';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(
+    BuildContext context,
+    AppLocalizations l10n,
+    GeneralLedger gl,
+  ) async {
+    final headers = [
+      l10n.date,
+      l10n.documentNumber,
+      l10n.debit,
+      l10n.credit,
+      l10n.accountBalance,
+    ];
+    final csvRows = gl.lines
+        .map(
+          (l) => [
+            l.entry.date,
+            '${entrySourceLabel(l.entry.source, l10n)} ${l.entry.reference}',
+            l.debit,
+            l.credit,
+            l.runningBalance,
+          ],
+        )
+        .toList();
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'ledger_${account.code}_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (_) {
+      if (context.mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExportMenu(
+    BuildContext context,
+    AppLocalizations l10n,
+    GeneralLedger gl,
+  ) {
+    ReportExportMenu.show(
+      context: context,
+      title: '${l10n.accountStatement} - ${l10n.accountName(account.code)}',
+      onPrintPdf: () => _exportPdf(context, l10n, gl, isShare: false),
+      onSharePdf: () => _exportPdf(context, l10n, gl, isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n, gl),
+      onExportCsv: () => _exportCsv(context, l10n, gl),
     );
   }
 

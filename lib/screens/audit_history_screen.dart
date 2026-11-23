@@ -5,12 +5,14 @@ import '../localization/app_localizations.dart';
 import '../models/date_range_filter.dart';
 import '../services/feature_access.dart';
 import '../services/license_service.dart';
+import '../services/csv_service.dart';
 import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_status_colors.dart';
 import '../widgets/access/screen_access_gate.dart';
 import '../widgets/pro_upgrade_sheet.dart';
+import '../widgets/report_export_menu.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'reports/report_date_filter.dart';
@@ -89,11 +91,7 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
-    final l10n = AppLocalizations.of(context);
-    final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null || _events.isEmpty) return;
-
+  PdfReportData _buildPdfData(AppLocalizations l10n) {
     final columns = [
       PdfReportColumn(title: l10n.date, flex: 1.8),
       PdfReportColumn(title: l10n.eventType, flex: 1.6),
@@ -110,7 +108,7 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
       return <String>[dateStr, _formatActionLabel(action, l10n), details];
     }).toList();
 
-    final data = PdfReportData(
+    return PdfReportData(
       title: l10n.auditHistoryTitle,
       dateRange: _range.label(l10n),
       summaryCards: [
@@ -119,11 +117,72 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
       columns: columns,
       rows: rows,
     );
+  }
 
-    await PdfService.printOrShareReportPdf(
-      data: data,
-      business: business,
-      l10n: l10n,
+  Future<void> _exportPdf({required bool isShare}) async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _events.isEmpty) return;
+    final data = _buildPdfData(l10n);
+
+    try {
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          data: data,
+          business: business,
+          l10n: l10n,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          data: data,
+          business: business,
+          l10n: l10n,
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _shareWhatsApp(AppLocalizations l10n) async {
+    final text =
+        '${l10n.auditHistoryTitle} · ${_range.label(l10n)}\n'
+        '${l10n.allEvents}: ${_events.length}';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n) async {
+    final headers = [l10n.date, l10n.eventType, l10n.entityLabel, l10n.details];
+    final csvRows = _events.map((e) {
+      final ts = DateTime.tryParse(e['timestamp'] as String? ?? '');
+      final action = e['action'] as String? ?? '';
+      return [
+        ts ?? (e['timestamp'] ?? ''),
+        _formatActionLabel(action, l10n),
+        e['entity_type'] ?? '',
+        e['details'] ?? '',
+      ];
+    }).toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'audit_history_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (_) {}
+  }
+
+  void _openExportMenu(BuildContext context, AppLocalizations l10n) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.auditHistoryTitle,
+      onPrintPdf: () => _exportPdf(isShare: false),
+      onSharePdf: () => _exportPdf(isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n),
+      onExportCsv: () => _exportCsv(l10n),
     );
   }
 
@@ -182,7 +241,9 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: _events.isNotEmpty ? _exportPdf : null,
+              onPressed: _events.isNotEmpty
+                  ? () => _openExportMenu(context, l10n)
+                  : null,
             ),
           ],
         ),

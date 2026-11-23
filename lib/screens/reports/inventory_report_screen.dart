@@ -6,6 +6,7 @@ import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/product.dart';
 import '../../services/business_reporting_service.dart';
+import '../../services/csv_service.dart';
 import '../../services/inventory_costing_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
@@ -18,6 +19,7 @@ import '../../services/license_service.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/report_export_menu.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
 
@@ -87,11 +89,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
-    final l10n = AppLocalizations.of(context);
-    final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null || _summary == null) return;
-
+  PdfReportData _buildPdfData(AppLocalizations l10n) {
     final summary = _summary!;
     String reportTitle;
     List<PdfReportColumn> columns;
@@ -249,7 +247,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       }
     }
 
-    final data = PdfReportData(
+    return PdfReportData(
       title: reportTitle,
       subtitle: _selectedCategory != null
           ? _selectedCategory!
@@ -274,13 +272,28 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       rows: rows,
       totalsRow: totalsRow,
     );
+  }
+
+  Future<void> _exportPdf({required bool isShare}) async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _summary == null) return;
+    final data = _buildPdfData(l10n);
 
     try {
-      await PdfService.printOrShareReportPdf(
-        business: business,
-        l10n: l10n,
-        data: data,
-      );
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.show(
@@ -289,6 +302,75 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         severity: AppSnackBarSeverity.error,
       );
     }
+  }
+
+  Future<void> _shareWhatsApp(AppLocalizations l10n) async {
+    final summary = _summary;
+    if (summary == null) return;
+    final text =
+        '${l10n.inventoryReport}\n'
+        '${l10n.inventoryValuationAtCost}: ${_numFmt.format(summary.totalValuationAtCost)}\n'
+        '${l10n.lowStock}: ${summary.lowStockCount}\n'
+        '${l10n.outOfStock}: ${summary.outOfStockCount}';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n) async {
+    final summary = _summary;
+    if (summary == null) return;
+    final headers = [
+      l10n.product,
+      l10n.category,
+      l10n.stockQuantity,
+      l10n.unit,
+      l10n.purchasePrice,
+      l10n.sellingPrice,
+    ];
+    final csvRows = summary.items
+        .map(
+          (i) => [
+            i.product.name,
+            i.product.category ?? '',
+            i.stockQuantity,
+            i.product.unit ?? '',
+            i.isCostKnown
+                ? (i.averageCost ?? i.product.purchasePrice)
+                : i.product.purchasePrice,
+            i.product.salePrice,
+          ],
+        )
+        .toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'inventory_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          '${l10n.operationFailed}: $e',
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExportMenu(BuildContext context, AppLocalizations l10n) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.inventoryReport,
+      onPrintPdf: () => _exportPdf(isShare: false),
+      onSharePdf: () => _exportPdf(isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n),
+      onExportCsv: () => _exportCsv(l10n),
+    );
   }
 
   void _showReconciliationDialog(Product p) {
@@ -477,7 +559,7 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
               onPressed: summary != null && summary.items.isNotEmpty
-                  ? _exportPdf
+                  ? () => _openExportMenu(context, l10n)
                   : null,
             ),
             IconButton(

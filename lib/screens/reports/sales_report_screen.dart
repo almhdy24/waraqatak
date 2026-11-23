@@ -7,6 +7,7 @@ import '../../models/business.dart';
 import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../models/document_status.dart';
+import '../../services/csv_service.dart';
 import '../../services/inventory_costing_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
@@ -14,9 +15,10 @@ import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
-import '../../widgets/app_status_colors.dart';
-import '../document_detail_screen.dart';
 import '../../widgets/app_snackbar.dart';
+import '../../widgets/app_status_colors.dart';
+import '../../widgets/report_export_menu.dart';
+import '../document_detail_screen.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
@@ -119,11 +121,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
-    final l10n = AppLocalizations.of(context);
-    final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null || _sales == null) return;
-
+  PdfReportData _buildPdfData(AppLocalizations l10n, Business business) {
     final baseCurrency = business.currencyCode;
     final baseSymbol = business.currencySymbol;
     final finalized = _sales!
@@ -200,7 +198,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       ];
     }).toList();
 
-    final data = PdfReportData(
+    return PdfReportData(
       title: l10n.salesReport,
       dateRange: _range.label(l10n),
       warningNotice: hasIncompleteCost
@@ -241,13 +239,28 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         '${_numFmt.format(totalRemaining)} $baseSymbol',
       ],
     );
+  }
+
+  Future<void> _exportPdf({required bool isShare}) async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _sales == null) return;
+    final data = _buildPdfData(l10n, business);
 
     try {
-      await PdfService.printOrShareReportPdf(
-        business: business,
-        l10n: l10n,
-        data: data,
-      );
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.show(
@@ -256,6 +269,89 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         severity: AppSnackBarSeverity.error,
       );
     }
+  }
+
+  Future<void> _shareWhatsApp(
+    AppLocalizations l10n,
+    double totalSales,
+    double totalProfit,
+    String baseSymbol,
+  ) async {
+    final text =
+        '${l10n.salesReport} · ${_range.label(l10n)}\n'
+        '${l10n.totalSales}: ${_numFmt.format(totalSales)} $baseSymbol\n'
+        '${l10n.grossProfit}: ${_numFmt.format(totalProfit)} $baseSymbol';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n) async {
+    if (_sales == null) return;
+    final headers = [
+      l10n.date,
+      l10n.invoice,
+      l10n.customer,
+      l10n.salesValue,
+      l10n.cogs,
+      l10n.grossProfit,
+      l10n.paid,
+      l10n.remaining,
+      l10n.currency,
+      l10n.status,
+    ];
+    final csvRows = _sales!.map((item) {
+      final doc = item.document;
+      final isCancelled = doc.status == DocumentStatus.cancelled;
+      return [
+        doc.date,
+        doc.documentNumber,
+        doc.recipientName ?? '',
+        isCancelled ? 0.0 : doc.total,
+        isCancelled ? 0.0 : item.cogs,
+        (isCancelled || !item.isCostReliable) ? '' : item.grossProfit,
+        isCancelled ? 0.0 : doc.paid,
+        isCancelled ? 0.0 : doc.remaining,
+        doc.currencyCode,
+        isCancelled ? l10n.cancelledCount : l10n.finalized,
+      ];
+    }).toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'sales_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          '${l10n.operationFailed}: $e',
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExportMenu(
+    BuildContext context,
+    AppLocalizations l10n,
+    double totalSales,
+    double totalProfit,
+    String baseSymbol,
+  ) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.salesReport,
+      onPrintPdf: () => _exportPdf(isShare: false),
+      onSharePdf: () => _exportPdf(isShare: true),
+      onShareWhatsApp: () =>
+          _shareWhatsApp(l10n, totalSales, totalProfit, baseSymbol),
+      onExportCsv: () => _exportCsv(l10n),
+    );
   }
 
   @override
@@ -313,7 +409,13 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
               onPressed: _sales != null && _sales!.isNotEmpty
-                  ? _exportPdf
+                  ? () => _openExportMenu(
+                      context,
+                      l10n,
+                      totalSales,
+                      totalTrustedProfit,
+                      baseSymbol,
+                    )
                   : null,
             ),
           ],

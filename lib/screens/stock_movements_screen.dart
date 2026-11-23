@@ -9,6 +9,7 @@ import '../models/stock_movement.dart';
 import '../services/access/access_guard.dart';
 import '../services/access/permission_registry.dart';
 import '../services/business_reporting_service.dart';
+import '../services/csv_service.dart';
 import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
 import '../utils/error_utils.dart';
@@ -19,6 +20,7 @@ import '../widgets/app_error_state.dart';
 import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/app_status_colors.dart';
+import '../widgets/report_export_menu.dart';
 import '../widgets/responsive.dart';
 import '../widgets/access/screen_access_gate.dart';
 import 'document_detail_screen.dart';
@@ -236,11 +238,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
-    final l10n = AppLocalizations.of(context);
-    final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null || _reportSummary == null) return;
-
+  PdfReportData _buildPdfData(AppLocalizations l10n) {
     final canViewCost = AccessGuard.can(PermissionRegistry.stockViewCost);
     final columns = [
       PdfReportColumn(title: l10n.date, flex: 1.4),
@@ -295,7 +293,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
           ' (${l10n.showingMovementsLimit(_reportSummary!.items.length)})';
     }
 
-    final data = PdfReportData(
+    return PdfReportData(
       title: l10n.stockMovementsReport,
       subtitle: subtitle,
       dateRange: _range.label(l10n),
@@ -317,13 +315,28 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
       columns: columns,
       rows: rows,
     );
+  }
+
+  Future<void> _exportPdf({required bool isShare}) async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _reportSummary == null) return;
+    final data = _buildPdfData(l10n);
 
     try {
-      await PdfService.printOrShareReportPdf(
-        business: business,
-        l10n: l10n,
-        data: data,
-      );
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.show(
@@ -332,6 +345,72 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
         severity: AppSnackBarSeverity.error,
       );
     }
+  }
+
+  Future<void> _shareWhatsApp(AppLocalizations l10n) async {
+    final summary = _reportSummary;
+    if (summary == null) return;
+    final text =
+        '${l10n.stockMovementsReport} · ${_range.label(l10n)}\n'
+        '${l10n.totalStockIn}: +${FormatUtils.formatQuantity(summary.totalInQuantity)}\n'
+        '${l10n.totalStockOut}: -${FormatUtils.formatQuantity(summary.totalOutQuantity)}';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n) async {
+    final summary = _reportSummary;
+    if (summary == null) return;
+    final canViewCost = AccessGuard.can(PermissionRegistry.stockViewCost);
+    final headers = [
+      l10n.date,
+      l10n.product,
+      l10n.type,
+      l10n.quantity,
+      if (_selectedProduct != null) l10n.balanceAfter,
+      if (canViewCost) l10n.averageCost,
+    ];
+    final csvRows = summary.items.map((item) {
+      final m = item.movement;
+      return [
+        m.date,
+        m.productName ?? '',
+        _typeLabel(m.type, l10n),
+        m.quantity,
+        if (_selectedProduct != null) item.balanceAfter ?? '',
+        if (canViewCost) m.unitCost ?? '',
+      ];
+    }).toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'stock_movements_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          ErrorUtils.toFriendlyMessage(e, l10n),
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExportMenu(BuildContext context, AppLocalizations l10n) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.stockMovementsReport,
+      onPrintPdf: () => _exportPdf(isShare: false),
+      onSharePdf: () => _exportPdf(isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n),
+      onExportCsv: () => _exportCsv(l10n),
+    );
   }
 
   String _typeLabel(String type, AppLocalizations l10n) => switch (type) {
@@ -397,7 +476,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
               tooltip: l10n.printOrShareReport,
               onPressed:
                   _reportSummary != null && _reportSummary!.items.isNotEmpty
-                  ? _exportPdf
+                  ? () => _openExportMenu(context, l10n)
                   : null,
             ),
           ],

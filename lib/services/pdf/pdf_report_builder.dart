@@ -73,6 +73,7 @@ class PdfReportBuilder {
     required AppLocalizations l10n,
     required PdfReportData data,
     PdfStyleSettings style = const PdfStyleSettings(),
+    PdfPageFormat? pageFormat,
   }) async {
     AccessGuard.require(PermissionRegistry.reportsExportPdf);
     final theme = PdfTheme.fromSettings(style);
@@ -94,11 +95,15 @@ class PdfReportBuilder {
     final pdf = pw.Document();
     final isArabic = l10n.isArabic;
     final textDir = isArabic ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+    final resolvedFormat = pageFormat ?? PdfPageFormat.a4;
+    final isRoll80 = resolvedFormat.width <= 230;
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(28),
+        pageFormat: resolvedFormat,
+        margin: isRoll80
+            ? const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 12)
+            : const pw.EdgeInsets.all(28),
         theme: _pageTheme(regular, bold, rtl: isArabic),
         textDirection: textDir,
         header: (context) => _buildHeader(

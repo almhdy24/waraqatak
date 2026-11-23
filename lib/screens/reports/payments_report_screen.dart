@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:pdf/widgets.dart' as pw;
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/business.dart';
 import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
 import '../../models/payment_method.dart';
+import '../../services/csv_service.dart';
+import '../../services/pdf/pdf_report_builder.dart';
+import '../../services/pdf_service.dart';
 import '../../utils/currency_utils.dart';
 import '../document_detail_screen.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_amount_text.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
+import '../../widgets/report_export_menu.dart';
 import 'report_date_filter.dart';
 import '../../widgets/responsive.dart';
 
@@ -66,6 +72,203 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     }
   }
 
+  PdfReportData _buildPdfData(
+    AppLocalizations l10n,
+    String baseCurrency,
+    double inAmt,
+    double outAmt,
+  ) {
+    final rows = _rows ?? [];
+    return PdfReportData(
+      title: l10n.paymentsReport,
+      dateRange: _range.label(l10n),
+      summaryCards: [
+        PdfReportSummaryCard(
+          label: l10n.receivedPayments,
+          value: '${_numFmt.format(inAmt)} $baseCurrency',
+        ),
+        PdfReportSummaryCard(
+          label: l10n.madePayments,
+          value: '${_numFmt.format(outAmt)} $baseCurrency',
+        ),
+        PdfReportSummaryCard(
+          label: l10n.netCash,
+          value: '${_numFmt.format(inAmt - outAmt)} $baseCurrency',
+        ),
+      ],
+      columns: [
+        PdfReportColumn(title: l10n.date, flex: 1.2),
+        PdfReportColumn(title: l10n.entityLabel, flex: 2.2),
+        PdfReportColumn(title: l10n.paymentMethod, flex: 1.5),
+        PdfReportColumn(title: l10n.status, flex: 1.2),
+        PdfReportColumn(
+          title: l10n.amount,
+          flex: 1.8,
+          align: pw.TextAlign.right,
+        ),
+      ],
+      rows: rows.map((r) {
+        final dt = DateTime.tryParse(r['date'] as String? ?? '');
+        final dateStr = dt != null
+            ? _dateFmt.format(dt)
+            : (r['date']?.toString() ?? '');
+        final party = (r['recipient_name'] as String?)?.trim();
+        final partyStr = (party != null && party.isNotEmpty) ? party : '—';
+        final methodKey = r['method'] as String?;
+        final methodLabel = methodKey != null
+            ? (_methodsMap[methodKey]?.label(l10n.langCode) ??
+                  CurrencyUtils.getPaymentMethodLabel(methodKey, l10n))
+            : '—';
+        final isIn =
+            r['doc_type'] == 'invoice' || r['doc_type'] == 'payment_receipt';
+        final typeStr = isIn ? l10n.receivedPayments : l10n.madePayments;
+        final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+        final curr = (r['currency_code'] as String?)?.trim() ?? baseCurrency;
+        return [
+          dateStr,
+          partyStr,
+          methodLabel,
+          typeStr,
+          '${_numFmt.format(amt)} $curr',
+        ];
+      }).toList(),
+    );
+  }
+
+  Future<void> _exportPdf(
+    AppLocalizations l10n,
+    String baseCurrency,
+    double inAmt,
+    double outAmt,
+  ) async {
+    final business =
+        _business ?? await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null) return;
+    final data = _buildPdfData(l10n, baseCurrency, inAmt, outAmt);
+    try {
+      await PdfService.printOrShareReportPdf(
+        business: business,
+        l10n: l10n,
+        data: data,
+        fileName: 'payments_${DateFormat('yyyyMMdd').format(DateTime.now())}',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _sharePdf(
+    AppLocalizations l10n,
+    String baseCurrency,
+    double inAmt,
+    double outAmt,
+  ) async {
+    final business =
+        _business ?? await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null) return;
+    final data = _buildPdfData(l10n, baseCurrency, inAmt, outAmt);
+    try {
+      await PdfService.shareReportPdf(
+        business: business,
+        l10n: l10n,
+        data: data,
+        fileName: 'payments_${DateFormat('yyyyMMdd').format(DateTime.now())}',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _shareWhatsApp(
+    AppLocalizations l10n,
+    String baseCurrency,
+    double inAmt,
+    double outAmt,
+  ) async {
+    final text =
+        '${l10n.paymentsReport} · ${_range.label(l10n)}\n'
+        '${l10n.receivedPayments}: ${_numFmt.format(inAmt)} $baseCurrency\n'
+        '${l10n.madePayments}: ${_numFmt.format(outAmt)} $baseCurrency\n'
+        '${l10n.netCash}: ${_numFmt.format(inAmt - outAmt)} $baseCurrency';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n, String baseCurrency) async {
+    final rows = _rows ?? [];
+    final headers = [
+      l10n.date,
+      l10n.entityLabel,
+      l10n.paymentMethod,
+      l10n.status,
+      l10n.amount,
+      l10n.currency,
+    ];
+    final csvRows = rows.map((r) {
+      final dt = DateTime.tryParse(r['date'] as String? ?? '');
+      final party = (r['recipient_name'] as String?)?.trim() ?? '';
+      final methodKey = r['method'] as String?;
+      final methodLabel = methodKey != null
+          ? (_methodsMap[methodKey]?.label(l10n.langCode) ??
+                CurrencyUtils.getPaymentMethodLabel(methodKey, l10n))
+          : '';
+      final isIn =
+          r['doc_type'] == 'invoice' || r['doc_type'] == 'payment_receipt';
+      final typeStr = isIn ? 'in' : 'out';
+      final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+      final curr = (r['currency_code'] as String?)?.trim() ?? baseCurrency;
+      return [dt ?? r['date'], party, methodLabel, typeStr, amt, curr];
+    }).toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'payments_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          l10n.operationFailed,
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExportMenu(
+    BuildContext context,
+    AppLocalizations l10n,
+    String baseCurrency,
+    double inAmt,
+    double outAmt,
+  ) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.paymentsReport,
+      onPrintPdf: () => _exportPdf(l10n, baseCurrency, inAmt, outAmt),
+      onSharePdf: () => _sharePdf(l10n, baseCurrency, inAmt, outAmt),
+      onShareWhatsApp: () => _shareWhatsApp(l10n, baseCurrency, inAmt, outAmt),
+      onExportCsv: () => _exportCsv(l10n, baseCurrency),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -97,7 +300,25 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
     return ScreenAccessGate(
       screenType: PaymentsReportScreen,
       child: Scaffold(
-        appBar: AppBar(title: Text(l10n.paymentsReport), centerTitle: true),
+        appBar: AppBar(
+          title: Text(l10n.paymentsReport),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: _rows != null && _rows!.isNotEmpty
+                  ? () => _openExportMenu(
+                      context,
+                      l10n,
+                      baseCurrency,
+                      baseTotals.inAmount,
+                      baseTotals.outAmount,
+                    )
+                  : null,
+            ),
+          ],
+        ),
         body: ResponsiveCenter(
           child: Column(
             children: [

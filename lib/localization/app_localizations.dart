@@ -826,6 +826,8 @@ class AppLocalizations {
   String get finalized => _t('معتمدة', 'Finalized');
   String get receivedPayments => _t('المقبوضات', 'Received Payments');
   String get madePayments => _t('المدفوعات', 'Made Payments');
+  String get netCashFlow => _t('صافي التدفق النقدي', 'Net Cash Flow');
+  String get netCash => _t('الصافي', 'Net');
   String get salesQty => _t('كمية المبيعات', 'Quantity Sold');
   String get salesValue => _t('قيمة المبيعات', 'Sales Value');
   String get purchasedQty => _t('كمية المشتريات', 'Quantity Purchased');
@@ -833,6 +835,15 @@ class AppLocalizations {
   String get noReportData =>
       _t('لا توجد بيانات لهذا التقرير', 'No report data');
   String get relatedDoc => _t('المستند المرتبط', 'Related Document');
+  String get exportOptions =>
+      _t('خيارات التصدير والمشاركة', 'Export & Share Options');
+  String get printOrPreviewPdf =>
+      _t('عرض وطباعة التقرير (PDF)', 'View & Print Report (PDF)');
+  String get sharePdfFile => _t('مشاركة ملف PDF', 'Share PDF File');
+  String get shareWhatsAppSummary =>
+      _t('مشاركة ملخص التقرير (واتساب)', 'Share Report Summary (WhatsApp)');
+  String get exportCsvTable =>
+      _t('تصدير جدول بيانات (CSV)', 'Export Spreadsheet (CSV)');
 
   // ========== PRINT & THERMAL SETTINGS ==========
   String get printSettings => _t('إعدادات الطباعة', 'Print Settings');

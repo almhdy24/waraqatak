@@ -5,12 +5,14 @@ import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/date_range_filter.dart';
 import '../../services/business_reporting_service.dart';
+import '../../services/csv_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/access/screen_access_gate.dart';
+import '../../widgets/report_export_menu.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -87,11 +89,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
     }
   }
 
-  Future<void> _exportPdf() async {
-    final l10n = AppLocalizations.of(context);
-    final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null || _summary == null) return;
-
+  PdfReportData _buildPdfData(AppLocalizations l10n) {
     final summary = _summary!;
     final tabIndex = _tabController.index;
 
@@ -259,7 +257,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       }
     }
 
-    final data = PdfReportData(
+    return PdfReportData(
       title: reportTitle,
       subtitle: _selectedCategory != null
           ? _selectedCategory!
@@ -286,13 +284,28 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       rows: rows,
       totalsRow: totalsRow,
     );
+  }
+
+  Future<void> _exportPdf({required bool isShare}) async {
+    final l10n = AppLocalizations.of(context);
+    final business = await DatabaseHelper.instance.getFirstBusiness();
+    if (business == null || _summary == null) return;
+    final data = _buildPdfData(l10n);
 
     try {
-      await PdfService.printOrShareReportPdf(
-        business: business,
-        l10n: l10n,
-        data: data,
-      );
+      if (isShare) {
+        await PdfService.shareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      } else {
+        await PdfService.printOrShareReportPdf(
+          business: business,
+          l10n: l10n,
+          data: data,
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       AppSnackBar.show(
@@ -301,6 +314,74 @@ class _ProductReportScreenState extends State<ProductReportScreen>
         severity: AppSnackBarSeverity.error,
       );
     }
+  }
+
+  Future<void> _shareWhatsApp(AppLocalizations l10n) async {
+    final summary = _summary;
+    if (summary == null) return;
+    final text =
+        '${l10n.productReport} · ${_range.label(l10n)}\n'
+        '${l10n.totalSales}: ${_numFmt.format(summary.totalSalesRevenue)}\n'
+        '${l10n.grossProfit}: ${_numFmt.format(summary.totalTrustedGrossProfit)}';
+    await PdfService.shareText(text: text);
+  }
+
+  Future<void> _exportCsv(AppLocalizations l10n) async {
+    final summary = _summary;
+    if (summary == null) return;
+    final headers = [
+      l10n.product,
+      l10n.category,
+      l10n.salesQty,
+      l10n.salesValue,
+      l10n.cogs,
+      l10n.grossProfit,
+      l10n.profitMargin,
+    ];
+    final csvRows = summary.items
+        .map(
+          (i) => [
+            i.productName,
+            i.category ?? '',
+            i.salesQty,
+            i.salesRevenue,
+            i.cogs,
+            i.isCostReliable ? i.grossProfit : '',
+            i.isCostReliable && i.salesRevenue > 0 ? i.profitMargin : '',
+          ],
+        )
+        .toList();
+
+    try {
+      final bytes = CsvService.instance.exportReportToCsv(
+        headers: headers,
+        rows: csvRows,
+      );
+      await PdfService.shareCsv(
+        bytes: bytes,
+        fileName:
+            'product_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv',
+      );
+    } catch (e) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          '${l10n.operationFailed}: $e',
+          severity: AppSnackBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExportMenu(BuildContext context, AppLocalizations l10n) {
+    ReportExportMenu.show(
+      context: context,
+      title: l10n.productReport,
+      onPrintPdf: () => _exportPdf(isShare: false),
+      onSharePdf: () => _exportPdf(isShare: true),
+      onShareWhatsApp: () => _shareWhatsApp(l10n),
+      onExportCsv: () => _exportCsv(l10n),
+    );
   }
 
   @override
@@ -325,7 +406,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
               onPressed: summary != null && summary.items.isNotEmpty
-                  ? _exportPdf
+                  ? () => _openExportMenu(context, l10n)
                   : null,
             ),
           ],

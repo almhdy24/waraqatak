@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../localization/app_localizations.dart';
@@ -155,6 +156,7 @@ class PdfService {
     required AppLocalizations l10n,
     required PdfReportData data,
     PdfStyleSettings? style,
+    PdfPageFormat? pageFormat,
   }) async {
     final pdfStyle = style ?? await PdfSettings.load();
     return PdfReportBuilder.build(
@@ -162,6 +164,7 @@ class PdfService {
       l10n: l10n,
       data: data,
       style: pdfStyle,
+      pageFormat: pageFormat,
     );
   }
 
@@ -170,11 +173,13 @@ class PdfService {
     required AppLocalizations l10n,
     required PdfReportData data,
     String? fileName,
+    PdfPageFormat? pageFormat,
   }) async {
     final bytes = await generateReportPdf(
       business: business,
       l10n: l10n,
       data: data,
+      pageFormat: pageFormat,
     );
     final rawBase = fileName != null
         ? (fileName.endsWith('.pdf')
@@ -189,5 +194,59 @@ class PdfService {
         'kind': 'report',
       });
     } catch (_) {}
+  }
+
+  static Future<void> shareReportPdf({
+    required Business business,
+    required AppLocalizations l10n,
+    required PdfReportData data,
+    String? fileName,
+    String? caption,
+    PdfPageFormat? pageFormat,
+  }) async {
+    final bytes = await generateReportPdf(
+      business: business,
+      l10n: l10n,
+      data: data,
+      pageFormat: pageFormat,
+    );
+    final rawBase = fileName != null
+        ? (fileName.endsWith('.pdf')
+              ? fileName.substring(0, fileName.length - 4)
+              : fileName)
+        : '${data.title}_${DateFormat('yyyyMMdd').format(DateTime.now())}';
+    final safeName = '${safeFileName(rawBase)}.pdf';
+
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile.fromData(bytes, mimeType: 'application/pdf')],
+        fileNameOverrides: [safeName],
+        text: caption,
+      ),
+    );
+    try {
+      AnalyticsService.instance.track(AnalyticsEvent.pdfShared, {
+        'kind': 'report',
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> shareText({required String text}) async {
+    await SharePlus.instance.share(ShareParams(text: text));
+  }
+
+  static Future<void> shareCsv({
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final safeName = fileName.endsWith('.csv')
+        ? '${safeFileName(fileName.substring(0, fileName.length - 4))}.csv'
+        : '${safeFileName(fileName)}.csv';
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile.fromData(bytes, mimeType: 'text/csv')],
+        fileNameOverrides: [safeName],
+      ),
+    );
   }
 }
