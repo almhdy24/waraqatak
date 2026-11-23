@@ -15,7 +15,7 @@
 - [x] **Batch E** - Shared date range across reports
 - [x] **Batch F** - Daily closing (end-of-day) report [new]
 - [x] **Batch G** - Receivables and payables aging [new]
-- [ ] **Batch H** - Payments report: cash flow by method
+- [x] **Batch H** - Payments report: cash flow by method
 - [ ] **Batch I** - UI/UX polish across reports
 - [ ] **Batch J** - Phase 3 extras (J1: Period comparison; J2: Tax & discounts report)
 - [ ] **Docs & Verification** - CHANGELOG, reports_section.md, checklist
@@ -167,5 +167,20 @@
   - Designed Free vs Pro split: Bucket totals are Free to all merchants; granular customer/supplier breakdown with reminder triggers requires Pro (`Feature.advancedReports`), consistent with the product tier boundary.
 - **Validation:**
   - `dart format`: 6 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch H: Payments report cash flow by method and standalone voucher drilldown
+
+- **Batch ID:** `batch-h`
+- **Files Changed:**
+  - `lib/database/database_helper.dart`: Added `getPaymentMethodCashFlow({required DateTime from, required DateTime to, String? currencyCode})` SQL aggregation calculating inflows, outflows, and net flow grouped by payment method across documents and vouchers.
+  - `lib/screens/reports/payments_report_screen.dart`: Integrated payment method cash flow chips row above payments list (displaying in, out, and net per method with color-coded badges); remediated standalone voucher drilldown by checking `(row['document_id'] ?? row['id'])` so all vouchers are tappable and open their detail screen.
+  - `test/services/payment_cash_flow_test.dart`: Added unit tests verifying multi-method cash flow aggregation across invoices, purchases, and standalone vouchers.
+- **Decisions Taken:**
+  - Standardized payment method breakdown to give Sudanese merchants direct visibility into Cash vs Bankak (mobile money) net flows.
+  - Enabled click-through drilldown for standalone vouchers into `DocumentDetailScreen` without needing a redundant separate screen.
+- **Validation:**
+  - `dart format`: 3 files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.

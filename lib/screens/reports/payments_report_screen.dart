@@ -31,6 +31,7 @@ class PaymentsReportScreen extends StatefulWidget {
 class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   DateRangeFilter _range = ReportsDateNotifier.instance.range;
   List<Map<String, dynamic>>? _rows;
+  List<Map<String, dynamic>>? _methodFlows;
   Business? _business;
   Map<String, PaymentMethod> _methodsMap = {};
   String? _error;
@@ -47,6 +48,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   Future<void> _load() async {
     setState(() {
       _rows = null;
+      _methodFlows = null;
       _error = null;
     });
     try {
@@ -57,15 +59,21 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         ),
         DatabaseHelper.instance.getPaymentMethods(),
         DatabaseHelper.instance.getFirstBusiness(),
+        DatabaseHelper.instance.getPaymentMethodCashFlow(
+          from: _range.from,
+          to: _range.to,
+        ),
       ]);
       if (!mounted) return;
       final rows = results[0] as List<Map<String, dynamic>>;
       final methods = results[1] as List<PaymentMethod>;
       final business = results[2] as Business?;
+      final flows = results[3] as List<Map<String, dynamic>>;
       setState(() {
         _rows = rows;
         _methodsMap = {for (final m in methods) m.key: m};
         _business = business;
+        _methodFlows = flows;
       });
     } catch (e) {
       if (!mounted) return;
@@ -351,6 +359,91 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                           ),
                         ],
                       ),
+                      if (_methodFlows != null && _methodFlows!.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: _methodFlows!.map((mf) {
+                              final methodKey =
+                                  mf['method'] as String? ?? 'cash';
+                              final inAmt =
+                                  (mf['in_amount'] as num?)?.toDouble() ?? 0.0;
+                              final outAmt =
+                                  (mf['out_amount'] as num?)?.toDouble() ?? 0.0;
+                              final netAmt =
+                                  (mf['net_amount'] as num?)?.toDouble() ?? 0.0;
+                              final label =
+                                  _methodsMap[methodKey]?.label(
+                                    l10n.langCode,
+                                  ) ??
+                                  CurrencyUtils.getPaymentMethodLabel(
+                                    methodKey,
+                                    l10n,
+                                  );
+                              return Container(
+                                margin: const EdgeInsetsDirectional.only(
+                                  end: 8,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outlineVariant,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      label,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${l10n.netCash}: ${_numFmt.format(netAmt)} $baseSymbol',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: netAmt >= 0
+                                            ? AppStatusColors.fg(
+                                                context,
+                                                AppStatus.success,
+                                              )
+                                            : AppStatusColors.fg(
+                                                context,
+                                                AppStatus.danger,
+                                              ),
+                                      ),
+                                    ),
+                                    Text(
+                                      '+${_numFmt.format(inAmt)} / -${_numFmt.format(outAmt)}',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
                       if (legacyEntries.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
@@ -514,6 +607,11 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         final cCode = (row['currency_code'] as String?)?.trim() ?? '';
         final sym = cCode.isNotEmpty ? ' ${Currency.symbolForCode(cCode)}' : '';
 
+        final rawDocId = row['document_id'] ?? row['id'];
+        final docId = rawDocId is num
+            ? rawDocId.toInt()
+            : (rawDocId is String ? int.tryParse(rawDocId) : null);
+
         return Card(
           elevation: 0,
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
@@ -524,9 +622,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             ),
           ),
           child: ListTile(
-            onTap: row['document_id'] != null
-                ? () => _openDocument(context, row['document_id'] as int)
-                : null,
+            onTap: docId != null ? () => _openDocument(context, docId) : null,
             leading: CircleAvatar(
               backgroundColor: color.withValues(alpha: 0.1),
               child: Icon(

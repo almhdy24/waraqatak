@@ -1566,18 +1566,14 @@ class DatabaseHelper {
   static Future<void> _upgradeToCustomerDepositsAccountSchema(
     DatabaseExecutor db,
   ) async {
-    await db.insert(
-      'accounts',
-      {
-        'code': '2130',
-        'name_ar': 'دفعات مقدمة من العملاء',
-        'name_en': 'Customer deposits',
-        'type': 'liability',
-        'normal_side': 'credit',
-        'is_system': 1,
-      },
-      conflictAlgorithm: ConflictAlgorithm.ignore,
-    );
+    await db.insert('accounts', {
+      'code': '2130',
+      'name_ar': 'دفعات مقدمة من العملاء',
+      'name_en': 'Customer deposits',
+      'type': 'liability',
+      'normal_side': 'credit',
+      'is_system': 1,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   static Future<void> _upgradeToProductImageBasenameSchema(
@@ -4017,9 +4013,10 @@ class DatabaseHelper {
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
-      final isTaxesEnabled = bRows.isNotEmpty &&
-          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
-      final isPricesIncludeTax = bRows.isNotEmpty &&
+      final isTaxesEnabled =
+          bRows.isNotEmpty && (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax =
+          bRows.isNotEmpty &&
           (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
       final businessFallbackTaxRate = bRows.isNotEmpty
           ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
@@ -4200,7 +4197,9 @@ class DatabaseHelper {
                     isTaxesEnabled: isTaxesEnabled,
                     isPricesIncludeTax: isPricesIncludeTax,
                     docTaxAmount: doc.taxAmount,
-                    docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                    docFallbackTaxRate: doc.taxRate > 0
+                        ? doc.taxRate
+                        : businessFallbackTaxRate,
                     isTaxable: item.taxable,
                   );
               itemUnitCost = incomingUnitCost;
@@ -4650,8 +4649,9 @@ class DatabaseHelper {
           final snapshotUnitCost =
               oldUnitCostByProduct[pid] ?? (isCostKnown ? avgCost : null);
           final isRestoredCostKnown = snapshotUnitCost != null;
-          final movementCost =
-              isRestoredCostKnown ? restoreQty * snapshotUnitCost : null;
+          final movementCost = isRestoredCostKnown
+              ? restoreQty * snapshotUnitCost
+              : null;
           final movementCostStatus = isRestoredCostKnown
               ? StockMovement.costStatusKnown
               : StockMovement.costStatusUnknown;
@@ -4755,9 +4755,10 @@ class DatabaseHelper {
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
-      final isTaxesEnabled = bRows.isNotEmpty &&
-          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
-      final isPricesIncludeTax = bRows.isNotEmpty &&
+      final isTaxesEnabled =
+          bRows.isNotEmpty && (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax =
+          bRows.isNotEmpty &&
           (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
       final businessFallbackTaxRate = bRows.isNotEmpty
           ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
@@ -5254,7 +5255,9 @@ class DatabaseHelper {
                       isTaxesEnabled: isTaxesEnabled,
                       isPricesIncludeTax: isPricesIncludeTax,
                       docTaxAmount: doc.taxAmount,
-                      docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                      docFallbackTaxRate: doc.taxRate > 0
+                          ? doc.taxRate
+                          : businessFallbackTaxRate,
                       isTaxable: item.taxable,
                     );
                 itemUnitCost = incomingUnitCost;
@@ -5341,7 +5344,8 @@ class DatabaseHelper {
                     pRows.first['cost_status'] as String? ??
                     Product.costStatusUnknown;
                 final snapshotCost = oldUnitCostByProduct[item.productId];
-                final effectiveCost = snapshotCost ??
+                final effectiveCost =
+                    snapshotCost ??
                     (costStatus == Product.costStatusKnown ? avgCost : null);
                 if (effectiveCost != null) {
                   itemUnitCost = effectiveCost;
@@ -5356,7 +5360,9 @@ class DatabaseHelper {
                     isTaxesEnabled: isTaxesEnabled,
                     isPricesIncludeTax: isPricesIncludeTax,
                     docTaxAmount: doc.taxAmount,
-                    docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                    docFallbackTaxRate: doc.taxRate > 0
+                        ? doc.taxRate
+                        : businessFallbackTaxRate,
                     isTaxable: item.taxable,
                   );
               itemUnitCost = netPrice;
@@ -7109,9 +7115,10 @@ class DatabaseHelper {
       final baseCurrency = bRows.isNotEmpty
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
-      final isTaxesEnabled = bRows.isNotEmpty &&
-          (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
-      final isPricesIncludeTax = bRows.isNotEmpty &&
+      final isTaxesEnabled =
+          bRows.isNotEmpty && (bRows.first['taxes_enabled'] as int? ?? 0) == 1;
+      final isPricesIncludeTax =
+          bRows.isNotEmpty &&
           (bRows.first['prices_include_tax'] as int? ?? 0) == 1;
       final businessFallbackTaxRate = bRows.isNotEmpty
           ? (bRows.first['tax_rate'] as num?)?.toDouble() ?? 0.0
@@ -7236,7 +7243,9 @@ class DatabaseHelper {
                   isTaxesEnabled: isTaxesEnabled,
                   isPricesIncludeTax: isPricesIncludeTax,
                   docTaxAmount: doc.taxAmount,
-                  docFallbackTaxRate: doc.taxRate > 0 ? doc.taxRate : businessFallbackTaxRate,
+                  docFallbackTaxRate: doc.taxRate > 0
+                      ? doc.taxRate
+                      : businessFallbackTaxRate,
                   isTaxable: isTaxable,
                 );
             final itemTotalCost = incomingQty * incomingUnitCost;
@@ -8073,6 +8082,68 @@ class DatabaseHelper {
       WHERE $vWhere
 
       ORDER BY date DESC
+    ''', combinedArgs);
+  }
+
+  /// Aggregates inflows, outflows, and net cash flow grouped by payment method
+  /// for the specified period.
+  Future<List<Map<String, dynamic>>> getPaymentMethodCashFlow({
+    required DateTime from,
+    required DateTime to,
+    String? currencyCode,
+  }) async {
+    final db = await database;
+    final fromStr = from.toIso8601String();
+    final toStr = to.toIso8601String();
+
+    final dpWhere = StringBuffer(
+      "d.status != '${DocumentStatus.cancelled}' AND dp.date >= ? AND dp.date <= ?",
+    );
+    final vWhere = StringBuffer(
+      "v.status NOT IN ('${DocumentStatus.draft}', '${DocumentStatus.cancelled}') "
+      "AND v.type IN ('payment_receipt', 'expense_voucher') "
+      "AND v.id NOT IN (SELECT DISTINCT receipt_document_id FROM document_payments WHERE receipt_document_id IS NOT NULL) "
+      "AND v.date >= ? AND v.date <= ?",
+    );
+
+    final dpArgs = <Object?>[fromStr, toStr];
+    final vArgs = <Object?>[fromStr, toStr];
+
+    if (currencyCode != null && currencyCode.isNotEmpty) {
+      dpWhere.write(' AND d.currency_code = ?');
+      dpArgs.add(currencyCode);
+      vWhere.write(' AND v.currency_code = ?');
+      vArgs.add(currencyCode);
+    }
+
+    final combinedArgs = [...dpArgs, ...vArgs];
+
+    return db.rawQuery('''
+      SELECT
+        method,
+        SUM(in_amount) AS in_amount,
+        SUM(out_amount) AS out_amount,
+        SUM(in_amount - out_amount) AS net_amount
+      FROM (
+        SELECT
+          LOWER(COALESCE(dp.payment_method, 'cash')) AS method,
+          CASE WHEN d.type IN ('invoice', 'payment_receipt') THEN dp.amount ELSE 0 END AS in_amount,
+          CASE WHEN d.type IN ('purchase', 'expense_voucher') THEN dp.amount ELSE 0 END AS out_amount
+        FROM document_payments dp
+        JOIN documents d ON d.id = dp.document_id
+        WHERE $dpWhere
+
+        UNION ALL
+
+        SELECT
+          LOWER(COALESCE(v.payment_method, 'cash')) AS method,
+          CASE WHEN v.type = 'payment_receipt' THEN v.paid ELSE 0 END AS in_amount,
+          CASE WHEN v.type = 'expense_voucher' THEN v.paid ELSE 0 END AS out_amount
+        FROM documents v
+        WHERE $vWhere
+      )
+      GROUP BY method
+      ORDER BY in_amount DESC
     ''', combinedArgs);
   }
 
