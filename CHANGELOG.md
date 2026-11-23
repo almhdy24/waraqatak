@@ -5,7 +5,15 @@ All notable changes to the Waraqatak (ورقتك) project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-11-23
+
+### ما الجديد في الإصدار 1.3.0:
+• تقرير الإغلاق اليومي ومطابقة درج النقدية مع فصل مبيعات النقد عن تحصيلات الديون.
+• تقرير أعمار الديون والالتزامات مع إرسال تذكيرات مباشرة بالسداد عبر واتساب بنقرة واحدة.
+• تقرير ملخص الضرائب والخصومات ومتابعة صافي الالتزام الضريبي.
+• تقرير مخصص للمنتجات قاربت على النفاد لتمكين الكاشير من متابعة النواقص بأمان دون كشف التكاليف.
+• تصدير البيانات الشامل بصيغة CSV المتوافقة مع Excel والطباعة على طابعات الإيصالات الحرارية (80 مم).
+• حفظ نطاق التاريخ المحدد أثناء التنقل بين التقارير وتحديثات شاملة في سرعة الأداء وسلاسة البحث.
 
 ### Reports Modernization & Audit Remediation
 - **CSV Formula Injection vs Numbers Integrity:** Enhanced `CsvService` to emit real numbers (`val is num`) and numeric strings raw without prepended apostrophe, properly preserving negative balances (`-250`) and contact phone numbers (`+249...`) in Microsoft Excel while strictly neutralizing dangerous spreadsheet formulas (`=`, `+`, `-`, `@`, `\t`, `\r`) and multiline cells according to RFC 4180.
