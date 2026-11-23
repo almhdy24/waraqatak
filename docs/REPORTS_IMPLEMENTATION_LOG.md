@@ -16,9 +16,12 @@
 - [x] **Batch F** - Daily closing (end-of-day) report [new]
 - [x] **Batch G** - Receivables and payables aging [new]
 - [x] **Batch H** - Payments report: cash flow by method
-- [ ] **Batch I** - UI/UX polish across reports
-- [ ] **Batch J** - Phase 3 extras (J1: Period comparison; J2: Tax & discounts report)
-- [ ] **Docs & Verification** - CHANGELOG, reports_section.md, checklist
+- [x] **Batch I** - UI/UX polish across reports
+- [x] **Batch J** - Phase 3 extras (J1: Period comparison; J2: Tax & discounts report)
+- [x] **Batch P0** - Audit blockers remediation
+- [x] **Batch P1** - Audit correctness & permissions
+- [x] **Batch P2** - Audit UX, WhatsApp normalizer & consistency
+- [x] **Docs & Verification** - CHANGELOG, reports_section.md, checklist
 
 ---
 
@@ -57,7 +60,7 @@
 - **Decisions Taken:**
   - Standardized all 7 previously unguarded report/audit screens with `ScreenAccessGate` at top of `build()`.
   - Prevented cashier from accessing payments report (which leaks financial cash balance) by requiring `reportsViewFinancials` instead of `paymentsRecord`.
-  - Used explicit SQL migration in `AccessSeeder.migrateReceivablesPermissions(db)` so existing installations seamlessly receive `reportsViewReceivables` for roles with `contactsViewBalances`.
+  - Implemented automatic database upgrade migration via `DatabaseHelper.runPostOpenMigrations(db)` on database `onOpen` hook guarded by `app_settings` key `receivables_permission_migrated`. This ensures `AccessSeeder.migrateReceivablesPermissions(db)` automatically grants `reportsViewReceivables` to existing custom roles and user overrides that hold `contactsViewBalances` without requiring a login re-seed.
 - **Validation:**
   - `dart format`: 11 files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).
@@ -164,6 +167,7 @@
   - `test/services/debt_aging_test.dart`: Added unit tests verifying pure `AgingBucketSummary` arithmetic, query grouping, exclusion of cancelled and paid documents, and contact debt descending sorting.
 - **Decisions Taken:**
   - Grouped aging buckets strictly using `documents.date` (due date column does not exist in schema).
+  - Implemented standard 4-bucket delay structure (0–30, 31–60, 61–90, 90+ days) instead of 3 buckets (0–30, 31–60, 61+) as an intentional, harmless accounting enhancement providing Sudanese merchants finer granularity on overdue debts.
   - Designed Free vs Pro split: Bucket totals are Free to all merchants; granular customer/supplier breakdown with reminder triggers requires Pro (`Feature.advancedReports`), consistent with the product tier boundary.
 - **Validation:**
   - `dart format`: 6 files formatted.

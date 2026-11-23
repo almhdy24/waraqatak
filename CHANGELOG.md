@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Reports Modernization & Hardening
+### Reports Modernization & Audit Remediation
+- **CSV Formula Injection vs Numbers Integrity:** Enhanced `CsvService` to emit real numbers (`val is num`) and numeric strings raw without prepended apostrophe, properly preserving negative balances (`-250`) and contact phone numbers (`+249...`) in Microsoft Excel while strictly neutralizing dangerous spreadsheet formulas (`=`, `+`, `-`, `@`, `\t`, `\r`) and multiline cells according to RFC 4180.
+- **Dedicated Low Stock Screen for Cashiers:** Created `LowStockReportScreen` requiring `products.view` so cashiers can monitor inventory replenishment thresholds and shortages without exposing confidential item purchase costs and inventory valuation.
+- **Receivables Permission Migration on Database Upgrade:** Added `DatabaseHelper.runPostOpenMigrations` triggered on `onOpen` to idempotently grant `reports.view_receivables` to existing roles and user overrides holding `contacts.view_balances`, ensuring custom roles seamlessly preserve customer/supplier balance visibility.
+- **Debt Aging & Daily Closing Calculation Invariants:**
+  - Strictly excluded `draft` and `cancelled` documents (`status NOT IN ('draft', 'cancelled')`) from aging and daily closing calculations, and restricted aging to `invoice` and `purchase` documents.
+  - Isolated financial aggregations to base currency (`currency_code = ? OR currency_code IS NULL`), adding warning banners for legacy foreign-currency documents.
+  - Implemented 4 standard aging delay buckets (0–30, 31–60, 61–90, 90+ days).
+- **Export Action Permissions:** Added granular UI permission gates in `ReportExportMenu` requiring `reports.export_pdf` for PDF export/print and `data.export_csv` for CSV export, hiding the export button entirely when user possesses neither.
+- **WhatsApp Phone Normalizer & Localized Reminders:** Implemented `normalizeSudanPhone` utility supporting Sudanese mobile prefixes (`09x` Zain/MTN, `01x` Sudani) to launch 1-tap WhatsApp reminders via `https://wa.me/...` with localized reminder text in `AppLocalizations` and seamless fallback to system share sheet.
+- **Async Concurrency Guards & Client-Side Search/Sort:** Added `_querySeq` sequence counters to all 16 report screens to prevent out-of-order race conditions when rapidly toggling filters, and integrated debounced search and amount/date sort on Sales and Purchases reports.
+- **Universal Date Scope Synchronization:** Connected `AuditHistoryScreen` to session-scoped `ReportsDateNotifier` and `ReportsDateScope`, ensuring complete date filter synchronization across all report screens.
 - **N+1 Costing Query Elimination:** Replaced per-document item query loop in `InventoryCostingService.getSalesReportWithCost` with a single batch `IN (...)` chunked query (250 items/chunk), preserving async non-blocking execution while eliminating SQLite variable limit risks.
 - **Reports Access Control & Security Hardening:**
   - Wrapped 7 previously unguarded report screens (`AccountingScreen`, `CustomerReportScreen`, `SupplierReportScreen`, `InventoryReportScreen`, `ProductReportScreen`, `PurchasesReportScreen`, `SalesReportScreen`) in `ScreenAccessGate`.
