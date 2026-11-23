@@ -2130,6 +2130,40 @@ class AppLocalizations {
     'Activity log, price changes & adjustments',
   );
 
+  String get dailyClosingReport =>
+      _t('تقرير الإغلاق اليومي', 'Daily Closing Report');
+  String get reportSubtitleDailyClosing => _t(
+    'ملخص المبيعات، المقبوضات، المصروفات ومطابقة الصندوق',
+    'Sales, collections, expenses, and cash drawer reconciliation',
+  );
+  String get openingCash => _t('رصيد بداية اليوم', 'Opening Cash');
+  String get expectedCash =>
+      _t('النقد المتوقع بالدرج', 'Expected Cash in Drawer');
+  String get actualCash => _t('النقد الفعلي بالدرج', 'Actual Cash Counted');
+  String get cashVariance => _t('فارق الصندوق', 'Cash Variance');
+  String get cashVarianceSurplus => _t('فائض بالصندوق', 'Cash Surplus');
+  String get cashVarianceDeficit => _t('عجز بالصندوق', 'Cash Shortage');
+  String get cashVarianceBalanced =>
+      _t('الصندوق مطابق تماماً', 'Cash Drawer Balanced');
+  String get grossSalesTitle => _t('إجمالي المبيعات قبل الخصم', 'Gross Sales');
+  String get netSalesTitle => _t('صافي المبيعات', 'Net Sales');
+  String get creditSalesTitle =>
+      _t('المبيعات الآجلة (ديون جديدة)', 'Credit Sales');
+  String get customerDebtsCollected =>
+      _t('تحصيل ديون سابقة', 'Prior Debts Collected');
+  String get collectionsByMethodTitle =>
+      _t('المتحصلات حسب طريقة الدفع', 'Collections by Payment Method');
+  String get disbursementsByMethodTitle =>
+      _t('المدفوعات حسب طريقة الدفع', 'Disbursements by Payment Method');
+  String get cashDrawerReconciliation =>
+      _t('مطابقة الصندوق والدرج', 'Cash Drawer Reconciliation');
+  String get invoicesCount =>
+      _t('عدد الفواتير الصادرة', 'Issued Invoices Count');
+  String get cancelledInvoicesCount =>
+      _t('الفواتير الملغاة', 'Cancelled Invoices');
+  String get totalOutflows =>
+      _t('إجمالي المصروفات والمدفوعات', 'Total Outflows');
+
   // ========== ACTIVATION SUPPORT & GUIDANCE ==========
   String get activationTroubleTitle =>
       _t('واجهت مشكلة في التفعيل؟', 'Having trouble with activation?');

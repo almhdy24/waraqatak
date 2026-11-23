@@ -1166,6 +1166,217 @@ class BusinessReportingService {
       totalCogsInPeriod: totalCogsInPeriod,
     );
   }
+
+  /// Daily Closing (End of Day / Z-Report) aggregation:
+  /// Summarizes sales invoices, discounts, cancellations, credit sales,
+  /// collections by payment method, customer debt collections, and outflows
+  /// (supplier payments & expense vouchers) for register drawer reconciliation.
+  Future<DailyClosingSummary> getDailyClosingSummary({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final fromStr = from.toIso8601String();
+    final toStr = to.toIso8601String();
+
+    // 1. Sales Invoices
+    final docRows = await db.rawQuery(
+      '''
+      SELECT
+        COUNT(*) AS total_count,
+        SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) AS valid_count,
+        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count,
+        SUM(CASE WHEN status != 'cancelled' THEN subtotal ELSE 0 END) AS gross_sales,
+        SUM(CASE WHEN status != 'cancelled' THEN discount ELSE 0 END) AS total_discount,
+        SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END) AS net_sales,
+        SUM(CASE WHEN status != 'cancelled' THEN remaining ELSE 0 END) AS credit_sales
+      FROM documents
+      WHERE type = 'invoice' AND date >= ? AND date <= ?
+    ''',
+      [fromStr, toStr],
+    );
+
+    final docRow = docRows.isNotEmpty ? docRows.first : null;
+    final int validInvoices = (docRow?['valid_count'] as num?)?.toInt() ?? 0;
+    final int cancelledInvoices =
+        (docRow?['cancelled_count'] as num?)?.toInt() ?? 0;
+    final double grossSales =
+        (docRow?['gross_sales'] as num?)?.toDouble() ?? 0.0;
+    final double totalDiscounts =
+        (docRow?['total_discount'] as num?)?.toDouble() ?? 0.0;
+    final double netSales = (docRow?['net_sales'] as num?)?.toDouble() ?? 0.0;
+    final double creditSales =
+        (docRow?['credit_sales'] as num?)?.toDouble() ?? 0.0;
+
+    // 2. Collections (Cash In)
+    // 2a. Payments on sales invoices
+    final paymentRows = await db.rawQuery(
+      '''
+      SELECT
+        dp.amount,
+        COALESCE(dp.payment_method, 'cash') AS payment_method,
+        d.date AS invoice_date
+      FROM document_payments dp
+      JOIN documents d ON d.id = dp.document_id
+      WHERE d.type = 'invoice'
+        AND d.status != 'cancelled'
+        AND dp.date >= ? AND dp.date <= ?
+    ''',
+      [fromStr, toStr],
+    );
+
+    final Map<String, double> collectionsByMethod = {};
+    double customerDebtCollected = 0.0;
+    double totalCollected = 0.0;
+
+    for (final r in paymentRows) {
+      final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+      final method = (r['payment_method'] as String?)?.toLowerCase() ?? 'cash';
+      final invDateStr = r['invoice_date'] as String?;
+      if (invDateStr != null && invDateStr.compareTo(fromStr) < 0) {
+        customerDebtCollected += amt;
+      }
+      collectionsByMethod[method] = (collectionsByMethod[method] ?? 0.0) + amt;
+      totalCollected += amt;
+    }
+
+    // 2b. Standalone payment receipts (sundry cash in)
+    final receiptRows = await db.rawQuery(
+      '''
+      SELECT
+        v.paid AS amount,
+        COALESCE(v.payment_method, 'cash') AS payment_method
+      FROM documents v
+      WHERE v.type = 'payment_receipt'
+        AND v.status NOT IN ('draft', 'cancelled')
+        AND v.id NOT IN (
+          SELECT DISTINCT receipt_document_id
+          FROM document_payments
+          WHERE receipt_document_id IS NOT NULL
+        )
+        AND v.date >= ? AND v.date <= ?
+    ''',
+      [fromStr, toStr],
+    );
+
+    for (final r in receiptRows) {
+      final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+      final method = (r['payment_method'] as String?)?.toLowerCase() ?? 'cash';
+      collectionsByMethod[method] = (collectionsByMethod[method] ?? 0.0) + amt;
+      totalCollected += amt;
+    }
+
+    // 3. Outflows (Cash Out)
+    // 3a. Supplier payments
+    final supplierPaymentRows = await db.rawQuery(
+      '''
+      SELECT
+        dp.amount,
+        COALESCE(dp.payment_method, 'cash') AS payment_method
+      FROM document_payments dp
+      JOIN documents d ON d.id = dp.document_id
+      WHERE d.type = 'purchase'
+        AND d.status != 'cancelled'
+        AND dp.date >= ? AND dp.date <= ?
+    ''',
+      [fromStr, toStr],
+    );
+
+    final Map<String, double> disbursementsByMethod = {};
+    double supplierPayments = 0.0;
+    double expenseVouchers = 0.0;
+    double totalDisbursed = 0.0;
+
+    for (final r in supplierPaymentRows) {
+      final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+      final method = (r['payment_method'] as String?)?.toLowerCase() ?? 'cash';
+      supplierPayments += amt;
+      disbursementsByMethod[method] =
+          (disbursementsByMethod[method] ?? 0.0) + amt;
+      totalDisbursed += amt;
+    }
+
+    // 3b. Standalone expense vouchers
+    final expenseRows = await db.rawQuery(
+      '''
+      SELECT
+        v.paid AS amount,
+        COALESCE(v.payment_method, 'cash') AS payment_method
+      FROM documents v
+      WHERE v.type = 'expense_voucher'
+        AND v.status NOT IN ('draft', 'cancelled')
+        AND v.date >= ? AND v.date <= ?
+    ''',
+      [fromStr, toStr],
+    );
+
+    for (final r in expenseRows) {
+      final amt = (r['amount'] as num?)?.toDouble() ?? 0.0;
+      final method = (r['payment_method'] as String?)?.toLowerCase() ?? 'cash';
+      expenseVouchers += amt;
+      disbursementsByMethod[method] =
+          (disbursementsByMethod[method] ?? 0.0) + amt;
+      totalDisbursed += amt;
+    }
+
+    return DailyClosingSummary(
+      from: from,
+      to: to,
+      invoiceCount: validInvoices,
+      cancelledInvoiceCount: cancelledInvoices,
+      grossSales: grossSales,
+      totalDiscounts: totalDiscounts,
+      netSales: netSales,
+      creditSales: creditSales,
+      customerDebtCollected: customerDebtCollected,
+      collectionsByMethod: collectionsByMethod,
+      totalCollected: totalCollected,
+      supplierPayments: supplierPayments,
+      expenseVouchers: expenseVouchers,
+      disbursementsByMethod: disbursementsByMethod,
+      totalDisbursed: totalDisbursed,
+    );
+  }
+}
+
+class DailyClosingSummary {
+  final DateTime from;
+  final DateTime to;
+  final int invoiceCount;
+  final int cancelledInvoiceCount;
+  final double grossSales;
+  final double totalDiscounts;
+  final double netSales;
+  final double creditSales;
+  final double customerDebtCollected;
+  final Map<String, double> collectionsByMethod;
+  final double totalCollected;
+  final double supplierPayments;
+  final double expenseVouchers;
+  final Map<String, double> disbursementsByMethod;
+  final double totalDisbursed;
+
+  double get netCashCollected =>
+      (collectionsByMethod['cash'] ?? 0.0) -
+      (disbursementsByMethod['cash'] ?? 0.0);
+
+  const DailyClosingSummary({
+    required this.from,
+    required this.to,
+    required this.invoiceCount,
+    required this.cancelledInvoiceCount,
+    required this.grossSales,
+    required this.totalDiscounts,
+    required this.netSales,
+    required this.creditSales,
+    required this.customerDebtCollected,
+    required this.collectionsByMethod,
+    required this.totalCollected,
+    required this.supplierPayments,
+    required this.expenseVouchers,
+    required this.disbursementsByMethod,
+    required this.totalDisbursed,
+  });
 }
 
 class ProductVelocityItem {

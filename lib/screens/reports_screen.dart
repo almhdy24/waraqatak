@@ -9,6 +9,7 @@ import '../services/analytics/analytics_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'reports/accounting_screen.dart';
 import 'reports/customer_report_screen.dart';
+import 'reports/daily_closing_report_screen.dart';
 import 'reports/inventory_report_screen.dart';
 import 'reports/payments_report_screen.dart';
 import 'reports/product_report_screen.dart';
@@ -96,6 +97,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   static String? _resolveReportKey(Widget screen) {
+    if (screen is DailyClosingReportScreen) return 'daily_closing';
     if (screen is AccountingScreen) return 'accounting';
     if (screen is SalesReportScreen) return 'sales';
     if (screen is PurchasesReportScreen) return 'purchases';
@@ -139,6 +141,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.salesReport,
             subtitle: l10n.reportSubtitleSales,
             screen: const SalesReportScreen(),
+            permission: PermissionRegistry.reportsViewSales,
+          ),
+          _ReportEntry(
+            icon: Icons.point_of_sale_outlined,
+            color: const Color(0xFF1B5E20),
+            title: l10n.dailyClosingReport,
+            subtitle: l10n.reportSubtitleDailyClosing,
+            screen: const DailyClosingReportScreen(),
             permission: PermissionRegistry.reportsViewSales,
           ),
           _ReportEntry(

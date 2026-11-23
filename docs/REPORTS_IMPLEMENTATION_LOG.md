@@ -13,7 +13,7 @@
 - [x] **Batch C** - Localization cleanup
 - [x] **Batch D** - Export and share foundation
 - [x] **Batch E** - Shared date range across reports
-- [ ] **Batch F** - Daily closing (end-of-day) report [new]
+- [x] **Batch F** - Daily closing (end-of-day) report [new]
 - [ ] **Batch G** - Receivables and payables aging [new]
 - [ ] **Batch H** - Payments report: cash flow by method
 - [ ] **Batch I** - UI/UX polish across reports
@@ -130,5 +130,24 @@
   - Preserved individual screen date change freedom while synchronizing state across report screen transitions.
 - **Validation:**
   - `dart format`: 11 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch F: Daily closing (end-of-day) register reconciliation report
+
+- **Batch ID:** `batch-f`
+- **Files Changed:**
+  - `lib/localization/app_localizations.dart`: Added Arabic and English localized strings for Daily Closing, opening cash, expected cash, actual cash, cash variance (surplus/deficit/balanced), gross sales, credit sales, customer debts collected, and method breakdowns.
+  - `lib/services/business_reporting_service.dart`: Added `DailyClosingSummary` model and `getDailyClosingSummary` method aggregating sales, discounts, cancellations, collections by method, collections on prior debt, supplier payments, and expense vouchers.
+  - `lib/screens/reports/daily_closing_report_screen.dart`: Created full Daily Closing Screen with live cash drawer reconciliation (opening + cash in - cash out = expected; actual - expected = variance), metric summary cards, sales summary, collections breakdown, financial outflows (gated by `reportsViewFinancials`), pull-to-refresh, and PDF (A4/80mm receipt), CSV, and WhatsApp export.
+  - `lib/services/access/screen_access_policy.dart`: Registered `DailyClosingReportScreen` in manifest requiring `PermissionRegistry.reportsViewSales`.
+  - `lib/screens/reports_screen.dart`: Added Daily Closing Report tile to `reportCatSalesPurchases` category as a Free feature.
+  - `test/services/daily_closing_report_test.dart`: Added unit tests verifying sales aggregation, cancellations exclusion, debt collection segregation, and net cash drawer calculation.
+- **Decisions Taken:**
+  - Differentiated cash collected today for current-period invoices from collections on prior-period invoices (`customerDebtCollected`), which is vital for retail cash accounting.
+  - Cash register variance calculation is reactive and instantly provides visual feedback (green balanced / blue surplus / red shortage).
+  - Outflow reporting and its subtraction from expected cash is conditionally included based on `reportsViewFinancials`.
+- **Validation:**
+  - `dart format`: 6 files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
