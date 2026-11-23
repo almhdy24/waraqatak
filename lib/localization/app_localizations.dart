@@ -2185,6 +2185,28 @@ class AppLocalizations {
     'Per-contact aging breakdown is available in Pro',
   );
 
+  String get searchCustomer => _t('بحث عن عميل…', 'Search customer…');
+  String get searchSupplier => _t('بحث عن مورد…', 'Search supplier…');
+  String get sortByName => _t('ترتيب حسب الاسم', 'Sort by name');
+  String get sortByRemaining => _t('ترتيب حسب المتبقي', 'Sort by remaining');
+  String get salesGrowthVsPrevious =>
+      _t('مقارنة بالفترة السابقة', 'vs previous period');
+  String get taxDiscountReport =>
+      _t('تقرير الضرائب والخصومات', 'Taxes & Discounts Report');
+  String get reportSubtitleTaxDiscount => _t(
+    'ملخص الضرائب المحصلة والخصومات الممنوحة والمستلمة',
+    'Summary of taxes collected and discounts given/received',
+  );
+  String get taxCollected =>
+      _t('ضريبة المبيعات المحصلة', 'Sales Tax Collected');
+  String get taxPaid => _t('ضريبة المشتريات المدفوعة', 'Purchase Tax Paid');
+  String get netTax => _t('صافي الضريبة', 'Net Tax');
+  String get discountsGiven =>
+      _t('خصومات المبيعات الممنوحة', 'Sales Discounts Given');
+  String get discountsReceived =>
+      _t('خصومات المشتريات المستلمة', 'Purchase Discounts Received');
+  String get netDiscounts => _t('صافي الخصومات', 'Net Discounts');
+
   // ========== ACTIVATION SUPPORT & GUIDANCE ==========
   String get activationTroubleTitle =>
       _t('واجهت مشكلة في التفعيل؟', 'Having trouble with activation?');

@@ -12,9 +12,11 @@ import '../../services/business_reporting_service.dart';
 import '../../services/csv_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
+import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
+import '../../widgets/app_metric_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/report_export_menu.dart';
@@ -318,149 +320,155 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                 },
               ),
 
-              // Supplier Filter & Status Filter Bar
+              // Supplier Filter (Row 1) & Status Filters (Row 2)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                child: Row(
+                child: Column(
                   children: [
-                    // Supplier Dropdown
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<int?>(
-                            value: _selectedSupplierId,
-                            isExpanded: true,
-                            hint: Text(
-                              l10n.allSuppliers,
-                              style: const TextStyle(fontSize: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int?>(
+                          value: _selectedSupplierId,
+                          isExpanded: true,
+                          hint: Text(
+                            l10n.allSuppliers,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          items: [
+                            DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                l10n.allSuppliers,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
-                            items: [
-                              DropdownMenuItem<int?>(
-                                value: null,
+                            ..._suppliers.map(
+                              (s) => DropdownMenuItem<int?>(
+                                value: s.id,
                                 child: Text(
-                                  l10n.allSuppliers,
+                                  s.name,
                                   style: const TextStyle(fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              ..._suppliers.map(
-                                (s) => DropdownMenuItem<int?>(
-                                  value: s.id,
-                                  child: Text(
-                                    s.name,
-                                    style: const TextStyle(fontSize: 12),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setState(() => _selectedSupplierId = val);
+                            _load();
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedDocStatus,
+                                isExpanded: true,
+                                items: [
+                                  DropdownMenuItem(
+                                    value: 'all',
+                                    child: Text(
+                                      l10n.activeFilterAll,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
                                   ),
-                                ),
+                                  DropdownMenuItem(
+                                    value: DocumentStatus.issued,
+                                    child: Text(
+                                      l10n.statusIssued,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: DocumentStatus.cancelled,
+                                    child: Text(
+                                      l10n.statusCancelled,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedDocStatus = val);
+                                    _load();
+                                  }
+                                },
                               ),
-                            ],
-                            onChanged: (val) {
-                              setState(() => _selectedSupplierId = val);
-                              _load();
-                            },
+                            ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Document Status Dropdown
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedDocStatus,
-                          items: [
-                            DropdownMenuItem(
-                              value: 'all',
-                              child: Text(
-                                l10n.activeFilterAll,
-                                style: const TextStyle(fontSize: 12),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedPaymentStatus,
+                                isExpanded: true,
+                                items: [
+                                  DropdownMenuItem(
+                                    value: 'all',
+                                    child: Text(
+                                      l10n.activeFilterAll,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'paid',
+                                    child: Text(
+                                      l10n.paidStatus,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'partial',
+                                    child: Text(
+                                      l10n.partialStatus,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'unpaid',
+                                    child: Text(
+                                      l10n.unpaidStatus,
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(
+                                      () => _selectedPaymentStatus = val,
+                                    );
+                                    _load();
+                                  }
+                                },
                               ),
                             ),
-                            DropdownMenuItem(
-                              value: DocumentStatus.issued,
-                              child: Text(
-                                l10n.statusIssued,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: DocumentStatus.cancelled,
-                              child: Text(
-                                l10n.statusCancelled,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _selectedDocStatus = val);
-                              _load();
-                            }
-                          },
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Payment Status Dropdown
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedPaymentStatus,
-                          items: [
-                            DropdownMenuItem(
-                              value: 'all',
-                              child: Text(
-                                l10n.activeFilterAll,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'paid',
-                              child: Text(
-                                l10n.paidStatus,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'partial',
-                              child: Text(
-                                l10n.partialStatus,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'unpaid',
-                              child: Text(
-                                l10n.unpaidStatus,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _selectedPaymentStatus = val);
-                              _load();
-                            }
-                          },
-                        ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -488,25 +496,43 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                         padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                         child: Row(
                           children: [
-                            _chip(
-                              l10n.totalPurchasesAmt,
-                              baseTotals.purchases,
-                              AppStatusColors.fg(context, AppStatus.warning),
-                              symbol: baseSymbol,
+                            Expanded(
+                              child: AppMetricCard(
+                                title: l10n.totalPurchasesAmt,
+                                value:
+                                    '${_numFmt.format(baseTotals.purchases)} $baseSymbol',
+                                icon: Icons.shopping_bag_outlined,
+                                color: AppStatusColors.fg(
+                                  context,
+                                  AppStatus.warning,
+                                ),
+                                compact: true,
+                              ),
                             ),
                             const SizedBox(width: 8),
-                            _chip(
-                              l10n.totalPaid,
-                              baseTotals.paid,
-                              AppStatusColors.fg(context, AppStatus.success),
-                              symbol: baseSymbol,
+                            Expanded(
+                              child: AppMetricCard(
+                                title: l10n.totalPaid,
+                                value:
+                                    '${_numFmt.format(baseTotals.paid)} $baseSymbol',
+                                icon: Icons.check_circle_outline,
+                                color: AppStatusColors.fg(
+                                  context,
+                                  AppStatus.success,
+                                ),
+                                compact: true,
+                              ),
                             ),
                             const SizedBox(width: 8),
-                            _chip(
-                              l10n.totalOutstanding,
-                              baseTotals.remaining,
-                              Theme.of(context).colorScheme.error,
-                              symbol: baseSymbol,
+                            Expanded(
+                              child: AppMetricCard(
+                                title: l10n.totalOutstanding,
+                                value:
+                                    '${_numFmt.format(baseTotals.remaining)} $baseSymbol',
+                                icon: Icons.account_balance_wallet_outlined,
+                                color: Theme.of(context).colorScheme.error,
+                                compact: true,
+                              ),
                             ),
                           ],
                         ),
@@ -695,100 +721,106 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
       );
     }
 
-    return ListView.builder(
-      itemCount: items.length,
-      padding: const EdgeInsets.only(top: 4, bottom: 16),
-      itemBuilder: (ctx, i) {
-        final cs = Theme.of(ctx).colorScheme;
-        final item = items[i];
-        final doc = item.document;
-        final isCancelled = doc.status == DocumentStatus.cancelled;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        itemCount: items.length,
+        padding: const EdgeInsets.only(top: 4, bottom: 16),
+        itemBuilder: (ctx, i) {
+          final cs = Theme.of(ctx).colorScheme;
+          final item = items[i];
+          final doc = item.document;
+          final isCancelled = doc.status == DocumentStatus.cancelled;
 
-        return Card(
-          elevation: 0,
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant,
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
-          ),
-          child: ListTile(
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    doc.documentNumber,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      decoration: isCancelled
-                          ? TextDecoration.lineThrough
-                          : null,
+            child: ListTile(
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      doc.documentNumber,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        decoration: isCancelled
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
                     ),
                   ),
-                ),
-                Text(
-                  '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.supplierName ?? '',
-                        style: const TextStyle(fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Text(
-                      _dateFmt.format(doc.date),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-                if (!isCancelled) ...[
+                  Text(
+                    '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      Text(
-                        '${l10n.paid}: ${_numFmt.format(doc.paid)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppStatusColors.fg(context, AppStatus.success),
+                      Expanded(
+                        child: Text(
+                          item.supplierName ?? '',
+                          style: const TextStyle(fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 10),
                       Text(
-                        '${l10n.remaining}: ${_numFmt.format(doc.remaining)}',
+                        _dateFmt.format(doc.date),
                         style: TextStyle(
-                          fontSize: 11,
-                          color: doc.remaining > 0 ? cs.error : cs.outline,
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
+                  if (!isCancelled) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          '${l10n.paid}: ${_numFmt.format(doc.paid)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppStatusColors.fg(
+                              context,
+                              AppStatus.success,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '${l10n.remaining}: ${_numFmt.format(doc.remaining)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: doc.remaining > 0 ? cs.error : cs.outline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
-            ),
-            onTap: () => Navigator.push(
-              ctx,
-              MaterialPageRoute(
-                builder: (_) => DocumentDetailScreen(documentId: doc.id!),
               ),
-            ).then((_) => _load()),
-          ),
-        );
-      },
+              onTap: () => Navigator.push(
+                ctx,
+                MaterialPageRoute(
+                  builder: (_) => DocumentDetailScreen(documentId: doc.id!),
+                ),
+              ).then((_) => _load()),
+            ),
+          );
+        },
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../localization/app_localizations.dart';
 import '../../models/business.dart';
 import '../../models/currency.dart';
 import '../../models/date_range_filter.dart';
+import '../../models/document.dart';
 import '../../models/document_status.dart';
 import '../../services/csv_service.dart';
 import '../../services/inventory_costing_service.dart';
@@ -15,6 +16,7 @@ import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_empty_state.dart';
 import '../../widgets/app_error_state.dart';
 import '../../widgets/app_loading_view.dart';
+import '../../widgets/app_metric_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/report_export_menu.dart';
@@ -86,6 +88,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   DateRangeFilter _range = ReportsDateNotifier.instance.range;
   List<SaleProfitSummary>? _sales;
   Business? _business;
+  double? _previousSalesTotal;
   String? _error;
 
   static final _numFmt = NumberFormat('#,##0.##');
@@ -100,9 +103,11 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   Future<void> _load() async {
     setState(() {
       _sales = null;
+      _previousSalesTotal = null;
       _error = null;
     });
     try {
+      final prevRange = _range.previousPeriod();
       final results = await Future.wait([
         InventoryCostingService.instance.getSalesReportWithCost(
           from: _range.from,
@@ -110,11 +115,23 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           includeCancelled: true,
         ),
         DatabaseHelper.instance.getFirstBusiness(),
+        DatabaseHelper.instance.getDocumentsInPeriod(
+          type: 'invoice',
+          from: prevRange.from,
+          to: prevRange.to,
+        ),
       ]);
       if (!mounted) return;
+      final prevDocs = results[2] as List<Document>;
+      final prevFinalized = prevDocs.where(
+        (d) => d.status != DocumentStatus.cancelled,
+      );
+      final prevTotal = prevFinalized.fold(0.0, (sum, d) => sum + d.total);
+
       setState(() {
         _sales = results[0] as List<SaleProfitSummary>;
         _business = results[1] as Business?;
+        _previousSalesTotal = prevTotal;
       });
     } catch (e) {
       if (!mounted) return;
@@ -399,6 +416,14 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
     final hasIncompleteCost = baseFinalized.any((s) => !s.isCostReliable);
 
+    double? deltaPercentage;
+    if (_previousSalesTotal != null && _previousSalesTotal! > 0) {
+      deltaPercentage =
+          ((totalSales - _previousSalesTotal!) / _previousSalesTotal!) * 100;
+    } else if (_previousSalesTotal == 0 && totalSales > 0) {
+      deltaPercentage = 100.0;
+    }
+
     return ScreenAccessGate(
       screenType: SalesReportScreen,
       child: Scaffold(
@@ -435,27 +460,40 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
               if (_sales != null && _sales!.isNotEmpty) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: AppMetricCard(
+                    title: l10n.totalSales,
+                    value: '${_numFmt.format(totalSales)} $baseSymbol',
+                    subtitle: deltaPercentage != null
+                        ? '${deltaPercentage >= 0 ? '+' : ''}${_numFmt.format(deltaPercentage)}% ${l10n.salesGrowthVsPrevious}'
+                        : null,
+                    icon: Icons.trending_up,
+                    color: AppStatusColors.fg(context, AppStatus.success),
+                    compact: true,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                   child: Row(
                     children: [
-                      _summaryChip(
-                        l10n.totalSales,
-                        totalSales,
-                        AppStatusColors.fg(context, AppStatus.success),
-                        symbol: baseSymbol,
+                      Expanded(
+                        child: AppMetricCard(
+                          title: l10n.cogs,
+                          value: '${_numFmt.format(totalCogs)} $baseSymbol',
+                          icon: Icons.inventory_2_outlined,
+                          color: cs.secondary,
+                          compact: true,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      _summaryChip(
-                        l10n.cogs,
-                        totalCogs,
-                        cs.secondary,
-                        symbol: baseSymbol,
-                      ),
-                      const SizedBox(width: 8),
-                      _summaryChip(
-                        l10n.grossProfit,
-                        totalTrustedProfit,
-                        AppStatusColors.fg(context, AppStatus.success),
-                        symbol: baseSymbol,
+                      Expanded(
+                        child: AppMetricCard(
+                          title: l10n.grossProfit,
+                          value:
+                              '${_numFmt.format(totalTrustedProfit)} $baseSymbol',
+                          icon: Icons.monetization_on_outlined,
+                          color: AppStatusColors.fg(context, AppStatus.success),
+                          compact: true,
+                        ),
                       ),
                     ],
                   ),
@@ -464,18 +502,25 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                   child: Row(
                     children: [
-                      _summaryChip(
-                        l10n.totalPaid,
-                        totalPaid,
-                        AppStatusColors.fg(context, AppStatus.success),
-                        symbol: baseSymbol,
+                      Expanded(
+                        child: AppMetricCard(
+                          title: l10n.totalPaid,
+                          value: '${_numFmt.format(totalPaid)} $baseSymbol',
+                          icon: Icons.check_circle_outline,
+                          color: AppStatusColors.fg(context, AppStatus.success),
+                          compact: true,
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      _summaryChip(
-                        l10n.totalOutstanding,
-                        totalRemaining,
-                        Theme.of(context).colorScheme.error,
-                        symbol: baseSymbol,
+                      Expanded(
+                        child: AppMetricCard(
+                          title: l10n.totalOutstanding,
+                          value:
+                              '${_numFmt.format(totalRemaining)} $baseSymbol',
+                          icon: Icons.account_balance_wallet_outlined,
+                          color: Theme.of(context).colorScheme.error,
+                          compact: true,
+                        ),
                       ),
                     ],
                   ),
@@ -668,46 +713,6 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     );
   }
 
-  Widget _summaryChip(
-    String label,
-    double value,
-    Color color, {
-    String symbol = '',
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 10, color: color),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              symbol.isNotEmpty
-                  ? '${_numFmt.format(value)} $symbol'
-                  : _numFmt.format(value),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
     if (_error != null) {
       return AppErrorState(message: l10n.operationFailed, onRetry: _load);
@@ -721,139 +726,143 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
       );
     }
 
-    return ListView.builder(
-      itemCount: _sales!.length,
-      padding: const EdgeInsets.only(top: 4, bottom: 16),
-      itemBuilder: (ctx, i) {
-        final item = _sales![i];
-        final doc = item.document;
-        final isCancelled = doc.status == DocumentStatus.cancelled;
-        return Card(
-          elevation: 0,
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
-            side: BorderSide(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.7),
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        itemCount: _sales!.length,
+        padding: const EdgeInsets.only(top: 4, bottom: 16),
+        itemBuilder: (ctx, i) {
+          final item = _sales![i];
+          final doc = item.document;
+          final isCancelled = doc.status == DocumentStatus.cancelled;
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+              side: BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          child: ListTile(
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    doc.documentNumber,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      decoration: isCancelled
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
-                  ),
-                ),
-                if (!isCancelled && !item.isCostReliable)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: AppStatusColors.bg(context, AppStatus.warning),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: AppStatusColors.border(
-                          context,
-                          AppStatus.warning,
-                        ),
-                        width: 0.5,
-                      ),
-                    ),
+            child: ListTile(
+              title: Row(
+                children: [
+                  Expanded(
                     child: Text(
-                      l10n.costIncomplete,
+                      doc.documentNumber,
                       style: TextStyle(
-                        fontSize: 10,
-                        color: AppStatusColors.fg(context, AppStatus.warning),
                         fontWeight: FontWeight.bold,
+                        decoration: isCancelled
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                     ),
                   ),
-                Text(
-                  '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Expanded(
+                  if (!isCancelled && !item.isCostReliable)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: AppStatusColors.bg(context, AppStatus.warning),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: AppStatusColors.border(
+                            context,
+                            AppStatus.warning,
+                          ),
+                          width: 0.5,
+                        ),
+                      ),
                       child: Text(
-                        doc.recipientName ?? '',
-                        style: const TextStyle(fontSize: 12),
+                        l10n.costIncomplete,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppStatusColors.fg(context, AppStatus.warning),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    Text(
-                      _dateFmt.format(doc.date),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-                if (!isCancelled) ...[
+                  Text(
+                    '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      Text(
-                        item.isCostReliable
-                            ? '${l10n.grossProfit}: ${_numFmt.format(item.grossProfit)} ${doc.currencySymbol}'
-                            : '${l10n.grossProfit}: —',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: (item.isCostReliable && item.grossProfit >= 0)
-                              ? AppStatusColors.fg(context, AppStatus.success)
-                              : (item.isCostReliable
-                                    ? Theme.of(context).colorScheme.error
-                                    : Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant),
-                          fontWeight: FontWeight.w500,
+                      Expanded(
+                        child: Text(
+                          doc.recipientName ?? '',
+                          style: const TextStyle(fontSize: 12),
                         ),
                       ),
-                      if (item.isCostReliable &&
-                          item.recognizedRevenue > 0) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '(${item.profitMargin.toStringAsFixed(1)}%)',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                          ),
+                      Text(
+                        _dateFmt.format(doc.date),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                      ],
+                      ),
                     ],
                   ),
+                  if (!isCancelled) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          item.isCostReliable
+                              ? '${l10n.grossProfit}: ${_numFmt.format(item.grossProfit)} ${doc.currencySymbol}'
+                              : '${l10n.grossProfit}: —',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color:
+                                (item.isCostReliable && item.grossProfit >= 0)
+                                ? AppStatusColors.fg(context, AppStatus.success)
+                                : (item.isCostReliable
+                                      ? Theme.of(context).colorScheme.error
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (item.isCostReliable &&
+                            item.recognizedRevenue > 0) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            '(${item.profitMargin.toStringAsFixed(1)}%)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                 ],
-              ],
-            ),
-            onTap: () => Navigator.push(
-              ctx,
-              MaterialPageRoute(
-                builder: (_) => DocumentDetailScreen(documentId: doc.id!),
               ),
-            ).then((_) => _load()),
-          ),
-        );
-      },
+              onTap: () => Navigator.push(
+                ctx,
+                MaterialPageRoute(
+                  builder: (_) => DocumentDetailScreen(documentId: doc.id!),
+                ),
+              ).then((_) => _load()),
+            ),
+          );
+        },
+      ),
     );
   }
 }

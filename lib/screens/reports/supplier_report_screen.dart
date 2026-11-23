@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -9,6 +10,11 @@ import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
 import '../../widgets/access/screen_access_gate.dart';
+import '../../widgets/app_design_tokens.dart';
+import '../../widgets/app_empty_state.dart';
+import '../../widgets/app_error_state.dart';
+import '../../widgets/app_loading_view.dart';
+import '../../widgets/app_metric_card.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/report_export_menu.dart';
@@ -48,9 +54,16 @@ class SupplierReportScreen extends StatefulWidget {
 }
 
 class _SupplierReportScreenState extends State<SupplierReportScreen> {
-  List<Map<String, dynamic>>? _rows;
+  List<Map<String, dynamic>>? _allRows;
+  List<Map<String, dynamic>>? _filteredRows;
+  bool _hasLegacyForeign = false;
   String? _error;
   String _currencySymbol = '';
+
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  int _querySeq = 0;
+  bool _sortByName = false;
 
   static final _numFmt = NumberFormat('#,##0.##');
 
@@ -60,38 +73,104 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
-      _rows = null;
+      _allRows = null;
+      _filteredRows = null;
       _error = null;
     });
     try {
       final business = await DatabaseHelper.instance.getFirstBusiness();
       final currency = business?.currencyCode ?? 'SDG';
-      _currencySymbol = Currency.symbolForCode(currency);
-      final rows = await DatabaseHelper.instance.getContactBalances(
-        'supplier',
-        'purchase',
-        currencyCode: currency,
-      );
-      if (!mounted) return;
-      setState(() => _rows = rows);
+      final symbol = Currency.symbolForCode(currency);
+
+      final results = await Future.wait([
+        DatabaseHelper.instance.getContactBalances(
+          'supplier',
+          'purchase',
+          currencyCode: currency,
+        ),
+        DatabaseHelper.instance.getContactBalances('supplier', 'purchase'),
+      ]);
+
+      if (!mounted || seq != _querySeq) return;
+
+      final rows = results[0];
+      final allUnfiltered = results[1];
+      final hasForeign = allUnfiltered.any((r) {
+        final c = (r['currency_code'] as String?)?.trim();
+        return c != null && c.isNotEmpty && c != currency;
+      });
+
+      setState(() {
+        _currencySymbol = symbol;
+        _allRows = rows;
+        _hasLegacyForeign = hasForeign;
+        _applyFilter();
+      });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() => _error = e.toString());
     }
   }
 
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        setState(() => _applyFilter());
+      }
+    });
+  }
+
+  void _applyFilter() {
+    if (_allRows == null) return;
+    final query = _searchController.text.trim().toLowerCase();
+    var list = _allRows!;
+    if (query.isNotEmpty) {
+      list = list.where((r) {
+        final name = (r['name'] as String? ?? '').toLowerCase();
+        final phone = (r['phone'] as String? ?? '').toLowerCase();
+        return name.contains(query) || phone.contains(query);
+      }).toList();
+    }
+    if (_sortByName) {
+      list = List.of(list)
+        ..sort(
+          (a, b) => (a['name'] as String? ?? '').compareTo(
+            b['name'] as String? ?? '',
+          ),
+        );
+    } else {
+      list = List.of(list)
+        ..sort(
+          (a, b) => ((b['outstanding'] ?? 0) as num).compareTo(
+            (a['outstanding'] ?? 0) as num,
+          ),
+        );
+    }
+    _filteredRows = list;
+  }
+
   PdfReportData _buildPdfData(AppLocalizations l10n) {
-    final totalAmount = _rows!.fold(
+    final rows = _filteredRows ?? _allRows ?? [];
+    final totalAmount = rows.fold(
       0.0,
       (s, r) => s + ((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble(),
     );
-    final totalPaid = _rows!.fold(
+    final totalPaid = rows.fold(
       0.0,
       (s, r) => s + ((r['total_paid'] ?? r['paid'] ?? 0) as num).toDouble(),
     );
-    final totalPayable = _rows!.fold(
+    final totalPayable = rows.fold(
       0.0,
       (s, r) => s + ((r['outstanding'] ?? 0) as num).toDouble(),
     );
@@ -108,7 +187,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
       ),
     ];
 
-    final rows = _rows!
+    final pdfRows = rows
         .map((r) => SupplierReportScreen.buildPdfRow(r, _numFmt))
         .toList();
 
@@ -118,11 +197,11 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
       summaryCards: [
         PdfReportSummaryCard(
           label: l10n.totalOutstanding,
-          value: _numFmt.format(totalPayable),
+          value: '${_numFmt.format(totalPayable)} $_currencySymbol',
         ),
       ],
       columns: columns,
-      rows: rows,
+      rows: pdfRows,
       totalsRow: SupplierReportScreen.buildTotalsRow(
         totalAmount: totalAmount,
         totalPaid: totalPaid,
@@ -136,7 +215,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
   Future<void> _exportPdf({required bool isShare}) async {
     final l10n = AppLocalizations.of(context);
     final business = await DatabaseHelper.instance.getFirstBusiness();
-    if (business == null || _rows == null) return;
+    if (business == null || _filteredRows == null) return;
     final data = _buildPdfData(l10n);
 
     try {
@@ -174,7 +253,8 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
   }
 
   Future<void> _exportCsv(AppLocalizations l10n) async {
-    if (_rows == null) return;
+    final rows = _filteredRows ?? _allRows;
+    if (rows == null) return;
     final headers = [
       l10n.supplier,
       l10n.phone,
@@ -182,7 +262,7 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
       l10n.paid,
       l10n.remaining,
     ];
-    final csvRows = _rows!
+    final csvRows = rows
         .map(
           (r) => [
             r['name'] as String? ?? '',
@@ -233,8 +313,13 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
     final totalPayable =
-        _rows?.fold(0.0, (s, r) => s + (r['outstanding'] as num).toDouble()) ??
+        _allRows?.fold(
+          0.0,
+          (s, r) => s + (r['outstanding'] as num).toDouble(),
+        ) ??
         0.0;
 
     return ScreenAccessGate(
@@ -245,9 +330,9 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
           centerTitle: true,
           actions: [
             IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: l10n.printOrShareReport,
-              onPressed: _rows != null && _rows!.isNotEmpty
+              icon: const Icon(Icons.share_outlined),
+              tooltip: l10n.exportOptions,
+              onPressed: _allRows != null && _allRows!.isNotEmpty
                   ? () => _openExportMenu(context, l10n, totalPayable)
                   : null,
             ),
@@ -256,62 +341,106 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
         body: ResponsiveCenter(
           child: Column(
             children: [
-              if (_rows != null && _rows!.isNotEmpty)
+              if (_allRows != null && _allRows!.isNotEmpty) ...[
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: AppMetricCard(
+                    title: l10n.totalOutstanding,
+                    value: '${_numFmt.format(totalPayable)} $_currencySymbol',
+                    icon: Icons.store_outlined,
+                    color: AppStatusColors.fg(context, AppStatus.warning),
+                    compact: true,
+                  ),
+                ),
+                if (_hasLegacyForeign)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest
+                            .withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              l10n.legacyForeignDocumentsNotice,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // Search & Sort Bar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
                   child: Row(
                     children: [
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppStatusColors.bg(
-                              context,
-                              AppStatus.warning,
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: l10n.searchSupplier,
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 16),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _applyFilter());
+                                    },
+                                  )
+                                : null,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
                             ),
-                            borderRadius: BorderRadius.circular(10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                l10n.allTimeBalance,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: AppStatusColors.fg(
-                                    context,
-                                    AppStatus.warning,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                l10n.payable,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: AppStatusColors.fg(
-                                    context,
-                                    AppStatus.warning,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '${_numFmt.format(totalPayable)} $_currencySymbol',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppStatusColors.fg(
-                                    context,
-                                    AppStatus.warning,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          onChanged: _onSearchChanged,
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(
+                          _sortByName
+                              ? Icons.sort_by_alpha
+                              : Icons.format_list_numbered,
+                          size: 20,
+                        ),
+                        tooltip: _sortByName
+                            ? l10n.sortByName
+                            : l10n.sortByRemaining,
+                        onPressed: () {
+                          setState(() {
+                            _sortByName = !_sortByName;
+                            _applyFilter();
+                          });
+                        },
                       ),
                     ],
                   ),
                 ),
+              ],
               Expanded(child: _buildList(context, l10n)),
             ],
           ),
@@ -321,102 +450,87 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
+    if (_allRows == null) return const AppLoadingView();
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(l10n.operationFailed),
-            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-          ],
-        ),
-      );
+      return AppErrorState(message: _error!, onRetry: _load);
     }
-    if (_rows == null) return const Center(child: CircularProgressIndicator());
     final cs = Theme.of(context).colorScheme;
-    if (_rows!.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.store_outlined, size: 64, color: cs.outline),
-              const SizedBox(height: 12),
-              Text(
-                l10n.noReportData,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: cs.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
+    if (_allRows!.isEmpty) {
+      return AppEmptyState(
+        icon: Icons.store_outlined,
+        title: l10n.noReportData,
       );
     }
+    if (_filteredRows!.isEmpty) {
+      return AppEmptyState(icon: Icons.search_off, title: l10n.noSearchResults);
+    }
 
-    return ListView.builder(
-      itemCount: _rows!.length,
-      padding: const EdgeInsets.only(top: 4, bottom: 16),
-      itemBuilder: (ctx, i) {
-        final row = _rows![i];
-        final outstanding = (row['outstanding'] as num).toDouble();
-        final total = (row['total_amount'] as num).toDouble();
-        final docCount = row['doc_count'] as int;
-        final hasDebt = outstanding > 0;
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        itemCount: _filteredRows!.length,
+        padding: const EdgeInsets.only(top: 4, bottom: 16),
+        itemBuilder: (ctx, i) {
+          final row = _filteredRows![i];
+          final outstanding = (row['outstanding'] as num).toDouble();
+          final total = (row['total_amount'] as num).toDouble();
+          final docCount = row['doc_count'] as int;
+          final hasDebt = outstanding > 0;
 
-        return Card(
-          elevation: 0,
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: cs.outlineVariant),
-          ),
-          child: ListTile(
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    row['name'] as String,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                if (hasDebt)
-                  Text(
-                    _numFmt.format(outstanding),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppStatusColors.fg(context, AppStatus.warning),
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppDesignTokens.cardRadius),
+              side: BorderSide(color: cs.outlineVariant),
+            ),
+            child: ListTile(
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row['name'] as String,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
-              ],
-            ),
-            subtitle: Text(
-              '${l10n.purchaseCount}: $docCount · ${l10n.totalPurchasesAmt}: ${_numFmt.format(total)}',
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-            ),
-            trailing: hasDebt
-                ? null
-                : Icon(
-                    Icons.check_circle_outline,
-                    color: AppStatusColors.fg(context, AppStatus.success),
-                    size: 18,
+                  if (hasDebt)
+                    Text(
+                      _numFmt.format(outstanding),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppStatusColors.fg(context, AppStatus.warning),
+                      ),
+                    ),
+                ],
+              ),
+              subtitle: Text(
+                '${l10n.purchaseCount}: $docCount · ${l10n.totalPurchasesAmt}: ${_numFmt.format(total)}',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
+              trailing: hasDebt
+                  ? null
+                  : Icon(
+                      Icons.check_circle_outline,
+                      color: AppStatusColors.fg(context, AppStatus.success),
+                      size: 18,
+                    ),
+              onTap: () async {
+                final contactId = row['contact_id'] as int;
+                final contact = await DatabaseHelper.instance.getContactById(
+                  contactId,
+                );
+                if (contact == null || !ctx.mounted) return;
+                Navigator.push(
+                  ctx,
+                  MaterialPageRoute(
+                    builder: (_) => CustomerDetailScreen(contact: contact),
                   ),
-            onTap: () async {
-              final contactId = row['contact_id'] as int;
-              final contact = await DatabaseHelper.instance.getContactById(
-                contactId,
-              );
-              if (contact == null || !ctx.mounted) return;
-              Navigator.push(
-                ctx,
-                MaterialPageRoute(
-                  builder: (_) => CustomerDetailScreen(contact: contact),
-                ),
-              ).then((_) => _load());
-            },
-          ),
-        );
-      },
+                ).then((_) => _load());
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 }

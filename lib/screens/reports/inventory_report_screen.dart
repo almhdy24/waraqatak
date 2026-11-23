@@ -14,6 +14,7 @@ import '../../utils/format_utils.dart';
 import '../../utils/number_input.dart';
 import '../../widgets/amount_field.dart';
 import '../inventory_screen.dart';
+import '../stock_movements_screen.dart';
 import '../../services/feature_access.dart';
 import '../../services/license_service.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
@@ -879,137 +880,154 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
               color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => StockMovementsScreen(initialProduct: p),
+              ),
+            ).then((_) => _load()),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (p.category != null && p.category!.isNotEmpty)
+                              Text(
+                                p.category!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            p.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          if (p.category != null && p.category!.isNotEmpty)
-                            Text(
-                              p.category!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
+                            FormatUtils.formatQuantity(
+                              p.stockQuantity,
+                              unit: p.unit,
                             ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          FormatUtils.formatQuantity(
-                            p.stockQuantity,
-                            unit: p.unit,
-                          ),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: isOut
-                                ? Theme.of(context).colorScheme.error
-                                : null,
-                          ),
-                        ),
-                        if (isLow) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            '${l10n.shortageQuantity}: ${FormatUtils.formatQuantity(item.shortageQuantity, unit: p.unit)}',
                             style: TextStyle(
-                              fontSize: 10,
-                              color: AppStatusColors.fg(
-                                context,
-                                AppStatus.warning,
-                              ),
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w600,
+                              color: isOut
+                                  ? Theme.of(context).colorScheme.error
+                                  : null,
                             ),
                           ),
+                          if (isLow) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '${l10n.shortageQuantity}: ${FormatUtils.formatQuantity(item.shortageQuantity, unit: p.unit)}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppStatusColors.fg(
+                                  context,
+                                  AppStatus.warning,
+                                ),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        hasCost
-                            ? '${l10n.averageCost}: ${_numFmt.format(p.averageCost)} | ${l10n.inventoryValuationAtCost}: ${_numFmt.format(item.valuationAtCost)}'
-                            : (p.stockQuantity > 0
-                                  ? '${l10n.costStatus}: ${l10n.costUnknown}'
-                                  : ''),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: hasCost
-                              ? AppStatusColors.fg(context, AppStatus.success)
-                              : AppStatusColors.fg(context, AppStatus.warning),
-                          fontWeight: hasCost
-                              ? FontWeight.w500
-                              : FontWeight.normal,
-                        ),
                       ),
-                    ),
-                    if (statusLabel.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
                         child: Text(
-                          statusLabel,
+                          hasCost
+                              ? '${l10n.averageCost}: ${_numFmt.format(p.averageCost)} | ${l10n.inventoryValuationAtCost}: ${_numFmt.format(item.valuationAtCost)}'
+                              : (p.stockQuantity > 0
+                                    ? '${l10n.costStatus}: ${l10n.costUnknown}'
+                                    : ''),
                           style: TextStyle(
-                            fontSize: 10,
-                            color: statusColor,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            color: hasCost
+                                ? AppStatusColors.fg(context, AppStatus.success)
+                                : AppStatusColors.fg(
+                                    context,
+                                    AppStatus.warning,
+                                  ),
+                            fontWeight: hasCost
+                                ? FontWeight.w500
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
-                    if (!hasCost && p.stockQuantity > 0) ...[
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () => _showReconciliationDialog(p),
-                        child: Container(
+                      if (statusLabel.isNotEmpty)
+                        Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 6,
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppStatusColors.bg(context, AppStatus.info),
+                            color: statusColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            l10n.reconcileCost,
+                            statusLabel,
                             style: TextStyle(
                               fontSize: 10,
-                              color: AppStatusColors.fg(
-                                context,
-                                AppStatus.info,
-                              ),
+                              color: statusColor,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      ),
+                      if (!hasCost && p.stockQuantity > 0) ...[
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () => _showReconciliationDialog(p),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppStatusColors.bg(
+                                context,
+                                AppStatus.info,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              l10n.reconcileCost,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppStatusColors.fg(
+                                  context,
+                                  AppStatus.info,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         );

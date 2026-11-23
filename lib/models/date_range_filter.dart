@@ -90,15 +90,7 @@ class DateRangeFilter {
   factory DateRangeFilter.previousMonth() {
     final now = DateTime.now();
     final firstDayPrev = DateTime(now.year, now.month - 1, 1);
-    final lastDayPrev = DateTime(
-      now.year,
-      now.month,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
+    final lastDayPrev = DateTime(now.year, now.month, 0, 23, 59, 59, 999);
     return DateRangeFilter._(
       preset: DateRangePreset.previousMonth,
       from: firstDayPrev,
@@ -122,7 +114,15 @@ class DateRangeFilter {
     return DateRangeFilter._(
       preset: DateRangePreset.custom,
       from: DateTime(actualFrom.year, actualFrom.month, actualFrom.day),
-      to: DateTime(actualTo.year, actualTo.month, actualTo.day, 23, 59, 59, 999),
+      to: DateTime(
+        actualTo.year,
+        actualTo.month,
+        actualTo.day,
+        23,
+        59,
+        59,
+        999,
+      ),
     );
   }
 
@@ -136,8 +136,31 @@ class DateRangeFilter {
       DateRangePreset.lastMonth => l10n.lastMonth,
       DateRangePreset.previousMonth => l10n.previousMonth,
       DateRangePreset.thisYear => l10n.thisYear,
-      DateRangePreset.custom =>
-        AppDateUtils.formatDateRange(from, to),
+      DateRangePreset.custom => AppDateUtils.formatDateRange(from, to),
+    };
+  }
+
+  DateRangeFilter previousPeriod() {
+    return switch (preset) {
+      DateRangePreset.today => DateRangeFilter.yesterday(),
+      DateRangePreset.yesterday => () {
+        final twoDaysAgo = from.subtract(const Duration(days: 1));
+        return DateRangeFilter.custom(twoDaysAgo, twoDaysAgo);
+      }(),
+      DateRangePreset.thisMonth => DateRangeFilter.lastMonth(),
+      DateRangePreset.thisYear => () {
+        final prevYear = from.year - 1;
+        return DateRangeFilter.custom(
+          DateTime(prevYear, 1, 1),
+          DateTime(prevYear, to.month, to.day, 23, 59, 59, 999),
+        );
+      }(),
+      _ => () {
+        final duration = to.difference(from);
+        final prevTo = from.subtract(const Duration(milliseconds: 1));
+        final prevFrom = prevTo.subtract(duration);
+        return DateRangeFilter.custom(prevFrom, prevTo);
+      }(),
     };
   }
 }

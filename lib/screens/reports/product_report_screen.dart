@@ -9,6 +9,7 @@ import '../../services/csv_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
+import '../stock_movements_screen.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/access/screen_access_gate.dart';
@@ -697,194 +698,227 @@ class _ProductReportScreenState extends State<ProductReportScreen>
 
     final activeTab = _tabController.index;
 
-    return ListView.builder(
-      itemCount: items.length,
-      padding: const EdgeInsets.only(top: 4, bottom: 16),
-      itemBuilder: (ctx, i) {
-        final item = items[i];
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.builder(
+        itemCount: items.length,
+        padding: const EdgeInsets.only(top: 4, bottom: 16),
+        itemBuilder: (ctx, i) {
+          final item = items[i];
 
-        return Card(
-          elevation: 0,
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant,
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () async {
+                final p = await DatabaseHelper.instance.getProductById(
+                  item.productId,
+                );
+                if (p != null && ctx.mounted) {
+                  Navigator.push(
+                    ctx,
+                    MaterialPageRoute(
+                      builder: (_) => StockMovementsScreen(initialProduct: p),
+                    ),
+                  ).then((_) => _load());
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.productName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          if (item.category != null &&
-                              item.category!.isNotEmpty)
-                            Text(
-                              item.category!,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.productName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
+                              if (item.category != null &&
+                                  item.category!.isNotEmpty)
+                                Text(
+                                  item.category!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (item.salesQty > 0 && !item.isCostReliable)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: AppStatusColors.bg(
+                                context,
+                                AppStatus.warning,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: AppStatusColors.border(
+                                  context,
+                                  AppStatus.warning,
+                                ),
+                                width: 0.5,
+                              ),
+                            ),
+                            child: Text(
+                              l10n.costIncomplete,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: AppStatusColors.fg(
+                                  context,
+                                  AppStatus.warning,
+                                ),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        Text(
+                          '${l10n.stockStatus}: ${FormatUtils.formatQuantity(item.currentStock, unit: item.unit)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Metrics based on active tab
+                    if (activeTab == 0) ...[
+                      // Sales by Product Tab
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 6,
+                        children: [
+                          _statCell(
+                            l10n.salesQty,
+                            FormatUtils.formatQuantity(
+                              item.salesQty,
+                              unit: item.unit,
+                            ),
+                            AppStatusColors.fg(context, AppStatus.success),
+                          ),
+                          _statCell(
+                            l10n.salesValue,
+                            _numFmt.format(item.salesRevenue),
+                            AppStatusColors.fg(context, AppStatus.success),
+                          ),
+                          _statCell(
+                            l10n.transactionCount,
+                            '${item.transactionCount}',
+                            AppStatusColors.fg(context, AppStatus.info),
+                          ),
+                        ],
+                      ),
+                    ] else if (activeTab == 1) ...[
+                      // Profit by Product Tab
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 6,
+                        children: [
+                          _statCell(
+                            l10n.salesValue,
+                            _numFmt.format(item.salesRevenue),
+                            AppStatusColors.fg(context, AppStatus.success),
+                          ),
+                          _statCell(
+                            l10n.cogs,
+                            _numFmt.format(item.cogs),
+                            Theme.of(context).colorScheme.secondary,
+                          ),
+                          _statCell(
+                            l10n.grossProfit,
+                            item.isCostReliable
+                                ? _numFmt.format(item.grossProfit)
+                                : '—',
+                            (item.isCostReliable && item.grossProfit >= 0)
+                                ? AppStatusColors.fg(context, AppStatus.success)
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                          ),
+                          _statCell(
+                            l10n.profitMargin,
+                            item.isCostReliable && item.salesRevenue > 0
+                                ? '${item.profitMargin.toStringAsFixed(1)}%'
+                                : '—',
+                            AppStatusColors.fg(context, AppStatus.info),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      // Product Performance Tab
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 6,
+                        children: [
+                          _statCell(
+                            l10n.salesQty,
+                            FormatUtils.formatQuantity(
+                              item.salesQty,
+                              unit: item.unit,
+                            ),
+                            AppStatusColors.fg(context, AppStatus.success),
+                          ),
+                          _statCell(
+                            l10n.salesValue,
+                            _numFmt.format(item.salesRevenue),
+                            AppStatusColors.fg(context, AppStatus.success),
+                          ),
+                          _statCell(
+                            l10n.grossProfit,
+                            item.isCostReliable
+                                ? _numFmt.format(item.grossProfit)
+                                : '—',
+                            (item.isCostReliable && item.grossProfit >= 0)
+                                ? AppStatusColors.fg(context, AppStatus.success)
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                          ),
+                          if (item.currentValuation != null)
+                            _statCell(
+                              l10n.inventoryValuationAtCost,
+                              _numFmt.format(item.currentValuation),
+                              AppStatusColors.fg(context, AppStatus.success),
                             ),
                         ],
                       ),
-                    ),
-                    if (item.salesQty > 0 && !item.isCostReliable)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(
-                          color: AppStatusColors.bg(context, AppStatus.warning),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: AppStatusColors.border(
-                              context,
-                              AppStatus.warning,
-                            ),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          l10n.costIncomplete,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: AppStatusColors.fg(
-                              context,
-                              AppStatus.warning,
-                            ),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    Text(
-                      '${l10n.stockStatus}: ${FormatUtils.formatQuantity(item.currentStock, unit: item.unit)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 6),
-
-                // Metrics based on active tab
-                if (activeTab == 0) ...[
-                  // Sales by Product Tab
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 6,
-                    children: [
-                      _statCell(
-                        l10n.salesQty,
-                        FormatUtils.formatQuantity(
-                          item.salesQty,
-                          unit: item.unit,
-                        ),
-                        AppStatusColors.fg(context, AppStatus.success),
-                      ),
-                      _statCell(
-                        l10n.salesValue,
-                        _numFmt.format(item.salesRevenue),
-                        AppStatusColors.fg(context, AppStatus.success),
-                      ),
-                      _statCell(
-                        l10n.transactionCount,
-                        '${item.transactionCount}',
-                        AppStatusColors.fg(context, AppStatus.info),
-                      ),
-                    ],
-                  ),
-                ] else if (activeTab == 1) ...[
-                  // Profit by Product Tab
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 6,
-                    children: [
-                      _statCell(
-                        l10n.salesValue,
-                        _numFmt.format(item.salesRevenue),
-                        AppStatusColors.fg(context, AppStatus.success),
-                      ),
-                      _statCell(
-                        l10n.cogs,
-                        _numFmt.format(item.cogs),
-                        Theme.of(context).colorScheme.secondary,
-                      ),
-                      _statCell(
-                        l10n.grossProfit,
-                        item.isCostReliable
-                            ? _numFmt.format(item.grossProfit)
-                            : '—',
-                        (item.isCostReliable && item.grossProfit >= 0)
-                            ? AppStatusColors.fg(context, AppStatus.success)
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      _statCell(
-                        l10n.profitMargin,
-                        item.isCostReliable && item.salesRevenue > 0
-                            ? '${item.profitMargin.toStringAsFixed(1)}%'
-                            : '—',
-                        AppStatusColors.fg(context, AppStatus.info),
-                      ),
-                    ],
-                  ),
-                ] else ...[
-                  // Product Performance Tab
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 6,
-                    children: [
-                      _statCell(
-                        l10n.salesQty,
-                        FormatUtils.formatQuantity(
-                          item.salesQty,
-                          unit: item.unit,
-                        ),
-                        AppStatusColors.fg(context, AppStatus.success),
-                      ),
-                      _statCell(
-                        l10n.salesValue,
-                        _numFmt.format(item.salesRevenue),
-                        AppStatusColors.fg(context, AppStatus.success),
-                      ),
-                      _statCell(
-                        l10n.grossProfit,
-                        item.isCostReliable
-                            ? _numFmt.format(item.grossProfit)
-                            : '—',
-                        (item.isCostReliable && item.grossProfit >= 0)
-                            ? AppStatusColors.fg(context, AppStatus.success)
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      if (item.currentValuation != null)
-                        _statCell(
-                          l10n.inventoryValuationAtCost,
-                          _numFmt.format(item.currentValuation),
-                          AppStatusColors.fg(context, AppStatus.success),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

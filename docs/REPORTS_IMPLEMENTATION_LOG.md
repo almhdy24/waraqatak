@@ -184,3 +184,27 @@
   - `dart format`: 3 files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch I: UI/UX polish across reports and period comparison delta
+
+- **Batch ID:** `batch-i`
+- **Files Changed:**
+  - `lib/widgets/app_percentage_bar.dart`: Created lightweight CustomPainter horizontal percentage share bar with circle legend tags and zero dependencies.
+  - `lib/localization/app_localizations.dart`: Added localized Arabic and English getters for searchCustomer, searchSupplier, sortByName, sortByRemaining, salesGrowthVsPrevious, taxDiscountReport, and tax/discount breakdown labels.
+  - `lib/models/date_range_filter.dart`: Added `previousPeriod()` helper calculating equivalent prior duration (today -> yesterday, thisMonth -> lastMonth, etc.).
+  - `lib/screens/reports/customer_report_screen.dart`: Integrated debounced search (300ms) with sequence counter, sort toggle (debt vs name), `AppLoadingView`, `AppErrorState`, `AppEmptyState`, `RefreshIndicator`, `AppMetricCard(compact: true)`, and legacy foreign-currency warning banner.
+  - `lib/screens/reports/supplier_report_screen.dart`: Applied symmetrical UI architecture with debounced search, sort toggle, `AppLoadingView`, `AppErrorState`, `AppEmptyState`, `RefreshIndicator`, and `AppMetricCard(compact: true)`.
+  - `lib/screens/reports/purchases_report_screen.dart`: Split squished 3-dropdown layout into 2 spacious rows (Supplier full-width on row 1, Document & Payment status on row 2), replaced squished chips with `AppMetricCard(compact: true)`, wrapped list in `RefreshIndicator`, and applied `AppDesignTokens.cardRadius`.
+  - `lib/screens/reports/sales_report_screen.dart`: Replaced squished summary row with spacious responsive `AppMetricCard(compact: true)` layout, added period comparison growth delta badge (`+12.5% vs previous period`) computed against prior period of equal length, and wrapped list in `RefreshIndicator`.
+  - `lib/screens/reports/payments_report_screen.dart`: Integrated `AppPercentageBar` above payments list visualizing payment methods distribution (Cash, Bankak, etc.).
+  - `lib/screens/reports/inventory_report_screen.dart`: Added click-through drilldown navigating from product card to `StockMovementsScreen(initialProduct: p)`.
+  - `lib/screens/reports/product_report_screen.dart`: Added click-through drilldown to `StockMovementsScreen` and wrapped list in `RefreshIndicator`.
+- **Decisions Taken:**
+  - Standardized on `AppMetricCard(compact: true)` across Sales, Purchases, Customers, and Suppliers reports to eliminate horizontal text cramping on low-end 360dp phone screens.
+  - Provided immediate drilldown into item stock movements directly from inventory and product performance cards.
+  - Computed previous period comparisons asynchronously with lightweight single-query aggregates to preserve UI fluidity.
+- **Validation:**
+  - `dart format`: 10 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+

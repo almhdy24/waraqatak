@@ -14,6 +14,7 @@ import '../../utils/currency_utils.dart';
 import '../document_detail_screen.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_amount_text.dart';
+import '../../widgets/app_percentage_bar.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/report_export_menu.dart';
@@ -439,6 +440,41 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                                     ),
                                   ],
                                 ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: AppPercentageBar(
+                            segments: _methodFlows!.asMap().entries.map((
+                              entry,
+                            ) {
+                              final idx = entry.key;
+                              final mf = entry.value;
+                              final methodKey =
+                                  mf['method'] as String? ?? 'cash';
+                              final inAmt =
+                                  (mf['in_amount'] as num?)?.toDouble() ?? 0.0;
+                              final label =
+                                  _methodsMap[methodKey]?.label(
+                                    l10n.langCode,
+                                  ) ??
+                                  CurrencyUtils.getPaymentMethodLabel(
+                                    methodKey,
+                                    l10n,
+                                  );
+                              final colors = [
+                                Theme.of(context).colorScheme.primary,
+                                AppStatusColors.fg(context, AppStatus.success),
+                                AppStatusColors.fg(context, AppStatus.warning),
+                                AppStatusColors.fg(context, AppStatus.info),
+                                Theme.of(context).colorScheme.tertiary,
+                              ];
+                              return PercentageSegment(
+                                label: label,
+                                value: inAmt,
+                                color: colors[idx % colors.length],
                               );
                             }).toList(),
                           ),
