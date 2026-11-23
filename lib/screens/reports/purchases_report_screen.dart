@@ -93,7 +93,11 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
       PdfReportColumn(title: l10n.status, flex: 1.2),
       PdfReportColumn(title: l10n.total, flex: 1.4, align: pw.TextAlign.right),
       PdfReportColumn(title: l10n.paid, flex: 1.4, align: pw.TextAlign.right),
-      PdfReportColumn(title: l10n.remaining, flex: 1.4, align: pw.TextAlign.right),
+      PdfReportColumn(
+        title: l10n.remaining,
+        flex: 1.4,
+        align: pw.TextAlign.right,
+      ),
     ];
 
     final rows = _summary!.items.map((item) {
@@ -102,7 +106,9 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
         _dateFmt.format(doc.date),
         doc.documentNumber,
         item.supplierName ?? '—',
-        doc.status == DocumentStatus.cancelled ? l10n.cancelledCount : l10n.issued,
+        doc.status == DocumentStatus.cancelled
+            ? l10n.cancelledCount
+            : l10n.issued,
         '${_numFmt.format(doc.total)} ${doc.currencySymbol}',
         '${_numFmt.format(doc.paid)} ${doc.currencySymbol}',
         '${_numFmt.format(doc.remaining)} ${doc.currencySymbol}',
@@ -111,18 +117,24 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
 
     final baseCurrency = business.currencyCode;
     final baseSymbol = business.currencySymbol;
-    final baseTotals = _summary!.totalsByCurrency[baseCurrency] ??
+    final baseTotals =
+        _summary!.totalsByCurrency[baseCurrency] ??
         (
           purchases: _summary!.totalPurchases,
           paid: _summary!.totalPaid,
           remaining: _summary!.totalRemaining,
         );
-    final hasLegacyForeign = _summary!.totalsByCurrency.keys.any((c) => c != baseCurrency);
+    final hasLegacyForeign = _summary!.totalsByCurrency.keys.any(
+      (c) => c != baseCurrency,
+    );
 
     final data = PdfReportData(
       title: l10n.purchasesReport,
       subtitle: _selectedSupplierId != null
-          ? _suppliers.where((s) => s.id == _selectedSupplierId).firstOrNull?.name
+          ? _suppliers
+                .where((s) => s.id == _selectedSupplierId)
+                .firstOrNull
+                ?.name
           : l10n.allSuppliers,
       dateRange: _range.label(l10n),
       warningNotice: hasLegacyForeign ? l10n.mixedCurrenciesNotice : null,
@@ -181,273 +193,359 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
     return ScreenAccessGate(
       screenType: PurchasesReportScreen,
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.purchasesReport),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: l10n.printOrShareReport,
-            onPressed: summary != null && summary.items.isNotEmpty ? _exportPdf : null,
-          ),
-        ],
-      ),
-      body: ResponsiveCenter(
-        child: Column(
-          children: [
-            // Date Filter
-            ReportDateFilter(
-              range: _range,
-              onChanged: (r) {
-                setState(() => _range = r);
-                _load();
-              },
+        appBar: AppBar(
+          title: Text(l10n.purchasesReport),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: summary != null && summary.items.isNotEmpty
+                  ? _exportPdf
+                  : null,
             ),
+          ],
+        ),
+        body: ResponsiveCenter(
+          child: Column(
+            children: [
+              // Date Filter
+              ReportDateFilter(
+                range: _range,
+                onChanged: (r) {
+                  setState(() => _range = r);
+                  _load();
+                },
+              ),
 
-            // Supplier Filter & Status Filter Bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-              child: Row(
-                children: [
-                  // Supplier Dropdown
-                  Expanded(
-                    child: Container(
+              // Supplier Filter & Status Filter Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                child: Row(
+                  children: [
+                    // Supplier Dropdown
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int?>(
+                            value: _selectedSupplierId,
+                            isExpanded: true,
+                            hint: Text(
+                              l10n.allSuppliers,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            items: [
+                              DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text(
+                                  l10n.allSuppliers,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              ..._suppliers.map(
+                                (s) => DropdownMenuItem<int?>(
+                                  value: s.id,
+                                  child: Text(
+                                    s.name,
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              setState(() => _selectedSupplierId = val);
+                              _load();
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Document Status Dropdown
+                    Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int?>(
-                          value: _selectedSupplierId,
-                          isExpanded: true,
-                          hint: Text(l10n.allSuppliers, style: const TextStyle(fontSize: 12)),
+                        child: DropdownButton<String>(
+                          value: _selectedDocStatus,
                           items: [
-                            DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text(l10n.allSuppliers, style: const TextStyle(fontSize: 12)),
+                            DropdownMenuItem(
+                              value: 'all',
+                              child: Text(
+                                l10n.activeFilterAll,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
-                            ..._suppliers.map((s) => DropdownMenuItem<int?>(
-                                  value: s.id,
-                                  child: Text(s.name,
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
-                                )),
+                            DropdownMenuItem(
+                              value: DocumentStatus.issued,
+                              child: Text(
+                                l10n.statusIssued,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            DropdownMenuItem(
+                              value: DocumentStatus.cancelled,
+                              child: Text(
+                                l10n.statusCancelled,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
                           ],
                           onChanged: (val) {
-                            setState(() => _selectedSupplierId = val);
-                            _load();
+                            if (val != null) {
+                              setState(() => _selectedDocStatus = val);
+                              _load();
+                            }
                           },
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 8),
 
-                  // Document Status Dropdown
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedDocStatus,
-                        items: [
-                          DropdownMenuItem(value: 'all', child: Text(l10n.activeFilterAll, style: const TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: DocumentStatus.issued, child: Text(l10n.statusIssued, style: const TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: DocumentStatus.cancelled, child: Text(l10n.statusCancelled, style: const TextStyle(fontSize: 12))),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedDocStatus = val);
-                            _load();
-                          }
-                        },
+                    // Payment Status Dropdown
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Payment Status Dropdown
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedPaymentStatus,
-                        items: [
-                          DropdownMenuItem(value: 'all', child: Text(l10n.activeFilterAll, style: const TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: 'paid', child: Text(l10n.paidStatus, style: const TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: 'partial', child: Text(l10n.partialStatus, style: const TextStyle(fontSize: 12))),
-                          DropdownMenuItem(value: 'unpaid', child: Text(l10n.unpaidStatus, style: const TextStyle(fontSize: 12))),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _selectedPaymentStatus = val);
-                            _load();
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Summary Cards
-            if (summary != null && summary.items.isNotEmpty) ...[
-              () {
-                final baseCurrency = _business?.currencyCode ?? 'SDG';
-                final baseSymbol = _business?.currencySymbol ?? 'ج.س';
-                final baseTotals = summary.totalsByCurrency[baseCurrency] ??
-                    (
-                      purchases: summary.totalPurchases,
-                      paid: summary.totalPaid,
-                      remaining: summary.totalRemaining,
-                    );
-                final legacyEntries = summary.totalsByCurrency.entries
-                    .where((e) => e.key != baseCurrency)
-                    .toList();
-
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                      child: Row(
-                        children: [
-                          _chip(
-                            l10n.totalPurchasesAmt,
-                            baseTotals.purchases,
-                            AppStatusColors.fg(context, AppStatus.warning),
-                            symbol: baseSymbol,
-                          ),
-                          const SizedBox(width: 8),
-                          _chip(
-                            l10n.totalPaid,
-                            baseTotals.paid,
-                            AppStatusColors.fg(context, AppStatus.success),
-                            symbol: baseSymbol,
-                          ),
-                          const SizedBox(width: 8),
-                          _chip(
-                            l10n.totalOutstanding,
-                            baseTotals.remaining,
-                            Theme.of(context).colorScheme.error,
-                            symbol: baseSymbol,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (legacyEntries.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.4),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.outlineVariant,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.history,
-                                    size: 16,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    l10n.langCode == 'ar'
-                                        ? 'وثائق قديمة بعملات أخرى'
-                                        : 'Legacy documents in other currencies',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedPaymentStatus,
+                          items: [
+                            DropdownMenuItem(
+                              value: 'all',
+                              child: Text(
+                                l10n.activeFilterAll,
+                                style: const TextStyle(fontSize: 12),
                               ),
-                              const SizedBox(height: 8),
-                              ...legacyEntries.map((e) {
-                                final sym = Currency.symbolForCode(e.key);
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Row(
-                                    children: [
-                                      _chip(
-                                        '${l10n.totalPurchasesAmt} (${e.key})',
-                                        e.value.purchases,
-                                        AppStatusColors.fg(context, AppStatus.warning),
-                                        symbol: sym,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      _chip(
-                                        '${l10n.totalPaid} (${e.key})',
-                                        e.value.paid,
-                                        AppStatusColors.fg(context, AppStatus.success),
-                                        symbol: sym,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      _chip(
-                                        '${l10n.totalOutstanding} (${e.key})',
-                                        e.value.remaining,
-                                        Theme.of(context).colorScheme.error,
-                                        symbol: sym,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
+                            ),
+                            DropdownMenuItem(
+                              value: 'paid',
+                              child: Text(
+                                l10n.paidStatus,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            DropdownMenuItem(
+                              value: 'partial',
+                              child: Text(
+                                l10n.partialStatus,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            DropdownMenuItem(
+                              value: 'unpaid',
+                              child: Text(
+                                l10n.unpaidStatus,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _selectedPaymentStatus = val);
+                              _load();
+                            }
+                          },
                         ),
                       ),
-                  ],
-                );
-              }(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                child: Row(
-                  children: [
-                    Text('${l10n.finalized}: $finalizedCount',
-                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                    const SizedBox(width: 12),
-                    if (cancelledCount > 0)
-                      Text('${l10n.cancelledCount}: $cancelledCount',
-                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                    const Spacer(),
-                    if (summary.currencies.length > 1)
-                      Text(
-                        l10n.mixedCurrenciesNotice,
-                        style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.warning)),
-                      ),
+                    ),
                   ],
                 ),
               ),
-            ],
 
-            // Purchases List
-            Expanded(child: _buildList(context, l10n)),
-          ],
+              // Summary Cards
+              if (summary != null && summary.items.isNotEmpty) ...[
+                () {
+                  final baseCurrency = _business?.currencyCode ?? 'SDG';
+                  final baseSymbol = _business?.currencySymbol ?? 'ج.س';
+                  final baseTotals =
+                      summary.totalsByCurrency[baseCurrency] ??
+                      (
+                        purchases: summary.totalPurchases,
+                        paid: summary.totalPaid,
+                        remaining: summary.totalRemaining,
+                      );
+                  final legacyEntries = summary.totalsByCurrency.entries
+                      .where((e) => e.key != baseCurrency)
+                      .toList();
+
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                        child: Row(
+                          children: [
+                            _chip(
+                              l10n.totalPurchasesAmt,
+                              baseTotals.purchases,
+                              AppStatusColors.fg(context, AppStatus.warning),
+                              symbol: baseSymbol,
+                            ),
+                            const SizedBox(width: 8),
+                            _chip(
+                              l10n.totalPaid,
+                              baseTotals.paid,
+                              AppStatusColors.fg(context, AppStatus.success),
+                              symbol: baseSymbol,
+                            ),
+                            const SizedBox(width: 8),
+                            _chip(
+                              l10n.totalOutstanding,
+                              baseTotals.remaining,
+                              Theme.of(context).colorScheme.error,
+                              symbol: baseSymbol,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (legacyEntries.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.history,
+                                      size: 16,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      l10n.legacyForeignDocumentsNotice,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                ...legacyEntries.map((e) {
+                                  final sym = Currency.symbolForCode(e.key);
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Row(
+                                      children: [
+                                        _chip(
+                                          '${l10n.totalPurchasesAmt} (${e.key})',
+                                          e.value.purchases,
+                                          AppStatusColors.fg(
+                                            context,
+                                            AppStatus.warning,
+                                          ),
+                                          symbol: sym,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        _chip(
+                                          '${l10n.totalPaid} (${e.key})',
+                                          e.value.paid,
+                                          AppStatusColors.fg(
+                                            context,
+                                            AppStatus.success,
+                                          ),
+                                          symbol: sym,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        _chip(
+                                          '${l10n.totalOutstanding} (${e.key})',
+                                          e.value.remaining,
+                                          Theme.of(context).colorScheme.error,
+                                          symbol: sym,
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                }(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        '${l10n.finalized}: $finalizedCount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      if (cancelledCount > 0)
+                        Text(
+                          '${l10n.cancelledCount}: $cancelledCount',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      const Spacer(),
+                      if (summary.currencies.length > 1)
+                        Text(
+                          l10n.mixedCurrenciesNotice,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppStatusColors.fg(
+                              context,
+                              AppStatus.warning,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Purchases List
+              Expanded(child: _buildList(context, l10n)),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -463,9 +561,20 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(fontSize: 10, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text('${_numFmt.format(value)}$symStr',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              '${_numFmt.format(value)}$symStr',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ],
         ),
       ),
@@ -475,10 +584,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
     if (_loading) return const AppLoadingView();
     if (_error != null) {
-      return AppErrorState(
-        message: l10n.operationFailed,
-        onRetry: _load,
-      );
+      return AppErrorState(message: l10n.operationFailed, onRetry: _load);
     }
     final items = _summary?.items ?? [];
     if (items.isEmpty) {
@@ -503,7 +609,9 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: ListTile(
             title: Row(
@@ -513,7 +621,9 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                     doc.documentNumber,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      decoration: isCancelled ? TextDecoration.lineThrough : null,
+                      decoration: isCancelled
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
                   ),
                 ),
@@ -539,7 +649,10 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                     ),
                     Text(
                       _dateFmt.format(doc.date),
-                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -549,7 +662,10 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                     children: [
                       Text(
                         '${l10n.paid}: ${_numFmt.format(doc.paid)}',
-                        style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.success)),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppStatusColors.fg(context, AppStatus.success),
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Text(
@@ -566,7 +682,9 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
             ),
             onTap: () => Navigator.push(
               ctx,
-              MaterialPageRoute(builder: (_) => DocumentDetailScreen(documentId: doc.id!)),
+              MaterialPageRoute(
+                builder: (_) => DocumentDetailScreen(documentId: doc.id!),
+              ),
             ).then((_) => _load()),
           ),
         );

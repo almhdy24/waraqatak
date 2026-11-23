@@ -77,32 +77,29 @@ class _AccountingScreenState extends State<AccountingScreen> {
       child: DefaultTabController(
         length: 4,
         child: Scaffold(
-        appBar: AppBar(
-          title: Text(l10n.accounting),
-          centerTitle: true,
-          bottom: TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(text: l10n.incomeStatement),
-              Tab(text: l10n.balanceSheet),
-              Tab(text: l10n.trialBalance),
-              Tab(text: l10n.chartOfAccounts),
-            ],
+          appBar: AppBar(
+            title: Text(l10n.accounting),
+            centerTitle: true,
+            bottom: TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [
+                Tab(text: l10n.incomeStatement),
+                Tab(text: l10n.balanceSheet),
+                Tab(text: l10n.trialBalance),
+                Tab(text: l10n.chartOfAccounts),
+              ],
+            ),
           ),
+          body: ResponsiveCenter(child: _body(context, l10n)),
         ),
-        body: ResponsiveCenter(child: _body(context, l10n)),
       ),
-    ),
     );
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
     if (_failed) {
-      return AppErrorState(
-        message: l10n.operationFailed,
-        onRetry: _load,
-      );
+      return AppErrorState(message: l10n.operationFailed, onRetry: _load);
     }
     final book = _book;
     if (book == null) return const AppLoadingView();
@@ -123,10 +120,9 @@ class _AccountingScreenState extends State<AccountingScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: 0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -139,9 +135,7 @@ class _AccountingScreenState extends State<AccountingScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      l10n.langCode == 'ar'
-                          ? 'دفتر الحسابات يعرض العملة الأساسية (${book.currencyCode}). الوثائق القديمة بعملات أخرى مستبعدة.'
-                          : 'Ledger shows base currency (${book.currencyCode}). Legacy foreign currency documents are excluded.',
+                      l10n.ledgerBaseCurrencyNotice(book.currencyCode),
                       style: const TextStyle(fontSize: 11),
                     ),
                   ),
@@ -359,7 +353,9 @@ class _Header extends StatelessWidget {
               avatar: Icon(
                 balanced! ? Icons.check_circle : Icons.error_outline,
                 size: 18,
-                color: balanced! ? AppStatusColors.fg(context, AppStatus.success) : scheme.error,
+                color: balanced!
+                    ? AppStatusColors.fg(context, AppStatus.success)
+                    : scheme.error,
               ),
               label: Text(
                 balanced! ? l10n.balancedLabel : l10n.notBalancedLabel,
@@ -439,7 +435,9 @@ class _IncomeStatementView extends StatelessWidget {
           textValue: s.hasIncompleteCostOfSales ? '—' : null,
           color: s.hasIncompleteCostOfSales
               ? AppStatusColors.fg(context, AppStatus.warning)
-              : (profit ? AppDesignTokens.semanticSuccess(context) : scheme.error),
+              : (profit
+                    ? AppDesignTokens.semanticSuccess(context)
+                    : scheme.error),
         ),
         const SizedBox(height: 12),
         if (s.hasIncompleteCostOfSales)
@@ -449,7 +447,10 @@ class _IncomeStatementView extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppStatusColors.bg(context, AppStatus.warning),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppStatusColors.border(context, AppStatus.warning), width: 0.5),
+              border: Border.all(
+                color: AppStatusColors.border(context, AppStatus.warning),
+                width: 0.5,
+              ),
             ),
             child: Row(
               children: [
@@ -739,73 +740,76 @@ class AccountLedgerScreen extends StatelessWidget {
     return ScreenAccessGate(
       screenType: AccountLedgerScreen,
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.accountName(account.code)),
-        centerTitle: true,
-      ),
-      body: ResponsiveCenter(
-        child: ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            _Header('${l10n.accountStatement} · ${range.label(l10n)}', symbol),
-            _TotalCard(l10n.openingBalance, gl.openingBalance),
-            if (gl.lines.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  l10n.noDataForPeriod,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: scheme.onSurfaceVariant),
-                ),
+        appBar: AppBar(
+          title: Text(l10n.accountName(account.code)),
+          centerTitle: true,
+        ),
+        body: ResponsiveCenter(
+          child: ListView(
+            padding: const EdgeInsets.all(12),
+            children: [
+              _Header(
+                '${l10n.accountStatement} · ${range.label(l10n)}',
+                symbol,
               ),
-            for (final line in gl.lines)
-              Card(
-                elevation: 0,
-                margin: const EdgeInsets.only(bottom: 6),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  side: BorderSide(color: scheme.outlineVariant),
-                ),
-                child: ListTile(
-                  onTap: () => _showEntry(context, line.entry),
-                  title: Text(
-                    '${entrySourceLabel(line.entry.source, l10n)} · ${line.entry.reference}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(_dateFmt.format(line.entry.date)),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        line.debit > 0
-                            ? '${l10n.debit} ${formatAmount(line.debit)}'
-                            : '${l10n.credit} ${formatAmount(line.credit)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: line.debit > 0
-                              ? AppDesignTokens.semanticSuccess(context)
-                              : AppDesignTokens.semanticWarning(context),
-                        ),
-                      ),
-                      Text(
-                        formatAmount(line.runningBalance),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+              _TotalCard(l10n.openingBalance, gl.openingBalance),
+              if (gl.lines.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    l10n.noDataForPeriod,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 ),
-              ),
-            const SizedBox(height: 6),
-            _TotalCard(l10n.closingBalance, gl.closingBalance),
-          ],
+              for (final line in gl.lines)
+                Card(
+                  elevation: 0,
+                  margin: const EdgeInsets.only(bottom: 6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: BorderSide(color: scheme.outlineVariant),
+                  ),
+                  child: ListTile(
+                    onTap: () => _showEntry(context, line.entry),
+                    title: Text(
+                      '${entrySourceLabel(line.entry.source, l10n)} · ${line.entry.reference}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(_dateFmt.format(line.entry.date)),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          line.debit > 0
+                              ? '${l10n.debit} ${formatAmount(line.debit)}'
+                              : '${l10n.credit} ${formatAmount(line.credit)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: line.debit > 0
+                                ? AppDesignTokens.semanticSuccess(context)
+                                : AppDesignTokens.semanticWarning(context),
+                          ),
+                        ),
+                        Text(
+                          formatAmount(line.runningBalance),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 6),
+              _TotalCard(l10n.closingBalance, gl.closingBalance),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 

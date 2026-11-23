@@ -160,9 +160,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      l10n.langCode == 'ar'
-                                          ? 'دفعات قديمة بعملات أخرى'
-                                          : 'Legacy payments in other currencies',
+                                      l10n.legacyForeignPaymentsNotice,
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,

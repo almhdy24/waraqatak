@@ -156,7 +156,8 @@ class AppLocalizations {
   String get total => _t('الإجمالي', 'Total');
   String get stock => _t('المخزون', 'Stock');
   String get stockQuantity => _t('الكمية المتوفرة', 'Stock Quantity');
-  String get lowStockThreshold => _t('حد المخزون المنخفض', 'Low Stock Threshold');
+  String get lowStockThreshold =>
+      _t('حد المخزون المنخفض', 'Low Stock Threshold');
   String get lowStock => _t('المخزون منخفض', 'Low Stock');
   String get outOfStock => _t('نفد المخزون', 'Out of Stock');
   String get minStock => _t('الحد الأدنى للمخزون', 'Minimum Stock');
@@ -359,10 +360,8 @@ class AppLocalizations {
     'هل تريد حماية النسخة بكلمة مرور؟',
     'Do you want to protect this backup with a password?',
   );
-  String get backupWithoutPassword => _t(
-    'لا، بدون كلمة مرور (غير مشفرة)',
-    'No, leave it unencrypted',
-  );
+  String get backupWithoutPassword =>
+      _t('لا، بدون كلمة مرور (غير مشفرة)', 'No, leave it unencrypted');
   String get backupWithPassword =>
       _t('نعم، حماية بكلمة مرور', 'Yes, protect with password');
   String get backupPassword => _t('كلمة المرور', 'Password');
@@ -444,7 +443,8 @@ class AppLocalizations {
 
   // ========== PAYMENT RECORDING ==========
   String get recordPayment => _t('تسجيل دفعة', 'Record Payment');
-  String get paymentRecorded => _t('تم تسجيل الدفعة بنجاح', 'Payment recorded successfully');
+  String get paymentRecorded =>
+      _t('تم تسجيل الدفعة بنجاح', 'Payment recorded successfully');
   String get paymentHistory => _t('سجل الدفعات', 'Payment History');
   String get paymentAmountLabel => _t('مبلغ الدفعة', 'Payment Amount');
   String get noPaymentsYet => _t('لا توجد دفعات بعد', 'No payments yet');
@@ -639,8 +639,10 @@ class AppLocalizations {
   String get changePhoto => _t('تغيير الصورة', 'Change Photo');
   String get removePhoto => _t('حذف الصورة', 'Remove Photo');
   String get takePicture => _t('التقاط صورة', 'Take Picture');
-  String get chooseFromGallery => _t('اختيار من معرض الصور', 'Choose from Gallery');
-  String get imageLoadError => _t('تعذر تحميل الصورة', 'Could not load the image');
+  String get chooseFromGallery =>
+      _t('اختيار من معرض الصور', 'Choose from Gallery');
+  String get imageLoadError =>
+      _t('تعذر تحميل الصورة', 'Could not load the image');
   String get imagePickFailed =>
       _t('تعذر اختيار الصورة أو حفظها', 'Could not select or save the image');
   String get deactivateProduct => _t('تعطيل المنتج', 'Deactivate Product');
@@ -682,7 +684,8 @@ class AppLocalizations {
   String get purchase => _t('فاتورة شراء', 'Purchase Invoice');
   String get purchases => _t('فواتير الشراء', 'Purchase Invoices');
   String get newPurchase => _t('فاتورة شراء جديدة', 'New Purchase Invoice');
-  String get finalizePurchase => _t('اعتماد فاتورة الشراء', 'Finalize Purchase Invoice');
+  String get finalizePurchase =>
+      _t('اعتماد فاتورة الشراء', 'Finalize Purchase Invoice');
   String get purchaseDocument => _t('مستند شراء', 'Purchase Document');
   String get purchasesOnly => _t('المشتريات', 'Purchases');
 
@@ -797,7 +800,8 @@ class AppLocalizations {
   String get noDataForPeriod =>
       _t('لا توجد بيانات خلال هذه الفترة', 'No data for this period');
   String get inventorySummary => _t('ملخص المخزون', 'Inventory Summary');
-  String get trackedProducts => _t('منتجات تتم متابعة مخزونها', 'Tracked Products');
+  String get trackedProducts =>
+      _t('منتجات تتم متابعة مخزونها', 'Tracked Products');
   String get viewInventory => _t('عرض المخزون', 'View Inventory');
   String get viewReports => _t('التقارير', 'Reports');
 
@@ -894,7 +898,8 @@ class AppLocalizations {
   String get legalName => _t('الاسم القانوني', 'Legal / Registered Name');
   String get taxId => _t('الرقم الضريبي', 'Tax ID');
   String get taxReg => _t('رقم التسجيل الضريبي', 'Tax Registration No.');
-  String get commercialReg => _t('رقم السجل التجاري', 'Commercial Registration No.');
+  String get commercialReg =>
+      _t('رقم السجل التجاري', 'Commercial Registration No.');
   String get branch => _t('الفرع', 'Branch');
 
   String get taxSettings => _t('إعدادات الضريبة', 'Tax Settings');
@@ -1270,7 +1275,8 @@ class AppLocalizations {
   );
   String get freeTierHeader => _t('المجاني', 'Free');
   String get proTierHeader => _t('Pro (مع المفتاح)', 'Pro (with key)');
-  String get alreadyHaveKeyTitle => _t('لديك مفتاح تفعيل؟', 'Already have a key?');
+  String get alreadyHaveKeyTitle =>
+      _t('لديك مفتاح تفعيل؟', 'Already have a key?');
   String get enterKeyHintText => _t(
     'الصق المفتاح هنا ثم اضغط "تفعيل".',
     'Paste the key here and tap "Activate".',
@@ -1425,8 +1431,7 @@ class AppLocalizations {
       _t('إدارة المخزون المتقدمة', 'Advanced Inventory Management');
   String get proIncludesReports =>
       _t('التقارير التفصيلية الكاملة', 'Full Detailed Reports');
-  String get proAdvancedReports =>
-      _t('التقارير المتقدمة', 'Advanced Reports');
+  String get proAdvancedReports => _t('التقارير المتقدمة', 'Advanced Reports');
   String get enterActivationKeyAction =>
       _t('إدخال مفتاح التفعيل', 'Enter Activation Key');
   String get freeDataAlwaysAvailable => _t(
@@ -1805,7 +1810,8 @@ class AppLocalizations {
   );
   String get legacyCostSummaryTitle =>
       _t('ملخص تدقيق التكلفة التاريخية', 'Historical Cost Audit Summary');
-  String get valuedStockCount => _t('منتجات مقيَّمة بالتكلفة', 'Valued Products');
+  String get valuedStockCount =>
+      _t('منتجات مقيَّمة بالتكلفة', 'Valued Products');
   String get unvaluedStockQty =>
       _t('كمية المخزون غير المقيَّم', 'Unvalued Stock Quantity');
   String get close => _t('إغلاق', 'Close');
@@ -1835,7 +1841,8 @@ class AppLocalizations {
   String get printOrShareReport =>
       _t('طباعة أو مشاركة التقرير', 'Print / Share Report');
   String get reportPeriod => _t('فترة التقرير', 'Report Period');
-  String get reportGeneratedAt => _t('تاريخ ووقت إصدار التقرير', 'Generated At');
+  String get reportGeneratedAt =>
+      _t('تاريخ ووقت إصدار التقرير', 'Generated At');
   String get unitsSummary =>
       _t('إجمالي الكميات حسب الوحدة', 'Quantities by Unit');
   String get grossProfitNotice => _t(
@@ -1850,6 +1857,13 @@ class AppLocalizations {
     'تنبيه: تتضمن البيانات معاملات بعملات مختلفة دون تحويل إلى عملة موحدة',
     'Warning: The data includes multiple currencies that have not been converted to a single currency',
   );
+  String get legacyForeignDocumentsNotice =>
+      _t('وثائق قديمة بعملات أخرى', 'Legacy documents in other currencies');
+  String get legacyForeignPaymentsNotice =>
+      _t('دفعات قديمة بعملات أخرى', 'Legacy payments in other currencies');
+  String ledgerBaseCurrencyNotice(String currencyCode) => isArabic
+      ? 'دفتر الحسابات يعرض العملة الأساسية ($currencyCode). الوثائق القديمة بعملات أخرى مستبعدة.'
+      : 'Ledger shows base currency ($currencyCode). Legacy foreign currency documents are excluded.';
   String get inventoryValuationReport =>
       _t('تقرير تقييم المخزون', 'Inventory Valuation Report');
   String get transactionCount => _t('عدد الفواتير', 'Number of Invoices');
@@ -1929,7 +1943,8 @@ class AppLocalizations {
       _t('تحديد سعر جديد مباشر', 'Set New Price Directly');
   String get targetPrice => _t('السعر المستهدف', 'Target Price');
   String get sellingPrice => _t('سعر البيع', 'Selling Price');
-  String get bothPrices => _t('سعري البيع والشراء', 'Both Selling & Purchase Prices');
+  String get bothPrices =>
+      _t('سعري البيع والشراء', 'Both Selling & Purchase Prices');
   String get roundingRule =>
       _t('تقريب الأسعار المحوّلة', 'Round Converted Prices');
   String get roundNone => _t('بدون تقريب', 'No Rounding');
@@ -2039,10 +2054,8 @@ class AppLocalizations {
     'سعر التكلفة للوحدة، يُعتمد في تقييم المخزون واحتساب أرباح المبيعات بدقة.',
     'Unit purchase cost used for stock valuation and profit calculations.',
   );
-  String get pleaseAddItems => _t(
-    'أضف بنداً واحداً على الأقل',
-    'Add at least one item to the document',
-  );
+  String get pleaseAddItems =>
+      _t('أضف بنداً واحداً على الأقل', 'Add at least one item to the document');
   String get supplierStatement => _t('كشف حساب مورد', 'Supplier Statement');
   String get totalStockIn => _t('إجمالي الوارد', 'Total In');
   String get totalStockOut => _t('إجمالي المنصرف', 'Total Out');
@@ -2169,8 +2182,10 @@ class AppLocalizations {
       _t('حالات المستندات', 'Document Statuses');
   String get diagnosticsCategoryPayments =>
       _t('اختلاف بين المبلغ المسدد وسجل المدفوعات', 'Payment Discrepancies');
-  String get diagnosticsCategoryStock =>
-      _t('اختلاف بين رصيد المخزون وسجل الحركات', 'Stock vs. Movement Discrepancy');
+  String get diagnosticsCategoryStock => _t(
+    'اختلاف بين رصيد المخزون وسجل الحركات',
+    'Stock vs. Movement Discrepancy',
+  );
   String get diagnosticsCategoryMissingOpeningStock =>
       _t('مخزون افتتاحي مفقود', 'Missing Opening Stock');
   String get diagnosticsCategoryNegativeStock =>
@@ -2264,8 +2279,7 @@ class AppLocalizations {
   );
   String get googleDriveConnect =>
       _t('ربط حساب Google', 'Connect Google Account');
-  String get googleDriveDisconnect =>
-      _t('فصل الحساب', 'Disconnect Account');
+  String get googleDriveDisconnect => _t('فصل الحساب', 'Disconnect Account');
   String get googleDriveUploadNow =>
       _t('رفع نسخة احتياطية الآن', 'Upload Backup Now');
   String get googleDriveRestoreFromCloud =>
@@ -2567,7 +2581,8 @@ class AppLocalizations {
 
   String get pdfTaxIdLabel => _t('الرقم الضريبي:', 'Tax ID:');
   String get pdfTaxRegLabel => _t('رقم التسجيل الضريبي:', 'Tax Reg. No.:');
-  String get pdfCommercialRegLabel => _t('السجل التجاري:', 'Commercial Reg. No.:');
+  String get pdfCommercialRegLabel =>
+      _t('السجل التجاري:', 'Commercial Reg. No.:');
   String get pdfBranchLabel => _t('الفرع:', 'Branch:');
 
   // ========== ACCOUNTING BACKBONE & DIAGNOSTICS ==========
@@ -2742,10 +2757,8 @@ class AppLocalizations {
     'Please fill all required currency fields',
   );
 
-  String get selectCurrencyFirst => _t(
-    'يرجى اختيار العملة أولاً',
-    'Please select a currency first',
-  );
+  String get selectCurrencyFirst =>
+      _t('يرجى اختيار العملة أولاً', 'Please select a currency first');
   String get currencyRateField => _t('سعر الصرف', 'Exchange Rate');
   String get currencyRateHelper => _t(
     'كم وحدة من عملتك الأساسية تساوي 1 من هذه العملة',
@@ -3618,10 +3631,8 @@ class AppLocalizations {
     'الجلسة مقفلة. يرجى إدخال رمز PIN',
     'The session is locked. Please enter your PIN.',
   );
-  String get errOwnerOnly => _t(
-    'هذا الإجراء متاح لمالك النظام فقط',
-    'Restricted to the system Owner',
-  );
+  String get errOwnerOnly =>
+      _t('هذا الإجراء متاح لمالك النظام فقط', 'Restricted to the system Owner');
   String get errTargetIsOwner => _t(
     'لا يمكن تعديل أو إدارة حساب المالك',
     'Cannot modify or manage the Owner account',
@@ -3763,18 +3774,17 @@ class AppLocalizations {
   String get auditFilterSecurity => _t('الأمان والحماية', 'Security');
   String get auditFilterLogins => _t('الدخول والخروج', 'Logins');
   String get auditFilterChanges => _t('التعديلات', 'Changes');
-  String auditVerifiedEntries(int count) =>
-      _plural(
-        count,
-        zero: 'لا توجد سجلات موثّقة',
-        one: 'سجل واحد موثّق',
-        two: 'سجلان موثّقان',
-        few: '$count سجلات موثّقة',
-        many: '$count سجلاً موثّقاً',
-        other: '$count سجل موثّق',
-        enOne: '1 verified entry',
-        enOther: '$count verified entries',
-      );
+  String auditVerifiedEntries(int count) => _plural(
+    count,
+    zero: 'لا توجد سجلات موثّقة',
+    one: 'سجل واحد موثّق',
+    two: 'سجلان موثّقان',
+    few: '$count سجلات موثّقة',
+    many: '$count سجلاً موثّقاً',
+    other: '$count سجل موثّق',
+    enOne: '1 verified entry',
+    enOther: '$count verified entries',
+  );
   String auditBrokenAtId(int id) =>
       _t('تم اكتشاف الخلل عند السجل رقم $id', 'Chain broken at entry #$id');
   String get auditUnknownTime => _t('وقت غير معروف', 'Unknown time');
@@ -3808,7 +3818,8 @@ class AppLocalizations {
   String get auditDetailRole => _t('الدور', 'Role');
   String get auditDetailPermissionsCount =>
       _t('عدد الصلاحيات', 'Number of Permissions');
-  String get auditDetailUpdatedFields => _t('الحقول المعدَّلة', 'Updated Fields');
+  String get auditDetailUpdatedFields =>
+      _t('الحقول المعدَّلة', 'Updated Fields');
   String get auditDetailAction => _t('الإجراء المستهدف', 'Target Action');
   String get auditDetailDecision => _t('القرار', 'Decision');
   String get auditDetailReason => _t('السبب', 'Reason');
@@ -3855,18 +3866,17 @@ class AppLocalizations {
       _t('يجب أن يتكون رمز PIN من 4 إلى 6 أرقام', 'PIN must be 4 to 6 digits');
   String get noCustomOverrides =>
       _t('بدون استثناءات مخصصة', 'No custom overrides');
-  String customPermissionsCount(int count) =>
-      _plural(
-        count,
-        zero: 'لا توجد صلاحيات مخصصة',
-        one: 'صلاحية مخصصة واحدة',
-        two: 'صلاحيتان مخصصتان',
-        few: '$count صلاحيات مخصصة',
-        many: '$count صلاحية مخصصة',
-        other: '$count صلاحية مخصصة',
-        enOne: '1 custom permission',
-        enOther: '$count custom permissions',
-      );
+  String customPermissionsCount(int count) => _plural(
+    count,
+    zero: 'لا توجد صلاحيات مخصصة',
+    one: 'صلاحية مخصصة واحدة',
+    two: 'صلاحيتان مخصصتان',
+    few: '$count صلاحيات مخصصة',
+    many: '$count صلاحية مخصصة',
+    other: '$count صلاحية مخصصة',
+    enOne: '1 custom permission',
+    enOther: '$count custom permissions',
+  );
 
   String get disableMultiUserOwnerOnly => _t(
     'فقط المالك يمكنه تعطيل وضع تعدد المستخدمين',
@@ -4128,39 +4138,52 @@ class AppLocalizations {
     'سيتم إغلاق الدفاتر حتى $date. لن يكون بالإمكان إنشاء أي معاملة مؤرخة في هذا التاريخ أو قبله، ولا تعديلها أو حذفها.',
     'Books will be closed through $date. Transactions dated on or before this date can no longer be created, edited, or deleted.',
   );
-  String taxProfileInUse(int count) =>
-      _plural(
-        count,
-        zero: 'غير مرتبط بأي منتج',
-        one: 'مرتبط بمنتج واحد',
-        two: 'مرتبط بمنتجين',
-        few: 'مرتبط بـ $count منتجات',
-        many: 'مرتبط بـ $count منتجاً',
-        other: 'مرتبط بـ $count منتج',
-        enOne: 'Used by 1 product',
-        enOther: 'Used by $count products',
-      );
-  String get taxRateRange =>
-      _t('يجب أن تكون النسبة بين 0 و 100', 'The rate must be between 0 and 100');
+  String taxProfileInUse(int count) => _plural(
+    count,
+    zero: 'غير مرتبط بأي منتج',
+    one: 'مرتبط بمنتج واحد',
+    two: 'مرتبط بمنتجين',
+    few: 'مرتبط بـ $count منتجات',
+    many: 'مرتبط بـ $count منتجاً',
+    other: 'مرتبط بـ $count منتج',
+    enOne: 'Used by 1 product',
+    enOther: 'Used by $count products',
+  );
+  String get taxRateRange => _t(
+    'يجب أن تكون النسبة بين 0 و 100',
+    'The rate must be between 0 and 100',
+  );
   String get clearFilters => _t('مسح عوامل التصفية', 'Clear Filters');
   String unitRemoved(String name) =>
       _t('تم حذف الوحدة: $name', 'Unit removed: $name');
-  String get logoInvalidImage =>
-      _t('الملف المختار ليس صورة صالحة', 'The selected file is not a valid image');
-  String csvPreviewLimited(int shown, int total) =>
-      _t('عرض أول $shown صفاً من $total', 'Showing first $shown of $total rows');
-  String get legacyPayablesOtherCurrencies =>
-      _t('التزامات قديمة للموردين بعملات أخرى', 'Legacy payables in other currencies');
-  String get legacyReceivablesOtherCurrencies =>
-      _t('مستحقات قديمة على العملاء بعملات أخرى', 'Legacy receivables in other currencies');
+  String get logoInvalidImage => _t(
+    'الملف المختار ليس صورة صالحة',
+    'The selected file is not a valid image',
+  );
+  String csvPreviewLimited(int shown, int total) => _t(
+    'عرض أول $shown صفاً من $total',
+    'Showing first $shown of $total rows',
+  );
+  String get legacyPayablesOtherCurrencies => _t(
+    'التزامات قديمة للموردين بعملات أخرى',
+    'Legacy payables in other currencies',
+  );
+  String get legacyReceivablesOtherCurrencies => _t(
+    'مستحقات قديمة على العملاء بعملات أخرى',
+    'Legacy receivables in other currencies',
+  );
 
   // ── Digital & Paper Seals Customization ──────────────────────────────────
   String get pdfDigitalSealsHeader =>
       _t('الأختام والتوقيعات الرقمية', 'Digital Stamps & Signatures');
-  String get pdfDigitalStampDesc =>
-      _t('ختم رقمي جاهز يظهر مطبوعاً على الفاتورة', 'Digital stamp printed on the invoice');
-  String get pdfDigitalSignatureDesc =>
-      _t('توقيع رقمي يظهر مطبوعاً على الفاتورة', 'Digital signature printed on the invoice');
+  String get pdfDigitalStampDesc => _t(
+    'ختم رقمي جاهز يظهر مطبوعاً على الفاتورة',
+    'Digital stamp printed on the invoice',
+  );
+  String get pdfDigitalSignatureDesc => _t(
+    'توقيع رقمي يظهر مطبوعاً على الفاتورة',
+    'Digital signature printed on the invoice',
+  );
   String get pdfPaperStampSignatureSection =>
       _t('مربعات الختم والتوقيع الورقي', 'Paper Stamp & Signature Boxes');
   String get pdfShowSignatureLine =>
@@ -4169,8 +4192,7 @@ class AppLocalizations {
     'ترك مساحة فارغة في الفاتورة للتوقيع يدوياً بعد الطباعة',
     'Leave blank space on the invoice for a handwritten signature after printing',
   );
-  String get pdfShowStampBox =>
-      _t('مربع الختم اليدوي', 'Manual Stamp Box');
+  String get pdfShowStampBox => _t('مربع الختم اليدوي', 'Manual Stamp Box');
   String get pdfShowStampBoxDesc => _t(
     'ترك مربع فارغ في الفاتورة للختم الورقي بعد الطباعة',
     'Leave an empty box on the invoice for a physical stamp after printing',
@@ -4186,9 +4208,12 @@ class AppLocalizations {
   String get posPayCashFull => _t('نقداً بالكامل', 'Full Cash');
   String get posPayCredit => _t('آجل بالكامل', 'Full Credit');
   String get posPayPartial => _t('دفعة مقدمة', 'Partial Payment');
-  String get posCompleteCreditSale => _t('إتمام البيع الآجل', 'Complete Credit Sale');
-  String get posCompletePartialSale => _t('إتمام البيع بالدفعة', 'Complete Partial Sale');
-  String get posRemainingOnAccount => _t('المتبقي على الحساب', 'Remaining on Account');
+  String get posCompleteCreditSale =>
+      _t('إتمام البيع الآجل', 'Complete Credit Sale');
+  String get posCompletePartialSale =>
+      _t('إتمام البيع بالدفعة', 'Complete Partial Sale');
+  String get posRemainingOnAccount =>
+      _t('المتبقي على الحساب', 'Remaining on Account');
   String get posLayoutSettingTitle =>
       _t('طريقة عرض المنتجات في البيع السريع', 'Quick Sale Product Layout');
 
@@ -4213,14 +4238,22 @@ class AppLocalizations {
     'اختر الباقة المناسبة لنشاطك التجاري واستفد من الإمكانات الكاملة لإدارة فواتيرك ومخزونك باحترافية',
     'Choose the plan that fits your business and unlock the full power of invoicing and inventory management',
   );
-  String get proValuePointInvoices =>
-      _t('فواتير وعروض أسعار وسندات غير محدودة', 'Unlimited invoices, quotations, and vouchers');
-  String get proValuePointInventory =>
-      _t('إدارة متقدمة للمخزون والتنبيهات وجرد الباركود', 'Advanced inventory management, low-stock alerts, and barcode stocktake');
-  String get proValuePointReports =>
-      _t('تقارير مالية وأرباح مفصلة مع تصدير وطباعة', 'Detailed financial and profit reports with export and printing');
-  String get proValuePointBranding =>
-      _t('تخصيص كامل للفواتير بالشعار والأختام والتوقيع', 'Fully customizable invoices with your logo, stamps, and signatures');
+  String get proValuePointInvoices => _t(
+    'فواتير وعروض أسعار وسندات غير محدودة',
+    'Unlimited invoices, quotations, and vouchers',
+  );
+  String get proValuePointInventory => _t(
+    'إدارة متقدمة للمخزون والتنبيهات وجرد الباركود',
+    'Advanced inventory management, low-stock alerts, and barcode stocktake',
+  );
+  String get proValuePointReports => _t(
+    'تقارير مالية وأرباح مفصلة مع تصدير وطباعة',
+    'Detailed financial and profit reports with export and printing',
+  );
+  String get proValuePointBranding => _t(
+    'تخصيص كامل للفواتير بالشعار والأختام والتوقيع',
+    'Fully customizable invoices with your logo, stamps, and signatures',
+  );
 
   // Plan Names & Durations
   String get plan1MonthTitle => _t('باقة شهر واحد', '1-Month Plan');
@@ -4240,23 +4273,28 @@ class AppLocalizations {
   String get save20kBadge => _t('وفر 20,000 ج.س', 'Save 20,000 SDG');
   String get save5kBadge => _t('وفر 5,000 ج.س', 'Save 5,000 SDG');
   String get discount33PercentBadge => _t('خصم 33%', '33% OFF');
-  String get equivalentMonthly10k =>
-      _t('يعادل 10,000 ج.س / شهرياً فقط', 'Equivalent to only 10,000 SDG / month');
+  String get equivalentMonthly10k => _t(
+    'يعادل 10,000 ج.س / شهرياً فقط',
+    'Equivalent to only 10,000 SDG / month',
+  );
   String get originalAnnualPriceCrossing => _t('180,000 ج.س', '180,000 SDG');
 
   // Subscription Actions & Instructions
   String get subscribeNowAction => _t('اشترك الآن', 'Subscribe Now');
-  String get howToActivateTitle => _t('طريقة الاشتراك والتفعيل', 'How to Subscribe & Activate');
+  String get howToActivateTitle =>
+      _t('طريقة الاشتراك والتفعيل', 'How to Subscribe & Activate');
   String get howToActivateBody => _t(
     '1. اضغط على «اشترك الآن» في الباقة المختارة للتواصل معنا عبر واتساب مباشرة.\n2. سيزوّدك فريق الدعم ببيانات الدفع (تطبيق بنكك أو تحويل مصرفي).\n3. بعد تأكيد التحويل ستستلم مفتاح التفعيل فوراً لتفعيل باقتك.',
     '1. Tap “Subscribe Now” on your chosen plan to message us directly on WhatsApp.\n2. Our support team will send you the payment details (Bankak or bank transfer).\n3. Once your payment is confirmed, you will receive an activation key right away to activate your plan.',
   );
-  String get alreadyHaveKeyHeader => _t('لديك مفتاح تفعيل؟', 'Already have an activation key?');
+  String get alreadyHaveKeyHeader =>
+      _t('لديك مفتاح تفعيل؟', 'Already have an activation key?');
   String get alreadyHaveKeyDesc => _t(
     'إذا تواصلت مع الدعم واستلمت مفتاح التفعيل، أدخله هنا لتفعيل نسختك فوراً:',
     'If you have contacted support and received your activation key, enter it here to activate right away:',
   );
   String get myDeviceIdLabel => _t('معرّف جهازك:', 'Your Device ID:');
   String get copyDeviceIdAction => _t('نسخ المعرف', 'Copy ID');
-  String get deviceIdCopiedSnack => _t('تم نسخ معرف الجهاز', 'Device ID copied to clipboard');
+  String get deviceIdCopiedSnack =>
+      _t('تم نسخ معرف الجهاز', 'Device ID copied to clipboard');
 }

@@ -10,7 +10,7 @@
 
 - [x] **Batch A** - Performance and correctness
 - [x] **Batch B** - Permissions and gates
-- [ ] **Batch C** - Localization cleanup
+- [x] **Batch C** - Localization cleanup
 - [ ] **Batch D** - Export and share foundation
 - [ ] **Batch E** - Shared date range across reports
 - [ ] **Batch F** - Daily closing (end-of-day) report [new]
@@ -61,4 +61,21 @@
 - **Validation:**
   - `dart format`: 11 files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch C: Localization cleanup
+
+- **Batch ID:** `batch-c`
+- **Files Changed:**
+  - `lib/localization/app_localizations.dart`: Added `legacyForeignDocumentsNotice`, `legacyForeignPaymentsNotice`, and parameterized `ledgerBaseCurrencyNotice(currencyCode)` in both Arabic and English.
+  - `lib/screens/reports/accounting_screen.dart`: Replaced inline `l10n.langCode == 'ar'` ternary with `l10n.ledgerBaseCurrencyNotice(book.currencyCode)`.
+  - `lib/screens/reports/payments_report_screen.dart`: Replaced inline ternary with `l10n.legacyForeignPaymentsNotice`.
+  - `lib/screens/reports/purchases_report_screen.dart`: Replaced inline ternary with `l10n.legacyForeignDocumentsNotice`.
+  - `lib/screens/reports/sales_report_screen.dart`: Replaced inline ternary with `l10n.legacyForeignDocumentsNotice`.
+- **Decisions Taken:**
+  - Fully eliminated all inline hardcoded Arabic/English ternaries across the reports subsystem.
+  - Ensured localized strings use `_t(ar, en)` and `isArabic` helper pattern.
+- **Validation:**
+  - `dart format`: 5 files formatted.
+  - `dart analyze`: Clean (0 issues).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
