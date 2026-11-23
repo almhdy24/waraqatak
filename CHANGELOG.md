@@ -5,6 +5,34 @@ All notable changes to the Waraqatak (ورقتك) project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Reports Modernization & Hardening
+- **N+1 Costing Query Elimination:** Replaced per-document item query loop in `InventoryCostingService.getSalesReportWithCost` with a single batch `IN (...)` chunked query (250 items/chunk), preserving async non-blocking execution while eliminating SQLite variable limit risks.
+- **Reports Access Control & Security Hardening:**
+  - Wrapped 7 previously unguarded report screens (`AccountingScreen`, `CustomerReportScreen`, `SupplierReportScreen`, `InventoryReportScreen`, `ProductReportScreen`, `PurchasesReportScreen`, `SalesReportScreen`) in `ScreenAccessGate`.
+  - Realigned permissions: Gated Customer and Supplier reports by `reports.view_receivables` instead of customer management permissions; corrected Low Stock report permission from `stock.adjust` (write) to `products.view` (read).
+  - Fixed Payments Report visibility leak where default Cashier role could view financial payments.
+- **Universal Date Range Synchronization:**
+  - Introduced session-scoped `ReportsDateNotifier` and `ReportsDateScope` (`InheritedNotifier`) persisting the active date range across all reports without disk I/O.
+  - Enlarged quick date filter touch targets to >= 48 dp with `MaterialTapTargetSize.padded`.
+- **Universal Data Export:**
+  - Implemented standard RFC 4180 CSV export in `CsvService` with UTF-8 BOM for Microsoft Excel compatibility and sanitized formula injection prefixes (`=`, `+`, `-`, `@`, `\t`, `\r`).
+  - Added support for 80mm thermal receipt roll format (`PdfPageFormat.roll80`) alongside standard A4 in `PdfReportBuilder` and `PdfService`.
+  - Added uniform `ReportExportMenu` (Print, Share PDF, 80mm roll, WhatsApp text summary, CSV export) to every report screen.
+- **New Reports & Analytics:**
+  - **Daily Closing Report (`DailyClosingReportScreen`):** Daily register summary separating current-invoice cash from debt collection on prior credit sales, breakdown by payment method (Cash vs Bankak), live cash drawer reconciliation with surplus/shortage variance feedback, and PDF/CSV export.
+  - **Receivables & Payables Aging Report (`AgingReportScreen`):** Standard 4-bucket aging analysis (0–30, 31–60, 61–90, 90+ days from invoice date) for customer receivables and supplier payables with one-tap WhatsApp payment reminders.
+  - **Taxes & Discounts Summary Report (`TaxDiscountReportScreen`):** Comprehensive accounting summary of sales tax collected, purchase tax paid, net tax liability, sales discounts given, and purchase discounts received with complete transaction drilldown.
+  - **Payment Methods Cash Flow:** Integrated payment method cash flow chips and `AppPercentageBar` in Payments Report, and enabled click-through drilldown for standalone expense/receipt vouchers.
+  - **Sales Report Period Comparison:** Added growth delta indicator (`+X.X% vs previous period`) computed against prior period of equal length.
+- **UI/UX Polish & Consistency:**
+  - Replaced cramped horizontal summary chips with responsive `AppMetricCard(compact: true)` across Sales, Purchases, Customers, and Suppliers reports.
+  - Integrated debounced search (300ms) with sequence counters to prevent race conditions.
+  - Added `RefreshIndicator` pull-to-refresh on all report lists.
+  - Added direct drilldown navigation to `StockMovementsScreen` from inventory and product performance cards.
+  - Replaced all inline language ternaries with localized `AppLocalizations` getters.
+
 ## [1.2.1] - 2026-11-22
 
 ### ما الجديد في الإصدار 1.2.1:
