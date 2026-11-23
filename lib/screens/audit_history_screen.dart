@@ -16,6 +16,7 @@ import '../widgets/report_export_menu.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
 import 'reports/report_date_filter.dart';
+import 'reports/reports_date_scope.dart';
 
 class AuditHistoryScreen extends StatefulWidget {
   const AuditHistoryScreen({super.key});
@@ -25,11 +26,12 @@ class AuditHistoryScreen extends StatefulWidget {
 }
 
 class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
-  DateRangeFilter _range = DateRangeFilter.thisMonth();
+  DateRangeFilter _range = ReportsDateNotifier.instance.range;
   String _selectedAction = 'all';
   List<Map<String, dynamic>> _events = [];
   bool _loading = true;
   String? _error;
+  int _querySeq = 0;
 
   static final _dateFmt = DateFormat('dd/MM/yyyy HH:mm:ss');
 
@@ -66,6 +68,7 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -78,12 +81,14 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
         to: _range.to,
         limit: 200,
       );
+      if (!mounted || seq != _querySeq) return;
 
       setState(() {
         _events = events;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = ErrorUtils.getFriendlyErrorMessage(e);
         _loading = false;
@@ -238,13 +243,14 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
         appBar: AppBar(
           title: Text(l10n.auditHistoryTitle),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: l10n.printOrShareReport,
-              onPressed: _events.isNotEmpty
-                  ? () => _openExportMenu(context, l10n)
-                  : null,
-            ),
+            if (ReportExportMenu.canExport())
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: l10n.printOrShareReport,
+                onPressed: _events.isNotEmpty
+                    ? () => _openExportMenu(context, l10n)
+                    : null,
+              ),
           ],
         ),
         body: ResponsiveCenter(
@@ -254,6 +260,7 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
               ReportDateFilter(
                 range: _range,
                 onChanged: (newRange) {
+                  ReportsDateScope.update(context, newRange);
                   setState(() => _range = newRange);
                   _load();
                 },

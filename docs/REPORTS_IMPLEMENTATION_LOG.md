@@ -254,3 +254,30 @@
   - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
 
+
+### Batch P1: Correctness & Permissions
+
+- **Batch ID:** `batch-p1-correctness-permissions`
+- **Files Changed:**
+  - `lib/services/business_reporting_service.dart`: Added base currency filtering `(currency_code = ? OR currency_code IS NULL)` to `getDailyClosingSummary` and `getAgingReport`, and added `hasLegacyForeignCurrency` and `currencyCode` properties to both summaries.
+  - `lib/screens/reports/aging_report_screen.dart`: Added warning banner informing merchants if legacy foreign-currency documents exist and are omitted from SDG totals. Added sequence guard `_querySeq`, localized unknown contact placeholder, and export button check with `ReportExportMenu.canExport()`.
+  - `lib/screens/reports/daily_closing_report_screen.dart`: Added notice banner for legacy foreign-currency documents and sequence guard `_querySeq`.
+  - `lib/widgets/report_export_menu.dart`: Implemented pure `ReportExportPermissions.resolveVisibleActions` and `ReportExportMenu.canExport()` gating PDF export/print on `reportsExportPdf` and CSV export on `dataExportCsv`.
+  - `lib/screens/reports/sales_report_screen.dart`: Added sequence guard `_querySeq`, interactive search filtering by customer name or invoice number with 300ms debounce, sort toggle (by amount or date), and gated export button with `ReportExportMenu.canExport()`.
+  - `lib/screens/reports/purchases_report_screen.dart`: Added sequence guard `_querySeq`, interactive search filtering by supplier name or purchase invoice number with 300ms debounce, sort toggle, and gated export button with `ReportExportMenu.canExport()`.
+  - `lib/screens/reports/payments_report_screen.dart`, `tax_discount_report_screen.dart`, `product_report_screen.dart`, `advanced_inventory_analytics_screen.dart`, `customer_report_screen.dart`, `supplier_report_screen.dart`, `inventory_report_screen.dart`, `low_stock_report_screen.dart`, `stock_movements_screen.dart`: Added sequence guard `_querySeq` and gated export button with `ReportExportMenu.canExport()`.
+  - `lib/screens/audit_history_screen.dart`: Initialized date range from `ReportsDateNotifier.instance.range`, propagated date updates via `ReportsDateScope.update(context, newRange)`, added sequence guard `_querySeq`, and gated export button.
+  - `lib/screens/reports/accounting_screen.dart`: Added sequence guard `_querySeq` and gated export button with `ReportExportMenu.canExport()`.
+  - `lib/localization/app_localizations.dart`: Added localized labels `unspecified`, `sortByDate`, `sortByAmount`, `searchInvoices`, and `searchPurchases` in both Arabic and English.
+  - `test/services/daily_closing_report_test.dart`: Added unit tests asserting omission of foreign currency documents from SDG daily closing calculations and flagging `hasLegacyForeignCurrency`.
+  - `test/services/debt_aging_test.dart`: Added unit tests asserting omission of foreign currency documents from SDG debt aging calculations and flagging `hasLegacyForeignCurrency`.
+  - `test/widgets/report_export_permissions_test.dart`: Created unit tests verifying pure permission resolution for PDF and CSV actions based on user session permissions.
+- **Decisions Taken:**
+  - P1-1: Daily closing and aging calculations strictly filter to base currency (SDG or NULL) to prevent summing disparate currency amounts, while prominently informing users of legacy foreign-currency documents via warning banners.
+  - P1-2: Export options are dynamically resolved based on `reportsExportPdf` and `dataExportCsv` permissions; export trigger action is hidden if the user possesses neither.
+  - P1-3: Asynchronous load sequence guards (`_querySeq`) added to prevent out-of-order race conditions when switching filters rapidly.
+  - P1-4: Client-side search and sorting implemented on sales and purchases reports without new dependencies.
+- **Validation:**
+  - `dart format`: All touched files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.

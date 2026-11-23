@@ -40,6 +40,7 @@ class _AgingReportScreenState extends State<AgingReportScreen>
   EntitlementState? _entitlement;
   bool _loading = true;
   String? _error;
+  int _querySeq = 0;
 
   static final _numFmt = NumberFormat('#,##0.##');
 
@@ -63,6 +64,7 @@ class _AgingReportScreenState extends State<AgingReportScreen>
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -77,7 +79,7 @@ class _AgingReportScreenState extends State<AgingReportScreen>
         ),
         DatabaseHelper.instance.getFirstBusiness(),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _receivables = results[0] as AgingReportData;
         _payables = results[1] as AgingReportData;
@@ -85,7 +87,7 @@ class _AgingReportScreenState extends State<AgingReportScreen>
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -359,7 +361,9 @@ class _AgingReportScreenState extends State<AgingReportScreen>
         appBar: AppBar(
           title: Text(l10n.agingReport),
           actions: [
-            if (!_loading && _receivables != null)
+            if (!_loading &&
+                _receivables != null &&
+                ReportExportMenu.canExport())
               IconButton(
                 icon: const Icon(Icons.share_outlined),
                 tooltip: l10n.exportOptions,
@@ -433,6 +437,40 @@ class _AgingReportScreenState extends State<AgingReportScreen>
                 ? AppStatusColors.fg(context, AppStatus.warning)
                 : AppStatusColors.fg(context, AppStatus.danger),
           ),
+
+          if (data.hasLegacyForeignCurrency) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.4,
+                ),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.legacyForeignDocumentsNotice,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 12),
 
@@ -578,7 +616,9 @@ class _AgingReportScreenState extends State<AgingReportScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  item.contactName,
+                                  item.contactName.isEmpty
+                                      ? l10n.unspecified
+                                      : item.contactName,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,

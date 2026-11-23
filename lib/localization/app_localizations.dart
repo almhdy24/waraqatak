@@ -1102,6 +1102,7 @@ class AppLocalizations {
   String get legalAndTaxInfo =>
       _t('البيانات القانونية والضريبية', 'Legal & Tax Details');
   String get notConfigured => _t('غير محدد', 'Not set');
+  String get unspecified => _t('غير محدد', 'Unspecified');
   String get configureInFinancial =>
       _t('تعديل في الإعدادات المالية', 'Configure in Financial Settings');
   String get activeMethods => _t('طرق الدفع المفعلة', 'Active Payment Methods');
@@ -2189,6 +2190,12 @@ class AppLocalizations {
   String get searchSupplier => _t('بحث عن مورد…', 'Search supplier…');
   String get sortByName => _t('ترتيب حسب الاسم', 'Sort by name');
   String get sortByRemaining => _t('ترتيب حسب المتبقي', 'Sort by remaining');
+  String get sortByDate => _t('ترتيب حسب التاريخ', 'Sort by date');
+  String get sortByAmount => _t('ترتيب حسب المبلغ', 'Sort by amount');
+  String get searchInvoices =>
+      _t('بحث برقم الفاتورة أو العميل…', 'Search invoice # or customer…');
+  String get searchPurchases =>
+      _t('بحث برقم الفاتورة أو المورد…', 'Search bill # or supplier…');
   String get salesGrowthVsPrevious =>
       _t('مقارنة بالفترة السابقة', 'vs previous period');
   String get taxDiscountReport =>

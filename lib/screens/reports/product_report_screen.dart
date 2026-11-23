@@ -36,6 +36,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
   String _sortBy = 'revenue'; // 'revenue', 'quantity', 'profit'
   String? _error;
   bool _loading = true;
+  int _querySeq = 0;
 
   static final _numFmt = NumberFormat('#,##0.##');
 
@@ -60,6 +61,7 @@ class _ProductReportScreenState extends State<ProductReportScreen>
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -76,14 +78,14 @@ class _ProductReportScreenState extends State<ProductReportScreen>
           sortBy: _sortBy,
         ),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _categories = futures[0] as List<String>;
         _summary = futures[1] as ProductPerformanceSummary;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -407,7 +409,10 @@ class _ProductReportScreenState extends State<ProductReportScreen>
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: summary != null && summary.items.isNotEmpty
+              onPressed:
+                  summary != null &&
+                      summary.items.isNotEmpty &&
+                      ReportExportMenu.canExport()
                   ? () => _openExportMenu(context, l10n)
                   : null,
             ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -36,6 +37,7 @@ class PurchasesReportScreen extends StatefulWidget {
 class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
   DateRangeFilter _range = ReportsDateNotifier.instance.range;
   PurchaseReportSummary? _summary;
+  List<PurchaseReportItem>? _filteredItems;
   Business? _business;
   List<Contact> _suppliers = [];
   int? _selectedSupplierId;
@@ -43,6 +45,11 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
   String _selectedPaymentStatus = 'all';
   String? _error;
   bool _loading = true;
+
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  int _querySeq = 0;
+  bool _sortByAmount = false;
 
   static final _numFmt = NumberFormat('#,##0.##');
   static final _dateFmt = DateFormat('dd/MM/yy');
@@ -53,9 +60,49 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() => _applyFilter());
+    });
+  }
+
+  void _applyFilter() {
+    if (_summary == null) return;
+    final query = _searchController.text.trim().toLowerCase();
+    var list = _summary!.items;
+    if (query.isNotEmpty) {
+      list = list.where((item) {
+        final docNum = item.document.documentNumber.toLowerCase();
+        final party = (item.supplierName ?? item.document.recipientName ?? '')
+            .toLowerCase();
+        final phone = (item.document.recipientPhone ?? '').toLowerCase();
+        return docNum.contains(query) ||
+            party.contains(query) ||
+            phone.contains(query);
+      }).toList();
+    }
+    list = List.of(list);
+    if (_sortByAmount) {
+      list.sort((a, b) => b.document.total.compareTo(a.document.total));
+    } else {
+      list.sort((a, b) => b.document.date.compareTo(a.document.date));
+    }
+    _filteredItems = list;
+  }
+
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
+      _filteredItems = null;
       _error = null;
     });
     try {
@@ -70,15 +117,16 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
         ),
         DatabaseHelper.instance.getFirstBusiness(),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _suppliers = futures[0] as List<Contact>;
         _summary = futures[1] as PurchaseReportSummary;
         _business = futures[2] as Business?;
         _loading = false;
+        _applyFilter();
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -295,7 +343,10 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: summary != null && summary.items.isNotEmpty
+              onPressed:
+                  summary != null &&
+                      summary.items.isNotEmpty &&
+                      ReportExportMenu.canExport()
                   ? () => _openExportMenu(
                       context,
                       l10n,
@@ -664,6 +715,60 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: l10n.searchPurchases,
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 16),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _applyFilter());
+                                    },
+                                  )
+                                : null,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppDesignTokens.smallRadius,
+                              ),
+                            ),
+                          ),
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(
+                          _sortByAmount
+                              ? Icons.format_list_numbered
+                              : Icons.access_time_rounded,
+                          size: 20,
+                        ),
+                        tooltip: _sortByAmount
+                            ? l10n.sortByAmount
+                            : l10n.sortByDate,
+                        onPressed: () {
+                          setState(() {
+                            _sortByAmount = !_sortByAmount;
+                            _applyFilter();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ],
 
               // Purchases List
@@ -712,7 +817,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
     if (_error != null) {
       return AppErrorState(message: l10n.operationFailed, onRetry: _load);
     }
-    final items = _summary?.items ?? [];
+    final items = _filteredItems ?? _summary?.items ?? [];
     if (items.isEmpty) {
       return AppEmptyState(
         icon: Icons.shopping_cart_outlined,

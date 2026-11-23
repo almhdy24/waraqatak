@@ -158,6 +158,78 @@ void main() {
 
       // Verify Net Cash in drawer
       expect(summary.netCashCollected, equals(7000.0)); // 10000 in - 3000 out
+      expect(summary.hasLegacyForeignCurrency, isFalse);
+    },
+  );
+
+  test(
+    'Daily closing excludes legacy foreign currency (USD) documents and sets hasLegacyForeignCurrency',
+    () async {
+      final db = DatabaseHelper.instance;
+      final rawDb = await db.database;
+      final now = DateTime(2026, 11, 23, 15, 0);
+
+      // Clean documents
+      await rawDb.delete('document_payments');
+      await rawDb.delete('documents');
+
+      // 1. Base SDG invoice
+      final sdgInvId = await rawDb.insert('documents', {
+        'type': 'invoice',
+        'document_number': 'INV-SDG-1',
+        'date': now.toIso8601String(),
+        'subtotal': 10000.0,
+        'discount': 0.0,
+        'tax_rate': 0.0,
+        'tax_amount': 0.0,
+        'total': 10000.0,
+        'paid': 10000.0,
+        'remaining': 0.0,
+        'status': DocumentStatus.issued,
+        'currency_code': 'SDG',
+      });
+      await rawDb.insert('document_payments', {
+        'document_id': sdgInvId,
+        'amount': 10000.0,
+        'payment_method': 'cash',
+        'date': now.toIso8601String(),
+      });
+
+      // 2. Legacy USD invoice (should be excluded from amounts, but detected by flag)
+      final usdInvId = await rawDb.insert('documents', {
+        'type': 'invoice',
+        'document_number': 'INV-USD-1',
+        'date': now.toIso8601String(),
+        'subtotal': 500.0,
+        'discount': 0.0,
+        'tax_rate': 0.0,
+        'tax_amount': 0.0,
+        'total': 500.0,
+        'paid': 500.0,
+        'remaining': 0.0,
+        'status': DocumentStatus.issued,
+        'currency_code': 'USD',
+      });
+      await rawDb.insert('document_payments', {
+        'document_id': usdInvId,
+        'amount': 500.0,
+        'payment_method': 'cash',
+        'date': now.toIso8601String(),
+      });
+
+      final from = DateTime(2026, 11, 23, 0, 0);
+      final to = DateTime(2026, 11, 23, 23, 59, 59);
+
+      final summary = await BusinessReportingService.instance
+          .getDailyClosingSummary(from: from, to: to);
+
+      // USD invoice is excluded from amounts
+      expect(summary.invoiceCount, equals(1));
+      expect(summary.grossSales, equals(10000.0));
+      expect(summary.totalCollected, equals(10000.0));
+
+      // Legacy foreign currency is flagged
+      expect(summary.hasLegacyForeignCurrency, isTrue);
     },
   );
 }

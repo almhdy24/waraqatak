@@ -36,6 +36,7 @@ class _AdvancedInventoryAnalyticsScreenState
   String? _selectedCategory;
   bool _loading = true;
   String? _error;
+  int _querySeq = 0;
   late TabController _tabController;
 
   static final _numFmt = NumberFormat('#,##0.##');
@@ -80,6 +81,7 @@ class _AdvancedInventoryAnalyticsScreenState
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -90,6 +92,7 @@ class _AdvancedInventoryAnalyticsScreenState
       final catRows = await db.rawQuery(
         "SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category ASC",
       );
+      if (!mounted || seq != _querySeq) return;
       _categories = catRows.map((r) => r['category'] as String).toList();
 
       final metrics = await BusinessReportingService.instance
@@ -99,11 +102,13 @@ class _AdvancedInventoryAnalyticsScreenState
             category: _selectedCategory,
           );
 
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _metrics = metrics;
         _loading = false;
       });
     } catch (e) {
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -269,7 +274,7 @@ class _AdvancedInventoryAnalyticsScreenState
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: _metrics != null
+              onPressed: _metrics != null && ReportExportMenu.canExport()
                   ? () => _openExportMenu(context, l10n)
                   : null,
             ),

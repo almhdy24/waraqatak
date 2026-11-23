@@ -59,6 +59,7 @@ class _AccountingScreenState extends State<AccountingScreen>
       widget.initialRange ?? ReportsDateNotifier.instance.range;
   LedgerBook? _book;
   bool _failed = false;
+  int _querySeq = 0;
   late final TabController _tabController = TabController(
     length: 4,
     vsync: this,
@@ -77,13 +78,14 @@ class _AccountingScreenState extends State<AccountingScreen>
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() => _failed = false);
     try {
       final book = await LedgerService.load();
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() => _book = book);
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() => _failed = true);
     }
   }
@@ -481,13 +483,14 @@ class _AccountingScreenState extends State<AccountingScreen>
           title: Text(l10n.accounting),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: l10n.printOrShareReport,
-              onPressed: book != null && book.entries.isNotEmpty
-                  ? () => _openExportMenu(context, l10n, book, symbol, asOf)
-                  : null,
-            ),
+            if (ReportExportMenu.canExport())
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: l10n.printOrShareReport,
+                onPressed: book != null && book.entries.isNotEmpty
+                    ? () => _openExportMenu(context, l10n, book, symbol, asOf)
+                    : null,
+              ),
           ],
           bottom: TabBar(
             controller: _tabController,
@@ -1157,13 +1160,14 @@ class AccountLedgerScreen extends StatelessWidget {
           title: Text(l10n.accountName(account.code)),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: l10n.printOrShareReport,
-              onPressed: gl.lines.isNotEmpty
-                  ? () => _openExportMenu(context, l10n, gl)
-                  : null,
-            ),
+            if (ReportExportMenu.canExport())
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: l10n.printOrShareReport,
+                onPressed: gl.lines.isNotEmpty
+                    ? () => _openExportMenu(context, l10n, gl)
+                    : null,
+              ),
           ],
         ),
         body: ResponsiveCenter(

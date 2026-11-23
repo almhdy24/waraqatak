@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -87,9 +88,15 @@ class SalesReportScreen extends StatefulWidget {
 class _SalesReportScreenState extends State<SalesReportScreen> {
   DateRangeFilter _range = ReportsDateNotifier.instance.range;
   List<SaleProfitSummary>? _sales;
+  List<SaleProfitSummary>? _filteredSales;
   Business? _business;
   double? _previousSalesTotal;
   String? _error;
+
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  int _querySeq = 0;
+  bool _sortByAmount = false;
 
   static final _numFmt = NumberFormat('#,##0.##');
   static final _dateFmt = DateFormat('dd/MM/yy');
@@ -100,9 +107,48 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() => _applyFilter());
+    });
+  }
+
+  void _applyFilter() {
+    if (_sales == null) return;
+    final query = _searchController.text.trim().toLowerCase();
+    var list = _sales!;
+    if (query.isNotEmpty) {
+      list = list.where((s) {
+        final docNum = s.document.documentNumber.toLowerCase();
+        final party = (s.document.recipientName ?? '').toLowerCase();
+        final phone = (s.document.recipientPhone ?? '').toLowerCase();
+        return docNum.contains(query) ||
+            party.contains(query) ||
+            phone.contains(query);
+      }).toList();
+    }
+    list = List.of(list);
+    if (_sortByAmount) {
+      list.sort((a, b) => b.document.total.compareTo(a.document.total));
+    } else {
+      list.sort((a, b) => b.document.date.compareTo(a.document.date));
+    }
+    _filteredSales = list;
+  }
+
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _sales = null;
+      _filteredSales = null;
       _previousSalesTotal = null;
       _error = null;
     });
@@ -121,7 +167,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           to: prevRange.to,
         ),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       final prevDocs = results[2] as List<Document>;
       final prevFinalized = prevDocs.where(
         (d) => d.status != DocumentStatus.cancelled,
@@ -132,9 +178,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         _sales = results[0] as List<SaleProfitSummary>;
         _business = results[1] as Business?;
         _previousSalesTotal = prevTotal;
+        _applyFilter();
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() => _error = e.toString());
     }
   }
@@ -434,7 +481,10 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: _sales != null && _sales!.isNotEmpty
+              onPressed:
+                  _sales != null &&
+                      _sales!.isNotEmpty &&
+                      ReportExportMenu.canExport()
                   ? () => _openExportMenu(
                       context,
                       l10n,
@@ -704,6 +754,60 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: l10n.searchInvoices,
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 16),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _applyFilter());
+                                    },
+                                  )
+                                : null,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppDesignTokens.smallRadius,
+                              ),
+                            ),
+                          ),
+                          onChanged: _onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: Icon(
+                          _sortByAmount
+                              ? Icons.format_list_numbered
+                              : Icons.access_time_rounded,
+                          size: 20,
+                        ),
+                        tooltip: _sortByAmount
+                            ? l10n.sortByAmount
+                            : l10n.sortByDate,
+                        onPressed: () {
+                          setState(() {
+                            _sortByAmount = !_sortByAmount;
+                            _applyFilter();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ],
               Expanded(child: _buildList(context, l10n)),
             ],
@@ -725,14 +829,18 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
         description: l10n.noDataForPeriod,
       );
     }
+    final items = _filteredSales ?? [];
+    if (items.isEmpty) {
+      return AppEmptyState(icon: Icons.search_off, title: l10n.noReportData);
+    }
 
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
-        itemCount: _sales!.length,
+        itemCount: items.length,
         padding: const EdgeInsets.only(top: 4, bottom: 16),
         itemBuilder: (ctx, i) {
-          final item = _sales![i];
+          final item = items[i];
           final doc = item.document;
           final isCancelled = doc.status == DocumentStatus.cancelled;
           return Card(

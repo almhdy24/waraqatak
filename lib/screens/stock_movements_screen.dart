@@ -472,14 +472,15 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                   if (changed) _load();
                 },
               ),
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: l10n.printOrShareReport,
-              onPressed:
-                  _reportSummary != null && _reportSummary!.items.isNotEmpty
-                  ? () => _openExportMenu(context, l10n)
-                  : null,
-            ),
+            if (ReportExportMenu.canExport())
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: l10n.printOrShareReport,
+                onPressed:
+                    _reportSummary != null && _reportSummary!.items.isNotEmpty
+                    ? () => _openExportMenu(context, l10n)
+                    : null,
+              ),
           ],
         ),
         body: ResponsiveCenter(

@@ -36,6 +36,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   Business? _business;
   Map<String, PaymentMethod> _methodsMap = {};
   String? _error;
+  int _querySeq = 0;
 
   static final _numFmt = NumberFormat('#,##0.##');
   static final _dateFmt = DateFormat('dd/MM/yy');
@@ -47,6 +48,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _rows = null;
       _methodFlows = null;
@@ -65,7 +67,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
           to: _range.to,
         ),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       final rows = results[0] as List<Map<String, dynamic>>;
       final methods = results[1] as List<PaymentMethod>;
       final business = results[2] as Business?;
@@ -77,7 +79,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
         _methodFlows = flows;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() => _error = e.toString());
     }
   }
@@ -317,7 +319,10 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
             IconButton(
               icon: const Icon(Icons.picture_as_pdf_outlined),
               tooltip: l10n.printOrShareReport,
-              onPressed: _rows != null && _rows!.isNotEmpty
+              onPressed:
+                  _rows != null &&
+                      _rows!.isNotEmpty &&
+                      ReportExportMenu.canExport()
                   ? () => _openExportMenu(
                       context,
                       l10n,

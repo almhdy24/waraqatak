@@ -329,13 +329,14 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
           title: Text(l10n.supplierReport),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.share_outlined),
-              tooltip: l10n.exportOptions,
-              onPressed: _allRows != null && _allRows!.isNotEmpty
-                  ? () => _openExportMenu(context, l10n, totalPayable)
-                  : null,
-            ),
+            if (ReportExportMenu.canExport())
+              IconButton(
+                icon: const Icon(Icons.share_outlined),
+                tooltip: l10n.exportOptions,
+                onPressed: _allRows != null && _allRows!.isNotEmpty
+                    ? () => _openExportMenu(context, l10n, totalPayable)
+                    : null,
+              ),
           ],
         ),
         body: ResponsiveCenter(

@@ -41,6 +41,7 @@ class _DailyClosingReportScreenState extends State<DailyClosingReportScreen> {
   Map<String, PaymentMethod> _methodsMap = {};
   bool _loading = true;
   String? _error;
+  int _querySeq = 0;
 
   final TextEditingController _openingCashController = TextEditingController(
     text: '',
@@ -65,6 +66,7 @@ class _DailyClosingReportScreenState extends State<DailyClosingReportScreen> {
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -78,7 +80,7 @@ class _DailyClosingReportScreenState extends State<DailyClosingReportScreen> {
         DatabaseHelper.instance.getPaymentMethods(),
         DatabaseHelper.instance.getFirstBusiness(),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _summary = results[0] as DailyClosingSummary;
         _methodsMap = {
@@ -88,7 +90,7 @@ class _DailyClosingReportScreenState extends State<DailyClosingReportScreen> {
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -427,7 +429,7 @@ class _DailyClosingReportScreenState extends State<DailyClosingReportScreen> {
         appBar: AppBar(
           title: Text(l10n.dailyClosingReport),
           actions: [
-            if (_summary != null && !_loading)
+            if (_summary != null && !_loading && ReportExportMenu.canExport())
               IconButton(
                 icon: const Icon(Icons.share_outlined),
                 tooltip: l10n.exportOptions,
@@ -452,6 +454,41 @@ class _DailyClosingReportScreenState extends State<DailyClosingReportScreen> {
                   _load();
                 },
               ),
+              if (_summary?.hasLegacyForeignCurrency == true)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.outlineVariant,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            l10n.legacyForeignDocumentsNotice,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Expanded(
                 child: _buildBody(l10n, theme, baseCurrency, hasFinancials),
               ),

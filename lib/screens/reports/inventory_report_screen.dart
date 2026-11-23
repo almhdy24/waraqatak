@@ -556,13 +556,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           ),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: l10n.printOrShareReport,
-              onPressed: summary != null && summary.items.isNotEmpty
-                  ? () => _openExportMenu(context, l10n)
-                  : null,
-            ),
+            if (ReportExportMenu.canExport())
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: l10n.printOrShareReport,
+                onPressed: summary != null && summary.items.isNotEmpty
+                    ? () => _openExportMenu(context, l10n)
+                    : null,
+              ),
             IconButton(
               icon: const Icon(Icons.analytics_outlined),
               tooltip: l10n.legacyCostSummaryTitle,

@@ -39,6 +39,7 @@ class _TaxDiscountReportScreenState extends State<TaxDiscountReportScreen> {
   Business? _business;
   String? _error;
   bool _loading = true;
+  int _querySeq = 0;
 
   static final _numFmt = NumberFormat('#,##0.##');
   static final _dateFmt = DateFormat('dd/MM/yyyy');
@@ -50,6 +51,7 @@ class _TaxDiscountReportScreenState extends State<TaxDiscountReportScreen> {
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -63,14 +65,14 @@ class _TaxDiscountReportScreenState extends State<TaxDiscountReportScreen> {
         DatabaseHelper.instance.getFirstBusiness(),
       ]);
 
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _summary = results[0] as TaxDiscountSummary;
         _business = results[1] as Business?;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -265,7 +267,7 @@ class _TaxDiscountReportScreenState extends State<TaxDiscountReportScreen> {
             IconButton(
               icon: const Icon(Icons.share_outlined),
               tooltip: l10n.exportOptions,
-              onPressed: _summary != null
+              onPressed: _summary != null && ReportExportMenu.canExport()
                   ? () => _openExportMenu(context, l10n)
                   : null,
             ),

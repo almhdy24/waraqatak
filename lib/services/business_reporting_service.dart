@@ -1174,12 +1174,15 @@ class BusinessReportingService {
   Future<DailyClosingSummary> getDailyClosingSummary({
     required DateTime from,
     required DateTime to,
+    String? currencyCode,
   }) async {
     final db = await DatabaseHelper.instance.database;
+    final biz = await DatabaseHelper.instance.getFirstBusiness();
+    final effectiveCurrency = currencyCode ?? biz?.currencyCode ?? 'SDG';
     final fromStr = from.toIso8601String();
     final toStr = to.toIso8601String();
 
-    // 1. Sales Invoices
+    // 1. Sales Invoices (base currency)
     final docRows = await db.rawQuery(
       '''
       SELECT
@@ -1191,10 +1194,29 @@ class BusinessReportingService {
         SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN total ELSE 0 END) AS net_sales,
         SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN remaining ELSE 0 END) AS credit_sales
       FROM documents
-      WHERE type = 'invoice' AND date >= ? AND date <= ?
+      WHERE type = 'invoice'
+        AND date >= ? AND date <= ?
+        AND (currency_code = ? OR currency_code IS NULL)
     ''',
-      [fromStr, toStr],
+      [fromStr, toStr, effectiveCurrency],
     );
+
+    final legacyRows = await db.rawQuery(
+      '''
+      SELECT COUNT(*) AS count
+      FROM documents
+      WHERE type = 'invoice'
+        AND date >= ? AND date <= ?
+        AND status NOT IN ('draft', 'cancelled')
+        AND currency_code IS NOT NULL
+        AND currency_code != ?
+    ''',
+      [fromStr, toStr, effectiveCurrency],
+    );
+    final int legacyCount =
+        (legacyRows.isNotEmpty ? legacyRows.first['count'] as num? : 0)
+            ?.toInt() ??
+        0;
 
     final docRow = docRows.isNotEmpty ? docRows.first : null;
     final int validInvoices = (docRow?['valid_count'] as num?)?.toInt() ?? 0;
@@ -1220,9 +1242,10 @@ class BusinessReportingService {
       JOIN documents d ON d.id = dp.document_id
       WHERE d.type = 'invoice'
         AND d.status NOT IN ('draft', 'cancelled')
+        AND (d.currency_code = ? OR d.currency_code IS NULL)
         AND dp.date >= ? AND dp.date <= ?
     ''',
-      [fromStr, toStr],
+      [effectiveCurrency, fromStr, toStr],
     );
 
     final Map<String, double> collectionsByMethod = {};
@@ -1249,6 +1272,7 @@ class BusinessReportingService {
       FROM documents v
       WHERE v.type = 'payment_receipt'
         AND v.status NOT IN ('draft', 'cancelled')
+        AND (v.currency_code = ? OR v.currency_code IS NULL)
         AND v.id NOT IN (
           SELECT DISTINCT receipt_document_id
           FROM document_payments
@@ -1256,7 +1280,7 @@ class BusinessReportingService {
         )
         AND v.date >= ? AND v.date <= ?
     ''',
-      [fromStr, toStr],
+      [effectiveCurrency, fromStr, toStr],
     );
 
     for (final r in receiptRows) {
@@ -1277,9 +1301,10 @@ class BusinessReportingService {
       JOIN documents d ON d.id = dp.document_id
       WHERE d.type = 'purchase'
         AND d.status NOT IN ('draft', 'cancelled')
+        AND (d.currency_code = ? OR d.currency_code IS NULL)
         AND dp.date >= ? AND dp.date <= ?
     ''',
-      [fromStr, toStr],
+      [effectiveCurrency, fromStr, toStr],
     );
 
     final Map<String, double> disbursementsByMethod = {};
@@ -1305,9 +1330,10 @@ class BusinessReportingService {
       FROM documents v
       WHERE v.type = 'expense_voucher'
         AND v.status NOT IN ('draft', 'cancelled')
+        AND (v.currency_code = ? OR v.currency_code IS NULL)
         AND v.date >= ? AND v.date <= ?
     ''',
-      [fromStr, toStr],
+      [effectiveCurrency, fromStr, toStr],
     );
 
     for (final r in expenseRows) {
@@ -1335,6 +1361,8 @@ class BusinessReportingService {
       expenseVouchers: expenseVouchers,
       disbursementsByMethod: disbursementsByMethod,
       totalDisbursed: totalDisbursed,
+      hasLegacyForeignCurrency: legacyCount > 0,
+      currencyCode: effectiveCurrency,
     );
   }
 
@@ -1345,8 +1373,11 @@ class BusinessReportingService {
   Future<AgingReportData> getAgingReport({
     required String documentType,
     DateTime? asOf,
+    String? currencyCode,
   }) async {
     final db = await DatabaseHelper.instance.database;
+    final biz = await DatabaseHelper.instance.getFirstBusiness();
+    final effectiveCurrency = currencyCode ?? biz?.currencyCode ?? 'SDG';
     final asOfDate = asOf ?? DateTime.now();
     final docType = (documentType == 'purchase') ? 'purchase' : 'invoice';
 
@@ -1357,18 +1388,36 @@ class BusinessReportingService {
         d.document_number,
         d.date,
         d.contact_id,
-        COALESCE(c.name, d.recipient_name, 'غير محدد') AS contact_name,
+        COALESCE(c.name, d.recipient_name) AS contact_name,
         COALESCE(c.phone, d.recipient_phone) AS contact_phone,
         d.remaining
       FROM documents d
       LEFT JOIN contacts c ON c.id = d.contact_id
       WHERE d.type = ?
         AND d.status NOT IN ('draft', 'cancelled')
+        AND (d.currency_code = ? OR d.currency_code IS NULL)
         AND d.remaining > 0.001
       ORDER BY d.date ASC
     ''',
-      [docType],
+      [docType, effectiveCurrency],
     );
+
+    final legacyRows = await db.rawQuery(
+      '''
+      SELECT COUNT(*) AS count
+      FROM documents d
+      WHERE d.type = ?
+        AND d.status NOT IN ('draft', 'cancelled')
+        AND d.currency_code IS NOT NULL
+        AND d.currency_code != ?
+        AND d.remaining > 0.001
+    ''',
+      [docType, effectiveCurrency],
+    );
+    final int legacyCount =
+        (legacyRows.isNotEmpty ? legacyRows.first['count'] as num? : 0)
+            ?.toInt() ??
+        0;
 
     AgingBucketSummary overall = const AgingBucketSummary();
     final Map<String, _ContactAgingAccumulator> contactMap = {};
@@ -1380,7 +1429,7 @@ class BusinessReportingService {
       final safeDays = daysOld < 0 ? 0 : daysOld;
       final remaining = (r['remaining'] as num?)?.toDouble() ?? 0.0;
       final contactId = r['contact_id'] as int?;
-      final contactName = (r['contact_name'] as String?)?.trim() ?? 'غير محدد';
+      final contactName = (r['contact_name'] as String?)?.trim() ?? '';
       final phone = r['contact_phone'] as String?;
 
       overall = overall.copyWithAdded(daysOld: safeDays, amount: remaining);
@@ -1419,6 +1468,8 @@ class BusinessReportingService {
       asOfDate: asOfDate,
       overall: overall,
       contactItems: contactItems,
+      hasLegacyForeignCurrency: legacyCount > 0,
+      currencyCode: effectiveCurrency,
     );
   }
 
@@ -1616,11 +1667,15 @@ class AgingReportData {
   final DateTime asOfDate;
   final AgingBucketSummary overall;
   final List<ContactAgingItem> contactItems;
+  final bool hasLegacyForeignCurrency;
+  final String currencyCode;
 
   const AgingReportData({
     required this.asOfDate,
     required this.overall,
     required this.contactItems,
+    this.hasLegacyForeignCurrency = false,
+    this.currencyCode = 'SDG',
   });
 }
 
@@ -1654,6 +1709,8 @@ class DailyClosingSummary {
   final double expenseVouchers;
   final Map<String, double> disbursementsByMethod;
   final double totalDisbursed;
+  final bool hasLegacyForeignCurrency;
+  final String currencyCode;
 
   double get netCashCollected =>
       (collectionsByMethod['cash'] ?? 0.0) -
@@ -1675,6 +1732,8 @@ class DailyClosingSummary {
     required this.expenseVouchers,
     required this.disbursementsByMethod,
     required this.totalDisbursed,
+    this.hasLegacyForeignCurrency = false,
+    this.currencyCode = 'SDG',
   });
 }
 

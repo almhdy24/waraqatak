@@ -256,6 +256,66 @@ void main() {
         expect(report.contactItems[1].contactName, equals('أحمد إبراهيم'));
         expect(report.contactItems[1].buckets.total, equals(3000.0));
         expect(report.contactItems[1].openDocumentCount, equals(2));
+        expect(report.hasLegacyForeignCurrency, isFalse);
+      },
+    );
+
+    test(
+      'getAgingReport excludes legacy foreign currency (USD) documents and sets hasLegacyForeignCurrency',
+      () async {
+        final db = DatabaseHelper.instance;
+        final rawDb = await db.database;
+        final asOf = DateTime(2026, 11, 23, 12, 0);
+
+        await rawDb.delete('documents');
+
+        // 1. SDG invoice (10 days old, 1500 remaining)
+        await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-SDG-1',
+          'date': asOf.subtract(const Duration(days: 10)).toIso8601String(),
+          'recipient_name': 'عميل محلي',
+          'subtotal': 1500.0,
+          'discount': 0.0,
+          'tax_rate': 0.0,
+          'tax_amount': 0.0,
+          'total': 1500.0,
+          'paid': 0.0,
+          'remaining': 1500.0,
+          'status': DocumentStatus.issued,
+          'currency_code': 'SDG',
+        });
+
+        // 2. Legacy USD invoice (10 days old, 500 remaining)
+        await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-USD-1',
+          'date': asOf.subtract(const Duration(days: 10)).toIso8601String(),
+          'recipient_name': 'عميل دولي',
+          'subtotal': 500.0,
+          'discount': 0.0,
+          'tax_rate': 0.0,
+          'tax_amount': 0.0,
+          'total': 500.0,
+          'paid': 0.0,
+          'remaining': 500.0,
+          'status': DocumentStatus.issued,
+          'currency_code': 'USD',
+        });
+
+        final report = await BusinessReportingService.instance.getAgingReport(
+          documentType: 'invoice',
+          asOf: asOf,
+        );
+
+        // USD amount is excluded from SDG bucket
+        expect(report.overall.current0To30, equals(1500.0));
+        expect(report.overall.total, equals(1500.0));
+        expect(report.contactItems.length, equals(1));
+        expect(report.contactItems[0].contactName, equals('عميل محلي'));
+
+        // Flag indicates legacy foreign currency documents exist
+        expect(report.hasLegacyForeignCurrency, isTrue);
       },
     );
   });

@@ -256,13 +256,14 @@ class _LowStockReportScreenState extends State<LowStockReportScreen> {
           ),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              tooltip: l10n.printOrShareReport,
-              onPressed: summary != null && summary.items.isNotEmpty
-                  ? () => _openExportMenu(context, l10n)
-                  : null,
-            ),
+            if (ReportExportMenu.canExport())
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: l10n.printOrShareReport,
+                onPressed: summary != null && summary.items.isNotEmpty
+                    ? () => _openExportMenu(context, l10n)
+                    : null,
+              ),
           ],
         ),
         body: ResponsiveCenter(
