@@ -29,6 +29,7 @@ import '../../screens/purchase_screen.dart';
 import '../../screens/quick_sale_screen.dart';
 import '../../screens/quotation_screen.dart';
 import '../../screens/reports/accounting_screen.dart';
+import '../../screens/reports/aging_report_screen.dart';
 import '../../screens/reports/customer_report_screen.dart';
 import '../../screens/reports/daily_closing_report_screen.dart';
 import '../../screens/reports/inventory_report_screen.dart';
@@ -227,6 +228,9 @@ abstract final class ScreenAccessPolicy {
       PermissionRegistry.reportsViewReceivables,
     ),
     SupplierReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewReceivables,
+    ),
+    AgingReportScreen: const ScreenPolicy.require(
       PermissionRegistry.reportsViewReceivables,
     ),
     ProductReportScreen: const ScreenPolicy.require(

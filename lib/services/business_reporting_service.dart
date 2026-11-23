@@ -1337,6 +1337,186 @@ class BusinessReportingService {
       totalDisbursed: totalDisbursed,
     );
   }
+
+  /// Receivables & Payables Aging Report:
+  /// Segregates uncancelled documents with remaining balances into standard
+  /// aging buckets: 0–30 days, 31–60 days, 61–90 days, 90+ days based on
+  /// documents.date relative to asOfDate.
+  Future<AgingReportData> getAgingReport({
+    required String documentType,
+    DateTime? asOf,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final asOfDate = asOf ?? DateTime.now();
+
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        d.id,
+        d.document_number,
+        d.date,
+        d.contact_id,
+        COALESCE(c.name, d.recipient_name, 'غير محدد') AS contact_name,
+        COALESCE(c.phone, d.recipient_phone) AS contact_phone,
+        d.remaining
+      FROM documents d
+      LEFT JOIN contacts c ON c.id = d.contact_id
+      WHERE d.type = ?
+        AND d.status != 'cancelled'
+        AND d.remaining > 0.001
+      ORDER BY d.date ASC
+    ''',
+      [documentType],
+    );
+
+    AgingBucketSummary overall = const AgingBucketSummary();
+    final Map<String, _ContactAgingAccumulator> contactMap = {};
+
+    for (final r in rows) {
+      final dateStr = r['date'] as String;
+      final docDate = DateTime.tryParse(dateStr) ?? asOfDate;
+      final daysOld = asOfDate.difference(docDate).inDays;
+      final safeDays = daysOld < 0 ? 0 : daysOld;
+      final remaining = (r['remaining'] as num?)?.toDouble() ?? 0.0;
+      final contactId = r['contact_id'] as int?;
+      final contactName = (r['contact_name'] as String?)?.trim() ?? 'غير محدد';
+      final phone = r['contact_phone'] as String?;
+
+      overall = overall.copyWithAdded(daysOld: safeDays, amount: remaining);
+
+      final key = contactId != null ? 'id_$contactId' : 'name_$contactName';
+      final acc = contactMap.putIfAbsent(
+        key,
+        () => _ContactAgingAccumulator(
+          contactId: contactId,
+          contactName: contactName,
+          phone: phone,
+        ),
+      );
+      acc.buckets = acc.buckets.copyWithAdded(
+        daysOld: safeDays,
+        amount: remaining,
+      );
+      acc.openDocumentCount += 1;
+    }
+
+    final contactItems = contactMap.values
+        .map(
+          (a) => ContactAgingItem(
+            contactId: a.contactId,
+            contactName: a.contactName,
+            phone: a.phone,
+            buckets: a.buckets,
+            openDocumentCount: a.openDocumentCount,
+          ),
+        )
+        .toList();
+
+    contactItems.sort((a, b) => b.buckets.total.compareTo(a.buckets.total));
+
+    return AgingReportData(
+      asOfDate: asOfDate,
+      overall: overall,
+      contactItems: contactItems,
+    );
+  }
+}
+
+class AgingBucketSummary {
+  final double current0To30;
+  final double days31To60;
+  final double days61To90;
+  final double days90Plus;
+  final double total;
+
+  const AgingBucketSummary({
+    this.current0To30 = 0.0,
+    this.days31To60 = 0.0,
+    this.days61To90 = 0.0,
+    this.days90Plus = 0.0,
+    this.total = 0.0,
+  });
+
+  AgingBucketSummary copyWithAdded({
+    required int daysOld,
+    required double amount,
+  }) {
+    if (daysOld <= 30) {
+      return AgingBucketSummary(
+        current0To30: current0To30 + amount,
+        days31To60: days31To60,
+        days61To90: days61To90,
+        days90Plus: days90Plus,
+        total: total + amount,
+      );
+    } else if (daysOld <= 60) {
+      return AgingBucketSummary(
+        current0To30: current0To30,
+        days31To60: days31To60 + amount,
+        days61To90: days61To90,
+        days90Plus: days90Plus,
+        total: total + amount,
+      );
+    } else if (daysOld <= 90) {
+      return AgingBucketSummary(
+        current0To30: current0To30,
+        days31To60: days31To60,
+        days61To90: days61To90 + amount,
+        days90Plus: days90Plus,
+        total: total + amount,
+      );
+    } else {
+      return AgingBucketSummary(
+        current0To30: current0To30,
+        days31To60: days31To60,
+        days61To90: days61To90,
+        days90Plus: days90Plus + amount,
+        total: total + amount,
+      );
+    }
+  }
+}
+
+class ContactAgingItem {
+  final int? contactId;
+  final String contactName;
+  final String? phone;
+  final AgingBucketSummary buckets;
+  final int openDocumentCount;
+
+  const ContactAgingItem({
+    required this.contactId,
+    required this.contactName,
+    this.phone,
+    required this.buckets,
+    required this.openDocumentCount,
+  });
+}
+
+class AgingReportData {
+  final DateTime asOfDate;
+  final AgingBucketSummary overall;
+  final List<ContactAgingItem> contactItems;
+
+  const AgingReportData({
+    required this.asOfDate,
+    required this.overall,
+    required this.contactItems,
+  });
+}
+
+class _ContactAgingAccumulator {
+  final int? contactId;
+  final String contactName;
+  final String? phone;
+  AgingBucketSummary buckets = const AgingBucketSummary();
+  int openDocumentCount = 0;
+
+  _ContactAgingAccumulator({
+    required this.contactId,
+    required this.contactName,
+    this.phone,
+  });
 }
 
 class DailyClosingSummary {

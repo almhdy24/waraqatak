@@ -2164,6 +2164,27 @@ class AppLocalizations {
   String get totalOutflows =>
       _t('إجمالي المصروفات والمدفوعات', 'Total Outflows');
 
+  String get agingReport => _t('أعمار الديون والالتزامات', 'Debt Aging Report');
+  String get reportSubtitleAging => _t(
+    'تصنيف الديون والمستحقات حسب فترات التأخير (30، 60، 90+ يوماً)',
+    'Receivables and payables aging buckets (30, 60, 90+ days)',
+  );
+  String get receivablesAging =>
+      _t('ديون العملاء (مستحقات)', 'Receivables Aging');
+  String get payablesAging => _t('ديون الموردين (التزامات)', 'Payables Aging');
+  String get agingBucket0To30 => _t('أقل من 30 يوماً', '0–30 Days');
+  String get agingBucket31To60 => _t('31 إلى 60 يوماً', '31–60 Days');
+  String get agingBucket61To90 => _t('61 إلى 90 يوماً', '61–90 Days');
+  String get agingBucket90Plus => _t('أكثر من 90 يوماً', '90+ Days');
+  String get totalRemainingDebt => _t('إجمالي المتبقي', 'Total Outstanding');
+  String get sendPaymentReminder =>
+      _t('إرسال تذكير بالسداد', 'Send Payment Reminder');
+  String get openInvoices => _t('فواتير غير مسددة', 'Open Invoices');
+  String get proDetailedAgingTitle => _t(
+    'تفاصيل أعمار الديون لكل عميل ومورد متوفرة في باقة برو',
+    'Per-contact aging breakdown is available in Pro',
+  );
+
   // ========== ACTIVATION SUPPORT & GUIDANCE ==========
   String get activationTroubleTitle =>
       _t('واجهت مشكلة في التفعيل؟', 'Having trouble with activation?');

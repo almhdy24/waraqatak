@@ -14,7 +14,7 @@
 - [x] **Batch D** - Export and share foundation
 - [x] **Batch E** - Shared date range across reports
 - [x] **Batch F** - Daily closing (end-of-day) report [new]
-- [ ] **Batch G** - Receivables and payables aging [new]
+- [x] **Batch G** - Receivables and payables aging [new]
 - [ ] **Batch H** - Payments report: cash flow by method
 - [ ] **Batch I** - UI/UX polish across reports
 - [ ] **Batch J** - Phase 3 extras (J1: Period comparison; J2: Tax & discounts report)
@@ -147,6 +147,24 @@
   - Differentiated cash collected today for current-period invoices from collections on prior-period invoices (`customerDebtCollected`), which is vital for retail cash accounting.
   - Cash register variance calculation is reactive and instantly provides visual feedback (green balanced / blue surplus / red shortage).
   - Outflow reporting and its subtraction from expected cash is conditionally included based on `reportsViewFinancials`.
+- **Validation:**
+  - `dart format`: 6 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch G: Receivables and payables aging report
+
+- **Batch ID:** `batch-g`
+- **Files Changed:**
+  - `lib/localization/app_localizations.dart`: Added localized Arabic and English getters for Aging Report, bucket labels (0–30, 31–60, 61–90, 90+ days), receivables/payables aging, total outstanding, and payment reminder action.
+  - `lib/services/business_reporting_service.dart`: Added pure aging models (`AgingBucketSummary`, `ContactAgingItem`, `AgingReportData`) and `getAgingReport(documentType, asOf)` method calculating standard aging buckets from `documents.date` relative to an as-of date.
+  - `lib/screens/reports/aging_report_screen.dart`: Created full Aging Report Screen with two tabs (Customers / Suppliers), top 4-bucket overview KPI cards (Free tier), and per-contact breakdown with WhatsApp reminder action (Pro tier gated by `Feature.advancedReports`), PDF (A4/80mm), CSV, and WhatsApp export.
+  - `lib/services/access/screen_access_policy.dart`: Registered `AgingReportScreen` in manifest policy requiring `PermissionRegistry.reportsViewReceivables`.
+  - `lib/screens/reports_screen.dart`: Added Aging Report tile under `reportCatSalesPurchases` requiring `reportsViewReceivables`.
+  - `test/services/debt_aging_test.dart`: Added unit tests verifying pure `AgingBucketSummary` arithmetic, query grouping, exclusion of cancelled and paid documents, and contact debt descending sorting.
+- **Decisions Taken:**
+  - Grouped aging buckets strictly using `documents.date` (due date column does not exist in schema).
+  - Designed Free vs Pro split: Bucket totals are Free to all merchants; granular customer/supplier breakdown with reminder triggers requires Pro (`Feature.advancedReports`), consistent with the product tier boundary.
 - **Validation:**
   - `dart format`: 6 files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).

@@ -8,6 +8,7 @@ import '../services/access/permission_registry.dart';
 import '../services/analytics/analytics_service.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import 'reports/accounting_screen.dart';
+import 'reports/aging_report_screen.dart';
 import 'reports/customer_report_screen.dart';
 import 'reports/daily_closing_report_screen.dart';
 import 'reports/inventory_report_screen.dart';
@@ -97,6 +98,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   static String? _resolveReportKey(Widget screen) {
+    if (screen is AgingReportScreen) return 'aging';
     if (screen is DailyClosingReportScreen) return 'daily_closing';
     if (screen is AccountingScreen) return 'accounting';
     if (screen is SalesReportScreen) return 'sales';
@@ -183,6 +185,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleSuppliers,
             screen: const SupplierReportScreen(),
             proFeature: Feature.advancedReports,
+            permission: PermissionRegistry.reportsViewReceivables,
+          ),
+          _ReportEntry(
+            icon: Icons.hourglass_bottom_rounded,
+            color: const Color(0xFFC2185B),
+            title: l10n.agingReport,
+            subtitle: l10n.reportSubtitleAging,
+            screen: const AgingReportScreen(),
             permission: PermissionRegistry.reportsViewReceivables,
           ),
         ],
