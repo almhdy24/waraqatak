@@ -208,3 +208,21 @@
   - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
 
+### Batch J: Tax and discounts summary report
+
+- **Batch ID:** `batch-j`
+- **Files Changed:**
+  - `lib/services/business_reporting_service.dart`: Added `TaxDiscountSummary` data model and `getTaxDiscountSummary({required DateTime from, required DateTime to, String? currencyCode})` single-query aggregation method for sales tax collected, purchase tax paid, net tax, sales discounts given, purchase discounts received, net discounts, and list of transactions with taxes or discounts.
+  - `lib/screens/reports/tax_discount_report_screen.dart`: Created full Tax & Discounts Report Screen (Free tier) with top KPI metric cards (tax and discount summaries), drilldown list of all invoices and purchases that incurred tax or discount, click-through into `DocumentDetailScreen`, date filter synchronized with `ReportsDateScope`, PDF (A4/80mm), CSV, and WhatsApp export.
+  - `lib/services/access/screen_access_policy.dart`: Registered `TaxDiscountReportScreen` requiring `PermissionRegistry.reportsViewFinancials`.
+  - `lib/screens/reports_screen.dart`: Added Tax & Discounts Report tile under `reportCatSalesPurchases` requiring `reportsViewFinancials`.
+  - `test/services/tax_discount_report_test.dart`: Added unit tests verifying pure `TaxDiscountSummary` netTax and netDiscounts calculation, query aggregation of invoices and purchases, handling of zero values, and exclusion of cancelled documents.
+- **Decisions Taken:**
+  - Available as a Free tier feature accessible to all business owners, gated by `reportsViewFinancials` to preserve role-based authorization.
+  - Documents list provides instant drilldown into individual tax invoices and purchase bills for tax auditing.
+- **Validation:**
+  - `dart format`: 5 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+

@@ -38,6 +38,7 @@ import '../../screens/reports/product_report_screen.dart';
 import '../../screens/reports/purchases_report_screen.dart';
 import '../../screens/reports/sales_report_screen.dart';
 import '../../screens/reports/supplier_report_screen.dart';
+import '../../screens/reports/tax_discount_report_screen.dart';
 import '../../screens/reports/advanced_inventory_analytics_screen.dart';
 import '../../screens/reports_screen.dart';
 import '../../screens/settings_screen.dart';
@@ -235,6 +236,9 @@ abstract final class ScreenAccessPolicy {
     ),
     ProductReportScreen: const ScreenPolicy.require(
       PermissionRegistry.reportsViewSales,
+    ),
+    TaxDiscountReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewFinancials,
     ),
     AdvancedInventoryAnalyticsScreen: const ScreenPolicy.require(
       PermissionRegistry.reportsViewInventoryCost,

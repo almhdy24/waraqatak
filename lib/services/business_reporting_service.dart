@@ -1420,6 +1420,124 @@ class BusinessReportingService {
       contactItems: contactItems,
     );
   }
+
+  /// Taxes and Discounts Summary:
+  /// Summarizes sales tax collected, purchase tax paid, sales discounts given,
+  /// and purchase discounts received over the selected period.
+  Future<TaxDiscountSummary> getTaxDiscountSummary({
+    required DateTime from,
+    required DateTime to,
+    String? currencyCode,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+    final biz = await DatabaseHelper.instance.getFirstBusiness();
+    final effectiveCurrency = currencyCode ?? biz?.currencyCode ?? 'SDG';
+
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        type,
+        COALESCE(SUM(tax_amount), 0.0) as total_tax,
+        COALESCE(SUM(discount), 0.0) as total_discount,
+        COALESCE(SUM(subtotal), 0.0) as total_subtotal,
+        COUNT(*) as doc_count
+      FROM documents
+      WHERE date >= ? AND date <= ?
+        AND status NOT IN ('draft', 'cancelled')
+        AND type IN ('invoice', 'purchase')
+        AND (currency_code = ? OR currency_code IS NULL)
+      GROUP BY type
+      ''',
+      [from.toIso8601String(), to.toIso8601String(), effectiveCurrency],
+    );
+
+    double salesTax = 0.0;
+    double purchaseTax = 0.0;
+    double salesDiscount = 0.0;
+    double purchaseDiscount = 0.0;
+    double salesSubtotal = 0.0;
+    double purchaseSubtotal = 0.0;
+    int salesCount = 0;
+    int purchaseCount = 0;
+
+    for (final r in rows) {
+      final t = r['type'] as String?;
+      final tax = (r['total_tax'] as num?)?.toDouble() ?? 0.0;
+      final disc = (r['total_discount'] as num?)?.toDouble() ?? 0.0;
+      final sub = (r['total_subtotal'] as num?)?.toDouble() ?? 0.0;
+      final count = (r['doc_count'] as num?)?.toInt() ?? 0;
+
+      if (t == 'invoice') {
+        salesTax = tax;
+        salesDiscount = disc;
+        salesSubtotal = sub;
+        salesCount = count;
+      } else if (t == 'purchase') {
+        purchaseTax = tax;
+        purchaseDiscount = disc;
+        purchaseSubtotal = sub;
+        purchaseCount = count;
+      }
+    }
+
+    final docRows = await db.rawQuery(
+      '''
+      SELECT *
+      FROM documents
+      WHERE date >= ? AND date <= ?
+        AND status NOT IN ('draft', 'cancelled')
+        AND type IN ('invoice', 'purchase')
+        AND (tax_amount > 0 OR discount > 0)
+        AND (currency_code = ? OR currency_code IS NULL)
+      ORDER BY date DESC
+      ''',
+      [from.toIso8601String(), to.toIso8601String(), effectiveCurrency],
+    );
+
+    final docs = docRows.map((m) => Document.fromMap(m)).toList();
+
+    return TaxDiscountSummary(
+      salesTaxCollected: salesTax,
+      purchaseTaxPaid: purchaseTax,
+      salesDiscountsGiven: salesDiscount,
+      purchaseDiscountsReceived: purchaseDiscount,
+      salesDocCount: salesCount,
+      purchaseDocCount: purchaseCount,
+      salesSubtotal: salesSubtotal,
+      purchaseSubtotal: purchaseSubtotal,
+      currencyCode: effectiveCurrency,
+      documents: docs,
+    );
+  }
+}
+
+class TaxDiscountSummary {
+  final double salesTaxCollected;
+  final double purchaseTaxPaid;
+  final double salesDiscountsGiven;
+  final double purchaseDiscountsReceived;
+  final int salesDocCount;
+  final int purchaseDocCount;
+  final double salesSubtotal;
+  final double purchaseSubtotal;
+  final String currencyCode;
+  final List<Document> documents;
+
+  const TaxDiscountSummary({
+    required this.salesTaxCollected,
+    required this.purchaseTaxPaid,
+    required this.salesDiscountsGiven,
+    required this.purchaseDiscountsReceived,
+    required this.salesDocCount,
+    required this.purchaseDocCount,
+    required this.salesSubtotal,
+    required this.purchaseSubtotal,
+    required this.currencyCode,
+    this.documents = const [],
+  });
+
+  double get netTax => salesTaxCollected - purchaseTaxPaid;
+  double get netDiscounts => purchaseDiscountsReceived - salesDiscountsGiven;
 }
 
 class AgingBucketSummary {

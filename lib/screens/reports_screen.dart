@@ -18,6 +18,7 @@ import 'reports/purchases_report_screen.dart';
 import 'reports/reports_date_scope.dart';
 import 'reports/sales_report_screen.dart';
 import 'reports/supplier_report_screen.dart';
+import 'reports/tax_discount_report_screen.dart';
 import 'stock_movements_screen.dart';
 import '../widgets/responsive.dart';
 import 'audit_history_screen.dart';
@@ -168,6 +169,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.paymentsReport,
             subtitle: l10n.reportSubtitlePayments,
             screen: const PaymentsReportScreen(),
+            permission: PermissionRegistry.reportsViewFinancials,
+          ),
+          _ReportEntry(
+            icon: Icons.receipt_long_outlined,
+            color: const Color(0xFF00695C),
+            title: l10n.taxDiscountReport,
+            subtitle: l10n.reportSubtitleTaxDiscount,
+            screen: const TaxDiscountReportScreen(),
             permission: PermissionRegistry.reportsViewFinancials,
           ),
           _ReportEntry(
