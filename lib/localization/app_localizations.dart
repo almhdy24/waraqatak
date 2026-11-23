@@ -2180,6 +2180,20 @@ class AppLocalizations {
   String get totalRemainingDebt => _t('إجمالي المتبقي', 'Total Outstanding');
   String get sendPaymentReminder =>
       _t('إرسال تذكير بالسداد', 'Send Payment Reminder');
+  String agingReminderMessage(
+    String contactName,
+    String amount,
+    String currency,
+  ) => _t(
+    'السلام عليكم $contactName،\n'
+        'نود تذكيركم بأن لديكم رصيد مستحق بقيمة $amount $currency طرفنا.\n'
+        'نرجو التكرم بترتيب السداد في أقرب وقت.\n'
+        'شكراً لتعاملكم معنا.',
+    'Hello $contactName,\n'
+        'We would like to remind you that you have an outstanding balance of $amount $currency with us.\n'
+        'Please arrange payment at your earliest convenience.\n'
+        'Thank you for your business.',
+  );
   String get openInvoices => _t('فواتير غير مسددة', 'Open Invoices');
   String get proDetailedAgingTitle => _t(
     'تفاصيل أعمار الديون لكل عميل ومورد متوفرة في باقة برو',

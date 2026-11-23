@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:url_launcher/url_launcher.dart';
 import '../../database/database_helper.dart';
 import '../../localization/app_localizations.dart';
 import '../../models/business.dart';
@@ -12,6 +13,7 @@ import '../../services/feature_access.dart';
 import '../../services/license_service.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
+import '../../utils/phone_utils.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_design_tokens.dart';
 import '../../widgets/app_empty_state.dart';
@@ -317,11 +319,31 @@ class _AgingReportScreenState extends State<AgingReportScreen>
     ContactAgingItem item,
     String baseCurrency,
   ) async {
-    final text =
-        'السلام عليكم ${item.contactName}،\n'
-        'نود تذكيركم بأن لديكم رصيد مستحق بقيمة ${_numFmt.format(item.buckets.total)} $baseCurrency طرفنا.\n'
-        'نرجو التكرم بترتيب السداد في أقرب وقت.\n'
-        'شكراً لتعاملكم معنا.';
+    final displayName = item.contactName.isEmpty
+        ? l10n.unspecified
+        : item.contactName;
+    final formattedAmount = _numFmt.format(item.buckets.total);
+    final text = l10n.agingReminderMessage(
+      displayName,
+      formattedAmount,
+      baseCurrency,
+    );
+
+    final normalized = normalizeSudanPhone(item.phone);
+    if (normalized != null) {
+      final uri = Uri.parse(
+        'https://wa.me/$normalized?text=${Uri.encodeComponent(text)}',
+      );
+      try {
+        final launched = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (launched) return;
+      } catch (_) {
+        // Fall back to system share sheet
+      }
+    }
     await PdfService.shareText(text: text);
   }
 

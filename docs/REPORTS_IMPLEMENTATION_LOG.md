@@ -281,3 +281,20 @@
   - `dart format`: All touched files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch P2: UX & Consistency
+
+- **Batch ID:** `batch-p2-ux-consistency`
+- **Files Changed:**
+  - `lib/utils/phone_utils.dart`: Implemented pure function `normalizeSudanPhone(String? phone)` which normalizes Sudanese mobile numbers (09x Zain/MTN, 01x Sudani) to international format `249` + 9 digits, strips formatting characters (`-`, spaces, parens), validates length and digit constraints, supports valid international numbers, and returns null for invalid formats.
+  - `lib/localization/app_localizations.dart`: Added `agingReminderMessage(contactName, amount, currency)` with proper localized templates in both Arabic and English.
+  - `lib/screens/reports/aging_report_screen.dart`: Updated `_sendReminder` to use `l10n.agingReminderMessage`, normalize contact phone via `normalizeSudanPhone`, launch WhatsApp directly via `https://wa.me/<digits>?text=<encoded>`, and fall back gracefully to `PdfService.shareText`.
+  - `test/utils/phone_normalizer_test.dart`: Added unit tests covering null/empty inputs, local 10-digit 0-prefixed numbers, 9-digit local numbers, international `+249` and `00249` formats, already normalized 12-digit numbers, international non-Sudan numbers, and invalid strings.
+- **Decisions Taken:**
+  - P2-1: Standardized WhatsApp launch URL to `https://wa.me/<digits>` with `LaunchMode.externalApplication`, ensuring seamless intent handling across WhatsApp and WhatsApp Business on Android with transparent fallback to system share sheet.
+  - P2-2: Verified absence of hardcoded Arabic in SQL queries across all reporting and accounting services; localized aging reminder template in UI layer.
+  - P2-3: Verified all 10 date-ranged reporting screens initialize from and synchronize with `ReportsDateNotifier` and `ReportsDateScope`.
+- **Validation:**
+  - `dart format`: 4 files checked/formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
