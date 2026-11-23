@@ -10,6 +10,7 @@ import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
 
@@ -313,229 +314,232 @@ class _ProductReportScreenState extends State<ProductReportScreen>
     final totalProfit = summary?.totalTrustedGrossProfit ?? 0.0;
     final hasUnknownCost = summary?.hasIncompleteCosts ?? false;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.productReport),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: l10n.printOrShareReport,
-            onPressed: summary != null && summary.items.isNotEmpty
-                ? _exportPdf
-                : null,
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: l10n.salesByProduct),
-            Tab(text: l10n.profitByProduct),
-            Tab(text: l10n.productPerformance),
+    return ScreenAccessGate(
+      screenType: ProductReportScreen,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.productReport),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: summary != null && summary.items.isNotEmpty
+                  ? _exportPdf
+                  : null,
+            ),
           ],
+          bottom: TabBar(
+            controller: _tabController,
+            tabs: [
+              Tab(text: l10n.salesByProduct),
+              Tab(text: l10n.profitByProduct),
+              Tab(text: l10n.productPerformance),
+            ],
+          ),
         ),
-      ),
-      body: ResponsiveCenter(
-        child: Column(
-          children: [
-            // Date Filter
-            ReportDateFilter(
-              range: _range,
-              onChanged: (r) {
-                setState(() => _range = r);
-                _load();
-              },
-            ),
-
-            // Category Filter & Sort Bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-              child: Row(
-                children: [
-                  // Category Dropdown
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: _selectedCategory,
-                          isExpanded: true,
-                          hint: Text(
-                            l10n.allCategories,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          items: [
-                            DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text(
-                                l10n.allCategories,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            ..._categories.map(
-                              (c) => DropdownMenuItem<String?>(
-                                value: c,
-                                child: Text(
-                                  c,
-                                  style: const TextStyle(fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: (val) {
-                            setState(() => _selectedCategory = val);
-                            _load();
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Sort By Dropdown
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _sortBy,
-                          isExpanded: true,
-                          items: [
-                            DropdownMenuItem(
-                              value: 'revenue',
-                              child: Text(
-                                l10n.sortByRevenue,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'quantity',
-                              child: Text(
-                                l10n.sortByQuantity,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'profit',
-                              child: Text(
-                                l10n.sortByProfit,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _sortBy = val);
-                              _load();
-                            }
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+        body: ResponsiveCenter(
+          child: Column(
+            children: [
+              // Date Filter
+              ReportDateFilter(
+                range: _range,
+                onChanged: (r) {
+                  setState(() => _range = r);
+                  _load();
+                },
               ),
-            ),
 
-            // Summary Chips
-            if (summary != null && summary.items.isNotEmpty) ...[
+              // Category Filter & Sort Bar
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                 child: Row(
                   children: [
-                    _chip(
-                      l10n.totalSales,
-                      totalSalesValue,
-                      AppStatusColors.fg(context, AppStatus.success),
+                    // Category Dropdown
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: _selectedCategory,
+                            isExpanded: true,
+                            hint: Text(
+                              l10n.allCategories,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            items: [
+                              DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text(
+                                  l10n.allCategories,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              ..._categories.map(
+                                (c) => DropdownMenuItem<String?>(
+                                  value: c,
+                                  child: Text(
+                                    c,
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              setState(() => _selectedCategory = val);
+                              _load();
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    _chip(l10n.cogs, totalCogs, cs.secondary),
-                    const SizedBox(width: 8),
-                    _chip(
-                      l10n.grossProfit,
-                      totalProfit,
-                      AppStatusColors.fg(context, AppStatus.success),
+
+                    // Sort By Dropdown
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _sortBy,
+                            isExpanded: true,
+                            items: [
+                              DropdownMenuItem(
+                                value: 'revenue',
+                                child: Text(
+                                  l10n.sortByRevenue,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'quantity',
+                                child: Text(
+                                  l10n.sortByQuantity,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'profit',
+                                child: Text(
+                                  l10n.sortByProfit,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _sortBy = val);
+                                _load();
+                              }
+                            },
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              if (hasUnknownCost)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 13,
-                        color: AppStatusColors.fg(context, AppStatus.warning),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          l10n.costIncomplete,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppStatusColors.fg(
-                              context,
-                              AppStatus.warning,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if (summary.hasMultipleCurrencies)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 13,
-                        color: AppStatusColors.fg(context, AppStatus.warning),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          l10n.mixedCurrenciesNotice,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppStatusColors.fg(
-                              context,
-                              AppStatus.warning,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
 
-            // Active Tab Content List
-            Expanded(child: _buildList(context, l10n)),
-          ],
+              // Summary Chips
+              if (summary != null && summary.items.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                  child: Row(
+                    children: [
+                      _chip(
+                        l10n.totalSales,
+                        totalSalesValue,
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(l10n.cogs, totalCogs, cs.secondary),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.grossProfit,
+                        totalProfit,
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                    ],
+                  ),
+                ),
+                if (hasUnknownCost)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 13,
+                          color: AppStatusColors.fg(context, AppStatus.warning),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            l10n.costIncomplete,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppStatusColors.fg(
+                                context,
+                                AppStatus.warning,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (summary.hasMultipleCurrencies)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 13,
+                          color: AppStatusColors.fg(context, AppStatus.warning),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            l10n.mixedCurrenciesNotice,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppStatusColors.fg(
+                                context,
+                                AppStatus.warning,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+
+              // Active Tab Content List
+              Expanded(child: _buildList(context, l10n)),
+            ],
+          ),
         ),
       ),
     );

@@ -9,6 +9,7 @@ import '../services/pdf/pdf_report_builder.dart';
 import '../services/pdf_service.dart';
 import '../utils/error_utils.dart';
 import '../widgets/app_status_colors.dart';
+import '../widgets/access/screen_access_gate.dart';
 import '../widgets/pro_upgrade_sheet.dart';
 import '../widgets/responsive.dart';
 import 'document_detail_screen.dart';
@@ -37,7 +38,9 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
   }
 
   Future<void> _checkEntitlementAndLoad() async {
-    final entitlement = await LicenseService.instance.checkEntitlement(force: true);
+    final entitlement = await LicenseService.instance.checkEntitlement(
+      force: true,
+    );
     if (!FeatureAccess.canAccess(Feature.inventoryAudit, entitlement)) {
       if (mounted) {
         final activated = await ProUpgradeSheet.show(
@@ -45,8 +48,9 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
           feature: Feature.inventoryAudit,
         );
         if (activated && mounted) {
-          final updated =
-              await LicenseService.instance.checkEntitlement(force: true);
+          final updated = await LicenseService.instance.checkEntitlement(
+            force: true,
+          );
           if (FeatureAccess.canAccess(Feature.inventoryAudit, updated)) {
             await _load();
             return;
@@ -98,7 +102,9 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
 
     final rows = _events.map((e) {
       final ts = DateTime.tryParse(e['timestamp'] as String? ?? '');
-      final dateStr = ts != null ? _dateFmt.format(ts) : (e['timestamp']?.toString() ?? '—');
+      final dateStr = ts != null
+          ? _dateFmt.format(ts)
+          : (e['timestamp']?.toString() ?? '—');
       final action = e['action'] as String? ?? '—';
       final details = e['details'] as String? ?? '—';
       return <String>[dateStr, _formatActionLabel(action, l10n), details];
@@ -114,7 +120,11 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
       rows: rows,
     );
 
-    await PdfService.printOrShareReportPdf(data: data, business: business, l10n: l10n);
+    await PdfService.printOrShareReportPdf(
+      data: data,
+      business: business,
+      l10n: l10n,
+    );
   }
 
   String _formatActionLabel(String action, AppLocalizations l10n) {
@@ -147,9 +157,13 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
   }
 
   Color _getActionColor(BuildContext context, String action, ColorScheme cs) {
-    if (action.contains('finalized')) return AppStatusColors.fg(context, AppStatus.success);
+    if (action.contains('finalized')) {
+      return AppStatusColors.fg(context, AppStatus.success);
+    }
     if (action.contains('cancelled')) return cs.error;
-    if (action.startsWith('bulk_pricing')) return AppStatusColors.fg(context, AppStatus.info);
+    if (action.startsWith('bulk_pricing')) {
+      return AppStatusColors.fg(context, AppStatus.info);
+    }
     if (action.startsWith('csv_import')) return cs.tertiary;
     return AppStatusColors.fg(context, AppStatus.warning);
   }
@@ -159,142 +173,201 @@ class _AuditHistoryScreenState extends State<AuditHistoryScreen> {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.auditHistoryTitle),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: l10n.printOrShareReport,
-            onPressed: _events.isNotEmpty ? _exportPdf : null,
-          ),
-        ],
-      ),
-      body: ResponsiveCenter(
-        child: Column(
-          children: [
-            // Date Filter
-            ReportDateFilter(
-              range: _range,
-              onChanged: (newRange) {
-                setState(() => _range = newRange);
-                _load();
-              },
-            ),
-
-            // Event Type Filter Chips
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Row(
-                children: [
-                  _chip('all', l10n.allEvents),
-                  const SizedBox(width: 6),
-                  _chip('stocktake_finalized', l10n.eventStocktake),
-                  const SizedBox(width: 6),
-                  _chip('bulk_pricing', l10n.eventBulkPricing),
-                  const SizedBox(width: 6),
-                  _chip('csv_import', l10n.eventCsvImport),
-                  const SizedBox(width: 6),
-                  _chip('cost_reconciled', l10n.eventCostReconciled),
-                ],
-              ),
-            ),
-
-            const Divider(height: 1),
-
-            // Events List
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? Center(child: Text(_error!))
-                      : _events.isEmpty
-                          ? Center(child: Text(l10n.noDataForPeriod))
-                          : ListView.separated(
-                              itemCount: _events.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (ctx, idx) {
-                                final e = _events[idx];
-                                final action = e['action'] as String? ?? '';
-                                final details = e['details'] as String? ?? '—';
-                                final ts = DateTime.tryParse(e['timestamp'] as String? ?? '');
-                                final dateStr = ts != null ? _dateFmt.format(ts) : (e['timestamp'] ?? '—');
-                                final color = _getActionColor(context, action, cs);
-
-                                return ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: color.withValues(alpha: 0.12),
-                                    child: Icon(_getActionIcon(action), color: color, size: 20),
-                                  ),
-                                  title: Text(
-                                    _formatActionLabel(action, l10n),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(height: 2),
-                                      Text(details, style: const TextStyle(fontSize: 11)),
-                                      const SizedBox(height: 2),
-                                      Text(dateStr, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
-                                    ],
-                                  ),
-                                  onTap: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (ctx) => AlertDialog(
-                                        title: Text(_formatActionLabel(action, l10n)),
-                                        content: SingleChildScrollView(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text('${l10n.date}: $dateStr', style: const TextStyle(fontSize: 12)),
-                                              const SizedBox(height: 6),
-                                              Text('${l10n.actionTypeLabel}: $action', style: const TextStyle(fontSize: 12)),
-                                              if (e['entity_type'] != null) ...[
-                                                const SizedBox(height: 6),
-                                                Row(
-                                                  children: [
-                                                    Text('${l10n.entityLabel}: ${e['entity_type']} ', style: const TextStyle(fontSize: 12)),
-                                                    if (e['entity_id'] != null)
-                                                      Directionality(
-                                                        textDirection: TextDirection.ltr,
-                                                        child: Text('(#${e['entity_id']})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ],
-                                              const SizedBox(height: 10),
-                                              Text('${l10n.detailsLabel}:', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                              const SizedBox(height: 4),
-                                              SelectableText(details, style: const TextStyle(fontSize: 12)),
-                                            ],
-                                          ),
-                                        ),
-                                        actions: [
-                                          if (e['entity_type'] == 'document' && e['entity_id'] != null)
-                                            FilledButton.tonal(
-                                              onPressed: () {
-                                                Navigator.pop(ctx);
-                                                _openDocument(context, e['entity_id'] as int);
-                                              },
-                                              child: Text(l10n.viewDocument),
-                                            ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(ctx),
-                                            child: Text(l10n.close),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
+    return ScreenAccessGate(
+      screenType: AuditHistoryScreen,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.auditHistoryTitle),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: _events.isNotEmpty ? _exportPdf : null,
             ),
           ],
+        ),
+        body: ResponsiveCenter(
+          child: Column(
+            children: [
+              // Date Filter
+              ReportDateFilter(
+                range: _range,
+                onChanged: (newRange) {
+                  setState(() => _range = newRange);
+                  _load();
+                },
+              ),
+
+              // Event Type Filter Chips
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: Row(
+                  children: [
+                    _chip('all', l10n.allEvents),
+                    const SizedBox(width: 6),
+                    _chip('stocktake_finalized', l10n.eventStocktake),
+                    const SizedBox(width: 6),
+                    _chip('bulk_pricing', l10n.eventBulkPricing),
+                    const SizedBox(width: 6),
+                    _chip('csv_import', l10n.eventCsvImport),
+                    const SizedBox(width: 6),
+                    _chip('cost_reconciled', l10n.eventCostReconciled),
+                  ],
+                ),
+              ),
+
+              const Divider(height: 1),
+
+              // Events List
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                    ? Center(child: Text(_error!))
+                    : _events.isEmpty
+                    ? Center(child: Text(l10n.noDataForPeriod))
+                    : ListView.separated(
+                        itemCount: _events.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, idx) {
+                          final e = _events[idx];
+                          final action = e['action'] as String? ?? '';
+                          final details = e['details'] as String? ?? '—';
+                          final ts = DateTime.tryParse(
+                            e['timestamp'] as String? ?? '',
+                          );
+                          final dateStr = ts != null
+                              ? _dateFmt.format(ts)
+                              : (e['timestamp'] ?? '—');
+                          final color = _getActionColor(context, action, cs);
+
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: color.withValues(alpha: 0.12),
+                              child: Icon(
+                                _getActionIcon(action),
+                                color: color,
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              _formatActionLabel(action, l10n),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 2),
+                                Text(
+                                  details,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  dateStr,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            onTap: () {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: Text(_formatActionLabel(action, l10n)),
+                                  content: SingleChildScrollView(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${l10n.date}: $dateStr',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          '${l10n.actionTypeLabel}: $action',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        if (e['entity_type'] != null) ...[
+                                          const SizedBox(height: 6),
+                                          Row(
+                                            children: [
+                                              Text(
+                                                '${l10n.entityLabel}: ${e['entity_type']} ',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              if (e['entity_id'] != null)
+                                                Directionality(
+                                                  textDirection:
+                                                      TextDirection.ltr,
+                                                  child: Text(
+                                                    '(#${e['entity_id']})',
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          '${l10n.detailsLabel}:',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        SelectableText(
+                                          details,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  actions: [
+                                    if (e['entity_type'] == 'document' &&
+                                        e['entity_id'] != null)
+                                      FilledButton.tonal(
+                                        onPressed: () {
+                                          Navigator.pop(ctx);
+                                          _openDocument(
+                                            context,
+                                            e['entity_id'] as int,
+                                          );
+                                        },
+                                        child: Text(l10n.viewDocument),
+                                      ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: Text(l10n.close),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

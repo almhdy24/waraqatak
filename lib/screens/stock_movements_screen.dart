@@ -20,6 +20,7 @@ import '../widgets/app_loading_view.dart';
 import '../widgets/app_snackbar.dart';
 import '../widgets/app_status_colors.dart';
 import '../widgets/responsive.dart';
+import '../widgets/access/screen_access_gate.dart';
 import 'document_detail_screen.dart';
 import 'inventory_screen.dart';
 import 'reports/report_date_filter.dart';
@@ -209,8 +210,10 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                         )
                                       : null,
                                   selected: isSelected,
-                                  onTap: () =>
-                                      Navigator.pop(ctx, _ProductPickerResult(p)),
+                                  onTap: () => Navigator.pop(
+                                    ctx,
+                                    _ProductPickerResult(p),
+                                  ),
                                 );
                               },
                             ),
@@ -342,12 +345,16 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
 
   Color _typeColor(BuildContext context, String type, ColorScheme cs) =>
       switch (type) {
-        StockMovement.typeOpening =>
-          AppStatusColors.fg(context, AppStatus.info),
+        StockMovement.typeOpening => AppStatusColors.fg(
+          context,
+          AppStatus.info,
+        ),
         StockMovement.typePurchase => cs.tertiary,
         StockMovement.typeSale => cs.primary,
-        StockMovement.typeAdjustment =>
-          AppStatusColors.fg(context, AppStatus.warning),
+        StockMovement.typeAdjustment => AppStatusColors.fg(
+          context,
+          AppStatus.warning,
+        ),
         StockMovement.typeCancellation => cs.error,
         _ => cs.onSurfaceVariant,
       };
@@ -366,263 +373,274 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.stockMovementsReport),
-        centerTitle: true,
-        actions: [
-          if (_selectedProduct != null)
+    return ScreenAccessGate(
+      screenType: StockMovementsScreen,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.stockMovementsReport),
+          centerTitle: true,
+          actions: [
+            if (_selectedProduct != null)
+              IconButton(
+                icon: const Icon(Icons.tune),
+                tooltip: l10n.stockAdjustment,
+                onPressed: () async {
+                  final changed = await InventoryScreen.showAdjustDialog(
+                    context,
+                    _selectedProduct!,
+                  );
+                  if (changed) _load();
+                },
+              ),
             IconButton(
-              icon: const Icon(Icons.tune),
-              tooltip: l10n.stockAdjustment,
-              onPressed: () async {
-                final changed = await InventoryScreen.showAdjustDialog(
-                  context,
-                  _selectedProduct!,
-                );
-                if (changed) _load();
-              },
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed:
+                  _reportSummary != null && _reportSummary!.items.isNotEmpty
+                  ? _exportPdf
+                  : null,
             ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: l10n.printOrShareReport,
-            onPressed:
-                _reportSummary != null && _reportSummary!.items.isNotEmpty
-                ? _exportPdf
-                : null,
-          ),
-        ],
-      ),
-      body: ResponsiveCenter(
-        child: Column(
-          children: [
-            // Date Filter
-            ReportDateFilter(
-              range: _range,
-              onChanged: (r) {
-                setState(() {
-                  _range = r;
-                  _currentLimit = 300;
-                });
-                _load();
-              },
-            ),
-
-            // Searchable Product Filter Bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () => _openProductPicker(l10n),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: cs.outlineVariant),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.inventory_2_outlined,
-                        size: 20,
-                        color: cs.primary,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _selectedProduct?.name ?? l10n.allProducts,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: _selectedProduct != null
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            color: _selectedProduct != null
-                                ? cs.onSurface
-                                : cs.onSurfaceVariant,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (_selectedProduct != null)
-                        InkWell(
-                          borderRadius: BorderRadius.circular(16),
-                          onTap: () {
-                            setState(() {
-                              _selectedProduct = null;
-                              _currentLimit = 300;
-                            });
-                            _load();
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Icon(
-                              Icons.close,
-                              size: 18,
-                              color: cs.onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      else
-                        Icon(Icons.arrow_drop_down, color: cs.onSurfaceVariant),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Type Filter Chips
-            SizedBox(
-              height: 38,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: [
-                  _typeChip(l10n.all, 'all'),
-                  const SizedBox(width: 6),
-                  _typeChip(l10n.purchase, StockMovement.typePurchase),
-                  const SizedBox(width: 6),
-                  _typeChip(l10n.salesPeriod, StockMovement.typeSale),
-                  const SizedBox(width: 6),
-                  _typeChip(l10n.stockAdjustment, StockMovement.typeAdjustment),
-                  const SizedBox(width: 6),
-                  _typeChip(l10n.openingStock, StockMovement.typeOpening),
-                  const SizedBox(width: 6),
-                  _typeChip(
-                    l10n.documentCancellation,
-                    StockMovement.typeCancellation,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-
-            // Summary Bar
-            if (_reportSummary != null && !_loading)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                child: Builder(
-                  builder: (context) {
-                    final successColor =
-                        AppDesignTokens.semanticSuccess(context);
-                    final dangerColor =
-                        AppDesignTokens.semanticDanger(context);
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: successColor.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: successColor.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.arrow_downward,
-                                  size: 16,
-                                  color: successColor,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        l10n.totalStockIn,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: cs.onSurfaceVariant,
-                                        ),
-                                      ),
-                                      Text(
-                                        '+${FormatUtils.formatQuantity(_reportSummary!.totalInQuantity)}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                          color: successColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: dangerColor.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: dangerColor.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.arrow_upward,
-                                  size: 16,
-                                  color: dangerColor,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        l10n.totalStockOut,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: cs.onSurfaceVariant,
-                                        ),
-                                      ),
-                                      Text(
-                                        '-${FormatUtils.formatQuantity(_reportSummary!.totalOutQuantity)}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                          color: dangerColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 4),
-
-            // Movements List
-            Expanded(child: _buildBody(context, l10n, cs)),
           ],
+        ),
+        body: ResponsiveCenter(
+          child: Column(
+            children: [
+              // Date Filter
+              ReportDateFilter(
+                range: _range,
+                onChanged: (r) {
+                  setState(() {
+                    _range = r;
+                    _currentLimit = 300;
+                  });
+                  _load();
+                },
+              ),
+
+              // Searchable Product Filter Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _openProductPicker(l10n),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cs.outlineVariant),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.inventory_2_outlined,
+                          size: 20,
+                          color: cs.primary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _selectedProduct?.name ?? l10n.allProducts,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _selectedProduct != null
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: _selectedProduct != null
+                                  ? cs.onSurface
+                                  : cs.onSurfaceVariant,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (_selectedProduct != null)
+                          InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              setState(() {
+                                _selectedProduct = null;
+                                _currentLimit = 300;
+                              });
+                              _load();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.close,
+                                size: 18,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          )
+                        else
+                          Icon(
+                            Icons.arrow_drop_down,
+                            color: cs.onSurfaceVariant,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // Type Filter Chips
+              SizedBox(
+                height: 38,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    _typeChip(l10n.all, 'all'),
+                    const SizedBox(width: 6),
+                    _typeChip(l10n.purchase, StockMovement.typePurchase),
+                    const SizedBox(width: 6),
+                    _typeChip(l10n.salesPeriod, StockMovement.typeSale),
+                    const SizedBox(width: 6),
+                    _typeChip(
+                      l10n.stockAdjustment,
+                      StockMovement.typeAdjustment,
+                    ),
+                    const SizedBox(width: 6),
+                    _typeChip(l10n.openingStock, StockMovement.typeOpening),
+                    const SizedBox(width: 6),
+                    _typeChip(
+                      l10n.documentCancellation,
+                      StockMovement.typeCancellation,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+
+              // Summary Bar
+              if (_reportSummary != null && !_loading)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  child: Builder(
+                    builder: (context) {
+                      final successColor = AppDesignTokens.semanticSuccess(
+                        context,
+                      );
+                      final dangerColor = AppDesignTokens.semanticDanger(
+                        context,
+                      );
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: successColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: successColor.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.arrow_downward,
+                                    size: 16,
+                                    color: successColor,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          l10n.totalStockIn,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        Text(
+                                          '+${FormatUtils.formatQuantity(_reportSummary!.totalInQuantity)}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: successColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: dangerColor.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: dangerColor.withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.arrow_upward,
+                                    size: 16,
+                                    color: dangerColor,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          l10n.totalStockOut,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        Text(
+                                          '-${FormatUtils.formatQuantity(_reportSummary!.totalOutQuantity)}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: dangerColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 4),
+
+              // Movements List
+              Expanded(child: _buildBody(context, l10n, cs)),
+            ],
+          ),
         ),
       ),
     );
@@ -886,7 +904,9 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: AppStatusColors.fg(
-                                      context, AppStatus.info),
+                                    context,
+                                    AppStatus.info,
+                                  ),
                                 ),
                               ),
                             ] else if (m.costStatus ==
@@ -898,7 +918,9 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: AppStatusColors.fg(
-                                      context, AppStatus.warning),
+                                    context,
+                                    AppStatus.warning,
+                                  ),
                                 ),
                               ),
                             ],

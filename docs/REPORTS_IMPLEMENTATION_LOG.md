@@ -9,7 +9,7 @@
 ## Batch Status Overview
 
 - [x] **Batch A** - Performance and correctness
-- [ ] **Batch B** - Permissions and gates
+- [x] **Batch B** - Permissions and gates
 - [ ] **Batch C** - Localization cleanup
 - [ ] **Batch D** - Export and share foundation
 - [ ] **Batch E** - Shared date range across reports
@@ -38,3 +38,27 @@
   - `dart analyze`: Clean (0 issues).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
 
+
+### Batch B: Permissions and gates
+
+- **Batch ID:** `batch-b`
+- **Files Changed:**
+  - `lib/screens/reports/payments_report_screen.dart`: Wrapped in `ScreenAccessGate(screenType: PaymentsReportScreen)`.
+  - `lib/screens/reports/customer_report_screen.dart`: Wrapped in `ScreenAccessGate(screenType: CustomerReportScreen)`.
+  - `lib/screens/reports/supplier_report_screen.dart`: Wrapped in `ScreenAccessGate(screenType: SupplierReportScreen)`.
+  - `lib/screens/reports/product_report_screen.dart`: Wrapped in `ScreenAccessGate(screenType: ProductReportScreen)`.
+  - `lib/screens/reports/advanced_inventory_analytics_screen.dart`: Wrapped in `ScreenAccessGate(screenType: AdvancedInventoryAnalyticsScreen)`.
+  - `lib/screens/stock_movements_screen.dart`: Wrapped in `ScreenAccessGate(screenType: StockMovementsScreen)`.
+  - `lib/screens/audit_history_screen.dart`: Wrapped in `ScreenAccessGate(screenType: AuditHistoryScreen)`.
+  - `lib/screens/reports_screen.dart`: Realigned report permissions: Payments report to `reportsViewFinancials`; Customer & Supplier reports to `reportsViewReceivables`; Low Stock and Stock Movements to `productsView`; Product report to `reportsViewSales`.
+  - `lib/services/access/screen_access_policy.dart`: Aligned manifest policy requirements for `PaymentsReportScreen` (`reportsViewFinancials`), `CustomerReportScreen` (`reportsViewReceivables`), and `SupplierReportScreen` (`reportsViewReceivables`).
+  - `lib/services/access/access_seeder.dart`: Added `reportsViewReceivables` to `roleTemplateSalesperson`; added migration `migrateReceivablesPermissions` granting `reportsViewReceivables` to any role or user override holding `contactsViewBalances`.
+  - `test/access/reports_screen_policy_test.dart`: Added unit tests verifying permission manifest mappings and cashier access boundaries.
+- **Decisions Taken:**
+  - Standardized all 7 previously unguarded report/audit screens with `ScreenAccessGate` at top of `build()`.
+  - Prevented cashier from accessing payments report (which leaks financial cash balance) by requiring `reportsViewFinancials` instead of `paymentsRecord`.
+  - Used explicit SQL migration in `AccessSeeder.migrateReceivablesPermissions(db)` so existing installations seamlessly receive `reportsViewReceivables` for roles with `contactsViewBalances`.
+- **Validation:**
+  - `dart format`: 11 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.

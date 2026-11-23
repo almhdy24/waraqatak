@@ -7,6 +7,7 @@ import '../../models/currency.dart';
 import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../customer_detail_screen.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/responsive.dart';
@@ -58,7 +59,10 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { _rows = null; _error = null; });
+    setState(() {
+      _rows = null;
+      _error = null;
+    });
     try {
       final business = await DatabaseHelper.instance.getFirstBusiness();
       final currency = business?.currencyCode ?? 'SDG';
@@ -81,22 +85,34 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
     final business = await DatabaseHelper.instance.getFirstBusiness();
     if (business == null || _rows == null) return;
 
-    final totalAmount = _rows!.fold(0.0,
-        (s, r) => s + ((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble());
-    final totalPaid = _rows!.fold(0.0,
-        (s, r) => s + ((r['total_paid'] ?? r['paid'] ?? 0) as num).toDouble());
-    final totalPayable = _rows!.fold(0.0,
-        (s, r) => s + ((r['outstanding'] ?? 0) as num).toDouble());
+    final totalAmount = _rows!.fold(
+      0.0,
+      (s, r) => s + ((r['total_amount'] ?? r['total'] ?? 0) as num).toDouble(),
+    );
+    final totalPaid = _rows!.fold(
+      0.0,
+      (s, r) => s + ((r['total_paid'] ?? r['paid'] ?? 0) as num).toDouble(),
+    );
+    final totalPayable = _rows!.fold(
+      0.0,
+      (s, r) => s + ((r['outstanding'] ?? 0) as num).toDouble(),
+    );
 
     final columns = [
       PdfReportColumn(title: l10n.supplier, flex: 2.2),
       PdfReportColumn(title: l10n.phone, flex: 1.5),
       PdfReportColumn(title: l10n.total, flex: 1.3, align: pw.TextAlign.right),
       PdfReportColumn(title: l10n.paid, flex: 1.3, align: pw.TextAlign.right),
-      PdfReportColumn(title: l10n.remaining, flex: 1.3, align: pw.TextAlign.right),
+      PdfReportColumn(
+        title: l10n.remaining,
+        flex: 1.3,
+        align: pw.TextAlign.right,
+      ),
     ];
 
-    final rows = _rows!.map((r) => SupplierReportScreen.buildPdfRow(r, _numFmt)).toList();
+    final rows = _rows!
+        .map((r) => SupplierReportScreen.buildPdfRow(r, _numFmt))
+        .toList();
 
     final data = PdfReportData(
       title: l10n.supplierReport,
@@ -137,72 +153,123 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final totalPayable = _rows?.fold(0.0,
-        (s, r) => s + (r['outstanding'] as num).toDouble()) ?? 0.0;
+    final totalPayable =
+        _rows?.fold(0.0, (s, r) => s + (r['outstanding'] as num).toDouble()) ??
+        0.0;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.supplierReport),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: l10n.printOrShareReport,
-            onPressed: _rows != null && _rows!.isNotEmpty ? _exportPdf : null,
-          ),
-        ],
-      ),
-      body: ResponsiveCenter(child: Column(
-        children: [
-          if (_rows != null && _rows!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-              child: Row(children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppStatusColors.bg(context, AppStatus.warning),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(l10n.allTimeBalance,
-                          style: TextStyle(fontSize: 10, color: AppStatusColors.fg(context, AppStatus.warning))),
-                      Text(l10n.payable,
-                          style: TextStyle(fontSize: 10, color: AppStatusColors.fg(context, AppStatus.warning))),
-                      Text('${_numFmt.format(totalPayable)} $_currencySymbol',
-                          style: TextStyle(fontSize: 14,
-                              fontWeight: FontWeight.bold, color: AppStatusColors.fg(context, AppStatus.warning))),
-                    ]),
+    return ScreenAccessGate(
+      screenType: SupplierReportScreen,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.supplierReport),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: _rows != null && _rows!.isNotEmpty ? _exportPdf : null,
+            ),
+          ],
+        ),
+        body: ResponsiveCenter(
+          child: Column(
+            children: [
+              if (_rows != null && _rows!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppStatusColors.bg(
+                              context,
+                              AppStatus.warning,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                l10n.allTimeBalance,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppStatusColors.fg(
+                                    context,
+                                    AppStatus.warning,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                l10n.payable,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: AppStatusColors.fg(
+                                    context,
+                                    AppStatus.warning,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${_numFmt.format(totalPayable)} $_currencySymbol',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppStatusColors.fg(
+                                    context,
+                                    AppStatus.warning,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ]),
-            ),
-          Expanded(child: _buildList(context, l10n)),
-        ],
-      )),
+              Expanded(child: _buildList(context, l10n)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildList(BuildContext context, AppLocalizations l10n) {
     if (_error != null) {
-      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(l10n.operationFailed),
-        FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-      ]));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(l10n.operationFailed),
+            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
+          ],
+        ),
+      );
     }
     if (_rows == null) return const Center(child: CircularProgressIndicator());
     final cs = Theme.of(context).colorScheme;
     if (_rows!.isEmpty) {
-      return Center(child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.store_outlined, size: 64, color: cs.outline),
-          const SizedBox(height: 12),
-          Text(l10n.noReportData, textAlign: TextAlign.center,
-              style: TextStyle(color: cs.onSurfaceVariant)),
-        ]),
-      ));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.store_outlined, size: 64, color: cs.outline),
+              const SizedBox(height: 12),
+              Text(
+                l10n.noReportData,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return ListView.builder(
@@ -223,25 +290,43 @@ class _SupplierReportScreenState extends State<SupplierReportScreen> {
             side: BorderSide(color: cs.outlineVariant),
           ),
           child: ListTile(
-            title: Row(children: [
-              Expanded(child: Text(row['name'] as String,
-                  style: const TextStyle(fontWeight: FontWeight.bold))),
-              if (hasDebt)
-                Text(_numFmt.format(outstanding),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row['name'] as String,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                if (hasDebt)
+                  Text(
+                    _numFmt.format(outstanding),
                     style: TextStyle(
-                        fontWeight: FontWeight.w600, color: AppStatusColors.fg(context, AppStatus.warning))),
-            ]),
+                      fontWeight: FontWeight.w600,
+                      color: AppStatusColors.fg(context, AppStatus.warning),
+                    ),
+                  ),
+              ],
+            ),
             subtitle: Text(
               '${l10n.purchaseCount}: $docCount · ${l10n.totalPurchasesAmt}: ${_numFmt.format(total)}',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
-            trailing: hasDebt ? null : Icon(Icons.check_circle_outline,
-                color: AppStatusColors.fg(context, AppStatus.success), size: 18),
+            trailing: hasDebt
+                ? null
+                : Icon(
+                    Icons.check_circle_outline,
+                    color: AppStatusColors.fg(context, AppStatus.success),
+                    size: 18,
+                  ),
             onTap: () async {
               final contactId = row['contact_id'] as int;
-              final contact = await DatabaseHelper.instance.getContactById(contactId);
+              final contact = await DatabaseHelper.instance.getContactById(
+                contactId,
+              );
               if (contact == null || !ctx.mounted) return;
-              Navigator.push(ctx,
+              Navigator.push(
+                ctx,
                 MaterialPageRoute(
                   builder: (_) => CustomerDetailScreen(contact: contact),
                 ),

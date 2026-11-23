@@ -82,7 +82,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
         }
       } catch (_) {}
       await Navigator.push(
-          context, MaterialPageRoute(builder: (_) => entry.screen));
+        context,
+        MaterialPageRoute(builder: (_) => entry.screen),
+      );
     } finally {
       _opening = false;
     }
@@ -149,7 +151,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.paymentsReport,
             subtitle: l10n.reportSubtitlePayments,
             screen: const PaymentsReportScreen(),
-            permission: PermissionRegistry.paymentsRecord,
+            permission: PermissionRegistry.reportsViewFinancials,
           ),
           _ReportEntry(
             icon: Icons.people_outlined,
@@ -157,7 +159,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: l10n.customerReport,
             subtitle: l10n.reportSubtitleCustomers,
             screen: const CustomerReportScreen(),
-            permission: PermissionRegistry.contactsViewBalances,
+            permission: PermissionRegistry.reportsViewReceivables,
           ),
           _ReportEntry(
             icon: Icons.store_outlined,
@@ -166,7 +168,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleSuppliers,
             screen: const SupplierReportScreen(),
             proFeature: Feature.advancedReports,
-            permission: PermissionRegistry.contactsViewBalances,
+            permission: PermissionRegistry.reportsViewReceivables,
           ),
         ],
       ),
@@ -189,7 +191,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleLowStock,
             screen: const InventoryReportScreen(initialFilter: 'low_stock'),
             proFeature: Feature.advancedReports,
-            permission: PermissionRegistry.stockAdjust,
+            permission: PermissionRegistry.productsView,
           ),
           _ReportEntry(
             icon: Icons.history_outlined,
@@ -198,7 +200,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleMovements,
             screen: const StockMovementsScreen(),
             proFeature: Feature.advancedReports,
-            permission: PermissionRegistry.stockViewCost,
+            permission: PermissionRegistry.productsView,
           ),
           _ReportEntry(
             icon: Icons.inventory_2_outlined,
@@ -207,7 +209,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             subtitle: l10n.reportSubtitleProducts,
             screen: const ProductReportScreen(),
             proFeature: Feature.advancedReports,
-            permission: PermissionRegistry.reportsViewInventoryCost,
+            permission: PermissionRegistry.reportsViewSales,
           ),
           _ReportEntry(
             icon: Icons.analytics_outlined,
@@ -267,7 +269,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   ),
                 ),
                 ...availableReports.map((entry) {
-                  final locked = _entitlement != null &&
+                  final locked =
+                      _entitlement != null &&
                       entry.proFeature != null &&
                       !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
                   return Padding(
@@ -328,8 +331,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             ],
                             Icon(
                               locked ? Icons.lock_outline : chevronIcon,
-                              semanticLabel:
-                                  locked ? l10n.proFeatureTitle : null,
+                              semanticLabel: locked
+                                  ? l10n.proFeatureTitle
+                                  : null,
                               color: locked
                                   ? Theme.of(context).colorScheme.outline
                                   : primaryColor,

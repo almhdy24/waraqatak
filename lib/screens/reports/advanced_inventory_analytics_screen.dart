@@ -11,6 +11,7 @@ import '../../services/pdf/pdf_report_builder.dart';
 import '../../services/pdf_service.dart';
 import '../../utils/format_utils.dart';
 import '../../widgets/app_status_colors.dart';
+import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
@@ -50,7 +51,9 @@ class _AdvancedInventoryAnalyticsScreenState
   }
 
   Future<void> _checkEntitlementAndLoad() async {
-    final entitlement = await LicenseService.instance.checkEntitlement(force: true);
+    final entitlement = await LicenseService.instance.checkEntitlement(
+      force: true,
+    );
     if (!FeatureAccess.canAccess(Feature.advancedReports, entitlement)) {
       if (mounted) {
         final activated = await ProUpgradeSheet.show(
@@ -58,8 +61,9 @@ class _AdvancedInventoryAnalyticsScreenState
           feature: Feature.advancedReports,
         );
         if (activated && mounted) {
-          final updated =
-              await LicenseService.instance.checkEntitlement(force: true);
+          final updated = await LicenseService.instance.checkEntitlement(
+            force: true,
+          );
           if (FeatureAccess.canAccess(Feature.advancedReports, updated)) {
             await _load();
             return;
@@ -87,10 +91,10 @@ class _AdvancedInventoryAnalyticsScreenState
 
       final metrics = await BusinessReportingService.instance
           .getAdvancedInventoryMetrics(
-        from: _range.from,
-        to: _range.to,
-        category: _selectedCategory,
-      );
+            from: _range.from,
+            to: _range.to,
+            category: _selectedCategory,
+          );
 
       setState(() {
         _metrics = metrics;
@@ -114,9 +118,21 @@ class _AdvancedInventoryAnalyticsScreenState
       PdfReportColumn(title: l10n.product, flex: 2.2),
       PdfReportColumn(title: l10n.category, flex: 1.4),
       PdfReportColumn(title: l10n.stock, flex: 1.2, align: pw.TextAlign.right),
-      PdfReportColumn(title: l10n.salesVelocity, flex: 1.4, align: pw.TextAlign.right),
-      PdfReportColumn(title: l10n.estimatedDaysRemaining, flex: 1.4, align: pw.TextAlign.right),
-      PdfReportColumn(title: l10n.reorderRecommendations, flex: 1.4, align: pw.TextAlign.right),
+      PdfReportColumn(
+        title: l10n.salesVelocity,
+        flex: 1.4,
+        align: pw.TextAlign.right,
+      ),
+      PdfReportColumn(
+        title: l10n.estimatedDaysRemaining,
+        flex: 1.4,
+        align: pw.TextAlign.right,
+      ),
+      PdfReportColumn(
+        title: l10n.reorderRecommendations,
+        flex: 1.4,
+        align: pw.TextAlign.right,
+      ),
     ];
 
     final rows = _metrics!.velocityItems.map((item) {
@@ -125,8 +141,12 @@ class _AdvancedInventoryAnalyticsScreenState
         item.product.category ?? '—',
         FormatUtils.formatQuantity(item.stockQuantity),
         item.salesVelocity.toStringAsFixed(2),
-        item.estimatedDaysRemaining != null ? '~${item.estimatedDaysRemaining}' : '—',
-        item.reorderSuggestion > 0 ? FormatUtils.formatQuantity(item.reorderSuggestion) : '—',
+        item.estimatedDaysRemaining != null
+            ? '~${item.estimatedDaysRemaining}'
+            : '—',
+        item.reorderSuggestion > 0
+            ? FormatUtils.formatQuantity(item.reorderSuggestion)
+            : '—',
       ];
     }).toList();
 
@@ -155,7 +175,11 @@ class _AdvancedInventoryAnalyticsScreenState
       rows: rows,
     );
 
-    await PdfService.printOrShareReportPdf(data: data, business: business, l10n: l10n);
+    await PdfService.printOrShareReportPdf(
+      data: data,
+      business: business,
+      l10n: l10n,
+    );
   }
 
   @override
@@ -163,108 +187,165 @@ class _AdvancedInventoryAnalyticsScreenState
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.advancedInventoryAnalytics),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: l10n.printOrShareReport,
-            onPressed: _metrics != null ? _exportPdf : null,
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: [
-            Tab(text: l10n.salesVelocity),
-            Tab(text: '${l10n.slowMovingStock} (${_metrics?.slowMovingCount ?? 0})'),
-            Tab(text: '${l10n.negativeMarginAlert} (${_metrics?.negativeMarginCount ?? 0})'),
-            Tab(text: l10n.categoryValuationShare),
-          ],
-        ),
-      ),
-      body: ResponsiveCenter(
-        child: Column(
-          children: [
-            // Date Filter
-            ReportDateFilter(
-              range: _range,
-              onChanged: (newRange) {
-                setState(() => _range = newRange);
-                _load();
-              },
+    return ScreenAccessGate(
+      screenType: AdvancedInventoryAnalyticsScreen,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.advancedInventoryAnalytics),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: _metrics != null ? _exportPdf : null,
             ),
-
-            // Category Filter
-            if (_categories.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(
-                  children: [
-                    Text(l10n.category, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 8),
-                    DropdownButton<String?>(
-                      value: _selectedCategory,
-                      hint: Text(l10n.allCategories, style: const TextStyle(fontSize: 12)),
-                      items: [
-                        DropdownMenuItem(value: null, child: Text(l10n.allCategories, style: const TextStyle(fontSize: 12))),
-                        ..._categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))),
-                      ],
-                      onChanged: (val) {
-                        setState(() => _selectedCategory = val);
-                        _load();
-                      },
-                    ),
-                  ],
-                ),
+          ],
+          bottom: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabs: [
+              Tab(text: l10n.salesVelocity),
+              Tab(
+                text:
+                    '${l10n.slowMovingStock} (${_metrics?.slowMovingCount ?? 0})',
+              ),
+              Tab(
+                text:
+                    '${l10n.negativeMarginAlert} (${_metrics?.negativeMarginCount ?? 0})',
+              ),
+              Tab(text: l10n.categoryValuationShare),
+            ],
+          ),
+        ),
+        body: ResponsiveCenter(
+          child: Column(
+            children: [
+              // Date Filter
+              ReportDateFilter(
+                range: _range,
+                onChanged: (newRange) {
+                  setState(() => _range = newRange);
+                  _load();
+                },
               ),
 
-            // Key Metrics Summary Cards
-            if (_metrics != null) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Row(
-                  children: [
-                    _chip(l10n.inventoryTurnover, _metrics!.inventoryTurnoverRatio.toStringAsFixed(2), AppStatusColors.fg(context, AppStatus.info)),
-                    const SizedBox(width: 8),
-                    _chip(l10n.tiedUpCapital, _numFmt.format(_metrics!.totalTiedUpCapitalInSlowMoving), AppStatusColors.fg(context, AppStatus.warning)),
-                    const SizedBox(width: 8),
-                    _chip(l10n.reorderRecommendations, '${_metrics!.reorderCount}', AppStatusColors.fg(context, AppStatus.success)),
-                    const SizedBox(width: 8),
-                    _chip(l10n.negativeMarginAlert, '${_metrics!.negativeMarginCount}',
-                        _metrics!.negativeMarginCount > 0 ? cs.error : cs.onSurfaceVariant),
-                  ],
+              // Category Filter
+              if (_categories.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        l10n.category,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      DropdownButton<String?>(
+                        value: _selectedCategory,
+                        hint: Text(
+                          l10n.allCategories,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: null,
+                            child: Text(
+                              l10n.allCategories,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          ..._categories.map(
+                            (c) => DropdownMenuItem(
+                              value: c,
+                              child: Text(
+                                c,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          setState(() => _selectedCategory = val);
+                          _load();
+                        },
+                      ),
+                    ],
+                  ),
                 ),
+
+              // Key Metrics Summary Cards
+              if (_metrics != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    children: [
+                      _chip(
+                        l10n.inventoryTurnover,
+                        _metrics!.inventoryTurnoverRatio.toStringAsFixed(2),
+                        AppStatusColors.fg(context, AppStatus.info),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.tiedUpCapital,
+                        _numFmt.format(
+                          _metrics!.totalTiedUpCapitalInSlowMoving,
+                        ),
+                        AppStatusColors.fg(context, AppStatus.warning),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.reorderRecommendations,
+                        '${_metrics!.reorderCount}',
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.negativeMarginAlert,
+                        '${_metrics!.negativeMarginCount}',
+                        _metrics!.negativeMarginCount > 0
+                            ? cs.error
+                            : cs.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const Divider(height: 1),
+
+              // Tab Views
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _error != null
+                    ? Center(child: Text(_error!))
+                    : TabBarView(
+                        controller: _tabController,
+                        children: [
+                          // 1. Sales Velocity & Reorder Suggestions
+                          _buildVelocityTab(l10n, cs),
+
+                          // 2. Slow-Moving Stock
+                          _buildSlowMovingTab(l10n, cs),
+
+                          // 3. Negative Margins
+                          _buildNegativeMarginTab(l10n, cs),
+
+                          // 4. Category Valuation Share
+                          _buildCategoryShareTab(l10n, cs),
+                        ],
+                      ),
               ),
             ],
-
-            const Divider(height: 1),
-
-            // Tab Views
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? Center(child: Text(_error!))
-                      : TabBarView(
-                          controller: _tabController,
-                          children: [
-                            // 1. Sales Velocity & Reorder Suggestions
-                            _buildVelocityTab(l10n, cs),
-
-                            // 2. Slow-Moving Stock
-                            _buildSlowMovingTab(l10n, cs),
-
-                            // 3. Negative Margins
-                            _buildNegativeMarginTab(l10n, cs),
-
-                            // 4. Category Valuation Share
-                            _buildCategoryShareTab(l10n, cs),
-                          ],
-                        ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -281,15 +362,26 @@ class _AdvancedInventoryAnalyticsScreenState
         ),
         child: Column(
           children: [
-            Text(value,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(fontSize: 9, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
@@ -306,7 +398,10 @@ class _AdvancedInventoryAnalyticsScreenState
       itemBuilder: (ctx, idx) {
         final it = items[idx];
         return ListTile(
-          title: Text(it.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          title: Text(
+            it.product.name,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           subtitle: Text(
             '${l10n.stock}: ${FormatUtils.formatQuantity(it.stockQuantity)} • '
             '${l10n.salesVelocity}: ${it.salesVelocity.toStringAsFixed(2)}${l10n.perDaySuffix} • '
@@ -315,14 +410,23 @@ class _AdvancedInventoryAnalyticsScreenState
           ),
           trailing: it.reorderSuggestion > 0
               ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppStatusColors.bg(ctx, AppStatus.warning),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    l10n.reorderSuggestionTag(FormatUtils.formatQuantity(it.reorderSuggestion)),
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppStatusColors.fg(ctx, AppStatus.warning)),
+                    l10n.reorderSuggestionTag(
+                      FormatUtils.formatQuantity(it.reorderSuggestion),
+                    ),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppStatusColors.fg(ctx, AppStatus.warning),
+                    ),
                   ),
                 )
               : null,
@@ -341,8 +445,14 @@ class _AdvancedInventoryAnalyticsScreenState
       itemBuilder: (ctx, idx) {
         final it = items[idx];
         return ListTile(
-          leading: Icon(Icons.hourglass_bottom_rounded, color: AppStatusColors.fg(ctx, AppStatus.warning)),
-          title: Text(it.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          leading: Icon(
+            Icons.hourglass_bottom_rounded,
+            color: AppStatusColors.fg(ctx, AppStatus.warning),
+          ),
+          title: Text(
+            it.product.name,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           subtitle: Text(
             '${l10n.stock}: ${FormatUtils.formatQuantity(it.stockQuantity)} ${it.product.unit ?? ""} • '
             '${l10n.category}: ${it.product.category ?? "—"}',
@@ -353,9 +463,18 @@ class _AdvancedInventoryAnalyticsScreenState
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(_numFmt.format(it.valuation),
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppStatusColors.fg(ctx, AppStatus.warning))),
-                    Text(l10n.tiedUpCapital, style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant)),
+                    Text(
+                      _numFmt.format(it.valuation),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: AppStatusColors.fg(ctx, AppStatus.warning),
+                      ),
+                    ),
+                    Text(
+                      l10n.tiedUpCapital,
+                      style: TextStyle(fontSize: 9, color: cs.onSurfaceVariant),
+                    ),
                   ],
                 )
               : null,
@@ -373,11 +492,18 @@ class _AdvancedInventoryAnalyticsScreenState
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.check_circle_outline, size: 48, color: AppStatusColors.fg(context, AppStatus.success)),
+              Icon(
+                Icons.check_circle_outline,
+                size: 48,
+                color: AppStatusColors.fg(context, AppStatus.success),
+              ),
               const SizedBox(height: 8),
               Text(
                 l10n.noProductsBelowCost,
-                style: TextStyle(fontSize: 13, color: AppStatusColors.fg(context, AppStatus.success)),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppStatusColors.fg(context, AppStatus.success),
+                ),
               ),
             ],
           ),
@@ -395,14 +521,21 @@ class _AdvancedInventoryAnalyticsScreenState
 
         return ListTile(
           leading: Icon(Icons.warning_rounded, color: cs.error),
-          title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          title: Text(
+            p.name,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           subtitle: Text(
             '${l10n.sellingPrice}: ${_numFmt.format(p.salePrice)} | ${l10n.averageCost}: ${_numFmt.format(avgCost)}',
             style: const TextStyle(fontSize: 11),
           ),
           trailing: Text(
             l10n.lossAmount(_numFmt.format(loss)),
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: cs.error),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+              color: cs.error,
+            ),
           ),
         );
       },
@@ -423,10 +556,17 @@ class _AdvancedInventoryAnalyticsScreenState
             backgroundColor: cs.primaryContainer,
             child: Text(
               '${cat.sharePercentage.toStringAsFixed(0)}%',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: cs.onPrimaryContainer),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: cs.onPrimaryContainer,
+              ),
             ),
           ),
-          title: Text(cat.category, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          title: Text(
+            cat.category,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
           subtitle: Text(
             '${cat.productCount} ${l10n.product}',
             style: const TextStyle(fontSize: 11),

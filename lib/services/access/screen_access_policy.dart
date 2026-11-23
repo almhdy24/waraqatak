@@ -70,19 +70,19 @@ class ScreenPolicy {
   final String? requiredPermission;
 
   const ScreenPolicy.public()
-      : isPublic = true,
-        isOwnerOnly = false,
-        requiredPermission = null;
+    : isPublic = true,
+      isOwnerOnly = false,
+      requiredPermission = null;
 
   const ScreenPolicy.ownerOnly()
-      : isPublic = false,
-        isOwnerOnly = true,
-        requiredPermission = null;
+    : isPublic = false,
+      isOwnerOnly = true,
+      requiredPermission = null;
 
   const ScreenPolicy.require(String permission)
-      : isPublic = false,
-        isOwnerOnly = false,
-        requiredPermission = permission;
+    : isPublic = false,
+      isOwnerOnly = false,
+      requiredPermission = permission;
 }
 
 /// Authoritative manifest declaring security policies for every screen in the app.
@@ -117,54 +117,120 @@ abstract final class ScreenAccessPolicy {
     UserFormScreen: const ScreenPolicy.require(PermissionRegistry.usersManage),
     RolesScreen: const ScreenPolicy.require(PermissionRegistry.rolesManage),
     AuditTrailScreen: const ScreenPolicy.require(PermissionRegistry.auditView),
-    AuditHistoryScreen: const ScreenPolicy.require(PermissionRegistry.auditView),
+    AuditHistoryScreen: const ScreenPolicy.require(
+      PermissionRegistry.auditView,
+    ),
 
     // 4. Settings & Setup
-    BusinessSetupScreen: const ScreenPolicy.require(PermissionRegistry.settingsManage),
-    FinancialSettingsScreen: const ScreenPolicy.require(PermissionRegistry.settingsManage),
-    ExchangeRatesScreen: const ScreenPolicy.require(PermissionRegistry.pricingRates),
-    PaymentMethodsScreen: const ScreenPolicy.require(PermissionRegistry.paymentMethodsManage),
-    TaxProfilesScreen: const ScreenPolicy.require(PermissionRegistry.taxProfilesManage),
-    PdfCustomizeScreen: const ScreenPolicy.require(PermissionRegistry.settingsManage),
-    PeriodClosingScreen: const ScreenPolicy.require(PermissionRegistry.accountingPeriodLock),
+    BusinessSetupScreen: const ScreenPolicy.require(
+      PermissionRegistry.settingsManage,
+    ),
+    FinancialSettingsScreen: const ScreenPolicy.require(
+      PermissionRegistry.settingsManage,
+    ),
+    ExchangeRatesScreen: const ScreenPolicy.require(
+      PermissionRegistry.pricingRates,
+    ),
+    PaymentMethodsScreen: const ScreenPolicy.require(
+      PermissionRegistry.paymentMethodsManage,
+    ),
+    TaxProfilesScreen: const ScreenPolicy.require(
+      PermissionRegistry.taxProfilesManage,
+    ),
+    PdfCustomizeScreen: const ScreenPolicy.require(
+      PermissionRegistry.settingsManage,
+    ),
+    PeriodClosingScreen: const ScreenPolicy.require(
+      PermissionRegistry.accountingPeriodLock,
+    ),
 
     // 5. Products & Inventory
     ProductsScreen: const ScreenPolicy.require(PermissionRegistry.productsView),
-    ProductFormScreen: const ScreenPolicy.require(PermissionRegistry.productsManage),
-    BulkPricingScreen: const ScreenPolicy.require(PermissionRegistry.pricingManage),
-    InventoryScreen: const ScreenPolicy.require(PermissionRegistry.productsView),
-    StockMovementsScreen: const ScreenPolicy.require(PermissionRegistry.productsView),
-    StocktakeScreen: const ScreenPolicy.require(PermissionRegistry.stocktakeManage),
-    StocktakeHistoryScreen: const ScreenPolicy.require(PermissionRegistry.stocktakeManage),
-    CsvImportExportScreen: const ScreenPolicy.require(PermissionRegistry.dataImportCsv),
+    ProductFormScreen: const ScreenPolicy.require(
+      PermissionRegistry.productsManage,
+    ),
+    BulkPricingScreen: const ScreenPolicy.require(
+      PermissionRegistry.pricingManage,
+    ),
+    InventoryScreen: const ScreenPolicy.require(
+      PermissionRegistry.productsView,
+    ),
+    StockMovementsScreen: const ScreenPolicy.require(
+      PermissionRegistry.productsView,
+    ),
+    StocktakeScreen: const ScreenPolicy.require(
+      PermissionRegistry.stocktakeManage,
+    ),
+    StocktakeHistoryScreen: const ScreenPolicy.require(
+      PermissionRegistry.stocktakeManage,
+    ),
+    CsvImportExportScreen: const ScreenPolicy.require(
+      PermissionRegistry.dataImportCsv,
+    ),
 
     // 6. Contacts
-    CustomersScreen: const ScreenPolicy.require(PermissionRegistry.contactsView),
-    CustomerDetailScreen: const ScreenPolicy.require(PermissionRegistry.contactsView),
-    ContactFormScreen: const ScreenPolicy.require(PermissionRegistry.contactsManage),
+    CustomersScreen: const ScreenPolicy.require(
+      PermissionRegistry.contactsView,
+    ),
+    CustomerDetailScreen: const ScreenPolicy.require(
+      PermissionRegistry.contactsView,
+    ),
+    ContactFormScreen: const ScreenPolicy.require(
+      PermissionRegistry.contactsManage,
+    ),
 
     // 7. Documents & Transactions
     DocumentsScreen: const ScreenPolicy.require(PermissionRegistry.salesView),
-    DocumentDetailScreen: const ScreenPolicy.require(PermissionRegistry.salesView),
+    DocumentDetailScreen: const ScreenPolicy.require(
+      PermissionRegistry.salesView,
+    ),
     InvoiceScreen: const ScreenPolicy.require(PermissionRegistry.salesCreate),
     QuickSaleScreen: const ScreenPolicy.require(PermissionRegistry.salesCreate),
     QuotationScreen: const ScreenPolicy.require(PermissionRegistry.salesCreate),
-    EditDocumentScreen: const ScreenPolicy.require(PermissionRegistry.salesEdit),
-    PurchaseScreen: const ScreenPolicy.require(PermissionRegistry.purchasesCreate),
-    CustomDocumentScreen: const ScreenPolicy.require(PermissionRegistry.salesCreate),
-    VoucherScreen: const ScreenPolicy.require(PermissionRegistry.vouchersCreate),
+    EditDocumentScreen: const ScreenPolicy.require(
+      PermissionRegistry.salesEdit,
+    ),
+    PurchaseScreen: const ScreenPolicy.require(
+      PermissionRegistry.purchasesCreate,
+    ),
+    CustomDocumentScreen: const ScreenPolicy.require(
+      PermissionRegistry.salesCreate,
+    ),
+    VoucherScreen: const ScreenPolicy.require(
+      PermissionRegistry.vouchersCreate,
+    ),
 
     // 8. Financial & Analytical Reports
-    AccountingScreen: const ScreenPolicy.require(PermissionRegistry.reportsViewFinancials),
-    AccountLedgerScreen: const ScreenPolicy.require(PermissionRegistry.reportsViewFinancials),
-    SalesReportScreen: const ScreenPolicy.require(PermissionRegistry.reportsViewSales),
-    PurchasesReportScreen: const ScreenPolicy.require(PermissionRegistry.reportsViewPurchases),
-    InventoryReportScreen: const ScreenPolicy.require(PermissionRegistry.reportsViewInventoryCost),
-    PaymentsReportScreen: const ScreenPolicy.require(PermissionRegistry.paymentsRecord),
-    CustomerReportScreen: const ScreenPolicy.require(PermissionRegistry.contactsViewBalances),
-    SupplierReportScreen: const ScreenPolicy.require(PermissionRegistry.contactsViewBalances),
-    ProductReportScreen: const ScreenPolicy.require(PermissionRegistry.reportsViewSales),
-    AdvancedInventoryAnalyticsScreen: const ScreenPolicy.require(PermissionRegistry.reportsViewInventoryCost),
+    AccountingScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewFinancials,
+    ),
+    AccountLedgerScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewFinancials,
+    ),
+    SalesReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewSales,
+    ),
+    PurchasesReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewPurchases,
+    ),
+    InventoryReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewInventoryCost,
+    ),
+    PaymentsReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewFinancials,
+    ),
+    CustomerReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewReceivables,
+    ),
+    SupplierReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewReceivables,
+    ),
+    ProductReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewSales,
+    ),
+    AdvancedInventoryAnalyticsScreen: const ScreenPolicy.require(
+      PermissionRegistry.reportsViewInventoryCost,
+    ),
   };
 
   /// Evaluates whether the current actor is permitted to enter [screenType].
