@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -35,6 +36,8 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
   String? _selectedCategory;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  Timer? _debounceTimer;
+  int _querySeq = 0;
   String? _error;
   bool _loading = true;
 
@@ -49,11 +52,13 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    final seq = ++_querySeq;
     setState(() {
       _loading = true;
       _error = null;
@@ -67,14 +72,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           searchQuery: _searchQuery,
         ),
       ]);
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _categories = futures[0] as List<String>;
         _summary = futures[1] as InventoryReportSummary;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _querySeq) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -99,9 +104,21 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       columns = [
         PdfReportColumn(title: l10n.product, flex: 2.2),
         PdfReportColumn(title: l10n.category, flex: 1.5),
-        PdfReportColumn(title: l10n.stockQuantity, flex: 1.2, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.minStock, flex: 1.2, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.shortageQuantity, flex: 1.2, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.stockQuantity,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.minStock,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.shortageQuantity,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
       ];
       rows = summary.items.map((i) {
         return [
@@ -117,8 +134,16 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       columns = [
         PdfReportColumn(title: l10n.product, flex: 2.5),
         PdfReportColumn(title: l10n.category, flex: 1.5),
-        PdfReportColumn(title: l10n.stockQuantity, flex: 1.2, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.minStock, flex: 1.2, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.stockQuantity,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.minStock,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
       ];
       rows = summary.items.map((i) {
         return [
@@ -133,15 +158,29 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       columns = [
         PdfReportColumn(title: l10n.product, flex: 2.5),
         PdfReportColumn(title: l10n.category, flex: 1.5),
-        PdfReportColumn(title: l10n.stockQuantity, flex: 1.2, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.averageCost, flex: 1.3, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.inventoryValuationAtCost, flex: 1.5, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.stockQuantity,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.averageCost,
+          flex: 1.3,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.inventoryValuationAtCost,
+          flex: 1.5,
+          align: pw.TextAlign.right,
+        ),
       ];
       rows = summary.items.map((i) {
         final valStr = i.valuationAtCost != null
             ? _numFmt.format(i.valuationAtCost)
             : l10n.costUnknown;
-        final costStr = i.averageCost != null ? _numFmt.format(i.averageCost) : '—';
+        final costStr = i.averageCost != null
+            ? _numFmt.format(i.averageCost)
+            : '—';
         return [
           i.product.name,
           i.product.category ?? '—',
@@ -158,22 +197,37 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         _numFmt.format(summary.totalValuationAtCost),
       ];
       if (summary.unvaluedProductsCount > 0) {
-        warning = '${l10n.unresolvedCostProducts}: ${summary.unvaluedProductsCount} (${l10n.unvaluedStockQty}: ${FormatUtils.formatQuantity(summary.unvaluedQuantity)})';
+        warning =
+            '${l10n.unresolvedCostProducts}: ${summary.unvaluedProductsCount} (${l10n.unvaluedStockQty}: ${FormatUtils.formatQuantity(summary.unvaluedQuantity)})';
       }
     } else {
       reportTitle = l10n.currentInventoryReport;
       columns = [
         PdfReportColumn(title: l10n.product, flex: 2.2),
         PdfReportColumn(title: l10n.category, flex: 1.4),
-        PdfReportColumn(title: l10n.stockQuantity, flex: 1.2, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.averageCost, flex: 1.2, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.inventoryValuationAtCost, flex: 1.4, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.stockQuantity,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.averageCost,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.inventoryValuationAtCost,
+          flex: 1.4,
+          align: pw.TextAlign.right,
+        ),
       ];
       rows = summary.items.map((i) {
         final valStr = i.valuationAtCost != null
             ? _numFmt.format(i.valuationAtCost)
             : (i.stockQuantity > 0 ? l10n.costUnknown : '—');
-        final costStr = i.averageCost != null ? _numFmt.format(i.averageCost) : '—';
+        final costStr = i.averageCost != null
+            ? _numFmt.format(i.averageCost)
+            : '—';
         return [
           i.product.name,
           i.product.category ?? '—',
@@ -190,13 +244,16 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         _numFmt.format(summary.totalValuationAtCost),
       ];
       if (summary.unvaluedProductsCount > 0) {
-        warning = '${l10n.unresolvedCostProducts}: ${summary.unvaluedProductsCount} (${l10n.unvaluedStockQty}: ${FormatUtils.formatQuantity(summary.unvaluedQuantity)})';
+        warning =
+            '${l10n.unresolvedCostProducts}: ${summary.unvaluedProductsCount} (${l10n.unvaluedStockQty}: ${FormatUtils.formatQuantity(summary.unvaluedQuantity)})';
       }
     }
 
     final data = PdfReportData(
       title: reportTitle,
-      subtitle: _selectedCategory != null ? _selectedCategory! : l10n.allCategories,
+      subtitle: _selectedCategory != null
+          ? _selectedCategory!
+          : l10n.allCategories,
       dateRange: DateFormat('dd/MM/yyyy').format(DateTime.now()),
       warningNotice: warning,
       summaryCards: [
@@ -319,7 +376,8 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
 
   void _showLegacyAuditDialog() async {
     final l10n = AppLocalizations.of(context);
-    final summary = await InventoryCostingService.instance.getLegacyCostSummary();
+    final summary = await InventoryCostingService.instance
+        .getLegacyCostSummary();
     if (!mounted) return;
 
     showDialog(
@@ -330,12 +388,32 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _auditRow(l10n.costKnown, '${summary.knownMovements}', AppStatusColors.fg(ctx, AppStatus.success)),
-            _auditRow(l10n.costReconstructed, '${summary.reconstructedMovements}', AppStatusColors.fg(ctx, AppStatus.info)),
-            _auditRow(l10n.costUnknown, '${summary.unknownMovements}', AppStatusColors.fg(ctx, AppStatus.warning)),
+            _auditRow(
+              l10n.costKnown,
+              '${summary.knownMovements}',
+              AppStatusColors.fg(ctx, AppStatus.success),
+            ),
+            _auditRow(
+              l10n.costReconstructed,
+              '${summary.reconstructedMovements}',
+              AppStatusColors.fg(ctx, AppStatus.info),
+            ),
+            _auditRow(
+              l10n.costUnknown,
+              '${summary.unknownMovements}',
+              AppStatusColors.fg(ctx, AppStatus.warning),
+            ),
             const Divider(height: 24),
-            _auditRow(l10n.valuedStockCount, '${summary.knownProducts}', AppStatusColors.fg(ctx, AppStatus.success)),
-            _auditRow(l10n.unresolvedCostProducts, '${summary.unknownProducts}', AppStatusColors.fg(ctx, AppStatus.warning)),
+            _auditRow(
+              l10n.valuedStockCount,
+              '${summary.knownProducts}',
+              AppStatusColors.fg(ctx, AppStatus.success),
+            ),
+            _auditRow(
+              l10n.unresolvedCostProducts,
+              '${summary.unknownProducts}',
+              AppStatusColors.fg(ctx, AppStatus.warning),
+            ),
           ],
         ),
         actions: [
@@ -357,7 +435,11 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           Text(label, style: const TextStyle(fontSize: 13)),
           Text(
             value,
-            style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color,
+              fontSize: 14,
+            ),
           ),
         ],
       ),
@@ -379,88 +461,95 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
     return ScreenAccessGate(
       screenType: InventoryReportScreen,
       child: Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _selectedStatus == 'low_stock'
-              ? l10n.lowStockReport
-              : (_selectedStatus == 'out_of_stock'
-                  ? l10n.outOfStockReport
-                  : (_selectedStatus == 'valuation'
-                      ? l10n.inventoryValuationReport
-                      : l10n.inventoryReport)),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: l10n.printOrShareReport,
-            onPressed: summary != null && summary.items.isNotEmpty ? _exportPdf : null,
+        appBar: AppBar(
+          title: Text(
+            _selectedStatus == 'low_stock'
+                ? l10n.lowStockReport
+                : (_selectedStatus == 'out_of_stock'
+                      ? l10n.outOfStockReport
+                      : (_selectedStatus == 'valuation'
+                            ? l10n.inventoryValuationReport
+                            : l10n.inventoryReport)),
           ),
-          IconButton(
-            icon: const Icon(Icons.analytics_outlined),
-            tooltip: l10n.legacyCostSummaryTitle,
-            onPressed: _showLegacyAuditDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.warehouse_outlined),
-            tooltip: l10n.inventory,
-            onPressed: () async {
-              final entitlement =
-                  await LicenseService.instance.checkEntitlement(force: true);
-              if (!context.mounted) return;
-              if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
-                final activated = await ProUpgradeSheet.show(
-                  context,
-                  feature: Feature.inventory,
-                );
-                if (!activated || !context.mounted) return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const InventoryScreen()),
-              ).then((_) => _load());
-            },
-          ),
-        ],
-      ),
-      body: ResponsiveCenter(
-        child: Column(
-          children: [
-            // Status Selector Tabs
-            SizedBox(
-              height: 42,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                children: [
-                  _statusChip(l10n.all, 'all'),
-                  const SizedBox(width: 6),
-                  _statusChip(l10n.lowStock, 'low_stock'),
-                  const SizedBox(width: 6),
-                  _statusChip(l10n.outOfStock, 'out_of_stock'),
-                  const SizedBox(width: 6),
-                  _statusChip(l10n.inventoryValuationReport, 'valuation'),
-                ],
-              ),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              tooltip: l10n.printOrShareReport,
+              onPressed: summary != null && summary.items.isNotEmpty
+                  ? _exportPdf
+                  : null,
             ),
+            IconButton(
+              icon: const Icon(Icons.analytics_outlined),
+              tooltip: l10n.legacyCostSummaryTitle,
+              onPressed: _showLegacyAuditDialog,
+            ),
+            IconButton(
+              icon: const Icon(Icons.warehouse_outlined),
+              tooltip: l10n.inventory,
+              onPressed: () async {
+                final entitlement = await LicenseService.instance
+                    .checkEntitlement(force: true);
+                if (!context.mounted) return;
+                if (!FeatureAccess.canAccess(Feature.inventory, entitlement)) {
+                  final activated = await ProUpgradeSheet.show(
+                    context,
+                    feature: Feature.inventory,
+                  );
+                  if (!activated || !context.mounted) return;
+                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const InventoryScreen()),
+                ).then((_) => _load());
+              },
+            ),
+          ],
+        ),
+        body: ResponsiveCenter(
+          child: Column(
+            children: [
+              // Status Selector Tabs
+              SizedBox(
+                height: 42,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  children: [
+                    _statusChip(l10n.all, 'all'),
+                    const SizedBox(width: 6),
+                    _statusChip(l10n.lowStock, 'low_stock'),
+                    const SizedBox(width: 6),
+                    _statusChip(l10n.outOfStock, 'out_of_stock'),
+                    const SizedBox(width: 6),
+                    _statusChip(l10n.inventoryValuationReport, 'valuation'),
+                  ],
+                ),
+              ),
 
-            // Search Bar & Category Filter
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-              child: Row(
-                children: [
-                  // Search TextField
-                  Expanded(
-                    flex: 3,
-                    child: SizedBox(
-                      height: 40,
+              // Search Bar & Category Filter
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                child: Row(
+                  children: [
+                    // Search TextField
+                    Expanded(
+                      flex: 3,
                       child: TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
+                          isDense: true,
                           hintText: l10n.searchProductsHint,
                           hintStyle: const TextStyle(fontSize: 12),
                           prefixIcon: const Icon(Icons.search, size: 18),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 8),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                            horizontal: 8,
+                          ),
                           filled: true,
                           fillColor: cs.surfaceContainerLow,
                           border: OutlineInputBorder(
@@ -469,93 +558,125 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                           ),
                         ),
                         onChanged: (val) {
-                          _searchQuery = val;
-                          _load();
+                          _debounceTimer?.cancel();
+                          _debounceTimer = Timer(
+                            const Duration(milliseconds: 300),
+                            () {
+                              _searchQuery = val;
+                              _load();
+                            },
+                          );
                         },
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 8),
 
-                  // Category Dropdown
-                  Expanded(
-                    flex: 2,
-                    child: Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: _selectedCategory,
-                          isExpanded: true,
-                          hint: Text(l10n.allCategories, style: const TextStyle(fontSize: 12)),
-                          items: [
-                            DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text(l10n.allCategories, style: const TextStyle(fontSize: 12)),
+                    // Category Dropdown
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 44),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: _selectedCategory,
+                            isExpanded: true,
+                            hint: Text(
+                              l10n.allCategories,
+                              style: const TextStyle(fontSize: 12),
                             ),
-                            ..._categories.map((c) => DropdownMenuItem<String?>(
+                            items: [
+                              DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text(
+                                  l10n.allCategories,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              ..._categories.map(
+                                (c) => DropdownMenuItem<String?>(
                                   value: c,
-                                  child: Text(c,
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
-                                )),
-                          ],
-                          onChanged: (val) {
-                            setState(() => _selectedCategory = val);
-                            _load();
-                          },
+                                  child: Text(
+                                    c,
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              setState(() => _selectedCategory = val);
+                              _load();
+                            },
+                          ),
                         ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+
+              // Valuation & Stock Status Summary Chips
+              if (summary != null) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+                  child: Row(
+                    children: [
+                      _chip(
+                        l10n.inventoryValuationAtCost,
+                        _numFmt.format(totalValuation),
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.unresolvedCostProducts,
+                        '$unvaluedCount',
+                        unvaluedCount > 0
+                            ? AppStatusColors.fg(context, AppStatus.warning)
+                            : Theme.of(context).colorScheme.outline,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                  child: Row(
+                    children: [
+                      _chip(
+                        l10n.trackedProducts,
+                        '$total',
+                        AppStatusColors.fg(context, AppStatus.info),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.lowStock,
+                        '$lowStock',
+                        AppStatusColors.fg(context, AppStatus.warning),
+                      ),
+                      const SizedBox(width: 8),
+                      _chip(
+                        l10n.outOfStock,
+                        '$outOfStock',
+                        Theme.of(context).colorScheme.error,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
-            // Valuation & Stock Status Summary Chips
-            if (summary != null) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
-                child: Row(
-                  children: [
-                    _chip(
-                      l10n.inventoryValuationAtCost,
-                      _numFmt.format(totalValuation),
-                      AppStatusColors.fg(context, AppStatus.success),
-                    ),
-                    const SizedBox(width: 8),
-                    _chip(
-                      l10n.unresolvedCostProducts,
-                      '$unvaluedCount',
-                      unvaluedCount > 0 ? AppStatusColors.fg(context, AppStatus.warning) : Theme.of(context).colorScheme.outline,
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-                child: Row(
-                  children: [
-                    _chip(l10n.trackedProducts, '$total', AppStatusColors.fg(context, AppStatus.info)),
-                    const SizedBox(width: 8),
-                    _chip(l10n.lowStock, '$lowStock', AppStatusColors.fg(context, AppStatus.warning)),
-                    const SizedBox(width: 8),
-                    _chip(l10n.outOfStock, '$outOfStock', Theme.of(context).colorScheme.error),
-                  ],
-                ),
-              ),
+              Expanded(child: _buildList(context, l10n)),
             ],
-
-            Expanded(child: _buildList(context, l10n)),
-          ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -583,12 +704,20 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: TextStyle(fontSize: 10, color: color),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-            Text(value,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ],
         ),
       ),
@@ -599,11 +728,14 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(l10n.operationFailed),
-          const SizedBox(height: 10),
-          FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-        ]),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(l10n.operationFailed),
+            const SizedBox(height: 10),
+            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
+          ],
+        ),
       );
     }
     final items = _summary?.items ?? [];
@@ -611,17 +743,26 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.warehouse_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 12),
-            Text(
-              _selectedStatus == 'low_stock'
-                  ? l10n.noReplenishmentNeeded
-                  : l10n.noReportData,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ]),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.warehouse_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                _selectedStatus == 'low_stock'
+                    ? l10n.noReplenishmentNeeded
+                    : l10n.noReportData,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -637,13 +778,13 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
         final statusColor = isOut
             ? Theme.of(context).colorScheme.error
             : isLow
-                ? AppStatusColors.fg(context, AppStatus.warning)
-                : AppStatusColors.fg(context, AppStatus.success);
+            ? AppStatusColors.fg(context, AppStatus.warning)
+            : AppStatusColors.fg(context, AppStatus.success);
         final statusLabel = isOut
             ? l10n.outOfStock
             : isLow
-                ? l10n.lowStock
-                : '';
+            ? l10n.lowStock
+            : '';
 
         final hasCost = item.isCostKnown && item.averageCost != null;
 
@@ -652,7 +793,9 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -672,7 +815,12 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                           if (p.category != null && p.category!.isNotEmpty)
                             Text(
                               p.category!,
-                              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                             ),
                         ],
                       ),
@@ -681,10 +829,15 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          FormatUtils.formatQuantity(p.stockQuantity, unit: p.unit),
+                          FormatUtils.formatQuantity(
+                            p.stockQuantity,
+                            unit: p.unit,
+                          ),
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: isOut ? Theme.of(context).colorScheme.error : null,
+                            color: isOut
+                                ? Theme.of(context).colorScheme.error
+                                : null,
                           ),
                         ),
                         if (isLow) ...[
@@ -693,7 +846,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                             '${l10n.shortageQuantity}: ${FormatUtils.formatQuantity(item.shortageQuantity, unit: p.unit)}',
                             style: TextStyle(
                               fontSize: 10,
-                              color: AppStatusColors.fg(context, AppStatus.warning),
+                              color: AppStatusColors.fg(
+                                context,
+                                AppStatus.warning,
+                              ),
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -709,17 +865,26 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                       child: Text(
                         hasCost
                             ? '${l10n.averageCost}: ${_numFmt.format(p.averageCost)} | ${l10n.inventoryValuationAtCost}: ${_numFmt.format(item.valuationAtCost)}'
-                            : (p.stockQuantity > 0 ? '${l10n.costStatus}: ${l10n.costUnknown}' : ''),
+                            : (p.stockQuantity > 0
+                                  ? '${l10n.costStatus}: ${l10n.costUnknown}'
+                                  : ''),
                         style: TextStyle(
                           fontSize: 11,
-                          color: hasCost ? AppStatusColors.fg(context, AppStatus.success) : AppStatusColors.fg(context, AppStatus.warning),
-                          fontWeight: hasCost ? FontWeight.w500 : FontWeight.normal,
+                          color: hasCost
+                              ? AppStatusColors.fg(context, AppStatus.success)
+                              : AppStatusColors.fg(context, AppStatus.warning),
+                          fontWeight: hasCost
+                              ? FontWeight.w500
+                              : FontWeight.normal,
                         ),
                       ),
                     ),
                     if (statusLabel.isNotEmpty)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -738,7 +903,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                       InkWell(
                         onTap: () => _showReconciliationDialog(p),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: AppStatusColors.bg(context, AppStatus.info),
                             borderRadius: BorderRadius.circular(6),
@@ -747,7 +915,10 @@ class _InventoryReportScreenState extends State<InventoryReportScreen> {
                             l10n.reconcileCost,
                             style: TextStyle(
                               fontSize: 10,
-                              color: AppStatusColors.fg(context, AppStatus.info),
+                              color: AppStatusColors.fg(
+                                context,
+                                AppStatus.info,
+                              ),
                               fontWeight: FontWeight.w600,
                             ),
                           ),

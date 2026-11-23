@@ -339,7 +339,10 @@ class InventoryCostingService {
           ? (bRows.first['currency_code'] as String? ?? 'SDG')
           : 'SDG';
       final decimalDigits = Currency.decimalDigitsForCode(currencyCode);
-      final valMinor = MoneyUtils.toMinorUnits(stock * newUnitCost, decimalDigits);
+      final valMinor = MoneyUtils.toMinorUnits(
+        stock * newUnitCost,
+        decimalDigits,
+      );
 
       if (valMinor > 0) {
         final now = DateTime.now();
@@ -511,6 +514,31 @@ class InventoryCostingService {
       orderBy: 'date DESC',
     );
 
+    if (docMaps.isEmpty) return const [];
+
+    // Aggregate item costs per document in a single batch query (O(1) queries instead of N+1).
+    // Uses subquery on documents with the same filters to avoid SQLite variable limit risks.
+    final costRows = await db.rawQuery('''
+      SELECT
+        document_id,
+        COALESCE(SUM(CASE WHEN product_id IS NOT NULL AND quantity > 0 AND total_cost IS NOT NULL THEN total_cost ELSE 0 END), 0) AS doc_cogs,
+        SUM(CASE WHEN product_id IS NOT NULL AND quantity > 0 AND total_cost IS NULL THEN 1 ELSE 0 END) AS missing_cost_count
+      FROM document_items
+      WHERE document_id IN (
+        SELECT id FROM documents
+        WHERE $where
+      )
+      GROUP BY document_id
+    ''', whereArgs);
+
+    final itemCostMap = <int, ({double cogs, bool isReliable})>{};
+    for (final r in costRows) {
+      final docId = (r['document_id'] as num).toInt();
+      final cogs = (r['doc_cogs'] as num?)?.toDouble() ?? 0.0;
+      final missing = (r['missing_cost_count'] as num?)?.toInt() ?? 0;
+      itemCostMap[docId] = (cogs: cogs, isReliable: missing == 0);
+    }
+
     final results = <SaleProfitSummary>[];
     for (final docMap in docMaps) {
       final doc = Document.fromMap(docMap);
@@ -527,28 +555,10 @@ class InventoryCostingService {
         );
         continue;
       }
-      final itemRows = await db.query(
-        'document_items',
-        where: 'document_id = ?',
-        whereArgs: [doc.id],
-      );
 
-      double docCogs = 0.0;
-      bool isReliable = true;
-
-      for (final item in itemRows) {
-        final pid = item['product_id'] as int?;
-        final qty = (item['quantity'] as num?)?.toDouble() ?? 0.0;
-        final totalCost = (item['total_cost'] as num?)?.toDouble();
-
-        if (pid != null && qty > 0) {
-          if (totalCost != null) {
-            docCogs += totalCost;
-          } else {
-            isReliable = false;
-          }
-        }
-      }
+      final costInfo = itemCostMap[doc.id] ?? (cogs: 0.0, isReliable: true);
+      final docCogs = costInfo.cogs;
+      final isReliable = costInfo.isReliable;
 
       // Recognized net revenue (subtotal minus discount)
       final recognizedRevenue = doc.subtotal - doc.discount;

@@ -106,9 +106,21 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       columns = [
         PdfReportColumn(title: l10n.product, flex: 2.2),
         PdfReportColumn(title: l10n.category, flex: 1.4),
-        PdfReportColumn(title: l10n.salesQty, flex: 1.2, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.transactionCount, flex: 1.0, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.salesValue, flex: 1.5, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.salesQty,
+          flex: 1.2,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.transactionCount,
+          flex: 1.0,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.salesValue,
+          flex: 1.5,
+          align: pw.TextAlign.right,
+        ),
       ];
       rows = summary.items.map((i) {
         return [
@@ -131,10 +143,22 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       reportTitle = l10n.profitByProduct;
       columns = [
         PdfReportColumn(title: l10n.product, flex: 2.2),
-        PdfReportColumn(title: l10n.salesValue, flex: 1.3, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.salesValue,
+          flex: 1.3,
+          align: pw.TextAlign.right,
+        ),
         PdfReportColumn(title: l10n.cogs, flex: 1.3, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.grossProfit, flex: 1.4, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.profitMargin, flex: 1.1, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.grossProfit,
+          flex: 1.4,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.profitMargin,
+          flex: 1.1,
+          align: pw.TextAlign.right,
+        ),
       ];
       rows = summary.items.map((i) {
         final marginStr = i.isCostReliable && i.salesRevenue > 0
@@ -162,7 +186,8 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       ];
       warning = l10n.grossProfitNotice;
       if (summary.hasIncompleteCosts) {
-        warning = '$warning\n${l10n.unknownCostNotice} ${l10n.unvaluedSalesNotice(summary.unvaluedSalesCount)}';
+        warning =
+            '$warning\n${l10n.unknownCostNotice} ${l10n.unvaluedSalesNotice(summary.unvaluedSalesCount)}';
       }
       if (summary.hasMultipleCurrencies) {
         warning = '$warning\n${l10n.mixedCurrenciesNotice}';
@@ -172,14 +197,36 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       reportTitle = l10n.productPerformance;
       columns = [
         PdfReportColumn(title: l10n.product, flex: 2.0),
-        PdfReportColumn(title: l10n.salesQty, flex: 1.1, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.salesValue, flex: 1.3, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.grossProfit, flex: 1.3, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.stockQuantity, flex: 1.1, align: pw.TextAlign.right),
-        PdfReportColumn(title: l10n.inventoryValuationAtCost, flex: 1.3, align: pw.TextAlign.right),
+        PdfReportColumn(
+          title: l10n.salesQty,
+          flex: 1.1,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.salesValue,
+          flex: 1.3,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.grossProfit,
+          flex: 1.3,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.stockQuantity,
+          flex: 1.1,
+          align: pw.TextAlign.right,
+        ),
+        PdfReportColumn(
+          title: l10n.inventoryValuationAtCost,
+          flex: 1.3,
+          align: pw.TextAlign.right,
+        ),
       ];
       rows = summary.items.map((i) {
-        final valStr = i.currentValuation != null ? _numFmt.format(i.currentValuation) : '—';
+        final valStr = i.currentValuation != null
+            ? _numFmt.format(i.currentValuation)
+            : '—';
         final profitStr = i.isCostReliable
             ? _numFmt.format(i.grossProfit)
             : '—';
@@ -213,7 +260,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
 
     final data = PdfReportData(
       title: reportTitle,
-      subtitle: _selectedCategory != null ? _selectedCategory! : l10n.allCategories,
+      subtitle: _selectedCategory != null
+          ? _selectedCategory!
+          : l10n.allCategories,
       dateRange: _range.label(l10n),
       warningNotice: warning,
       summaryCards: [
@@ -272,7 +321,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_outlined),
             tooltip: l10n.printOrShareReport,
-            onPressed: summary != null && summary.items.isNotEmpty ? _exportPdf : null,
+            onPressed: summary != null && summary.items.isNotEmpty
+                ? _exportPdf
+                : null,
           ),
         ],
         bottom: TabBar(
@@ -305,8 +356,11 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                   Expanded(
                     flex: 3,
                     child: Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      constraints: const BoxConstraints(minHeight: 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(10),
@@ -315,19 +369,29 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                         child: DropdownButton<String?>(
                           value: _selectedCategory,
                           isExpanded: true,
-                          hint: Text(l10n.allCategories, style: const TextStyle(fontSize: 12)),
+                          hint: Text(
+                            l10n.allCategories,
+                            style: const TextStyle(fontSize: 12),
+                          ),
                           items: [
                             DropdownMenuItem<String?>(
                               value: null,
-                              child: Text(l10n.allCategories, style: const TextStyle(fontSize: 12)),
+                              child: Text(
+                                l10n.allCategories,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
-                            ..._categories.map((c) => DropdownMenuItem<String?>(
-                                  value: c,
-                                  child: Text(c,
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis),
-                                )),
+                            ..._categories.map(
+                              (c) => DropdownMenuItem<String?>(
+                                value: c,
+                                child: Text(
+                                  c,
+                                  style: const TextStyle(fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
                           ],
                           onChanged: (val) {
                             setState(() => _selectedCategory = val);
@@ -343,8 +407,11 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                   Expanded(
                     flex: 2,
                     child: Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      constraints: const BoxConstraints(minHeight: 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: cs.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(10),
@@ -356,15 +423,24 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                           items: [
                             DropdownMenuItem(
                               value: 'revenue',
-                              child: Text(l10n.sortByRevenue, style: const TextStyle(fontSize: 12)),
+                              child: Text(
+                                l10n.sortByRevenue,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
                             DropdownMenuItem(
                               value: 'quantity',
-                              child: Text(l10n.sortByQuantity, style: const TextStyle(fontSize: 12)),
+                              child: Text(
+                                l10n.sortByQuantity,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
                             DropdownMenuItem(
                               value: 'profit',
-                              child: Text(l10n.sortByProfit, style: const TextStyle(fontSize: 12)),
+                              child: Text(
+                                l10n.sortByProfit,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ),
                           ],
                           onChanged: (val) {
@@ -387,11 +463,19 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                 padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
                 child: Row(
                   children: [
-                    _chip(l10n.totalSales, totalSalesValue, AppStatusColors.fg(context, AppStatus.success)),
+                    _chip(
+                      l10n.totalSales,
+                      totalSalesValue,
+                      AppStatusColors.fg(context, AppStatus.success),
+                    ),
                     const SizedBox(width: 8),
                     _chip(l10n.cogs, totalCogs, cs.secondary),
                     const SizedBox(width: 8),
-                    _chip(l10n.grossProfit, totalProfit, AppStatusColors.fg(context, AppStatus.success)),
+                    _chip(
+                      l10n.grossProfit,
+                      totalProfit,
+                      AppStatusColors.fg(context, AppStatus.success),
+                    ),
                   ],
                 ),
               ),
@@ -400,12 +484,22 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                   padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 13, color: AppStatusColors.fg(context, AppStatus.warning)),
+                      Icon(
+                        Icons.info_outline,
+                        size: 13,
+                        color: AppStatusColors.fg(context, AppStatus.warning),
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           l10n.costIncomplete,
-                          style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.warning)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppStatusColors.fg(
+                              context,
+                              AppStatus.warning,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -416,12 +510,22 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                   padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 13, color: AppStatusColors.fg(context, AppStatus.warning)),
+                      Icon(
+                        Icons.info_outline,
+                        size: 13,
+                        color: AppStatusColors.fg(context, AppStatus.warning),
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           l10n.mixedCurrenciesNotice,
-                          style: TextStyle(fontSize: 11, color: AppStatusColors.fg(context, AppStatus.warning)),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppStatusColors.fg(
+                              context,
+                              AppStatus.warning,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -449,8 +553,14 @@ class _ProductReportScreenState extends State<ProductReportScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label, style: TextStyle(fontSize: 10, color: color)),
-            Text(_numFmt.format(value),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+            Text(
+              _numFmt.format(value),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
           ],
         ),
       ),
@@ -461,11 +571,14 @@ class _ProductReportScreenState extends State<ProductReportScreen>
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(l10n.operationFailed),
-          const SizedBox(height: 10),
-          FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
-        ]),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(l10n.operationFailed),
+            const SizedBox(height: 10),
+            FilledButton.tonal(onPressed: _load, child: Text(l10n.retry)),
+          ],
+        ),
       );
     }
     final items = _summary?.items ?? [];
@@ -473,12 +586,24 @@ class _ProductReportScreenState extends State<ProductReportScreen>
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.inventory_2_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 12),
-            Text(l10n.noDataForPeriod,
-                textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ]),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                l10n.noDataForPeriod,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -496,7 +621,9 @@ class _ProductReportScreenState extends State<ProductReportScreen>
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+            side: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -513,35 +640,56 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                             item.productName,
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          if (item.category != null && item.category!.isNotEmpty)
+                          if (item.category != null &&
+                              item.category!.isNotEmpty)
                             Text(
                               item.category!,
-                              style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                             ),
                         ],
                       ),
                     ),
                     if (item.salesQty > 0 && !item.isCostReliable)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
                           color: AppStatusColors.bg(context, AppStatus.warning),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: AppStatusColors.border(context, AppStatus.warning), width: 0.5),
+                          border: Border.all(
+                            color: AppStatusColors.border(
+                              context,
+                              AppStatus.warning,
+                            ),
+                            width: 0.5,
+                          ),
                         ),
                         child: Text(
                           l10n.costIncomplete,
                           style: TextStyle(
                             fontSize: 10,
-                            color: AppStatusColors.fg(context, AppStatus.warning),
+                            color: AppStatusColors.fg(
+                              context,
+                              AppStatus.warning,
+                            ),
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                     Text(
                       '${l10n.stockStatus}: ${FormatUtils.formatQuantity(item.currentStock, unit: item.unit)}',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -554,9 +702,24 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                     spacing: 14,
                     runSpacing: 6,
                     children: [
-                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), AppStatusColors.fg(context, AppStatus.success)),
-                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), AppStatusColors.fg(context, AppStatus.success)),
-                      _statCell(l10n.transactionCount, '${item.transactionCount}', AppStatusColors.fg(context, AppStatus.info)),
+                      _statCell(
+                        l10n.salesQty,
+                        FormatUtils.formatQuantity(
+                          item.salesQty,
+                          unit: item.unit,
+                        ),
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                      _statCell(
+                        l10n.salesValue,
+                        _numFmt.format(item.salesRevenue),
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                      _statCell(
+                        l10n.transactionCount,
+                        '${item.transactionCount}',
+                        AppStatusColors.fg(context, AppStatus.info),
+                      ),
                     ],
                   ),
                 ] else if (activeTab == 1) ...[
@@ -565,12 +728,24 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                     spacing: 14,
                     runSpacing: 6,
                     children: [
-                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), AppStatusColors.fg(context, AppStatus.success)),
-                      _statCell(l10n.cogs, _numFmt.format(item.cogs), Theme.of(context).colorScheme.secondary),
+                      _statCell(
+                        l10n.salesValue,
+                        _numFmt.format(item.salesRevenue),
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                      _statCell(
+                        l10n.cogs,
+                        _numFmt.format(item.cogs),
+                        Theme.of(context).colorScheme.secondary,
+                      ),
                       _statCell(
                         l10n.grossProfit,
-                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '—',
-                        (item.isCostReliable && item.grossProfit >= 0) ? AppStatusColors.fg(context, AppStatus.success) : Theme.of(context).colorScheme.onSurfaceVariant,
+                        item.isCostReliable
+                            ? _numFmt.format(item.grossProfit)
+                            : '—',
+                        (item.isCostReliable && item.grossProfit >= 0)
+                            ? AppStatusColors.fg(context, AppStatus.success)
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       _statCell(
                         l10n.profitMargin,
@@ -587,15 +762,34 @@ class _ProductReportScreenState extends State<ProductReportScreen>
                     spacing: 14,
                     runSpacing: 6,
                     children: [
-                      _statCell(l10n.salesQty, FormatUtils.formatQuantity(item.salesQty, unit: item.unit), AppStatusColors.fg(context, AppStatus.success)),
-                      _statCell(l10n.salesValue, _numFmt.format(item.salesRevenue), AppStatusColors.fg(context, AppStatus.success)),
+                      _statCell(
+                        l10n.salesQty,
+                        FormatUtils.formatQuantity(
+                          item.salesQty,
+                          unit: item.unit,
+                        ),
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
+                      _statCell(
+                        l10n.salesValue,
+                        _numFmt.format(item.salesRevenue),
+                        AppStatusColors.fg(context, AppStatus.success),
+                      ),
                       _statCell(
                         l10n.grossProfit,
-                        item.isCostReliable ? _numFmt.format(item.grossProfit) : '—',
-                        (item.isCostReliable && item.grossProfit >= 0) ? AppStatusColors.fg(context, AppStatus.success) : Theme.of(context).colorScheme.onSurfaceVariant,
+                        item.isCostReliable
+                            ? _numFmt.format(item.grossProfit)
+                            : '—',
+                        (item.isCostReliable && item.grossProfit >= 0)
+                            ? AppStatusColors.fg(context, AppStatus.success)
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       if (item.currentValuation != null)
-                        _statCell(l10n.inventoryValuationAtCost, _numFmt.format(item.currentValuation), AppStatusColors.fg(context, AppStatus.success)),
+                        _statCell(
+                          l10n.inventoryValuationAtCost,
+                          _numFmt.format(item.currentValuation),
+                          AppStatusColors.fg(context, AppStatus.success),
+                        ),
                     ],
                   ),
                 ],
@@ -611,8 +805,21 @@ class _ProductReportScreenState extends State<ProductReportScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
       ],
     );
   }
