@@ -50,7 +50,7 @@ class ReportDateFilter extends StatelessWidget {
                     label: Text(p.$2, style: const TextStyle(fontSize: 12)),
                     selected: selected,
                     onSelected: (_) => onChanged(_filterFor(p.$1)),
-                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.padded,
                   ),
                 );
               }),
@@ -63,7 +63,7 @@ class ReportDateFilter extends StatelessWidget {
                 ),
                 selected: range.preset == DateRangePreset.custom,
                 onSelected: (_) => _pickCustom(context),
-                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.padded,
               ),
             ],
           ),
@@ -78,10 +78,14 @@ class ReportDateFilter extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  color: theme.colorScheme.outlineVariant.withValues(
+                    alpha: 0.5,
+                  ),
                 ),
               ),
               child: Row(
@@ -139,16 +143,16 @@ class ReportDateFilter extends StatelessWidget {
   }
 
   DateRangeFilter _filterFor(DateRangePreset preset) => switch (preset) {
-        DateRangePreset.today => DateRangeFilter.today(),
-        DateRangePreset.yesterday => DateRangeFilter.yesterday(),
-        DateRangePreset.thisWeek => DateRangeFilter.thisWeek(),
-        DateRangePreset.last7Days => DateRangeFilter.last7Days(),
-        DateRangePreset.thisMonth => DateRangeFilter.thisMonth(),
-        DateRangePreset.lastMonth => DateRangeFilter.lastMonth(),
-        DateRangePreset.previousMonth => DateRangeFilter.previousMonth(),
-        DateRangePreset.thisYear => DateRangeFilter.thisYear(),
-        DateRangePreset.custom => range,
-      };
+    DateRangePreset.today => DateRangeFilter.today(),
+    DateRangePreset.yesterday => DateRangeFilter.yesterday(),
+    DateRangePreset.thisWeek => DateRangeFilter.thisWeek(),
+    DateRangePreset.last7Days => DateRangeFilter.last7Days(),
+    DateRangePreset.thisMonth => DateRangeFilter.thisMonth(),
+    DateRangePreset.lastMonth => DateRangeFilter.lastMonth(),
+    DateRangePreset.previousMonth => DateRangeFilter.previousMonth(),
+    DateRangePreset.thisYear => DateRangeFilter.thisYear(),
+    DateRangePreset.custom => range,
+  };
 
   Future<void> _pickCustom(BuildContext context) async {
     final picked = await AppDatePicker.showRange(

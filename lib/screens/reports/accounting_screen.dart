@@ -19,6 +19,7 @@ import '../../widgets/app_status_colors.dart';
 import '../../widgets/report_export_menu.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
+import 'reports_date_scope.dart';
 
 final _amountFmt = NumberFormat('#,##0.00');
 final _dateFmt = DateFormat('dd/MM/yy');
@@ -55,7 +56,7 @@ class AccountingScreen extends StatefulWidget {
 class _AccountingScreenState extends State<AccountingScreen>
     with SingleTickerProviderStateMixin {
   late DateRangeFilter _range =
-      widget.initialRange ?? DateRangeFilter.thisMonth();
+      widget.initialRange ?? ReportsDateNotifier.instance.range;
   LedgerBook? _book;
   bool _failed = false;
   late final TabController _tabController = TabController(
@@ -520,7 +521,10 @@ class _AccountingScreenState extends State<AccountingScreen>
       children: [
         ReportDateFilter(
           range: _range,
-          onChanged: (r) => setState(() => _range = r),
+          onChanged: (r) {
+            setState(() => _range = r);
+            ReportsDateScope.update(context, r);
+          },
         ),
         if (book.currencies.length > 1)
           Padding(

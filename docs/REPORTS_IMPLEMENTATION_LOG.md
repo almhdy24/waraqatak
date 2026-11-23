@@ -12,7 +12,7 @@
 - [x] **Batch B** - Permissions and gates
 - [x] **Batch C** - Localization cleanup
 - [x] **Batch D** - Export and share foundation
-- [ ] **Batch E** - Shared date range across reports
+- [x] **Batch E** - Shared date range across reports
 - [ ] **Batch F** - Daily closing (end-of-day) report [new]
 - [ ] **Batch G** - Receivables and payables aging [new]
 - [ ] **Batch H** - Payments report: cash flow by method
@@ -107,5 +107,28 @@
   - Formula injection protection neutralizes spreadsheet execution risks for exported CSV files.
 - **Validation:**
   - `dart format`: 17 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+
+### Batch E: Shared date range across reports
+
+- **Batch ID:** `batch-e`
+- **Files Changed:**
+  - `lib/screens/reports/reports_date_scope.dart`: Created session-scoped `ReportsDateNotifier` and `ReportsDateScope` (`InheritedNotifier`) to share active date ranges across all reports.
+  - `lib/screens/reports/report_date_filter.dart`: Set `materialTapTargetSize: MaterialTapTargetSize.padded` on `FilterChip` items ensuring >= 48 dp touch targets; verified horizontal scrolling at 320 dp.
+  - `lib/screens/reports_screen.dart`: Attached `ReportsDateNotifier.instance`, wrapped hub `Scaffold` and wrapped pushed report routes in `ReportsDateScope`.
+  - `lib/screens/reports/sales_report_screen.dart`: Connected initial range to `ReportsDateNotifier.instance.range` and propagated updates through `ReportsDateScope.update`.
+  - `lib/screens/reports/purchases_report_screen.dart`: Connected initial range and propagated updates.
+  - `lib/screens/reports/payments_report_screen.dart`: Connected initial range and propagated updates.
+  - `lib/screens/reports/product_report_screen.dart`: Connected initial range and propagated updates.
+  - `lib/screens/reports/accounting_screen.dart`: Connected initial range and propagated updates.
+  - `lib/screens/reports/advanced_inventory_analytics_screen.dart`: Connected initial range and propagated updates.
+  - `lib/screens/stock_movements_screen.dart`: Connected initial range and propagated updates.
+  - `test/screens/reports_date_scope_test.dart`: Added widget tests for scope propagation and listener notifications.
+- **Decisions Taken:**
+  - Used hybrid approach combining singleton default fallback (`ReportsDateNotifier.instance`) and `InheritedNotifier` (`ReportsDateScope`) ensuring both `initState` initialization and reactive tree updates work seamlessly.
+  - Preserved individual screen date change freedom while synchronizing state across report screen transitions.
+- **Validation:**
+  - `dart format`: 11 files formatted.
   - `dart analyze`: Clean (0 issues across all touched files).
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.

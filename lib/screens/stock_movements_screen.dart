@@ -26,6 +26,7 @@ import '../widgets/access/screen_access_gate.dart';
 import 'document_detail_screen.dart';
 import 'inventory_screen.dart';
 import 'reports/report_date_filter.dart';
+import 'reports/reports_date_scope.dart';
 
 class _ProductPickerResult {
   final Product? product;
@@ -41,7 +42,7 @@ class StockMovementsScreen extends StatefulWidget {
 }
 
 class _StockMovementsScreenState extends State<StockMovementsScreen> {
-  DateRangeFilter _range = DateRangeFilter.thisMonth();
+  DateRangeFilter _range = ReportsDateNotifier.instance.range;
   StockMovementReportSummary? _reportSummary;
   List<Product> _allProducts = [];
   Product? _selectedProduct;
@@ -492,6 +493,7 @@ class _StockMovementsScreenState extends State<StockMovementsScreen> {
                     _range = r;
                     _currentLimit = 300;
                   });
+                  ReportsDateScope.update(context, r);
                   _load();
                 },
               ),

@@ -13,6 +13,7 @@ import 'reports/inventory_report_screen.dart';
 import 'reports/payments_report_screen.dart';
 import 'reports/product_report_screen.dart';
 import 'reports/purchases_report_screen.dart';
+import 'reports/reports_date_scope.dart';
 import 'reports/sales_report_screen.dart';
 import 'reports/supplier_report_screen.dart';
 import 'stock_movements_screen.dart';
@@ -32,6 +33,7 @@ class ReportsScreen extends StatefulWidget {
 }
 
 class _ReportsScreenState extends State<ReportsScreen> {
+  final ReportsDateNotifier _dateNotifier = ReportsDateNotifier.instance;
   EntitlementState? _entitlement;
   bool _opening = false;
 
@@ -83,7 +85,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       } catch (_) {}
       await Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => entry.screen),
+        MaterialPageRoute(
+          builder: (_) =>
+              ReportsDateScope(notifier: _dateNotifier, child: entry.screen),
+        ),
       );
     } finally {
       _opening = false;
@@ -240,115 +245,125 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     final chevronIcon = AppIcons.chevronForward(context);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.reports), centerTitle: true),
-      body: ResponsiveCenter(
-        child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          itemCount: categories.length,
-          itemBuilder: (context, catIndex) {
-            final cat = categories[catIndex];
-            final availableReports = cat.reports
-                .where(
-                  (r) => r.permission == null || AccessGuard.can(r.permission!),
-                )
-                .toList();
-            if (availableReports.isEmpty) return const SizedBox.shrink();
+    return ReportsDateScope(
+      notifier: _dateNotifier,
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.reports), centerTitle: true),
+        body: ResponsiveCenter(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            itemCount: categories.length,
+            itemBuilder: (context, catIndex) {
+              final cat = categories[catIndex];
+              final availableReports = cat.reports
+                  .where(
+                    (r) =>
+                        r.permission == null || AccessGuard.can(r.permission!),
+                  )
+                  .toList();
+              if (availableReports.isEmpty) return const SizedBox.shrink();
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(
-                    top: catIndex == 0 ? 8 : 20,
-                    bottom: 6,
-                  ),
-                  child: AppSectionHeader(
-                    title: cat.title,
-                    count: availableReports.length,
-                  ),
-                ),
-                ...availableReports.map((entry) {
-                  final locked =
-                      _entitlement != null &&
-                      entry.proFeature != null &&
-                      !FeatureAccess.canAccess(entry.proFeature!, _entitlement);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          AppDesignTokens.cardRadius,
-                        ),
-                        side: BorderSide(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.outlineVariant.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 4,
-                        ),
-                        leading: CircleAvatar(
-                          backgroundColor: AppStatusColors.adapt(
-                            context,
-                            entry.color,
-                          ).withValues(alpha: 0.14),
-                          child: Icon(
-                            entry.icon,
-                            color: AppStatusColors.adapt(context, entry.color),
-                            size: 22,
-                          ),
-                        ),
-                        title: Text(
-                          entry.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            entry.subtitle,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (locked) ...[
-                              const ProBadge(),
-                              const SizedBox(width: 8),
-                            ],
-                            Icon(
-                              locked ? Icons.lock_outline : chevronIcon,
-                              semanticLabel: locked
-                                  ? l10n.proFeatureTitle
-                                  : null,
-                              color: locked
-                                  ? Theme.of(context).colorScheme.outline
-                                  : primaryColor,
-                              size: locked ? 18 : 24,
-                            ),
-                          ],
-                        ),
-                        onTap: () => _openReport(entry),
-                      ),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: catIndex == 0 ? 8 : 20,
+                      bottom: 6,
                     ),
-                  );
-                }),
-              ],
-            );
-          },
+                    child: AppSectionHeader(
+                      title: cat.title,
+                      count: availableReports.length,
+                    ),
+                  ),
+                  ...availableReports.map((entry) {
+                    final locked =
+                        _entitlement != null &&
+                        entry.proFeature != null &&
+                        !FeatureAccess.canAccess(
+                          entry.proFeature!,
+                          _entitlement,
+                        );
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppDesignTokens.cardRadius,
+                          ),
+                          side: BorderSide(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.outlineVariant.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 4,
+                          ),
+                          leading: CircleAvatar(
+                            backgroundColor: AppStatusColors.adapt(
+                              context,
+                              entry.color,
+                            ).withValues(alpha: 0.14),
+                            child: Icon(
+                              entry.icon,
+                              color: AppStatusColors.adapt(
+                                context,
+                                entry.color,
+                              ),
+                              size: 22,
+                            ),
+                          ),
+                          title: Text(
+                            entry.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              entry.subtitle,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (locked) ...[
+                                const ProBadge(),
+                                const SizedBox(width: 8),
+                              ],
+                              Icon(
+                                locked ? Icons.lock_outline : chevronIcon,
+                                semanticLabel: locked
+                                    ? l10n.proFeatureTitle
+                                    : null,
+                                color: locked
+                                    ? Theme.of(context).colorScheme.outline
+                                    : primaryColor,
+                                size: locked ? 18 : 24,
+                              ),
+                            ],
+                          ),
+                          onTap: () => _openReport(entry),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

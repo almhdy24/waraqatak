@@ -21,6 +21,7 @@ import '../../widgets/report_export_menu.dart';
 import '../document_detail_screen.dart';
 import '../../widgets/access/screen_access_gate.dart';
 import 'report_date_filter.dart';
+import 'reports_date_scope.dart';
 import '../../widgets/responsive.dart';
 
 class SalesReportScreen extends StatefulWidget {
@@ -82,7 +83,7 @@ class SalesReportScreen extends StatefulWidget {
 }
 
 class _SalesReportScreenState extends State<SalesReportScreen> {
-  DateRangeFilter _range = DateRangeFilter.thisMonth();
+  DateRangeFilter _range = ReportsDateNotifier.instance.range;
   List<SaleProfitSummary>? _sales;
   Business? _business;
   String? _error;
@@ -427,6 +428,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                 range: _range,
                 onChanged: (r) {
                   setState(() => _range = r);
+                  ReportsDateScope.update(context, r);
                   _load();
                 },
               ),

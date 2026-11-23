@@ -17,6 +17,7 @@ import '../../widgets/pro_upgrade_sheet.dart';
 import '../../widgets/report_export_menu.dart';
 import '../../widgets/responsive.dart';
 import 'report_date_filter.dart';
+import 'reports_date_scope.dart';
 
 class AdvancedInventoryAnalyticsScreen extends StatefulWidget {
   const AdvancedInventoryAnalyticsScreen({super.key});
@@ -29,7 +30,7 @@ class AdvancedInventoryAnalyticsScreen extends StatefulWidget {
 class _AdvancedInventoryAnalyticsScreenState
     extends State<AdvancedInventoryAnalyticsScreen>
     with SingleTickerProviderStateMixin {
-  DateRangeFilter _range = DateRangeFilter.thisMonth();
+  DateRangeFilter _range = ReportsDateNotifier.instance.range;
   AdvancedInventoryMetrics? _metrics;
   List<String> _categories = [];
   String? _selectedCategory;
@@ -298,6 +299,7 @@ class _AdvancedInventoryAnalyticsScreenState
                 range: _range,
                 onChanged: (newRange) {
                   setState(() => _range = newRange);
+                  ReportsDateScope.update(context, newRange);
                   _load();
                 },
               ),

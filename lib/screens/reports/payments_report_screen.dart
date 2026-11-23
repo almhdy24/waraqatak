@@ -18,6 +18,7 @@ import '../../widgets/app_snackbar.dart';
 import '../../widgets/app_status_colors.dart';
 import '../../widgets/report_export_menu.dart';
 import 'report_date_filter.dart';
+import 'reports_date_scope.dart';
 import '../../widgets/responsive.dart';
 
 class PaymentsReportScreen extends StatefulWidget {
@@ -28,7 +29,7 @@ class PaymentsReportScreen extends StatefulWidget {
 }
 
 class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
-  DateRangeFilter _range = DateRangeFilter.thisMonth();
+  DateRangeFilter _range = ReportsDateNotifier.instance.range;
   List<Map<String, dynamic>>? _rows;
   Business? _business;
   Map<String, PaymentMethod> _methodsMap = {};
@@ -326,6 +327,7 @@ class _PaymentsReportScreenState extends State<PaymentsReportScreen> {
                 range: _range,
                 onChanged: (r) {
                   setState(() => _range = r);
+                  ReportsDateScope.update(context, r);
                   _load();
                 },
               ),

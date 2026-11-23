@@ -22,6 +22,7 @@ import '../../widgets/access/screen_access_gate.dart';
 import '../../widgets/responsive.dart';
 import '../document_detail_screen.dart';
 import 'report_date_filter.dart';
+import 'reports_date_scope.dart';
 
 class PurchasesReportScreen extends StatefulWidget {
   const PurchasesReportScreen({super.key});
@@ -31,7 +32,7 @@ class PurchasesReportScreen extends StatefulWidget {
 }
 
 class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
-  DateRangeFilter _range = DateRangeFilter.thisMonth();
+  DateRangeFilter _range = ReportsDateNotifier.instance.range;
   PurchaseReportSummary? _summary;
   Business? _business;
   List<Contact> _suppliers = [];
@@ -312,6 +313,7 @@ class _PurchasesReportScreenState extends State<PurchasesReportScreen> {
                 range: _range,
                 onChanged: (r) {
                   setState(() => _range = r);
+                  ReportsDateScope.update(context, r);
                   _load();
                 },
               ),
