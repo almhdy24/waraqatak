@@ -41,7 +41,7 @@ void main() {
     } catch (_) {}
   });
 
-  group('Pure AgingBucketSummary logic', () {
+  group('Pure AgingBucketSummary logic & Boundary Days Tests', () {
     test('correctly places amounts in respective buckets', () {
       var summary = const AgingBucketSummary();
       summary = summary.copyWithAdded(daysOld: 15, amount: 100);
@@ -55,17 +55,48 @@ void main() {
       expect(summary.days90Plus, equals(400));
       expect(summary.total, equals(1000));
     });
+
+    test('validates exact boundary days 30, 31, 60, 61, 90, 91', () {
+      var summary = const AgingBucketSummary();
+
+      // Day 0: 0-30 bucket
+      summary = summary.copyWithAdded(daysOld: 0, amount: 10);
+      // Day 30: 0-30 bucket boundary
+      summary = summary.copyWithAdded(daysOld: 30, amount: 20);
+      expect(summary.current0To30, equals(30));
+
+      // Day 31: 31-60 bucket boundary
+      summary = summary.copyWithAdded(daysOld: 31, amount: 40);
+      // Day 60: 31-60 bucket boundary
+      summary = summary.copyWithAdded(daysOld: 60, amount: 50);
+      expect(summary.days31To60, equals(90));
+
+      // Day 61: 61-90 bucket boundary
+      summary = summary.copyWithAdded(daysOld: 61, amount: 70);
+      // Day 90: 61-90 bucket boundary
+      summary = summary.copyWithAdded(daysOld: 90, amount: 80);
+      expect(summary.days61To90, equals(150));
+
+      // Day 91: 90+ bucket boundary
+      summary = summary.copyWithAdded(daysOld: 91, amount: 100);
+      expect(summary.days90Plus, equals(100));
+
+      expect(summary.total, equals(370));
+    });
   });
 
   group('getAgingReport database aggregation', () {
     test(
-      'aggregates receivables aging buckets and excludes cancelled/settled',
+      'aggregates receivables aging buckets, handles partial payments, and excludes draft, cancelled, settled, and quotations',
       () async {
         final db = DatabaseHelper.instance;
         final rawDb = await db.database;
         final asOf = DateTime(2026, 11, 23, 12, 0);
 
-        // Customer 1: 15 days ago (1000 SDG remaining)
+        // Clear existing documents to isolate test assertions
+        await rawDb.delete('documents');
+
+        // 1. Customer 1: 15 days ago with partial payment (1500 total, 500 paid, 1000 remaining)
         await rawDb.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-AGE-1',
@@ -79,11 +110,11 @@ void main() {
           'total': 1500.0,
           'paid': 500.0,
           'remaining': 1000.0,
-          'status': DocumentStatus.issued,
+          'status': DocumentStatus.partiallyPaid,
           'currency_code': 'SDG',
         });
 
-        // Customer 1: 45 days ago (2000 SDG remaining)
+        // 2. Customer 1: 45 days ago (2000 SDG remaining)
         await rawDb.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-AGE-2',
@@ -101,7 +132,7 @@ void main() {
           'currency_code': 'SDG',
         });
 
-        // Customer 2: 70 days ago (3000 SDG remaining)
+        // 3. Customer 2: 70 days ago (3000 SDG remaining)
         await rawDb.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-AGE-3',
@@ -118,7 +149,7 @@ void main() {
           'currency_code': 'SDG',
         });
 
-        // Customer 2: 100 days ago (4000 SDG remaining)
+        // 4. Customer 2: 100 days ago (4000 SDG remaining)
         await rawDb.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-AGE-4',
@@ -135,7 +166,24 @@ void main() {
           'currency_code': 'SDG',
         });
 
-        // Cancelled document (5000 SDG) - should be excluded
+        // 5. Draft invoice (6000 SDG remaining) - MUST BE EXCLUDED
+        await rawDb.insert('documents', {
+          'type': 'invoice',
+          'document_number': 'INV-DRAFT',
+          'date': asOf.subtract(const Duration(days: 10)).toIso8601String(),
+          'recipient_name': 'مسودة عميل',
+          'subtotal': 6000.0,
+          'discount': 0.0,
+          'tax_rate': 0.0,
+          'tax_amount': 0.0,
+          'total': 6000.0,
+          'paid': 0.0,
+          'remaining': 6000.0,
+          'status': DocumentStatus.draft,
+          'currency_code': 'SDG',
+        });
+
+        // 6. Cancelled document (5000 SDG) - MUST BE EXCLUDED
         await rawDb.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-CANCELLED',
@@ -152,7 +200,7 @@ void main() {
           'currency_code': 'SDG',
         });
 
-        // Settled document (remaining = 0) - should be excluded
+        // 7. Settled document (remaining = 0) - MUST BE EXCLUDED
         await rawDb.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-PAID',
@@ -169,11 +217,29 @@ void main() {
           'currency_code': 'SDG',
         });
 
+        // 8. Quotation document with remaining balance - MUST BE EXCLUDED
+        await rawDb.insert('documents', {
+          'type': 'quotation',
+          'document_number': 'QUO-100',
+          'date': asOf.subtract(const Duration(days: 25)).toIso8601String(),
+          'recipient_name': 'عرض سعر',
+          'subtotal': 8000.0,
+          'discount': 0.0,
+          'tax_rate': 0.0,
+          'tax_amount': 0.0,
+          'total': 8000.0,
+          'paid': 0.0,
+          'remaining': 8000.0,
+          'status': DocumentStatus.issued,
+          'currency_code': 'SDG',
+        });
+
         final report = await BusinessReportingService.instance.getAgingReport(
           documentType: 'invoice',
           asOf: asOf,
         );
 
+        // Verification: draft (6000), cancelled (5000), paid (0), quotation (8000) are all excluded!
         expect(report.overall.current0To30, equals(1000.0));
         expect(report.overall.days31To60, equals(2000.0));
         expect(report.overall.days61To90, equals(3000.0));

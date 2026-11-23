@@ -12,6 +12,7 @@ import 'reports/aging_report_screen.dart';
 import 'reports/customer_report_screen.dart';
 import 'reports/daily_closing_report_screen.dart';
 import 'reports/inventory_report_screen.dart';
+import 'reports/low_stock_report_screen.dart';
 import 'reports/payments_report_screen.dart';
 import 'reports/product_report_screen.dart';
 import 'reports/purchases_report_screen.dart';
@@ -30,6 +31,13 @@ import '../widgets/app_status_colors.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
+
+  /// Returns the canonical list of report categories and their tiles.
+  /// Accessible for UI rendering and automated security/manifest parity testing.
+  static List<ReportCategoryData> getReportCategories(
+    AppLocalizations l10n, {
+    Color primaryColor = const Color(0xFF1972D2),
+  }) => _ReportsScreenState.buildCategories(l10n, primaryColor: primaryColor);
 
   @override
   State<ReportsScreen> createState() => _ReportsScreenState();
@@ -115,12 +123,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return null;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    final categories = [
+  static List<ReportCategoryData> buildCategories(
+    AppLocalizations l10n, {
+    Color primaryColor = const Color(0xFF1972D2),
+  }) {
+    return [
       _ReportCategory(
         title: l10n.reportCatFinancial,
         reports: [
@@ -223,7 +230,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             color: const Color(0xFFE64A19),
             title: l10n.lowStockReport,
             subtitle: l10n.reportSubtitleLowStock,
-            screen: const InventoryReportScreen(initialFilter: 'low_stock'),
+            screen: const LowStockReportScreen(),
             proFeature: Feature.advancedReports,
             permission: PermissionRegistry.productsView,
           ),
@@ -271,6 +278,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ],
       ),
     ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final categories = buildCategories(l10n, primaryColor: primaryColor);
 
     final chevronIcon = AppIcons.chevronForward(context);
 
@@ -399,13 +413,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 }
 
-class _ReportCategory {
+typedef _ReportCategory = ReportCategoryData;
+typedef _ReportEntry = ReportEntryData;
+
+class ReportCategoryData {
   final String title;
-  final List<_ReportEntry> reports;
-  const _ReportCategory({required this.title, required this.reports});
+  final List<ReportEntryData> reports;
+  const ReportCategoryData({required this.title, required this.reports});
 }
 
-class _ReportEntry {
+class ReportEntryData {
   final IconData icon;
   final Color color;
   final String title;
@@ -414,7 +431,7 @@ class _ReportEntry {
   final Feature? proFeature;
   final String? permission;
 
-  const _ReportEntry({
+  const ReportEntryData({
     required this.icon,
     required this.color,
     required this.title,

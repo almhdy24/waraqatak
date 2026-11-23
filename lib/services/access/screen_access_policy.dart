@@ -33,6 +33,7 @@ import '../../screens/reports/aging_report_screen.dart';
 import '../../screens/reports/customer_report_screen.dart';
 import '../../screens/reports/daily_closing_report_screen.dart';
 import '../../screens/reports/inventory_report_screen.dart';
+import '../../screens/reports/low_stock_report_screen.dart';
 import '../../screens/reports/payments_report_screen.dart';
 import '../../screens/reports/product_report_screen.dart';
 import '../../screens/reports/purchases_report_screen.dart';
@@ -221,6 +222,9 @@ abstract final class ScreenAccessPolicy {
     ),
     InventoryReportScreen: const ScreenPolicy.require(
       PermissionRegistry.reportsViewInventoryCost,
+    ),
+    LowStockReportScreen: const ScreenPolicy.require(
+      PermissionRegistry.productsView,
     ),
     PaymentsReportScreen: const ScreenPolicy.require(
       PermissionRegistry.reportsViewFinancials,

@@ -127,12 +127,16 @@ class CsvService {
     'ReferencePurchasePrice',
   ];
 
+  static final _numericStringRegex = RegExp(r'^[+-]?\d+(\.\d+)?$');
+
   /// Escapes a single cell for CSV RFC 4180 with spreadsheet formula injection protection.
+  /// Strictly numeric strings (e.g. negative amounts, phone numbers) are NOT prepended with apostrophe.
   static String sanitizeCell(String? value) {
     if (value == null) return '';
     var text = value;
 
     // Formula injection prevention: if cell starts with =, +, -, @, \t, \r, prepend single quote '
+    // BUT skip apostrophe if the string is strictly numeric so negative amounts and phone numbers are not corrupted.
     if (text.isNotEmpty) {
       final firstChar = text[0];
       if (firstChar == '=' ||
@@ -141,7 +145,9 @@ class CsvService {
           firstChar == '@' ||
           firstChar == '\t' ||
           firstChar == '\r') {
-        text = "'$text";
+        if (!_numericStringRegex.hasMatch(text)) {
+          text = "'$text";
+        }
       }
     }
 
@@ -169,18 +175,21 @@ class CsvService {
 
     String formatCell(dynamic val) {
       if (val == null) return '';
+      if (val is num) {
+        // Emit real numbers raw with Western digits and dot decimal, without apostrophe
+        return val.toString();
+      }
       if (val is DateTime) {
         return sanitizeCell(val.toIso8601String());
-      }
-      if (val is num) {
-        return sanitizeCell(val.toString());
       }
       return sanitizeCell(val.toString());
     }
 
-    buffer.writeln(headers.map(sanitizeCell).join(','));
+    buffer.write(headers.map(sanitizeCell).join(','));
+    buffer.write('\r\n');
     for (final row in rows) {
-      buffer.writeln(row.map(formatCell).join(','));
+      buffer.write(row.map(formatCell).join(','));
+      buffer.write('\r\n');
     }
 
     return Uint8List.fromList(utf8.encode(buffer.toString()));

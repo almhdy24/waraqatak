@@ -33,6 +33,7 @@ import 'access_dao.dart';
 import 'reference_pricing_dao.dart';
 import '../services/access/access_context.dart';
 import '../services/access/access_guard.dart';
+import '../services/access/access_seeder.dart';
 import '../services/access/audit_service.dart';
 import '../services/access/permission_registry.dart';
 import '../models/digital_seal.dart';
@@ -59,7 +60,39 @@ class DatabaseHelper {
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _createTables,
       onUpgrade: _upgradeTables,
+      onOpen: (db) async => runPostOpenMigrations(db),
     );
+  }
+
+  /// Runs idempotent post-open schema or permission repairs/migrations.
+  /// Guarded so unexpected errors never block database initialization.
+  static Future<void> runPostOpenMigrations(DatabaseExecutor db) async {
+    try {
+      final appSettingsExists = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='app_settings'",
+      );
+      if (appSettingsExists.isEmpty) return;
+
+      final rolePermsExists = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='role_permissions'",
+      );
+      if (rolePermsExists.isEmpty) return;
+
+      final settingRows = await db.rawQuery(
+        "SELECT value FROM app_settings WHERE key = 'receivables_permission_migrated' LIMIT 1",
+      );
+      final migrated =
+          settingRows.isNotEmpty && settingRows.first['value'] == 'true';
+      if (!migrated) {
+        await AccessSeeder.migrateReceivablesPermissions(db);
+        await db.rawInsert('''
+          INSERT OR REPLACE INTO app_settings (key, value)
+          VALUES ('receivables_permission_migrated', 'true')
+          ''');
+      }
+    } catch (e) {
+      debugPrint('Post-open migration error: $e');
+    }
   }
 
   static const List<Map<String, dynamic>> _paymentMethodSeeds = [

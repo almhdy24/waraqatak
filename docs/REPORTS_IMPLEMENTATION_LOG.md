@@ -226,3 +226,31 @@
   - `tool/check_play_compliance.sh`: Play compliance guard: OK.
 
 
+---
+
+## Fix Round: Remediation of Implementation Audit
+
+### Batch P0: Blockers Remediation
+
+- **Batch ID:** `batch-p0-blockers`
+- **Files Changed:**
+  - `lib/services/csv_service.dart`: Numeric cells emitted raw without apostrophe. String cells preserve formula injection defense for `= + - @ \t \r` while skipping apostrophe when strictly numeric (`^[+-]?\d+(\.\d+)?$`), preserving negative amounts and phone numbers.
+  - `test/services/csv_report_export_test.dart`: Updated unit tests asserting uncorrupted negative amounts (`-250`, `-12.75`), preserved phone numbers (`+249912345678`), sanitized spreadsheet formulas (`'=SUM(A1:B1)`), and sanitized command injections (`'-cmd|calc`).
+  - `lib/screens/reports/low_stock_report_screen.dart`: Created dedicated lightweight Low Stock Report screen showing stock quantities, minimum thresholds, and shortages without costing/valuation data, gated with `PermissionRegistry.productsView`.
+  - `lib/screens/reports_screen.dart`: Updated Low Stock tile to navigate to `LowStockReportScreen` with `productsView` requirement. Exposed canonical `ReportsScreen.getReportCategories()` for UI and test verification.
+  - `lib/services/access/screen_access_policy.dart`: Registered `LowStockReportScreen` requiring `PermissionRegistry.productsView`.
+  - `lib/database/database_helper.dart`: Added `runPostOpenMigrations(db)` triggered on database `onOpen` and guarded by `app_settings` key `receivables_permission_migrated` to grant `reportsViewReceivables` to existing roles and users holding `contactsViewBalances`.
+  - `test/access/receivables_migration_test.dart`: Added unit tests verifying migration on existing database, role/user override propagation, flag persistence, idempotency, and resilience on empty databases.
+  - `lib/services/business_reporting_service.dart`: Fixed `getAgingReport` and `getDailyClosingSummary` to exclude draft documents via `status NOT IN ('draft', 'cancelled')` and restricted aging document types to `invoice` and `purchase`.
+  - `test/services/debt_aging_test.dart`: Added unit tests validating exclusion of `draft`, `cancelled`, and `quotation` documents from aging calculations, inclusion of `partially_paid` balances, and exact bucket day boundaries (30/31/60/61/90/91).
+  - `test/access/reports_screen_policy_test.dart`: Added exhaustive test asserting that every hub tile's declared permission exactly matches the target screen's `ScreenAccessPolicy.manifest` requirement, verified all 16 canonical report screens, and asserted cashier role boundaries.
+- **Decisions Taken:**
+  - P0-1: Strict numeric check allows negative numbers and phone numbers without triggering false-positive formula injection quotes.
+  - P0-2: Implemented Option B (dedicated `LowStockReportScreen`) so cashiers with `productsView` can monitor inventory replenishment without gaining unauthorized visibility into inventory costs and valuation.
+  - P0-3: Implemented Option A for receivables migration using post-open database hook with `app_settings` run-once guard.
+  - P0-4: Unified posted document status across financial aggregations as `status NOT IN ('draft', 'cancelled')`.
+- **Validation:**
+  - `dart format`: 10 files formatted.
+  - `dart analyze`: Clean (0 issues across all touched files).
+  - `tool/check_play_compliance.sh`: Play compliance guard: OK.
+

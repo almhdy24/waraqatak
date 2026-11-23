@@ -1184,12 +1184,12 @@ class BusinessReportingService {
       '''
       SELECT
         COUNT(*) AS total_count,
-        SUM(CASE WHEN status != 'cancelled' THEN 1 ELSE 0 END) AS valid_count,
+        SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN 1 ELSE 0 END) AS valid_count,
         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count,
-        SUM(CASE WHEN status != 'cancelled' THEN subtotal ELSE 0 END) AS gross_sales,
-        SUM(CASE WHEN status != 'cancelled' THEN discount ELSE 0 END) AS total_discount,
-        SUM(CASE WHEN status != 'cancelled' THEN total ELSE 0 END) AS net_sales,
-        SUM(CASE WHEN status != 'cancelled' THEN remaining ELSE 0 END) AS credit_sales
+        SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN subtotal ELSE 0 END) AS gross_sales,
+        SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN discount ELSE 0 END) AS total_discount,
+        SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN total ELSE 0 END) AS net_sales,
+        SUM(CASE WHEN status NOT IN ('draft', 'cancelled') THEN remaining ELSE 0 END) AS credit_sales
       FROM documents
       WHERE type = 'invoice' AND date >= ? AND date <= ?
     ''',
@@ -1219,7 +1219,7 @@ class BusinessReportingService {
       FROM document_payments dp
       JOIN documents d ON d.id = dp.document_id
       WHERE d.type = 'invoice'
-        AND d.status != 'cancelled'
+        AND d.status NOT IN ('draft', 'cancelled')
         AND dp.date >= ? AND dp.date <= ?
     ''',
       [fromStr, toStr],
@@ -1276,7 +1276,7 @@ class BusinessReportingService {
       FROM document_payments dp
       JOIN documents d ON d.id = dp.document_id
       WHERE d.type = 'purchase'
-        AND d.status != 'cancelled'
+        AND d.status NOT IN ('draft', 'cancelled')
         AND dp.date >= ? AND dp.date <= ?
     ''',
       [fromStr, toStr],
@@ -1348,6 +1348,7 @@ class BusinessReportingService {
   }) async {
     final db = await DatabaseHelper.instance.database;
     final asOfDate = asOf ?? DateTime.now();
+    final docType = (documentType == 'purchase') ? 'purchase' : 'invoice';
 
     final rows = await db.rawQuery(
       '''
@@ -1362,11 +1363,11 @@ class BusinessReportingService {
       FROM documents d
       LEFT JOIN contacts c ON c.id = d.contact_id
       WHERE d.type = ?
-        AND d.status != 'cancelled'
+        AND d.status NOT IN ('draft', 'cancelled')
         AND d.remaining > 0.001
       ORDER BY d.date ASC
     ''',
-      [documentType],
+      [docType],
     );
 
     AgingBucketSummary overall = const AgingBucketSummary();
