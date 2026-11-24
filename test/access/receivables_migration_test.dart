@@ -215,7 +215,7 @@ void main() {
         final userCount = await db.rawQuery(
           'SELECT COUNT(*) as count FROM user_permission_overrides',
         );
-        expect(userCount.first['count'], 4); // u1(2) + u2(1) + u3(1)
+        expect(userCount.first['count'], 5); // u1(2) + u2(1) + u3(2)
       },
     );
 

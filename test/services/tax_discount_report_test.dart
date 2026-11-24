@@ -88,7 +88,7 @@ void main() {
         await db.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-TAX-001',
-          'contact_id': 1,
+          'contact_id': null,
           'recipient_name': 'عميل تجريبي',
           'date': now.subtract(const Duration(days: 2)).toIso8601String(),
           'subtotal': 10000.0,
@@ -106,7 +106,7 @@ void main() {
         await db.insert('documents', {
           'type': 'purchase',
           'document_number': 'PUR-TAX-001',
-          'contact_id': 2,
+          'contact_id': null,
           'recipient_name': 'مورد تجريبي',
           'date': now.subtract(const Duration(days: 1)).toIso8601String(),
           'subtotal': 8000.0,
@@ -124,7 +124,7 @@ void main() {
         await db.insert('documents', {
           'type': 'invoice',
           'document_number': 'INV-TAX-CAN',
-          'contact_id': 1,
+          'contact_id': null,
           'recipient_name': 'عميل ملغي',
           'date': now.subtract(const Duration(days: 1)).toIso8601String(),
           'subtotal': 5000.0,
