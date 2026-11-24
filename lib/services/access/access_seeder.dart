@@ -150,30 +150,40 @@ abstract final class AccessSeeder {
   /// Grants [PermissionRegistry.reportsViewReceivables] to any role or user override
   /// that previously held [PermissionRegistry.contactsViewBalances].
   static Future<void> migrateReceivablesPermissions(DatabaseExecutor db) async {
-    await db.rawInsert(
-      '''
-      INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
-      SELECT DISTINCT role_id, ?
-      FROM role_permissions
-      WHERE permission_key = ?
-    ''',
-      [
-        PermissionRegistry.reportsViewReceivables,
-        PermissionRegistry.contactsViewBalances,
-      ],
+    final rolePerms = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='role_permissions'",
     );
+    if (rolePerms.isNotEmpty) {
+      await db.rawInsert(
+        '''
+        INSERT OR IGNORE INTO role_permissions (role_id, permission_key)
+        SELECT DISTINCT role_id, ?
+        FROM role_permissions
+        WHERE permission_key = ?
+      ''',
+        [
+          PermissionRegistry.reportsViewReceivables,
+          PermissionRegistry.contactsViewBalances,
+        ],
+      );
+    }
 
-    await db.rawInsert(
-      '''
-      INSERT OR IGNORE INTO user_permissions (user_id, permission_key, is_granted)
-      SELECT DISTINCT user_id, ?, 1
-      FROM user_permissions
-      WHERE permission_key = ? AND is_granted = 1
-    ''',
-      [
-        PermissionRegistry.reportsViewReceivables,
-        PermissionRegistry.contactsViewBalances,
-      ],
+    final userOverrides = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='user_permission_overrides'",
     );
+    if (userOverrides.isNotEmpty) {
+      await db.rawInsert(
+        '''
+        INSERT OR IGNORE INTO user_permission_overrides (user_id, permission_key, effect)
+        SELECT DISTINCT user_id, ?, effect
+        FROM user_permission_overrides
+        WHERE permission_key = ?
+      ''',
+        [
+          PermissionRegistry.reportsViewReceivables,
+          PermissionRegistry.contactsViewBalances,
+        ],
+      );
+    }
   }
 }

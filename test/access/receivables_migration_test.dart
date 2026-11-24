@@ -33,10 +33,10 @@ void main() {
         )
       ''');
       await db.execute('''
-        CREATE TABLE user_permissions (
+        CREATE TABLE user_permission_overrides (
           user_id TEXT NOT NULL,
           permission_key TEXT NOT NULL,
-          is_granted INTEGER NOT NULL DEFAULT 1,
+          effect TEXT NOT NULL,
           PRIMARY KEY (user_id, permission_key)
         )
       ''');
@@ -69,25 +69,25 @@ void main() {
       });
 
       // Seed test user overrides
-      // User 1: holds contactsViewBalances (is_granted = 1)
-      await db.insert('user_permissions', {
+      // User 1: holds contactsViewBalances (effect = 'allow')
+      await db.insert('user_permission_overrides', {
         'user_id': 'usr_override_1',
         'permission_key': PermissionRegistry.contactsViewBalances,
-        'is_granted': 1,
+        'effect': 'allow',
       });
 
       // User 2: holds productsView only
-      await db.insert('user_permissions', {
+      await db.insert('user_permission_overrides', {
         'user_id': 'usr_override_2',
         'permission_key': PermissionRegistry.productsView,
-        'is_granted': 1,
+        'effect': 'allow',
       });
 
-      // User 3: has contactsViewBalances revoked (is_granted = 0)
-      await db.insert('user_permissions', {
+      // User 3: has contactsViewBalances revoked (effect = 'deny')
+      await db.insert('user_permission_overrides', {
         'user_id': 'usr_override_3',
         'permission_key': PermissionRegistry.contactsViewBalances,
-        'is_granted': 0,
+        'effect': 'deny',
       });
     });
 
@@ -161,7 +161,7 @@ void main() {
 
         // 3. Verify user override grants
         final u1Perms = await db.query(
-          'user_permissions',
+          'user_permission_overrides',
           where: 'user_id = ?',
           whereArgs: ['usr_override_1'],
         );
@@ -170,9 +170,17 @@ void main() {
           u1Keys.contains(PermissionRegistry.reportsViewReceivables),
           isTrue,
         );
+        expect(
+          u1Perms.firstWhere(
+            (r) =>
+                r['permission_key'] ==
+                PermissionRegistry.reportsViewReceivables,
+          )['effect'],
+          'allow',
+        );
 
         final u2Perms = await db.query(
-          'user_permissions',
+          'user_permission_overrides',
           where: 'user_id = ?',
           whereArgs: ['usr_override_2'],
         );
@@ -183,14 +191,15 @@ void main() {
         );
 
         final u3Perms = await db.query(
-          'user_permissions',
+          'user_permission_overrides',
           where: 'user_id = ? AND permission_key = ?',
           whereArgs: [
             'usr_override_3',
             PermissionRegistry.reportsViewReceivables,
           ],
         );
-        expect(u3Perms.isEmpty, isTrue);
+        expect(u3Perms.isNotEmpty, isTrue);
+        expect(u3Perms.first['effect'], 'deny');
 
         // 4. Assert idempotency on second run
         await DatabaseHelper.runPostOpenMigrations(db);
@@ -204,7 +213,7 @@ void main() {
         ); // cashier(2) + viewer(1) + admin(2)
 
         final userCount = await db.rawQuery(
-          'SELECT COUNT(*) as count FROM user_permissions',
+          'SELECT COUNT(*) as count FROM user_permission_overrides',
         );
         expect(userCount.first['count'], 4); // u1(2) + u2(1) + u3(1)
       },
