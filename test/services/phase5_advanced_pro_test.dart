@@ -34,14 +34,32 @@ void main() {
 
       // Pro features
       expect(FeatureAccess.canAccess(Feature.stocktake, activePro), isTrue);
-      expect(FeatureAccess.canAccess(Feature.bulkPriceUpdate, activePro), isTrue);
-      expect(FeatureAccess.canAccess(Feature.csvImportExport, activePro), isTrue);
-      expect(FeatureAccess.canAccess(Feature.inventoryAudit, activePro), isTrue);
+      expect(
+        FeatureAccess.canAccess(Feature.bulkPriceUpdate, activePro),
+        isTrue,
+      );
+      expect(
+        FeatureAccess.canAccess(Feature.csvImportExport, activePro),
+        isTrue,
+      );
+      expect(
+        FeatureAccess.canAccess(Feature.inventoryAudit, activePro),
+        isTrue,
+      );
 
       expect(FeatureAccess.canAccess(Feature.stocktake, freeUser), isFalse);
-      expect(FeatureAccess.canAccess(Feature.bulkPriceUpdate, freeUser), isFalse);
-      expect(FeatureAccess.canAccess(Feature.csvImportExport, freeUser), isFalse);
-      expect(FeatureAccess.canAccess(Feature.inventoryAudit, freeUser), isFalse);
+      expect(
+        FeatureAccess.canAccess(Feature.bulkPriceUpdate, freeUser),
+        isFalse,
+      );
+      expect(
+        FeatureAccess.canAccess(Feature.csvImportExport, freeUser),
+        isFalse,
+      );
+      expect(
+        FeatureAccess.canAccess(Feature.inventoryAudit, freeUser),
+        isFalse,
+      );
 
       // Free features always accessible to both
       expect(FeatureAccess.canAccess(Feature.invoices, freeUser), isTrue);
@@ -76,35 +94,38 @@ void main() {
       expect(itemCountedZero.currentVariance, -15.0);
     });
 
-    test('4. Stocktake variance calculates positive, negative, and exact match', () {
-      const itemSurplus = StocktakeItem(
-        id: 1,
-        sessionId: 10,
-        productId: 100,
-        baselineQuantity: 10.0,
-        countedQuantity: 14.0,
-      );
+    test(
+      '4. Stocktake variance calculates positive, negative, and exact match',
+      () {
+        const itemSurplus = StocktakeItem(
+          id: 1,
+          sessionId: 10,
+          productId: 100,
+          baselineQuantity: 10.0,
+          countedQuantity: 14.0,
+        );
 
-      const itemShortage = StocktakeItem(
-        id: 2,
-        sessionId: 10,
-        productId: 101,
-        baselineQuantity: 20.0,
-        countedQuantity: 17.0,
-      );
+        const itemShortage = StocktakeItem(
+          id: 2,
+          sessionId: 10,
+          productId: 101,
+          baselineQuantity: 20.0,
+          countedQuantity: 17.0,
+        );
 
-      const itemMatch = StocktakeItem(
-        id: 3,
-        sessionId: 10,
-        productId: 102,
-        baselineQuantity: 5.0,
-        countedQuantity: 5.0,
-      );
+        const itemMatch = StocktakeItem(
+          id: 3,
+          sessionId: 10,
+          productId: 102,
+          baselineQuantity: 5.0,
+          countedQuantity: 5.0,
+        );
 
-      expect(itemSurplus.currentVariance, 4.0);
-      expect(itemShortage.currentVariance, -3.0);
-      expect(itemMatch.currentVariance, 0.0);
-    });
+        expect(itemSurplus.currentVariance, 4.0);
+        expect(itemShortage.currentVariance, -3.0);
+        expect(itemMatch.currentVariance, 0.0);
+      },
+    );
 
     test('5. StocktakeSession model serialization and status methods', () {
       final now = DateTime.now();
@@ -167,7 +188,10 @@ void main() {
 
       expect(previewIncrease[0].proposedSalePrice, 110.0);
       expect(previewIncrease[0].salePriceDelta, 10.0);
-      expect(previewIncrease[0].proposedPurchasePrice, 70.0); // Purchase untouched
+      expect(
+        previewIncrease[0].proposedPurchasePrice,
+        70.0,
+      ); // Purchase untouched
 
       final previewDecrease = BulkPricingService.instance.preview(
         products: testProducts,
@@ -199,57 +223,67 @@ void main() {
       expect(previewDirect[1].proposedSalePrice, 500.0);
     });
 
-    test('8. Price rounding rules: none, nearestWhole, nearestTen, ceilWhole', () {
-      // 255.45 + 10% = 280.995
-      final previewNone = BulkPricingService.instance.preview(
-        products: [testProducts[1]],
-        opType: BulkPriceOpType.percentageIncrease,
-        opValue: 10.0,
-        target: BulkPriceTarget.sellingPrice,
-        rounding: BulkPriceRounding.none,
-      );
-      expect(previewNone[0].proposedSalePrice, 281.0); // 2 decimals
+    test(
+      '8. Price rounding rules: none, nearestWhole, nearestTen, ceilWhole',
+      () {
+        // 255.45 + 10% = 280.995
+        final previewNone = BulkPricingService.instance.preview(
+          products: [testProducts[1]],
+          opType: BulkPriceOpType.percentageIncrease,
+          opValue: 10.0,
+          target: BulkPriceTarget.sellingPrice,
+          rounding: BulkPriceRounding.none,
+        );
+        expect(previewNone[0].proposedSalePrice, 281.0); // 2 decimals
 
-      final previewWhole = BulkPricingService.instance.preview(
-        products: [testProducts[1]],
-        opType: BulkPriceOpType.percentageIncrease,
-        opValue: 10.0,
-        target: BulkPriceTarget.sellingPrice,
-        rounding: BulkPriceRounding.nearestWhole,
-      );
-      expect(previewWhole[0].proposedSalePrice, 281.0);
+        final previewWhole = BulkPricingService.instance.preview(
+          products: [testProducts[1]],
+          opType: BulkPriceOpType.percentageIncrease,
+          opValue: 10.0,
+          target: BulkPriceTarget.sellingPrice,
+          rounding: BulkPriceRounding.nearestWhole,
+        );
+        expect(previewWhole[0].proposedSalePrice, 281.0);
 
-      final previewTen = BulkPricingService.instance.preview(
-        products: [testProducts[1]],
-        opType: BulkPriceOpType.percentageIncrease,
-        opValue: 10.0,
-        target: BulkPriceTarget.sellingPrice,
-        rounding: BulkPriceRounding.nearestTen,
-      );
-      expect(previewTen[0].proposedSalePrice, 280.0); // Rounded to nearest 10
-    });
+        final previewTen = BulkPricingService.instance.preview(
+          products: [testProducts[1]],
+          opType: BulkPriceOpType.percentageIncrease,
+          opValue: 10.0,
+          target: BulkPriceTarget.sellingPrice,
+          rounding: BulkPriceRounding.nearestTen,
+        );
+        expect(previewTen[0].proposedSalePrice, 280.0); // Rounded to nearest 10
+      },
+    );
 
-    test('9. Negative price validation flags invalid and blocks negative prices', () {
-      final previewNegative = BulkPricingService.instance.preview(
-        products: testProducts,
-        opType: BulkPriceOpType.fixedDecrease,
-        opValue: 150.0, // 100 - 150 = -50
-        target: BulkPriceTarget.sellingPrice,
-      );
+    test(
+      '9. Negative price validation flags invalid and blocks negative prices',
+      () {
+        final previewNegative = BulkPricingService.instance.preview(
+          products: testProducts,
+          opType: BulkPriceOpType.fixedDecrease,
+          opValue: 150.0, // 100 - 150 = -50
+          target: BulkPriceTarget.sellingPrice,
+        );
 
-      expect(previewNegative[0].isValid, isFalse);
-      expect(previewNegative[0].errorMessage, contains('سالب'));
-      expect(previewNegative[1].isValid, isTrue); // 255.45 - 150 > 0
-    });
+        expect(previewNegative[0].isValid, isFalse);
+        expect(previewNegative[0].errorMessage, contains('سالب'));
+        expect(previewNegative[1].isValid, isTrue); // 255.45 - 150 > 0
+      },
+    );
   });
 
   group('Phase 5 — CSV Import & Export', () {
     test('10. Formula injection prevention prefixes dangerous characters', () {
       expect(CsvService.sanitizeCell('=SUM(A1:A10)'), "'=SUM(A1:A10)");
-      expect(CsvService.sanitizeCell('+12345'), "'+12345");
-      expect(CsvService.sanitizeCell('-100'), "'-100");
+      expect(CsvService.sanitizeCell('+cmd|calc'), "'+cmd|calc");
+      expect(CsvService.sanitizeCell('-cmd|calc'), "'-cmd|calc");
       expect(CsvService.sanitizeCell('@CMD'), "'@CMD");
       expect(CsvService.sanitizeCell('\tTAB'), "'\tTAB");
+
+      // Legitimate numeric strings are preserved without apostrophe
+      expect(CsvService.sanitizeCell('+12345'), '+12345');
+      expect(CsvService.sanitizeCell('-100'), '-100');
 
       // Normal safe strings are not prefixed
       expect(CsvService.sanitizeCell('سكر كنانة'), 'سكر كنانة');
@@ -262,17 +296,21 @@ void main() {
       expect(CsvService.sanitizeCell('Line 1\nLine 2'), '"Line 1\nLine 2"');
     });
 
-    test('12. Robust RFC 4180 CSV parser parses quoted commas and escaped quotes', () {
-      const csv = 'Name,SalePrice,Category\n'
-          '"Sugar, White",500,"Food, Grocery"\n'
-          '"Box ""Large""",1200,Hardware\n';
+    test(
+      '12. Robust RFC 4180 CSV parser parses quoted commas and escaped quotes',
+      () {
+        const csv =
+            'Name,SalePrice,Category\n'
+            '"Sugar, White",500,"Food, Grocery"\n'
+            '"Box ""Large""",1200,Hardware\n';
 
-      final rows = CsvService.parseCsv(csv);
-      expect(rows.length, 3);
-      expect(rows[0], ['Name', 'SalePrice', 'Category']);
-      expect(rows[1], ['Sugar, White', '500', 'Food, Grocery']);
-      expect(rows[2], ['Box "Large"', '1200', 'Hardware']);
-    });
+        final rows = CsvService.parseCsv(csv);
+        expect(rows.length, 3);
+        expect(rows[0], ['Name', 'SalePrice', 'Category']);
+        expect(rows[1], ['Sugar, White', '500', 'Food, Grocery']);
+        expect(rows[2], ['Box "Large"', '1200', 'Hardware']);
+      },
+    );
 
     test('13. CSV unescape formula prefix restores clean text', () {
       expect(CsvService.unescapeFormulaPrefix("'+1234"), '+1234');
@@ -330,7 +368,10 @@ void main() {
       );
 
       expect(healthyProduct.salePrice >= healthyProduct.averageCost!, isTrue);
-      expect(lossProduct.salePrice < lossProduct.averageCost!, isTrue); // Negative margin alert!
+      expect(
+        lossProduct.salePrice < lossProduct.averageCost!,
+        isTrue,
+      ); // Negative margin alert!
     });
   });
 }

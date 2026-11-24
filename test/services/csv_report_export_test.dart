@@ -25,11 +25,8 @@ void main() {
         expect(bytes[1], 0xBB);
         expect(bytes[2], 0xBF);
 
-        final decoded = utf8.decode(bytes);
-        // Decoded string should start with BOM character \uFEFF
-        expect(decoded.startsWith('\uFEFF'), isTrue);
-
-        final content = decoded.substring(1);
+        // Decoded string from content after BOM
+        final content = utf8.decode(bytes.sublist(3));
         final lines = content
             .split('\r\n')
             .where((l) => l.trim().isNotEmpty)

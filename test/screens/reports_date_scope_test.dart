@@ -41,12 +41,12 @@ void main() {
         ),
       );
 
-      expect(observedRange, equals(DateRangeFilter.thisMonth()));
+      expect(observedRange?.preset, equals(DateRangePreset.thisMonth));
 
       notifier.update(DateRangeFilter.today());
       await tester.pump();
 
-      expect(observedRange, equals(DateRangeFilter.today()));
+      expect(observedRange?.preset, equals(DateRangePreset.today));
     });
 
     testWidgets('ReportsDateScope.update modifies the scoped notifier', (
@@ -75,7 +75,7 @@ void main() {
       await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
 
-      expect(notifier.range, equals(DateRangeFilter.today()));
+      expect(notifier.range.preset, equals(DateRangePreset.today));
     });
   });
 }

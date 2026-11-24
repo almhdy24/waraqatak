@@ -89,7 +89,7 @@ void main() {
           'type': 'invoice',
           'document_number': 'INV-TAX-001',
           'contact_id': 1,
-          'contact_name': 'عميل تجريبي',
+          'recipient_name': 'عميل تجريبي',
           'date': now.subtract(const Duration(days: 2)).toIso8601String(),
           'subtotal': 10000.0,
           'tax_amount': 1500.0,
@@ -100,8 +100,6 @@ void main() {
           'remaining': 0.0,
           'status': DocumentStatus.issued,
           'currency_code': 'SDG',
-          'created_at': now.toIso8601String(),
-          'updated_at': now.toIso8601String(),
         });
 
         // Insert a purchase with tax and discount
@@ -109,7 +107,7 @@ void main() {
           'type': 'purchase',
           'document_number': 'PUR-TAX-001',
           'contact_id': 2,
-          'contact_name': 'مورد تجريبي',
+          'recipient_name': 'مورد تجريبي',
           'date': now.subtract(const Duration(days: 1)).toIso8601String(),
           'subtotal': 8000.0,
           'tax_amount': 800.0,
@@ -120,8 +118,6 @@ void main() {
           'remaining': 0.0,
           'status': DocumentStatus.issued,
           'currency_code': 'SDG',
-          'created_at': now.toIso8601String(),
-          'updated_at': now.toIso8601String(),
         });
 
         // Insert a cancelled invoice that should be excluded
@@ -129,7 +125,7 @@ void main() {
           'type': 'invoice',
           'document_number': 'INV-TAX-CAN',
           'contact_id': 1,
-          'contact_name': 'عميل ملغي',
+          'recipient_name': 'عميل ملغي',
           'date': now.subtract(const Duration(days: 1)).toIso8601String(),
           'subtotal': 5000.0,
           'tax_amount': 750.0,
@@ -140,8 +136,6 @@ void main() {
           'remaining': 5500.0,
           'status': DocumentStatus.cancelled,
           'currency_code': 'SDG',
-          'created_at': now.toIso8601String(),
-          'updated_at': now.toIso8601String(),
         });
 
         final summary = await BusinessReportingService.instance

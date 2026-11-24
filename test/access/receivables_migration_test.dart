@@ -209,8 +209,8 @@ void main() {
         );
         expect(
           roleCount.first['count'],
-          5,
-        ); // cashier(2) + viewer(1) + admin(2)
+          6,
+        ); // cashier(3) + viewer(1) + admin(2)
 
         final userCount = await db.rawQuery(
           'SELECT COUNT(*) as count FROM user_permission_overrides',

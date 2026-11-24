@@ -163,4 +163,16 @@ class DateRangeFilter {
       }(),
     };
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DateRangeFilter &&
+          runtimeType == other.runtimeType &&
+          preset == other.preset &&
+          from == other.from &&
+          to == other.to;
+
+  @override
+  int get hashCode => Object.hash(preset, from, to);
 }
