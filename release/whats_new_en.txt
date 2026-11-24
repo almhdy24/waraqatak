@@ -1,7 +1,7 @@
 What's new in version 1.3.0:
-• Daily Closing report & cash drawer reconciliation segregating cash sales from debt collections.
-• Debt Aging report for receivables & payables with 1-tap direct WhatsApp payment reminders.
-• Taxes & Discounts Summary report with net tax liability tracking.
-• Dedicated Low Stock report enabling cashiers to monitor replenishment thresholds securely.
-• Universal RFC 4180 CSV export for Microsoft Excel and 80mm POS thermal receipt roll printing.
-• Cross-report session date range persistence with debounced search and performance polish.
+• Daily Closing report & cash drawer reconciliation with split collections.
+• Debt Aging report with 1-tap WhatsApp payment reminders.
+• Taxes & Discounts summary report with net liability tracking.
+• Dedicated Low Stock report to monitor inventory thresholds securely.
+• RFC 4180 CSV export for Microsoft Excel and 80mm thermal receipt printing.
+• Persistent date filters across reports, debounced search, and performance polish.
